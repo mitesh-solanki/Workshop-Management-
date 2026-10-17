@@ -1,0 +1,33 @@
+---
+description: Standing rules for the garage management software
+alwaysApply: true
+---
+
+# Project rules
+
+Read `docs/PRODUCT_SPEC.md` and `docs/ARCHITECTURE.md` before big changes. Follow them. If a request conflicts with them, say so and ask before changing the plan.
+
+## Stack
+Next.js App Router, TypeScript (strict), Tailwind, shadcn/ui, PostgreSQL with Prisma, Zod, next-intl, Vitest, Playwright. Do not add other frameworks or services without asking.
+
+## Layering
+- Routes and pages call `modules/<name>/service.ts`.
+- Services call `repo.ts`. Only repos use Prisma.
+- Validate every input with Zod in `schema.ts`.
+
+## Non-negotiable
+1. Every business query filters by `garageId` from the session. Never take `garageId` from the request body.
+2. Money is integer paise. No floats. Use `lib/money.ts`.
+3. Stock changes only through `StockMovement` inside a database transaction.
+4. Finalized invoices cannot be edited. Use credit notes.
+5. Write an `AuditLog` row for changes to money, stock, approvals and roles.
+6. No hard-coded user-facing text. Use `messages/en.json`, `hi.json`, `gu.json` (add all three keys).
+7. Never commit secrets. Add new variables to `.env.example`.
+8. AI results are drafts. A person must confirm before they are saved.
+
+## Quality
+- Small, focused changes. One task per chat. Do not refactor unrelated code.
+- Add tests for money, GST, stock and invoice-number logic. Run `npm run lint`, `npm run typecheck` and `npm test` before saying a task is done.
+- Mobile first: screens must work at 360px width with large tap targets. Mechanics use phones with dirty hands.
+- Show loading, empty and error states.
+- Explain what you changed in plain language at the end, and list anything you did not finish.

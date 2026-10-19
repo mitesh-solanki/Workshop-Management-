@@ -1,0 +1,12 @@
+{
+  "common": {
+    "appName": "Workshop",
+    "loading": "Loading…",
+    "empty": "Nothing here yet",
+    "error": "Something went wrong"
+  },
+  "home": {
+    "title": "Garage workshop",
+    "subtitle": "Project foundation is ready. Features come next."
+  }
+}

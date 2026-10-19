@@ -11,11 +11,12 @@ Next.js (App Router, TypeScript strict), Tailwind, shadcn/ui, PostgreSQL + Prism
 1. Install Node.js 20+.
 2. Copy env: `copy .env.example .env` (Windows) or `cp .env.example .env`.
 3. Start Postgres and Redis: `docker compose up -d`
-4. Generate the Prisma client: `npx prisma generate`  
+4. Generate the Prisma client and apply migrations: `npx prisma generate` then `npx prisma migrate dev`  
    If engine download fails with a certificate error on your network, retry with  
    `set PRISMA_ENGINES_CHECKSUM_IGNORE_MISSING=1` (Windows) then `npx prisma generate`.
-5. Install Playwright browsers when you need e2e: `npx playwright install chromium`
-6. Run the app: `npm run dev`
+5. Optional for local OTP testing: set `AUTH_DEV_OTP=123456` in `.env` (ignored in production). Codes are also printed in the server log.
+6. Install Playwright browsers when you need e2e: `npx playwright install chromium`
+7. Run the app: `npm run dev`
 
 ## Scripts
 

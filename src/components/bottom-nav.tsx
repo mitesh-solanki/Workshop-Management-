@@ -3,13 +3,20 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { ClipboardList, Settings, Users, LayoutDashboard } from "lucide-react";
+import {
+  ClipboardList,
+  Contact,
+  LayoutDashboard,
+  Settings,
+  Users,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const links = [
   { href: "/dashboard", key: "dashboard", icon: LayoutDashboard },
-  { href: "/team", key: "team", icon: Users },
+  { href: "/customers", key: "customers", icon: Contact },
   { href: "/orders", key: "orders", icon: ClipboardList },
+  { href: "/team", key: "team", icon: Users },
   { href: "/settings", key: "settings", icon: Settings },
 ] as const;
 

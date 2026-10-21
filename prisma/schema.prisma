@@ -25,6 +25,48 @@ model Garage {
   users     User[]
   invites   Invite[]
   auditLogs AuditLog[]
+  customers Customer[]
+  vehicles  Vehicle[]
+}
+
+model Customer {
+  id        String   @id @default(cuid())
+  garageId  String
+  garage    Garage   @relation(fields: [garageId], references: [id], onDelete: Cascade)
+  name      String
+  phone     String
+  address   String?
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  vehicles Vehicle[]
+
+  @@index([garageId])
+  @@index([garageId, phone])
+  @@index([garageId, name])
+}
+
+model Vehicle {
+  id                 String    @id @default(cuid())
+  garageId           String
+  garage             Garage    @relation(fields: [garageId], references: [id], onDelete: Cascade)
+  customerId         String
+  customer           Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  registrationNumber String
+  make               String
+  model              String
+  year               Int?
+  odometer           Int?
+  insuranceExpiry    DateTime?
+  pucExpiry          DateTime?
+  fitnessExpiry      DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  @@unique([garageId, registrationNumber])
+  @@index([garageId])
+  @@index([customerId])
 }
 
 model User {

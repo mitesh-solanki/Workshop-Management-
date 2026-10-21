@@ -8,6 +8,8 @@ vi.mock("@/modules/customers/repo", () => ({
   findCustomerById: vi.fn(),
   searchCustomers: vi.fn(),
   updateCustomerById: vi.fn(),
+  countCustomerServiceOrders: vi.fn(),
+  deleteCustomerById: vi.fn(),
 }));
 
 vi.mock("@/modules/vehicles/repo", () => ({
@@ -16,14 +18,20 @@ vi.mock("@/modules/vehicles/repo", () => ({
   findVehicleByRegistration: vi.fn(),
   isUniqueConstraintError: vi.fn(() => false),
   updateVehicleById: vi.fn(),
+  countVehicleServiceOrders: vi.fn(),
+  deleteVehicleById: vi.fn(),
 }));
 
 import {
+  countCustomerServiceOrders,
+  deleteCustomerById,
   findCustomerById,
   searchCustomers,
   updateCustomerById,
 } from "@/modules/customers/repo";
 import {
+  deleteCustomerForGarageId,
+  deleteCustomerRecord,
   getCustomer,
   getCustomerForGarageId,
   listCustomers,
@@ -31,13 +39,17 @@ import {
   updateCustomerRecord,
 } from "@/modules/customers/service";
 import {
+  countVehicleServiceOrders,
   createVehicle,
+  deleteVehicleById,
   findVehicleById,
   findVehicleByRegistration,
 } from "@/modules/vehicles/repo";
 import {
   createVehicleForGarageId,
   createVehicleRecord,
+  deleteVehicleForGarageId,
+  deleteVehicleRecord,
   getVehicleForGarageId,
 } from "@/modules/vehicles/service";
 
@@ -54,6 +66,12 @@ const ownerB: RoleSession = {
   userId: "user-b",
   garageId: garageB,
   role: "OWNER",
+};
+
+const accountantA: RoleSession = {
+  userId: "acct-a",
+  garageId: garageA,
+  role: "ACCOUNTANT",
 };
 
 const sampleCustomer = {
@@ -265,5 +283,106 @@ describe("garageId filtering", () => {
     ).rejects.toBeInstanceOf(ForbiddenError);
 
     expect(createVehicle).not.toHaveBeenCalled();
+  });
+});
+
+describe("delete customer and vehicle", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  const sampleVehicle = {
+    id: "veh-1",
+    garageId: garageA,
+    customerId: "cust-a",
+    registrationNumber: "GJ01AB1234",
+    make: "Maruti",
+    model: "Swift",
+    year: 2020,
+    odometer: 10000,
+    insuranceExpiry: null,
+    pucExpiry: null,
+    fitnessExpiry: null,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    customer: { id: "cust-a", name: "Ravi Patel", phone: "9876543210" },
+  };
+
+  it("deletes a customer with no service orders and writes audit via repo", async () => {
+    vi.mocked(findCustomerById).mockResolvedValue(sampleCustomer);
+    vi.mocked(countCustomerServiceOrders).mockResolvedValue(0);
+    vi.mocked(deleteCustomerById).mockResolvedValue({ id: "cust-a" });
+
+    await deleteCustomerRecord(ownerA, "cust-a");
+
+    expect(countCustomerServiceOrders).toHaveBeenCalledWith(garageA, "cust-a");
+    expect(deleteCustomerById).toHaveBeenCalledWith(garageA, "cust-a", {
+      actorId: "user-a",
+      name: "Ravi Patel",
+      phone: "9876543210",
+    });
+  });
+
+  it("blocks deleting a customer who has service orders", async () => {
+    vi.mocked(findCustomerById).mockResolvedValue(sampleCustomer);
+    vi.mocked(countCustomerServiceOrders).mockResolvedValue(2);
+
+    await expect(deleteCustomerRecord(ownerA, "cust-a")).rejects.toMatchObject({
+      code: "CUSTOMER_HAS_ORDERS",
+    } satisfies Partial<AppError>);
+
+    expect(deleteCustomerById).not.toHaveBeenCalled();
+  });
+
+  it("deletes a vehicle with no service orders", async () => {
+    vi.mocked(findVehicleById).mockResolvedValue(sampleVehicle);
+    vi.mocked(countVehicleServiceOrders).mockResolvedValue(0);
+    vi.mocked(deleteVehicleById).mockResolvedValue({
+      id: "veh-1",
+      customerId: "cust-a",
+    });
+
+    await deleteVehicleRecord(ownerA, "veh-1");
+
+    expect(deleteVehicleById).toHaveBeenCalledWith(garageA, "veh-1", {
+      actorId: "user-a",
+      customerId: "cust-a",
+      registrationNumber: "GJ01AB1234",
+    });
+  });
+
+  it("blocks deleting a vehicle that has service orders", async () => {
+    vi.mocked(findVehicleById).mockResolvedValue(sampleVehicle);
+    vi.mocked(countVehicleServiceOrders).mockResolvedValue(1);
+
+    await expect(deleteVehicleRecord(ownerA, "veh-1")).rejects.toMatchObject({
+      code: "VEHICLE_HAS_ORDERS",
+    } satisfies Partial<AppError>);
+
+    expect(deleteVehicleById).not.toHaveBeenCalled();
+  });
+
+  it("blocks accountants from deleting customers and vehicles", async () => {
+    await expect(
+      deleteCustomerRecord(accountantA, "cust-a"),
+    ).rejects.toBeInstanceOf(ForbiddenError);
+    await expect(
+      deleteVehicleRecord(accountantA, "veh-1"),
+    ).rejects.toBeInstanceOf(ForbiddenError);
+
+    expect(deleteCustomerById).not.toHaveBeenCalled();
+    expect(deleteVehicleById).not.toHaveBeenCalled();
+  });
+
+  it("rejects cross-garage customer and vehicle deletes", async () => {
+    await expect(
+      deleteCustomerForGarageId(ownerA, garageB, "cust-a"),
+    ).rejects.toBeInstanceOf(ForbiddenError);
+    await expect(
+      deleteVehicleForGarageId(ownerA, garageB, "veh-1"),
+    ).rejects.toBeInstanceOf(ForbiddenError);
+
+    expect(findCustomerById).not.toHaveBeenCalled();
+    expect(findVehicleById).not.toHaveBeenCalled();
   });
 });

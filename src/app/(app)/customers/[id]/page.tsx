@@ -3,7 +3,9 @@ import { notFound } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 import { NotFoundError } from "@/lib/errors";
 import { requireSession } from "@/lib/session";
+import { DeleteCustomerButton } from "@/modules/customers/components/delete-customer-button";
 import { getCustomer } from "@/modules/customers/service";
+import { DeleteVehicleButton } from "@/modules/vehicles/components/delete-vehicle-button";
 import { listCustomerServiceHistory } from "@/modules/service-orders/service";
 
 type Props = {
@@ -57,12 +59,15 @@ export default async function CustomerDetailPage({ params }: Props) {
             <p className="text-base text-muted-foreground">{customer.phone}</p>
           </div>
           {canWrite && (
-            <Link
-              href={`/customers/${customer.id}/edit`}
-              className="inline-flex min-h-12 shrink-0 items-center rounded-md border px-4 text-base font-medium"
-            >
-              {t("edit")}
-            </Link>
+            <div className="flex shrink-0 flex-col gap-2 sm:flex-row">
+              <Link
+                href={`/customers/${customer.id}/edit`}
+                className="inline-flex min-h-12 items-center justify-center rounded-md border px-4 text-base font-medium"
+              >
+                {t("edit")}
+              </Link>
+              <DeleteCustomerButton customerId={customer.id} />
+            </div>
           )}
         </div>
         {customer.address && (
@@ -123,12 +128,19 @@ export default async function CustomerDetailPage({ params }: Props) {
                     </Link>
                   )}
                   {canWrite && (
-                    <Link
-                      href={`/vehicles/${vehicle.id}/edit`}
-                      className="inline-flex min-h-12 items-center justify-center rounded-md border px-4 text-sm font-medium"
-                    >
-                      {tv("edit")}
-                    </Link>
+                    <>
+                      <Link
+                        href={`/vehicles/${vehicle.id}/edit`}
+                        className="inline-flex min-h-12 items-center justify-center rounded-md border px-4 text-sm font-medium"
+                      >
+                        {tv("edit")}
+                      </Link>
+                      <DeleteVehicleButton
+                        vehicleId={vehicle.id}
+                        customerId={customer.id}
+                        className="text-sm"
+                      />
+                    </>
                   )}
                 </div>
               </li>

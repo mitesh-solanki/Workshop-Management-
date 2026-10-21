@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 import { ForbiddenError, NotFoundError } from "@/lib/errors";
 import { requireRole, requireSession } from "@/lib/session";
+import { DeleteVehicleButton } from "@/modules/vehicles/components/delete-vehicle-button";
 import { VehicleForm } from "@/modules/vehicles/components/vehicle-form";
 import { getVehicle } from "@/modules/vehicles/service";
 
@@ -68,6 +69,10 @@ export default async function EditVehiclePage({ params }: Props) {
           pucExpiry: vehicle.pucExpiry,
           fitnessExpiry: vehicle.fitnessExpiry,
         }}
+      />
+      <DeleteVehicleButton
+        vehicleId={vehicle.id}
+        customerId={vehicle.customerId}
       />
     </main>
   );

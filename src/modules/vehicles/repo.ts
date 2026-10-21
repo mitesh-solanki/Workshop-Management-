@@ -127,3 +127,48 @@ export function isUniqueConstraintError(error: unknown): boolean {
     error.code === "P2002"
   );
 }
+
+export async function countVehicleServiceOrders(
+  garageId: string,
+  vehicleId: string,
+) {
+  return prisma.serviceOrder.count({
+    where: { garageId, vehicleId },
+  });
+}
+
+export async function deleteVehicleById(
+  garageId: string,
+  vehicleId: string,
+  data: {
+    actorId: string;
+    customerId: string;
+    registrationNumber: string;
+  },
+) {
+  return prisma.$transaction(async (tx) => {
+    const result = await tx.vehicle.deleteMany({
+      where: { id: vehicleId, garageId },
+    });
+
+    if (result.count === 0) {
+      return null;
+    }
+
+    await tx.auditLog.create({
+      data: {
+        garageId,
+        actorId: data.actorId,
+        action: "vehicle.deleted",
+        entity: "Vehicle",
+        entityId: vehicleId,
+        meta: {
+          customerId: data.customerId,
+          registrationNumber: data.registrationNumber,
+        } satisfies Prisma.InputJsonValue,
+      },
+    });
+
+    return { id: vehicleId, customerId: data.customerId };
+  });
+}

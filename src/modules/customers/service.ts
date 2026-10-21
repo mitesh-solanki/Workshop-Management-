@@ -1,9 +1,11 @@
 import "server-only";
 
-import { ForbiddenError, NotFoundError } from "@/lib/errors";
+import { AppError, ForbiddenError, NotFoundError } from "@/lib/errors";
 import { requireRole, type RoleSession } from "@/lib/rbac";
 import {
+  countCustomerServiceOrders,
   createCustomer,
+  deleteCustomerById,
   findCustomerById,
   searchCustomers,
   updateCustomerById,
@@ -72,6 +74,41 @@ export async function updateCustomerRecord(
   return customer;
 }
 
+export async function deleteCustomerRecord(
+  session: RoleSession,
+  customerId: string,
+) {
+  requireRole(session, WRITE_ROLES);
+
+  const customer = await findCustomerById(session.garageId, customerId);
+  if (!customer) {
+    throw new NotFoundError("Customer not found");
+  }
+
+  const orderCount = await countCustomerServiceOrders(
+    session.garageId,
+    customerId,
+  );
+  if (orderCount > 0) {
+    throw new AppError(
+      "CUSTOMER_HAS_ORDERS",
+      "Cannot delete a customer who has service orders",
+    );
+  }
+
+  const deleted = await deleteCustomerById(session.garageId, customerId, {
+    actorId: session.userId,
+    name: customer.name,
+    phone: customer.phone,
+  });
+
+  if (!deleted) {
+    throw new NotFoundError("Customer not found");
+  }
+
+  return deleted;
+}
+
 /** Test helper: attempt to read a customer while scoped to another garage id. */
 export async function getCustomerForGarageId(
   session: RoleSession,
@@ -95,4 +132,16 @@ export async function updateCustomerForGarageId(
     throw new ForbiddenError("Cross-garage access denied");
   }
   return updateCustomerRecord(session, customerId, raw);
+}
+
+/** Test helper: attempt to delete a customer while scoped to another garage id. */
+export async function deleteCustomerForGarageId(
+  session: RoleSession,
+  requestedGarageId: string,
+  customerId: string,
+) {
+  if (requestedGarageId !== session.garageId) {
+    throw new ForbiddenError("Cross-garage access denied");
+  }
+  return deleteCustomerRecord(session, customerId);
 }

@@ -6,6 +6,7 @@ import { AppError } from "@/lib/errors";
 import { requireSession } from "@/lib/session";
 import {
   createVehicleRecord,
+  deleteVehicleRecord,
   updateVehicleRecord,
 } from "@/modules/vehicles/service";
 
@@ -70,4 +71,28 @@ export async function updateVehicleAction(
       message: error instanceof AppError ? error.message : "Something went wrong",
     };
   }
+}
+
+export async function deleteVehicleAction(
+  vehicleId: string,
+  customerId: string,
+  _prev: VehicleActionState,
+  _formData: FormData,
+): Promise<VehicleActionState> {
+  try {
+    const session = await requireSession();
+    await deleteVehicleRecord(session, vehicleId);
+  } catch (error) {
+    if (error instanceof AppError && error.code === "VEHICLE_HAS_ORDERS") {
+      return { ok: false, message: "cannotDeleteHasOrders" };
+    }
+    return {
+      ok: false,
+      message: error instanceof AppError ? error.message : "Something went wrong",
+    };
+  }
+
+  revalidatePath("/customers");
+  revalidatePath(`/customers/${customerId}`);
+  redirect(`/customers/${customerId}`);
 }

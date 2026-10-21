@@ -109,6 +109,9 @@
     "updateStatus": "स्थिति अपडेट करें",
     "statusUpdated": "स्थिति अपडेट हुई",
     "statusTerminal": "यह ऑर्डर पूरा हो चुका है।",
+    "inspectionSection": "डिजिटल इंस्पेक्शन",
+    "inspectionHint": "चेकलिस्ट, फोटो, वीडियो और सुझाए गए रिपेयर।",
+    "openInspection": "इंस्पेक्शन खोलें",
     "lines": "लेबर और पार्ट्स",
     "linesEmpty": "अभी कोई लेबर या पार्ट लाइन नहीं।",
     "lineType": "प्रकार",
@@ -188,5 +191,53 @@
     "save": "परिवर्तन सहेजें",
     "saving": "सहेजा जा रहा है…",
     "saved": "वाहन सहेजा गया"
+  },
+  "inspections": {
+    "title": "डिजिटल इंस्पेक्शन",
+    "backToOrder": "ऑर्डर पर वापस",
+    "emptyReadOnly": "इंस्पेक्शन अभी शुरू नहीं हुआ।",
+    "checklist": "चेकलिस्ट",
+    "checklistHint": "हर आइटम OK, ध्यान चाहिए या जरूरी चिह्नित करें। फोटो या छोटा वीडियो जोड़ें।",
+    "result": "परिणाम",
+    "resultUnset": "जाँच नहीं हुई",
+    "notes": "नोट्स",
+    "saveItem": "आइटम सहेजें",
+    "itemSaved": "आइटम सहेजा गया",
+    "saving": "सहेजा जा रहा है…",
+    "addCustomItem": "चेकलिस्ट आइटम जोड़ें",
+    "customItemPlaceholder": "जैसे वाइपर ब्लेड",
+    "addPhoto": "फोटो जोड़ें",
+    "addVideo": "छोटा वीडियो जोड़ें",
+    "uploading": "अपलोड हो रहा है…",
+    "uploadFailed": "अपलोड विफल। फिर कोशिश करें।",
+    "removeMedia": "हटाएँ",
+    "suggestedRepairs": "सुझाए गए रिपेयर",
+    "repairsEmpty": "अभी कोई सुझाया गया रिपेयर नहीं।",
+    "repairType": "प्रकार",
+    "repairDescription": "विवरण",
+    "quantity": "मात्रा",
+    "unitPrice": "यूनिट कीमत (₹)",
+    "unitPriceHint": "पैसे में सहेजा जाता है। रुपये लिखें, जैसे 250 या 250.50।",
+    "addRepair": "सुझाया गया रिपेयर जोड़ें",
+    "repairAdded": "सुझाया गया रिपेयर जोड़ा गया",
+    "removeRepair": "हटाएँ",
+    "defaults": {
+      "brakes": "ब्रेक",
+      "tyres": "टायर",
+      "battery": "बैटरी",
+      "lights": "लाइट्स",
+      "fluids": "फ्लूइड्स",
+      "suspension": "सस्पेंशन",
+      "ac": "एसी"
+    },
+    "results": {
+      "OK": "OK",
+      "NEEDS_ATTENTION": "ध्यान चाहिए",
+      "URGENT": "जरूरी"
+    },
+    "repairTypes": {
+      "LABOUR": "लेबर",
+      "PART": "पार्ट"
+    }
   }
 }

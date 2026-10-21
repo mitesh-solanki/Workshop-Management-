@@ -133,6 +133,17 @@ export default async function OrderDetailPage({ params }: Props) {
       )}
 
       <section className="space-y-3">
+        <h2 className="text-lg font-medium">{t("inspectionSection")}</h2>
+        <p className="text-sm text-muted-foreground">{t("inspectionHint")}</p>
+        <Link
+          href={`/orders/${order.id}/inspection`}
+          className="inline-flex min-h-12 items-center justify-center rounded-md bg-primary px-4 text-base font-medium text-primary-foreground"
+        >
+          {t("openInspection")}
+        </Link>
+      </section>
+
+      <section className="space-y-3">
         <h2 className="text-lg font-medium">{t("lines")}</h2>
         {order.lines.length === 0 ? (
           <p className="text-sm text-muted-foreground">{t("linesEmpty")}</p>

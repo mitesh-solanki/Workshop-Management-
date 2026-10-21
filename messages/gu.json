@@ -109,6 +109,9 @@
     "updateStatus": "સ્થિતિ અપડેટ કરો",
     "statusUpdated": "સ્થિતિ અપડેટ થઈ",
     "statusTerminal": "આ ઓર્ડર પૂર્ણ થઈ ગયો છે.",
+    "inspectionSection": "ડિજિટલ ઇન્સ્પેક્શન",
+    "inspectionHint": "ચેકલિસ્ટ, ફોટો, વીડિયો અને સૂચવેલા રિપેર.",
+    "openInspection": "ઇન્સ્પેક્શન ખોલો",
     "lines": "લેબર અને પાર્ટ્સ",
     "linesEmpty": "હજુ કોઈ લેબર અથવા પાર્ટ લાઇન નથી.",
     "lineType": "પ્રકાર",
@@ -188,5 +191,53 @@
     "save": "ફેરફાર સાચવો",
     "saving": "સાચવી રહ્યા છીએ…",
     "saved": "વાહન સાચવાયું"
+  },
+  "inspections": {
+    "title": "ડિજિટલ ઇન્સ્પેક્શન",
+    "backToOrder": "ઓર્ડર પર પાછા",
+    "emptyReadOnly": "ઇન્સ્પેક્શન હજુ શરૂ થયું નથી.",
+    "checklist": "ચેકલિસ્ટ",
+    "checklistHint": "દરેક આઇટમ OK, ધ્યાન જોઈએ અથવા તાત્કાલિક ચિહ્નિત કરો. ફોટો અથવા ટૂંકો વીડિયો ઉમેરો.",
+    "result": "પરિણામ",
+    "resultUnset": "તપાસાયું નથી",
+    "notes": "નોંધ",
+    "saveItem": "આઇટમ સાચવો",
+    "itemSaved": "આઇટમ સાચવાઈ",
+    "saving": "સાચવી રહ્યા છીએ…",
+    "addCustomItem": "ચેકલિસ્ટ આઇટમ ઉમેરો",
+    "customItemPlaceholder": "જેમ કે વાઇપર બ્લેડ",
+    "addPhoto": "ફોટો ઉમેરો",
+    "addVideo": "ટૂંકો વીડિયો ઉમેરો",
+    "uploading": "અપલોડ થઈ રહ્યું છે…",
+    "uploadFailed": "અપલોડ નિષ્ફળ. ફરી પ્રયાસ કરો.",
+    "removeMedia": "કાઢો",
+    "suggestedRepairs": "સૂચવેલા રિપેર",
+    "repairsEmpty": "હજુ કોઈ સૂચવેલો રિપેર નથી.",
+    "repairType": "પ્રકાર",
+    "repairDescription": "વર્ણન",
+    "quantity": "જથ્થો",
+    "unitPrice": "યુનિટ કિંમત (₹)",
+    "unitPriceHint": "પૈસામાં સાચવાય છે. રૂપિયા લખો, જેમ કે 250 અથવા 250.50.",
+    "addRepair": "સૂચવેલો રિપેર ઉમેરો",
+    "repairAdded": "સૂચવેલો રિપેર ઉમેરાયો",
+    "removeRepair": "કાઢો",
+    "defaults": {
+      "brakes": "બ્રેક",
+      "tyres": "ટાયર",
+      "battery": "બેટરી",
+      "lights": "લાઇટ્સ",
+      "fluids": "ફ્લુઇડ્સ",
+      "suspension": "સસ્પેન્શન",
+      "ac": "એસી"
+    },
+    "results": {
+      "OK": "OK",
+      "NEEDS_ATTENTION": "ધ્યાન જોઈએ",
+      "URGENT": "તાત્કાલિક"
+    },
+    "repairTypes": {
+      "LABOUR": "લેબર",
+      "PART": "પાર્ટ"
+    }
   }
 }

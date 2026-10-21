@@ -109,6 +109,9 @@
     "updateStatus": "Update status",
     "statusUpdated": "Status updated",
     "statusTerminal": "This order is completed.",
+    "inspectionSection": "Digital inspection",
+    "inspectionHint": "Checklist, photos, videos and suggested repairs.",
+    "openInspection": "Open inspection",
     "lines": "Labour and parts",
     "linesEmpty": "No labour or parts lines yet.",
     "lineType": "Type",
@@ -188,5 +191,53 @@
     "save": "Save changes",
     "saving": "Saving…",
     "saved": "Vehicle saved"
+  },
+  "inspections": {
+    "title": "Digital inspection",
+    "backToOrder": "Back to order",
+    "emptyReadOnly": "Inspection has not been started yet.",
+    "checklist": "Checklist",
+    "checklistHint": "Mark each item OK, Needs attention or Urgent. Add photos or a short video.",
+    "result": "Result",
+    "resultUnset": "Not checked",
+    "notes": "Notes",
+    "saveItem": "Save item",
+    "itemSaved": "Item saved",
+    "saving": "Saving…",
+    "addCustomItem": "Add checklist item",
+    "customItemPlaceholder": "e.g. Wiper blades",
+    "addPhoto": "Add photo",
+    "addVideo": "Add short video",
+    "uploading": "Uploading…",
+    "uploadFailed": "Upload failed. Try again.",
+    "removeMedia": "Remove",
+    "suggestedRepairs": "Suggested repairs",
+    "repairsEmpty": "No suggested repairs yet.",
+    "repairType": "Type",
+    "repairDescription": "Description",
+    "quantity": "Quantity",
+    "unitPrice": "Unit price (₹)",
+    "unitPriceHint": "Stored as paise. Use rupees, e.g. 250 or 250.50.",
+    "addRepair": "Add suggested repair",
+    "repairAdded": "Suggested repair added",
+    "removeRepair": "Remove",
+    "defaults": {
+      "brakes": "Brakes",
+      "tyres": "Tyres",
+      "battery": "Battery",
+      "lights": "Lights",
+      "fluids": "Fluids",
+      "suspension": "Suspension",
+      "ac": "AC"
+    },
+    "results": {
+      "OK": "OK",
+      "NEEDS_ATTENTION": "Needs attention",
+      "URGENT": "Urgent"
+    },
+    "repairTypes": {
+      "LABOUR": "Labour",
+      "PART": "Part"
+    }
   }
 }

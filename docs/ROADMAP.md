@@ -9,19 +9,19 @@ Work in this order. A task is finished only when every "Done when" item is true 
 
 ## Phase 1: Core MVP (about 3 to 4 weeks)
 
-| Task | Prompt | Done when |
-| --- | --- | --- |
-| 1.0 Project setup | 0 | App runs locally, lint, typecheck and tests pass, Docker Postgres works |
-| 1.1 Auth, garages, roles, i18n | 1 | Owner signs up, creates a garage, invites staff; screens switch between English, Hindi and Gujarati; a user of one garage cannot read another's data (tested) |
-| 1.2 Customers and vehicles | 2 | Add, search and edit customers and vehicles; history page; duplicate registration number blocked per garage |
-| 1.3 Service orders | 3 | Create an order from a vehicle; complaints, technician, dates; status changes logged |
-| 1.4 Inspection | 4 | Checklist with photo upload; suggested repairs saved |
-| 1.5 Estimates and approval | 5 | Estimate with GST; approve, partly approve or reject per line; revision for extra work; history kept |
-| 1.6 Workshop board | 6 | Columns by status; drag to change status; technician filter |
-| 1.7 Inventory basics | 7 | Parts, stock in, stock out, low-stock alert; parts used on an order reduce stock |
-| 1.8 GST billing and payments | 8 | Finalized invoice with correct GST and sequential number; PDF; partial and mixed payments; credit note; tests pass |
-| 1.9 UPI link and Customer Live Link | 9 | Customer opens a link on a phone with no login, sees status and photos, approves lines, pays |
-| 1.10 Excel and CSV import | 10 | Customers, vehicles and parts import with an error report |
+| Task | Prompt | Status | Done when |
+| --- | --- | --- | --- |
+| 1.0 Project setup | 0 | Done (`feat/project-setup`) | App runs locally, lint, typecheck and tests pass, Docker Postgres works |
+| 1.1 Auth, garages, roles, i18n | 1 | Done (`feat/auth-garages-roles`) | Owner signs up, creates a garage, invites staff; screens switch between English, Hindi and Gujarati; a user of one garage cannot read another's data (tested) |
+| 1.2 Customers and vehicles | 2 | Done (`feat/customers-vehicles`) | Add, search and edit customers and vehicles; history page; duplicate registration number blocked per garage |
+| 1.3 Service orders | 3 | Done (`feat/service-orders`) | Create an order from a vehicle; complaints, technician, dates; status changes logged |
+| 1.4 Inspection | 4 | Done (`feat/service-orders`) | Checklist with photo upload; suggested repairs saved |
+| 1.5 Estimates and approval | 5 | Done (`feat/service-orders`) | Estimate with GST; approve, partly approve or reject per line; revision for extra work; history kept |
+| 1.6 Workshop board | 6 | Next | Columns by status; drag to change status; technician filter |
+| 1.7 Inventory basics | 7 | Pending (new branch after 3–6 merge) | Parts, stock in, stock out, low-stock alert; parts used on an order reduce stock |
+| 1.8 GST billing and payments | 8 | Pending | Finalized invoice with correct GST and sequential number; PDF; partial and mixed payments; credit note; tests pass |
+| 1.9 UPI link and Customer Live Link | 9 | Pending | Customer opens a link on a phone with no login, sees status and photos, approves lines, pays |
+| 1.10 Excel and CSV import | 10 | Pending | Customers, vehicles and parts import with an error report |
 
 Gate: 5 pilot garages use it daily for 4 weeks with correct invoices and payments.
 

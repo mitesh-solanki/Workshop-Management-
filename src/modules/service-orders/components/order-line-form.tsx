@@ -6,6 +6,7 @@ import {
   addServiceOrderLineAction,
   type ServiceOrderActionState,
 } from "@/app/actions/service-orders";
+import { RupeePriceInput } from "@/components/rupee-price-input";
 
 const initial: ServiceOrderActionState = { ok: false };
 
@@ -70,21 +71,7 @@ export function OrderLineForm({ orderId }: Props) {
           className={inputClass}
         />
       </div>
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor="unitPriceRupees" className="text-sm font-medium">
-          {t("unitPrice")}
-        </label>
-        <input
-          id="unitPriceRupees"
-          name="unitPriceRupees"
-          type="text"
-          inputMode="decimal"
-          defaultValue="0"
-          required
-          className={inputClass}
-        />
-        <p className="text-xs text-muted-foreground">{t("unitPriceHint")}</p>
-      </div>
+      <RupeePriceInput label={t("unitPrice")} hint={t("unitPriceHint")} />
       {state.message && (
         <p
           className={

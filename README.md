@@ -9,14 +9,26 @@ Next.js (App Router, TypeScript strict), Tailwind, shadcn/ui, PostgreSQL + Prism
 ## Local setup
 
 1. Install Node.js 20+.
-2. Copy env: `copy .env.example .env` (Windows) or `cp .env.example .env`.
-3. Start Postgres and Redis: `docker compose up -d`
+2. Copy env: `copy .env.example .env` (Windows) or `cp .env.example .env`.  
+   `.env.example` keeps **production-style** S3 placeholders empty. For local photo/video uploads, uncomment the **Local MinIO** block at the bottom of `.env.example` into your `.env` (see below).
+3. Start Postgres and Redis: `docker compose up -d postgres redis`
 4. Generate the Prisma client and apply migrations: `npx prisma generate` then `npx prisma migrate dev`  
    If engine download fails with a certificate error on your network, retry with  
    `set PRISMA_ENGINES_CHECKSUM_IGNORE_MISSING=1` (Windows) then `npx prisma generate`.
 5. Optional for local OTP testing: set `AUTH_DEV_OTP=123456` in `.env` (ignored in production). Codes are also printed in the server log.
 6. Install Playwright browsers when you need e2e: `npx playwright install chromium`
 7. Run the app: `npm run dev`
+
+### Local MinIO (inspection photos / videos)
+
+Official `minio/minio` Docker Hub images are no longer anonymously pullable. Compose uses `cgr.dev/chainguard/minio` instead.
+
+1. Start storage: `docker compose up -d minio`
+2. In `.env`, set the Local MinIO values from the commented block in `.env.example` (`S3_*` + `NEXT_PUBLIC_S3_ENDPOINT`).
+3. API: http://127.0.0.1:9000 · Console: http://127.0.0.1:9001 (user/pass `minioadmin` / `minioadmin` for local only).
+4. The app creates the `workshop` bucket on first upload — no separate init container.
+
+**Production / staging:** leave the empty `S3_*` keys in `.env.example` as the template. Fill real Cloudflare R2 or AWS S3 values only in the server `.env` (never commit secrets).
 
 ## Scripts
 

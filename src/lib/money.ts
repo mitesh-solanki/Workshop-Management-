@@ -1,5 +1,7 @@
 /** Money amounts are integer paise (1 rupee = 100 paise). Never use floats. */
 
+import { z } from "zod";
+
 export type Paise = number;
 
 function assertPaise(value: number, label: string): asserts value is Paise {
@@ -50,3 +52,75 @@ export function formatRupees(amountPaise: Paise, locale = "en-IN"): string {
     maximumFractionDigits: 2,
   }).format(rupees);
 }
+
+/**
+ * Parse a rupee form value ("250", "250.50", "") into integer paise.
+ * Empty → 0. Returns null when the string is not a valid price.
+ */
+export function parseRupeesToPaise(value: string | number): Paise | null {
+  const raw = typeof value === "number" ? String(value) : value.trim();
+  if (raw === "") {
+    return 0;
+  }
+  if (!/^\d+(\.\d{1,2})?$/.test(raw)) {
+    return null;
+  }
+  const [rupeesPart, paisePart = ""] = raw.split(".");
+  const rupees = Number(rupeesPart);
+  const paise = paisePart.padEnd(2, "0").slice(0, 2);
+  const total = rupees * 100 + Number(paise);
+  if (!Number.isInteger(total) || total < 0) {
+    return null;
+  }
+  return total;
+}
+
+/** Format paise for an editable rupee input. Zero → empty so typing does not leave a leading 0. */
+export function paiseToRupeesInput(amountPaise: Paise): string {
+  assertPaise(amountPaise, "amountPaise");
+  if (amountPaise === 0) {
+    return "";
+  }
+  const rupees = Math.floor(amountPaise / 100);
+  const paise = amountPaise % 100;
+  if (paise === 0) {
+    return String(rupees);
+  }
+  return `${rupees}.${String(paise).padStart(2, "0")}`;
+}
+
+/** True when the field still holds only a zero placeholder. */
+export function isZeroRupeesInput(value: string): boolean {
+  const trimmed = value.trim();
+  return trimmed === "" || trimmed === "0" || trimmed === "0.0" || trimmed === "0.00";
+}
+
+/**
+ * Strip letters/symbols while typing a rupee amount.
+ * Keeps digits, at most one `.`, and at most two decimal places.
+ */
+export function sanitizeRupeesTyping(value: string): string {
+  const cleaned = value.replace(/[^\d.]/g, "");
+  const firstDot = cleaned.indexOf(".");
+  if (firstDot === -1) {
+    return cleaned;
+  }
+  const whole = cleaned.slice(0, firstDot);
+  const fraction = cleaned
+    .slice(firstDot + 1)
+    .replace(/\./g, "")
+    .slice(0, 2);
+  return `${whole}.${fraction}`;
+}
+
+/** Zod field: rupee string/number → integer paise (shared by order, inspection, estimate forms). */
+export const rupeesToPaiseSchema = z
+  .union([z.string(), z.number()])
+  .transform((value, ctx) => {
+    const parsed = parseRupeesToPaise(value);
+    if (parsed == null) {
+      ctx.addIssue({ code: "custom", message: "Invalid price" });
+      return z.NEVER;
+    }
+    return parsed;
+  });

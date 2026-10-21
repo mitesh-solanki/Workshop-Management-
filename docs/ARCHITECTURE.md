@@ -7,7 +7,7 @@
 - **Auth**: Auth.js (email or phone OTP), role in the session
 - **Validation**: Zod on every API input
 - **Jobs**: BullMQ with Redis (reminders, messages, digests)
-- **Files**: S3-compatible storage (Cloudflare R2 or AWS S3), photos compressed in the browser
+- **Files**: S3-compatible storage (Cloudflare R2 or AWS S3 in production; local MinIO in Docker for development — see README). Photos are compressed in the browser before upload.
 - **i18n**: next-intl with `en`, `hi`, `gu`
 - **PDF**: server-side invoice PDFs
 - **Tests**: Vitest for logic, Playwright for the main flows
@@ -63,4 +63,4 @@ Rule: pages and API routes call `service.ts`. Services call `repo.ts`. Only repo
 10. **Errors**: never show raw database errors to users. Log them with a request ID.
 
 ## Environments
-Local: Docker Compose for Postgres and Redis. Staging and production: managed Postgres, daily backups, a restore test every month.
+Local: Docker Compose for Postgres, Redis, and MinIO (S3-compatible). Staging and production: managed Postgres, real S3/R2 credentials in env (not in `.env.example` secrets), daily backups, a restore test every month.

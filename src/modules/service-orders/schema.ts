@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { rupeesToPaiseSchema } from "@/lib/money";
 
 export const SERVICE_ORDER_STATUSES = [
   "WAITING",
@@ -10,6 +11,59 @@ export const SERVICE_ORDER_STATUSES = [
 ] as const;
 
 export type ServiceOrderStatusValue = (typeof SERVICE_ORDER_STATUSES)[number];
+
+export const SERVICE_ORDER_PRIORITIES = [
+  "LOW",
+  "NORMAL",
+  "HIGH",
+  "URGENT",
+] as const;
+
+export type ServiceOrderPriorityValue =
+  (typeof SERVICE_ORDER_PRIORITIES)[number];
+
+/** Lower number = higher urgency (for board card sort). */
+export const PRIORITY_RANK: Record<ServiceOrderPriorityValue, number> = {
+  URGENT: 0,
+  HIGH: 1,
+  NORMAL: 2,
+  LOW: 3,
+};
+
+/** Active board columns (excludes terminal Completed for phone switcher default). */
+export const BOARD_STATUSES = SERVICE_ORDER_STATUSES;
+
+export type BayOccupancy = {
+  bay: string;
+  count: number;
+  registrationNumbers: string[];
+};
+
+export function computeBayOccupancy(
+  orders: ReadonlyArray<{
+    bay: string | null;
+    status: ServiceOrderStatusValue;
+    vehicle: { registrationNumber: string };
+  }>,
+): BayOccupancy[] {
+  const byBay = new Map<string, BayOccupancy>();
+
+  for (const order of orders) {
+    if (!order.bay || order.status === "COMPLETED") {
+      continue;
+    }
+    const existing = byBay.get(order.bay) ?? {
+      bay: order.bay,
+      count: 0,
+      registrationNumbers: [],
+    };
+    existing.count += 1;
+    existing.registrationNumbers.push(order.vehicle.registrationNumber);
+    byBay.set(order.bay, existing);
+  }
+
+  return [...byBay.values()].sort((a, b) => a.bay.localeCompare(b.bay));
+}
 
 /** Allowed next statuses from each current status. COMPLETED is terminal. */
 export const STATUS_TRANSITIONS: Record<
@@ -98,29 +152,6 @@ const optionalRequestedServices = z
     return trimmed === "" ? null : trimmed.slice(0, 2000);
   });
 
-/** Rupee input (string/number) → integer paise. */
-const unitPriceRupeesToPaise = z
-  .union([z.string(), z.number()])
-  .transform((value, ctx) => {
-    const raw = typeof value === "number" ? String(value) : value.trim();
-    if (raw === "") {
-      return 0;
-    }
-    if (!/^\d+(\.\d{1,2})?$/.test(raw)) {
-      ctx.addIssue({ code: "custom", message: "Invalid price" });
-      return z.NEVER;
-    }
-    const [rupeesPart, paisePart = ""] = raw.split(".");
-    const rupees = Number(rupeesPart);
-    const paise = paisePart.padEnd(2, "0").slice(0, 2);
-    const total = rupees * 100 + Number(paise);
-    if (!Number.isInteger(total) || total < 0) {
-      ctx.addIssue({ code: "custom", message: "Invalid price" });
-      return z.NEVER;
-    }
-    return total;
-  });
-
 const quantityField = z
   .union([z.string(), z.number()])
   .transform((value, ctx) => {
@@ -132,6 +163,16 @@ const quantityField = z
     return n;
   });
 
+const priorityField = z
+  .union([z.enum(SERVICE_ORDER_PRIORITIES), z.literal("")])
+  .optional()
+  .transform((value) => {
+    if (value == null || value === "") {
+      return "NORMAL" as const;
+    }
+    return value;
+  });
+
 export const createServiceOrderSchema = z.object({
   vehicleId: z.string().trim().min(1),
   complaint: z.string().trim().min(1).max(4000),
@@ -140,6 +181,7 @@ export const createServiceOrderSchema = z.object({
   expectedCompletion: optionalDateTime,
   technicianId: optionalTechnicianId,
   bay: optionalBay,
+  priority: priorityField,
 });
 
 export const updateServiceOrderStatusSchema = z.object({
@@ -150,7 +192,7 @@ export const addServiceOrderLineSchema = z.object({
   type: z.enum(["LABOUR", "PART"]),
   description: z.string().trim().min(1).max(500),
   quantity: quantityField,
-  unitPricePaise: unitPriceRupeesToPaise,
+  unitPricePaise: rupeesToPaiseSchema,
   partId: z
     .union([z.string(), z.null(), z.undefined()])
     .transform((value) => {

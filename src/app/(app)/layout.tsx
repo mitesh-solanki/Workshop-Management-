@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import { AppContent } from "@/components/app-content";
 import { AppHeader } from "@/components/app-header";
 import { BottomNav } from "@/components/bottom-nav";
 import { requireSession } from "@/lib/session";
@@ -13,9 +14,7 @@ async function AuthenticatedChrome({ children }: { children: React.ReactNode }) 
   return (
     <>
       <AppHeader session={session} />
-      <div className="mx-auto w-full max-w-lg flex-1 px-4 py-4 pb-24">
-        {children}
-      </div>
+      <AppContent>{children}</AppContent>
       <BottomNav />
     </>
   );

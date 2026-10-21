@@ -3,6 +3,7 @@ import "server-only";
 import type {
   Prisma,
   ServiceOrderLineType,
+  ServiceOrderPriority,
   ServiceOrderStatus,
 } from "@prisma/client";
 import { prisma } from "@/lib/db";
@@ -27,6 +28,7 @@ const orderListSelect = {
   vehicleId: true,
   customerId: true,
   status: true,
+  priority: true,
   complaint: true,
   requestedServices: true,
   odometerIn: true,
@@ -149,6 +151,7 @@ export async function createServiceOrder(
     expectedCompletion: Date | null;
     technicianId: string | null;
     bay: string | null;
+    priority: ServiceOrderPriority;
     actorId: string;
   },
 ) {
@@ -159,6 +162,7 @@ export async function createServiceOrder(
         vehicleId: data.vehicleId,
         customerId: data.customerId,
         status: "WAITING",
+        priority: data.priority,
         complaint: data.complaint,
         requestedServices: data.requestedServices,
         odometerIn: data.odometerIn,

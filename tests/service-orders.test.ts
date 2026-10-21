@@ -3,6 +3,7 @@ import { AppError, ForbiddenError } from "@/lib/errors";
 import type { RoleSession } from "@/lib/rbac";
 import {
   canTransitionStatus,
+  computeBayOccupancy,
   STATUS_TRANSITIONS,
 } from "@/modules/service-orders/schema";
 
@@ -95,8 +96,10 @@ function sampleOrder(
   overrides: Partial<{
     id: string;
     status: "WAITING" | "INSPECTION" | "IN_PROGRESS" | "WAITING_FOR_PARTS" | "READY" | "COMPLETED";
+    priority: "LOW" | "NORMAL" | "HIGH" | "URGENT";
     technicianId: string | null;
     garageId: string;
+    bay: string | null;
   }> = {},
 ) {
   return {
@@ -105,12 +108,13 @@ function sampleOrder(
     vehicleId: "veh-1",
     customerId: "cust-1",
     status: overrides.status ?? ("WAITING" as const),
+    priority: overrides.priority ?? ("NORMAL" as const),
     complaint: "Engine noise",
     requestedServices: "Oil change",
     odometerIn: 12000,
     expectedCompletion: null,
     technicianId: overrides.technicianId === undefined ? "tech-a" : overrides.technicianId,
-    bay: "Bay 1",
+    bay: overrides.bay === undefined ? "Bay 1" : overrides.bay,
     createdAt: new Date(),
     updatedAt: new Date(),
     vehicle: {
@@ -179,6 +183,7 @@ describe("create and status change", () => {
       expectedCompletion: null,
       technicianId: "tech-a",
       bay: "Bay 1",
+      priority: "HIGH",
     });
 
     expect(createServiceOrder).toHaveBeenCalledWith(
@@ -188,6 +193,7 @@ describe("create and status change", () => {
         customerId: "cust-1",
         complaint: "Engine noise",
         technicianId: "tech-a",
+        priority: "HIGH",
         actorId: "owner-a",
       }),
     );
@@ -366,5 +372,55 @@ describe("role limits", () => {
 
     expect(findServiceOrderById).not.toHaveBeenCalled();
     expect(updateServiceOrderStatus).not.toHaveBeenCalled();
+  });
+
+  it("lets managers filter the board by technician", async () => {
+    vi.mocked(listServiceOrders).mockResolvedValue([sampleOrder()]);
+
+    await listOrders(managerA, { technicianId: "tech-a" });
+
+    expect(listServiceOrders).toHaveBeenCalledWith(garageA, {
+      technicianId: "tech-a",
+    });
+  });
+
+  it("ignores technician filter for technician sessions", async () => {
+    vi.mocked(listServiceOrders).mockResolvedValue([sampleOrder()]);
+
+    await listOrders(techA, { technicianId: "tech-other" });
+
+    expect(listServiceOrders).toHaveBeenCalledWith(garageA, {
+      technicianId: "tech-a",
+    });
+  });
+});
+
+describe("bay occupancy", () => {
+  it("groups active orders by bay and skips completed and empty bays", () => {
+    const occupancy = computeBayOccupancy([
+      sampleOrder({ id: "1", bay: "Bay 1", status: "IN_PROGRESS" }),
+      sampleOrder({
+        id: "2",
+        bay: "Bay 1",
+        status: "WAITING",
+        priority: "HIGH",
+      }),
+      sampleOrder({ id: "3", bay: "Bay 2", status: "READY" }),
+      sampleOrder({ id: "4", bay: "Bay 2", status: "COMPLETED" }),
+      sampleOrder({ id: "5", bay: null, status: "INSPECTION" }),
+    ]);
+
+    expect(occupancy).toEqual([
+      {
+        bay: "Bay 1",
+        count: 2,
+        registrationNumbers: ["GJ01AB1234", "GJ01AB1234"],
+      },
+      {
+        bay: "Bay 2",
+        count: 1,
+        registrationNumbers: ["GJ01AB1234"],
+      },
+    ]);
   });
 });

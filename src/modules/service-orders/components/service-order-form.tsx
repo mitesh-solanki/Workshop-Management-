@@ -6,6 +6,7 @@ import {
   createServiceOrderAction,
   type ServiceOrderActionState,
 } from "@/app/actions/service-orders";
+import { SERVICE_ORDER_PRIORITIES } from "@/modules/service-orders/schema";
 
 const initial: ServiceOrderActionState = { ok: false };
 
@@ -118,17 +119,34 @@ export function ServiceOrderForm({
           </select>
         </div>
         <div className="flex flex-col gap-1.5">
-          <label htmlFor="bay" className="text-sm font-medium">
-            {t("bay")}
+          <label htmlFor="priority" className="text-sm font-medium">
+            {t("priority")}
           </label>
-          <input
-            id="bay"
-            name="bay"
-            maxLength={40}
+          <select
+            id="priority"
+            name="priority"
             className={inputClass}
-            placeholder={t("bayPlaceholder")}
-          />
+            defaultValue="NORMAL"
+          >
+            {SERVICE_ORDER_PRIORITIES.map((priority) => (
+              <option key={priority} value={priority}>
+                {t(`priorities.${priority}`)}
+              </option>
+            ))}
+          </select>
         </div>
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor="bay" className="text-sm font-medium">
+          {t("bay")}
+        </label>
+        <input
+          id="bay"
+          name="bay"
+          maxLength={40}
+          className={inputClass}
+          placeholder={t("bayPlaceholder")}
+        />
       </div>
       {state.message && !state.ok && (
         <p className="text-sm text-destructive" role="status">

@@ -1,0 +1,86 @@
+{
+  "common": {
+    "appName": "Workshop",
+    "loading": "Loading…",
+    "empty": "Nothing here yet",
+    "error": "Something went wrong"
+  },
+  "home": {
+    "title": "Garage workshop",
+    "subtitle": "Sign in to run jobs, stock and billing for your garage."
+  },
+  "language": {
+    "label": "Language"
+  },
+  "nav": {
+    "label": "Main navigation",
+    "dashboard": "Home",
+    "team": "Team",
+    "orders": "Orders",
+    "settings": "Settings",
+    "signOut": "Sign out"
+  },
+  "auth": {
+    "loginTitle": "Sign in",
+    "loginSubtitle": "We will email you a one-time code.",
+    "signupTitle": "Create your garage",
+    "signupSubtitle": "You become the Owner of a new garage.",
+    "inviteTitle": "Join the team",
+    "inviteSubtitle": "Join {garage} as {role}.",
+    "inviteFor": "Invite sent to {email}",
+    "name": "Your name",
+    "email": "Email",
+    "garageName": "Garage name",
+    "code": "One-time code",
+    "continue": "Continue",
+    "verify": "Verify and continue",
+    "verifying": "Verifying…",
+    "sendingCode": "Sending code…",
+    "otpSent": "Enter the code sent to {email}. Check the server log in development.",
+    "noAccount": "New garage?",
+    "hasAccount": "Already have an account?",
+    "signupLink": "Create garage",
+    "loginLink": "Sign in"
+  },
+  "dashboard": {
+    "title": "Home",
+    "welcome": "Welcome to {garage}. You are signed in as {role}."
+  },
+  "settings": {
+    "title": "Garage settings",
+    "subtitle": "Name, address and GSTIN for invoices.",
+    "garageName": "Garage name",
+    "address": "Address",
+    "gstin": "GSTIN",
+    "save": "Save changes",
+    "saving": "Saving…",
+    "saved": "Settings saved",
+    "readOnly": "Only the Owner or Manager can edit garage settings."
+  },
+  "team": {
+    "title": "Team",
+    "subtitle": "People who work in this garage.",
+    "members": "Members",
+    "emptyMembers": "No members yet",
+    "inviteTitle": "Invite someone",
+    "email": "Email",
+    "role": "Role",
+    "invite": "Send invite",
+    "inviting": "Creating invite…",
+    "inviteCreated": "Invite created. Share the link below.",
+    "inviteLink": "Invite link",
+    "pending": "Pending invites",
+    "forbidden": "You do not have access to the team page.",
+    "error": "Could not load the team.",
+    "roles": {
+      "OWNER": "Owner",
+      "MANAGER": "Manager",
+      "TECHNICIAN": "Technician",
+      "ACCOUNTANT": "Accountant"
+    }
+  },
+  "orders": {
+    "title": "Service orders",
+    "empty": "Service orders will appear here in a later step."
+  }
+}

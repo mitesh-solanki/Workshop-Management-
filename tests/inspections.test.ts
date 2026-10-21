@@ -92,6 +92,7 @@ const sampleOrder = {
   vehicleId: "veh-1",
   customerId: "cust-1",
   status: "INSPECTION" as const,
+  priority: "NORMAL" as const,
   complaint: "Noise",
   requestedServices: null,
   odometerIn: 10000,

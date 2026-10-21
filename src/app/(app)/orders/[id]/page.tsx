@@ -107,6 +107,10 @@ export default async function OrderDetailPage({ params }: Props) {
               </dd>
             </div>
             <div>
+              <dt className="text-muted-foreground">{t("priority")}</dt>
+              <dd>{t(`priorities.${order.priority}`)}</dd>
+            </div>
+            <div>
               <dt className="text-muted-foreground">{t("bay")}</dt>
               <dd>{order.bay ?? tc("notSet")}</dd>
             </div>

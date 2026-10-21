@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useMemo, useState } from "react";
+import { useActionState, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import {
   setLineApprovalAction,
@@ -15,6 +15,12 @@ const initial: EstimateActionState = { ok: false };
 
 const inputClass =
   "min-h-12 w-full rounded-md border bg-background px-3 text-base outline-none focus-visible:ring-2 focus-visible:ring-ring";
+
+function defaultSelectedState(
+  currentState: EstimateApprovalStateValue,
+): EstimateApprovalStateValue {
+  return currentState === "PENDING" ? "APPROVED" : currentState;
+}
 
 type Props = {
   orderId: string;
@@ -31,12 +37,13 @@ export function LineApprovalForm({ orderId, lineId, currentState }: Props) {
   const [state, formAction, pending] = useActionState(bound, initial);
   /** Default to Approve when still pending; otherwise mirror current state. */
   const [selectedState, setSelectedState] = useState<EstimateApprovalStateValue>(
-    currentState === "PENDING" ? "APPROVED" : currentState,
+    () => defaultSelectedState(currentState),
   );
-
-  useEffect(() => {
-    setSelectedState(currentState === "PENDING" ? "APPROVED" : currentState);
-  }, [currentState]);
+  const [syncedCurrent, setSyncedCurrent] = useState(currentState);
+  if (currentState !== syncedCurrent) {
+    setSyncedCurrent(currentState);
+    setSelectedState(defaultSelectedState(currentState));
+  }
 
   const noChange = selectedState === currentState;
   const canSave = !pending && !noChange;

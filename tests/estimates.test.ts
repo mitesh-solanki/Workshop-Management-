@@ -67,6 +67,7 @@ function sampleOrder(
     vehicleId: "veh-1",
     customerId: "cust-1",
     status: overrides.status ?? "INSPECTION",
+    priority: "NORMAL" as const,
     complaint: "Brake noise",
     requestedServices: null,
     odometerIn: 12000,

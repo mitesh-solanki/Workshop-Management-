@@ -6,6 +6,7 @@ import { findVehicleById } from "@/modules/vehicles/repo";
 import {
   addServiceOrderLineSchema,
   canTransitionStatus,
+  computeBayOccupancy,
   createServiceOrderSchema,
   updateServiceOrderStatusSchema,
   type AddServiceOrderLineInput,
@@ -66,7 +67,19 @@ export async function listAssignableTechnicians(session: RoleSession) {
   return listTechniciansInGarage(session.garageId);
 }
 
-export async function listOrders(session: RoleSession) {
+/** Technicians for the workshop board filter (not for assignment). */
+export async function listBoardTechnicians(session: RoleSession) {
+  requireRole(session, READ_ROLES);
+  if (session.role === "TECHNICIAN") {
+    return [];
+  }
+  return listTechniciansInGarage(session.garageId);
+}
+
+export async function listOrders(
+  session: RoleSession,
+  options: { technicianId?: string } = {},
+) {
   requireRole(session, READ_ROLES);
 
   if (session.role === "TECHNICIAN") {
@@ -75,7 +88,19 @@ export async function listOrders(session: RoleSession) {
     });
   }
 
+  const technicianId = options.technicianId?.trim();
+  if (technicianId) {
+    return listServiceOrders(session.garageId, { technicianId });
+  }
   return listServiceOrders(session.garageId);
+}
+
+export async function getBayOccupancy(
+  session: RoleSession,
+  options: { technicianId?: string } = {},
+) {
+  const orders = await listOrders(session, options);
+  return computeBayOccupancy(orders);
 }
 
 /** Customer service history, scoped for technicians to their assignments. */
@@ -157,6 +182,7 @@ export async function createOrder(
     expectedCompletion: input.expectedCompletion,
     technicianId: input.technicianId,
     bay: input.bay,
+    priority: input.priority,
     actorId: session.userId,
   });
 }

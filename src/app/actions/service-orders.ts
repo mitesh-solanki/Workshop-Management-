@@ -33,6 +33,12 @@ export async function createServiceOrderAction(
       expectedCompletion: String(formData.get("expectedCompletion") ?? ""),
       technicianId: String(formData.get("technicianId") ?? ""),
       bay: String(formData.get("bay") ?? ""),
+      priority: String(formData.get("priority") ?? "") as
+        | ""
+        | "LOW"
+        | "NORMAL"
+        | "HIGH"
+        | "URGENT",
     });
     orderId = order.id;
     customerId = order.customerId;
@@ -44,6 +50,7 @@ export async function createServiceOrderAction(
   }
 
   revalidatePath("/orders");
+  revalidatePath("/workshop");
   revalidatePath(`/customers/${customerId}`);
   revalidatePath(`/vehicles/${vehicleId}/orders/new`);
   redirect(`/orders/${orderId}`);
@@ -66,6 +73,35 @@ export async function changeServiceOrderStatusAction(
         | "COMPLETED",
     });
     revalidatePath("/orders");
+    revalidatePath("/workshop");
+    revalidatePath(`/orders/${orderId}`);
+    return { ok: true, message: "statusUpdated" };
+  } catch (error) {
+    return {
+      ok: false,
+      message: error instanceof AppError ? error.message : "Something went wrong",
+    };
+  }
+}
+
+/** Board drag/drop and quick-move: same service as the order page status form. */
+export async function moveServiceOrderStatusAction(
+  orderId: string,
+  status: string,
+): Promise<ServiceOrderActionState> {
+  try {
+    const session = await requireSession();
+    await changeOrderStatus(session, orderId, {
+      status: status as
+        | "WAITING"
+        | "INSPECTION"
+        | "IN_PROGRESS"
+        | "WAITING_FOR_PARTS"
+        | "READY"
+        | "COMPLETED",
+    });
+    revalidatePath("/orders");
+    revalidatePath("/workshop");
     revalidatePath(`/orders/${orderId}`);
     return { ok: true, message: "statusUpdated" };
   } catch (error) {

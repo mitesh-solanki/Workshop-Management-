@@ -23,6 +23,13 @@ enum ServiceOrderStatus {
   COMPLETED
 }
 
+enum ServiceOrderPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
 enum ServiceOrderLineType {
   LABOUR
   PART
@@ -137,16 +144,17 @@ model ServiceOrder {
   vehicle            Vehicle            @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
   customerId         String
   customer           Customer           @relation(fields: [customerId], references: [id], onDelete: Restrict)
-  status             ServiceOrderStatus @default(WAITING)
+  status             ServiceOrderStatus   @default(WAITING)
+  priority           ServiceOrderPriority @default(NORMAL)
   complaint          String
   requestedServices  String?
   odometerIn         Int?
   expectedCompletion DateTime?
   technicianId       String?
-  technician         User?              @relation("ServiceOrderTechnician", fields: [technicianId], references: [id], onDelete: SetNull)
+  technician         User?                @relation("ServiceOrderTechnician", fields: [technicianId], references: [id], onDelete: SetNull)
   bay                String?
-  createdAt          DateTime           @default(now())
-  updatedAt          DateTime           @updatedAt
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
 
   lines       ServiceOrderLine[]
   inspection  Inspection?

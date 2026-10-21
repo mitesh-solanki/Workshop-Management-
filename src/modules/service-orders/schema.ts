@@ -12,6 +12,59 @@ export const SERVICE_ORDER_STATUSES = [
 
 export type ServiceOrderStatusValue = (typeof SERVICE_ORDER_STATUSES)[number];
 
+export const SERVICE_ORDER_PRIORITIES = [
+  "LOW",
+  "NORMAL",
+  "HIGH",
+  "URGENT",
+] as const;
+
+export type ServiceOrderPriorityValue =
+  (typeof SERVICE_ORDER_PRIORITIES)[number];
+
+/** Lower number = higher urgency (for board card sort). */
+export const PRIORITY_RANK: Record<ServiceOrderPriorityValue, number> = {
+  URGENT: 0,
+  HIGH: 1,
+  NORMAL: 2,
+  LOW: 3,
+};
+
+/** Active board columns (excludes terminal Completed for phone switcher default). */
+export const BOARD_STATUSES = SERVICE_ORDER_STATUSES;
+
+export type BayOccupancy = {
+  bay: string;
+  count: number;
+  registrationNumbers: string[];
+};
+
+export function computeBayOccupancy(
+  orders: ReadonlyArray<{
+    bay: string | null;
+    status: ServiceOrderStatusValue;
+    vehicle: { registrationNumber: string };
+  }>,
+): BayOccupancy[] {
+  const byBay = new Map<string, BayOccupancy>();
+
+  for (const order of orders) {
+    if (!order.bay || order.status === "COMPLETED") {
+      continue;
+    }
+    const existing = byBay.get(order.bay) ?? {
+      bay: order.bay,
+      count: 0,
+      registrationNumbers: [],
+    };
+    existing.count += 1;
+    existing.registrationNumbers.push(order.vehicle.registrationNumber);
+    byBay.set(order.bay, existing);
+  }
+
+  return [...byBay.values()].sort((a, b) => a.bay.localeCompare(b.bay));
+}
+
 /** Allowed next statuses from each current status. COMPLETED is terminal. */
 export const STATUS_TRANSITIONS: Record<
   ServiceOrderStatusValue,
@@ -110,6 +163,16 @@ const quantityField = z
     return n;
   });
 
+const priorityField = z
+  .union([z.enum(SERVICE_ORDER_PRIORITIES), z.literal("")])
+  .optional()
+  .transform((value) => {
+    if (value == null || value === "") {
+      return "NORMAL" as const;
+    }
+    return value;
+  });
+
 export const createServiceOrderSchema = z.object({
   vehicleId: z.string().trim().min(1),
   complaint: z.string().trim().min(1).max(4000),
@@ -118,6 +181,7 @@ export const createServiceOrderSchema = z.object({
   expectedCompletion: optionalDateTime,
   technicianId: optionalTechnicianId,
   bay: optionalBay,
+  priority: priorityField,
 });
 
 export const updateServiceOrderStatusSchema = z.object({

@@ -17,11 +17,39 @@
   "nav": {
     "label": "Main navigation",
     "dashboard": "Home",
+    "workshop": "Board",
     "customers": "Customers",
     "team": "Team",
     "orders": "Orders",
     "settings": "Settings",
     "signOut": "Sign out"
+  },
+  "workshop": {
+    "title": "Workshop board",
+    "subtitle": "Live jobs by status. Drag a card to move it.",
+    "subtitleTechnician": "Your assigned jobs by status.",
+    "empty": "No active orders to show.",
+    "filterTechnician": "Filter by technician",
+    "filterAllTechnicians": "All technicians",
+    "bayOccupancy": "Bay occupancy",
+    "bayEmpty": "No bays in use.",
+    "bayCount": "{count, plural, one {# vehicle} other {# vehicles}}",
+    "columnSwitcher": "Show status",
+    "columnEmpty": "No jobs here",
+    "dueLabel": "Due",
+    "dueNone": "No due time",
+    "overdue": "Overdue",
+    "technicianLabel": "Technician",
+    "moveTo": "Move to",
+    "moving": "Updating status…",
+    "moveFailed": "Could not update status",
+    "invalidDrop": "That status change is not allowed from here.",
+    "priorities": {
+      "LOW": "Low",
+      "NORMAL": "Normal",
+      "HIGH": "High",
+      "URGENT": "Urgent"
+    }
   },
   "auth": {
     "loginTitle": "Sign in",
@@ -102,6 +130,13 @@
     "expectedCompletion": "Expected completion",
     "technician": "Technician",
     "technicianUnassigned": "Unassigned",
+    "priority": "Priority",
+    "priorities": {
+      "LOW": "Low",
+      "NORMAL": "Normal",
+      "HIGH": "High",
+      "URGENT": "Urgent"
+    },
     "bay": "Bay",
     "bayPlaceholder": "e.g. Bay 2",
     "details": "Order details",

@@ -100,7 +100,7 @@ export function isZeroRupeesInput(value: string): boolean {
  * Keeps digits, at most one `.`, and at most two decimal places.
  */
 export function sanitizeRupeesTyping(value: string): string {
-  let cleaned = value.replace(/[^\d.]/g, "");
+  const cleaned = value.replace(/[^\d.]/g, "");
   const firstDot = cleaned.indexOf(".");
   if (firstDot === -1) {
     return cleaned;

@@ -6,6 +6,7 @@ import { useTranslations } from "next-intl";
 import {
   ClipboardList,
   Contact,
+  Kanban,
   LayoutDashboard,
   Settings,
   Users,
@@ -14,6 +15,7 @@ import { cn } from "@/lib/utils";
 
 const links = [
   { href: "/dashboard", key: "dashboard", icon: LayoutDashboard },
+  { href: "/workshop", key: "workshop", icon: Kanban },
   { href: "/customers", key: "customers", icon: Contact },
   { href: "/orders", key: "orders", icon: ClipboardList },
   { href: "/team", key: "team", icon: Users },

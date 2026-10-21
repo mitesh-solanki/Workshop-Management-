@@ -17,11 +17,39 @@
   "nav": {
     "label": "मुख्य नेविगेशन",
     "dashboard": "होम",
+    "workshop": "बोर्ड",
     "customers": "ग्राहक",
     "team": "टीम",
     "orders": "ऑर्डर",
     "settings": "सेटिंग्स",
     "signOut": "साइन आउट"
+  },
+  "workshop": {
+    "title": "वर्कशॉप बोर्ड",
+    "subtitle": "स्थिति के अनुसार लाइव जॉब। कार्ड खींचकर स्थिति बदलें।",
+    "subtitleTechnician": "आपको सौंपे गए जॉब, स्थिति के अनुसार।",
+    "empty": "दिखाने के लिए कोई ऑर्डर नहीं।",
+    "filterTechnician": "टेक्नीशियन से फ़िल्टर",
+    "filterAllTechnicians": "सभी टेक्नीशियन",
+    "bayOccupancy": "बे का उपयोग",
+    "bayEmpty": "कोई बे उपयोग में नहीं।",
+    "bayCount": "{count, plural, one {# वाहन} other {# वाहन}}",
+    "columnSwitcher": "स्थिति दिखाएँ",
+    "columnEmpty": "यहाँ कोई जॉब नहीं",
+    "dueLabel": "समय",
+    "dueNone": "कोई समय नहीं",
+    "overdue": "देर हो गई",
+    "technicianLabel": "टेक्नीशियन",
+    "moveTo": "यहाँ भेजें",
+    "moving": "स्थिति अपडेट हो रही है…",
+    "moveFailed": "स्थिति अपडेट नहीं हो सकी",
+    "invalidDrop": "यहाँ से यह स्थिति बदलाव मान्य नहीं है।",
+    "priorities": {
+      "LOW": "कम",
+      "NORMAL": "सामान्य",
+      "HIGH": "ऊँची",
+      "URGENT": "तुरंत"
+    }
   },
   "auth": {
     "loginTitle": "साइन इन",
@@ -102,6 +130,13 @@
     "expectedCompletion": "अपेक्षित पूर्णता",
     "technician": "तकनीशियन",
     "technicianUnassigned": "असाइन नहीं",
+    "priority": "प्राथमिकता",
+    "priorities": {
+      "LOW": "कम",
+      "NORMAL": "सामान्य",
+      "HIGH": "ऊँची",
+      "URGENT": "तुरंत"
+    },
     "bay": "बे",
     "bayPlaceholder": "जैसे बे 2",
     "details": "ऑर्डर विवरण",

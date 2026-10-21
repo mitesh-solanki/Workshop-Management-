@@ -17,11 +17,39 @@
   "nav": {
     "label": "મુખ્ય નેવિગેશન",
     "dashboard": "હોમ",
+    "workshop": "બોર્ડ",
     "customers": "ગ્રાહકો",
     "team": "ટીમ",
     "orders": "ઓર્ડર",
     "settings": "સેટિંગ્સ",
     "signOut": "સાઇન આઉટ"
+  },
+  "workshop": {
+    "title": "વર્કશોપ બોર્ડ",
+    "subtitle": "સ્ટેટસ પ્રમાણે લાઇવ જોબ. કાર્ડ ખેંચીને સ્ટેટસ બદલો.",
+    "subtitleTechnician": "તમને સોંપેલી જોબ, સ્ટેટસ પ્રમાણે.",
+    "empty": "બતાવવા માટે કોઈ ઓર્ડર નથી.",
+    "filterTechnician": "ટેક્નિશિયનથી ફિલ્ટર",
+    "filterAllTechnicians": "બધા ટેક્નિશિયન",
+    "bayOccupancy": "બે વ્યવસ્થા",
+    "bayEmpty": "કોઈ બે વપરાશમાં નથી.",
+    "bayCount": "{count, plural, one {# વાહન} other {# વાહન}}",
+    "columnSwitcher": "સ્ટેટસ બતાવો",
+    "columnEmpty": "અહીં કોઈ જોબ નથી",
+    "dueLabel": "સમય",
+    "dueNone": "સમય નથી",
+    "overdue": "મોડું",
+    "technicianLabel": "ટેક્નિશિયન",
+    "moveTo": "અહીં ખસેડો",
+    "moving": "સ્ટેટસ અપડેટ થઈ રહ્યું છે…",
+    "moveFailed": "સ્ટેટસ અપડેટ થઈ શક્યું નહીં",
+    "invalidDrop": "અહીંથી આ સ્ટેટસ બદલાવ માન્ય નથી.",
+    "priorities": {
+      "LOW": "ઓછી",
+      "NORMAL": "સામાન્ય",
+      "HIGH": "ઊંચી",
+      "URGENT": "તાત્કાલિક"
+    }
   },
   "auth": {
     "loginTitle": "સાઇન ઇન",
@@ -102,6 +130,13 @@
     "expectedCompletion": "અપેક્ષિત પૂર્ણતા",
     "technician": "ટેકનિશિયન",
     "technicianUnassigned": "સોંપાયેલ નથી",
+    "priority": "પ્રાથમિકતા",
+    "priorities": {
+      "LOW": "ઓછી",
+      "NORMAL": "સામાન્ય",
+      "HIGH": "ઊંચી",
+      "URGENT": "તાત્કાલિક"
+    },
     "bay": "બે",
     "bayPlaceholder": "જેમ કે બે 2",
     "details": "ઓર્ડર વિગતો",

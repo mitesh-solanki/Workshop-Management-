@@ -4,6 +4,7 @@ import { getTranslations } from "next-intl/server";
 import { NotFoundError } from "@/lib/errors";
 import { requireSession } from "@/lib/session";
 import { getCustomer } from "@/modules/customers/service";
+import { listCustomerServiceHistory } from "@/modules/service-orders/service";
 
 type Props = {
   params: Promise<{ id: string }>;
@@ -21,10 +22,13 @@ export default async function CustomerDetailPage({ params }: Props) {
   const { id } = await params;
   const t = await getTranslations("customers");
   const tv = await getTranslations("vehicles");
+  const to = await getTranslations("orders");
 
   let customer: Awaited<ReturnType<typeof getCustomer>>;
+  let serviceHistory: Awaited<ReturnType<typeof listCustomerServiceHistory>>;
   try {
     customer = await getCustomer(session, id);
+    serviceHistory = await listCustomerServiceHistory(session, id);
   } catch (error) {
     if (error instanceof NotFoundError) {
       notFound();
@@ -36,6 +40,8 @@ export default async function CustomerDetailPage({ params }: Props) {
     session.role === "OWNER" ||
     session.role === "MANAGER" ||
     session.role === "TECHNICIAN";
+  const canCreateOrder =
+    session.role === "OWNER" || session.role === "MANAGER";
 
   return (
     <main className="space-y-8">
@@ -107,23 +113,63 @@ export default async function CustomerDetailPage({ params }: Props) {
                     {formatDate(vehicle.fitnessExpiry, t("notSet"))}
                   </p>
                 </div>
-                {canWrite && (
-                  <Link
-                    href={`/vehicles/${vehicle.id}/edit`}
-                    className="inline-flex min-h-12 shrink-0 items-center justify-center rounded-md border px-4 text-sm font-medium"
-                  >
-                    {tv("edit")}
-                  </Link>
-                )}
+                <div className="flex shrink-0 flex-col gap-2 sm:flex-row">
+                  {canCreateOrder && (
+                    <Link
+                      href={`/vehicles/${vehicle.id}/orders/new`}
+                      className="inline-flex min-h-12 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground"
+                    >
+                      {to("createShort")}
+                    </Link>
+                  )}
+                  {canWrite && (
+                    <Link
+                      href={`/vehicles/${vehicle.id}/edit`}
+                      className="inline-flex min-h-12 items-center justify-center rounded-md border px-4 text-sm font-medium"
+                    >
+                      {tv("edit")}
+                    </Link>
+                  )}
+                </div>
               </li>
             ))}
           </ul>
         )}
       </section>
 
-      <section className="space-y-2">
+      <section className="space-y-3">
         <h2 className="text-lg font-medium">{t("serviceHistory")}</h2>
-        <p className="text-sm text-muted-foreground">{t("serviceHistoryEmpty")}</p>
+        {serviceHistory.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            {t("serviceHistoryEmpty")}
+          </p>
+        ) : (
+          <ul className="divide-y rounded-md border">
+            {serviceHistory.map((order) => (
+              <li key={order.id}>
+                <Link
+                  href={`/orders/${order.id}`}
+                  className="flex min-h-14 flex-col gap-1 px-3 py-3 hover:bg-secondary/40"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <p className="font-medium">
+                      {order.vehicle.registrationNumber}
+                    </p>
+                    <span className="shrink-0 text-xs text-muted-foreground">
+                      {to(`statuses.${order.status}`)}
+                    </span>
+                  </div>
+                  <p className="truncate text-sm text-muted-foreground">
+                    {order.complaint}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {order.createdAt.toLocaleDateString()}
+                  </p>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
 
       <section className="space-y-2">

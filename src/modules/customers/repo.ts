@@ -1,5 +1,6 @@
 import "server-only";
 
+import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 
 const customerSelect = {
@@ -85,6 +86,47 @@ export async function findCustomerById(garageId: string, customerId: string) {
         orderBy: { registrationNumber: "asc" },
       },
     },
+  });
+}
+
+export async function countCustomerServiceOrders(
+  garageId: string,
+  customerId: string,
+) {
+  return prisma.serviceOrder.count({
+    where: { garageId, customerId },
+  });
+}
+
+export async function deleteCustomerById(
+  garageId: string,
+  customerId: string,
+  data: { actorId: string; name: string; phone: string },
+) {
+  return prisma.$transaction(async (tx) => {
+    const result = await tx.customer.deleteMany({
+      where: { id: customerId, garageId },
+    });
+
+    if (result.count === 0) {
+      return null;
+    }
+
+    await tx.auditLog.create({
+      data: {
+        garageId,
+        actorId: data.actorId,
+        action: "customer.deleted",
+        entity: "Customer",
+        entityId: customerId,
+        meta: {
+          name: data.name,
+          phone: data.phone,
+        } satisfies Prisma.InputJsonValue,
+      },
+    });
+
+    return { id: customerId };
   });
 }
 

@@ -4,6 +4,7 @@ import { getTranslations } from "next-intl/server";
 import { ForbiddenError, NotFoundError } from "@/lib/errors";
 import { requireRole, requireSession } from "@/lib/session";
 import { CustomerForm } from "@/modules/customers/components/customer-form";
+import { DeleteCustomerButton } from "@/modules/customers/components/delete-customer-button";
 import { getCustomer } from "@/modules/customers/service";
 
 type Props = {
@@ -65,6 +66,7 @@ export default async function EditCustomerPage({ params }: Props) {
           notes: customer.notes,
         }}
       />
+      <DeleteCustomerButton customerId={customer.id} />
     </main>
   );
 }

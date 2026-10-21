@@ -14,6 +14,20 @@ enum Role {
   ACCOUNTANT
 }
 
+enum ServiceOrderStatus {
+  WAITING
+  INSPECTION
+  IN_PROGRESS
+  WAITING_FOR_PARTS
+  READY
+  COMPLETED
+}
+
+enum ServiceOrderLineType {
+  LABOUR
+  PART
+}
+
 model Garage {
   id        String   @id @default(cuid())
   name      String
@@ -22,11 +36,13 @@ model Garage {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  users     User[]
-  invites   Invite[]
-  auditLogs AuditLog[]
-  customers Customer[]
-  vehicles  Vehicle[]
+  users          User[]
+  invites        Invite[]
+  auditLogs      AuditLog[]
+  customers      Customer[]
+  vehicles       Vehicle[]
+  serviceOrders  ServiceOrder[]
+  serviceOrderLines ServiceOrderLine[]
 }
 
 model Customer {
@@ -40,7 +56,8 @@ model Customer {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  vehicles Vehicle[]
+  vehicles      Vehicle[]
+  serviceOrders ServiceOrder[]
 
   @@index([garageId])
   @@index([garageId, phone])
@@ -64,9 +81,59 @@ model Vehicle {
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 
+  serviceOrders ServiceOrder[]
+
   @@unique([garageId, registrationNumber])
   @@index([garageId])
   @@index([customerId])
+}
+
+model ServiceOrder {
+  id                 String             @id @default(cuid())
+  garageId           String
+  garage             Garage             @relation(fields: [garageId], references: [id], onDelete: Cascade)
+  vehicleId          String
+  vehicle            Vehicle            @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
+  customerId         String
+  customer           Customer           @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  status             ServiceOrderStatus @default(WAITING)
+  complaint          String
+  requestedServices  String?
+  odometerIn         Int?
+  expectedCompletion DateTime?
+  technicianId       String?
+  technician         User?              @relation("ServiceOrderTechnician", fields: [technicianId], references: [id], onDelete: SetNull)
+  bay                String?
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  lines ServiceOrderLine[]
+
+  @@index([garageId])
+  @@index([garageId, status])
+  @@index([garageId, technicianId])
+  @@index([vehicleId])
+  @@index([customerId])
+}
+
+model ServiceOrderLine {
+  id             String                @id @default(cuid())
+  garageId       String
+  garage         Garage                @relation(fields: [garageId], references: [id], onDelete: Cascade)
+  serviceOrderId String
+  serviceOrder   ServiceOrder          @relation(fields: [serviceOrderId], references: [id], onDelete: Cascade)
+  type           ServiceOrderLineType
+  description    String
+  quantity       Int                   @default(1)
+  unitPricePaise Int                   @default(0)
+  /// Reserved for inventory Part link (Prompt 7).
+  partId         String?
+  sortOrder      Int                   @default(0)
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+
+  @@index([garageId])
+  @@index([serviceOrderId])
 }
 
 model User {
@@ -81,9 +148,10 @@ model User {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  accounts  Account[]
-  sessions  Session[]
-  auditLogs AuditLog[] @relation("AuditActor")
+  accounts           Account[]
+  sessions           Session[]
+  auditLogs          AuditLog[]     @relation("AuditActor")
+  assignedOrders     ServiceOrder[] @relation("ServiceOrderTechnician")
 
   @@index([garageId])
 }

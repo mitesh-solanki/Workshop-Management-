@@ -44,6 +44,24 @@ enum SuggestedRepairType {
   PART
 }
 
+enum EstimateLineType {
+  LABOUR
+  PART
+}
+
+enum EstimateLineApprovalState {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum EstimateApprovalMethod {
+  MANUAL
+  PHONE
+  WHATSAPP
+  ONLINE
+}
+
 model Garage {
   id        String   @id @default(cuid())
   name      String
@@ -63,6 +81,9 @@ model Garage {
   inspectionItems     InspectionItem[]
   media               Media[]
   suggestedRepairs    SuggestedRepair[]
+  estimates           Estimate[]
+  estimateLines       EstimateLine[]
+  estimateApprovals   EstimateApproval[]
 }
 
 model Customer {
@@ -129,6 +150,7 @@ model ServiceOrder {
 
   lines       ServiceOrderLine[]
   inspection  Inspection?
+  estimates   Estimate[]
 
   @@index([garageId])
   @@index([garageId, status])
@@ -235,6 +257,82 @@ model SuggestedRepair {
   @@index([inspectionId])
 }
 
+/// Customer-facing estimate for a service order visit. Revisions keep history.
+model Estimate {
+  id             String    @id @default(cuid())
+  garageId       String
+  garage         Garage    @relation(fields: [garageId], references: [id], onDelete: Cascade)
+  serviceOrderId String
+  serviceOrder   ServiceOrder @relation(fields: [serviceOrderId], references: [id], onDelete: Cascade)
+  /// Starts at 1; each revision increments. Old revisions are never deleted.
+  revisionNumber Int
+  notes          String?
+  /// Set when a newer revision replaces this one. Null = current revision.
+  supersededAt   DateTime?
+  createdById    String?
+  createdBy      User?     @relation("EstimateCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  lines     EstimateLine[]
+  approvals EstimateApproval[]
+
+  @@unique([serviceOrderId, revisionNumber])
+  @@index([garageId])
+  @@index([serviceOrderId])
+  @@index([garageId, serviceOrderId, supersededAt])
+}
+
+model EstimateLine {
+  id                      String                     @id @default(cuid())
+  garageId                String
+  garage                  Garage                     @relation(fields: [garageId], references: [id], onDelete: Cascade)
+  estimateId              String
+  estimate                Estimate                   @relation(fields: [estimateId], references: [id], onDelete: Cascade)
+  type                    EstimateLineType
+  description             String
+  quantity                Int                        @default(1)
+  unitPricePaise          Int                        @default(0)
+  /// GST rate as whole percent (e.g. 18 for 18%).
+  gstRatePercent          Int                        @default(18)
+  /// HSN (parts) or SAC (labour) code.
+  hsnOrSac                String
+  approvalState           EstimateLineApprovalState  @default(PENDING)
+  sourceOrderLineId       String?
+  sourceSuggestedRepairId String?
+  sortOrder               Int                        @default(0)
+  createdAt               DateTime                   @default(now())
+  updatedAt               DateTime                   @updatedAt
+
+  approvals EstimateApproval[]
+
+  @@index([garageId])
+  @@index([estimateId])
+  @@index([garageId, approvalState])
+}
+
+/// Immutable history of approval changes on estimate lines.
+model EstimateApproval {
+  id             String                    @id @default(cuid())
+  garageId       String
+  garage         Garage                    @relation(fields: [garageId], references: [id], onDelete: Cascade)
+  estimateId     String
+  estimate       Estimate                  @relation(fields: [estimateId], references: [id], onDelete: Cascade)
+  estimateLineId String
+  estimateLine   EstimateLine              @relation(fields: [estimateLineId], references: [id], onDelete: Cascade)
+  fromState      EstimateLineApprovalState?
+  toState        EstimateLineApprovalState
+  method         EstimateApprovalMethod
+  recordedById   String?
+  recordedBy     User?                     @relation("EstimateApprovalRecorder", fields: [recordedById], references: [id], onDelete: SetNull)
+  note           String?
+  createdAt      DateTime                  @default(now())
+
+  @@index([garageId])
+  @@index([estimateId, createdAt])
+  @@index([estimateLineId, createdAt])
+}
+
 model User {
   id            String    @id @default(cuid())
   name          String?
@@ -251,6 +349,8 @@ model User {
   sessions           Session[]
   auditLogs          AuditLog[]     @relation("AuditActor")
   assignedOrders     ServiceOrder[] @relation("ServiceOrderTechnician")
+  estimatesCreated   Estimate[]     @relation("EstimateCreatedBy")
+  approvalsRecorded  EstimateApproval[] @relation("EstimateApprovalRecorder")
 
   @@index([garageId])
 }

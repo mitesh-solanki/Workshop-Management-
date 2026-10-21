@@ -3,7 +3,9 @@
     "appName": "Workshop",
     "loading": "Loading…",
     "empty": "Nothing here yet",
-    "error": "Something went wrong"
+    "error": "Something went wrong",
+    "unitPrice": "Unit price (₹)",
+    "unitPriceHint": "Stored as paise. Use rupees, e.g. 250 or 250.50."
   },
   "home": {
     "title": "Garage workshop",
@@ -112,6 +114,9 @@
     "inspectionSection": "Digital inspection",
     "inspectionHint": "Checklist, photos, videos and suggested repairs.",
     "openInspection": "Open inspection",
+    "estimateSection": "Estimate and approval",
+    "estimateHint": "Labour and parts with GST. Approve each line and keep revision history.",
+    "openEstimate": "Open estimate",
     "lines": "Labour and parts",
     "linesEmpty": "No labour or parts lines yet.",
     "lineType": "Type",
@@ -238,6 +243,73 @@
     "repairTypes": {
       "LABOUR": "Labour",
       "PART": "Part"
+    }
+  },
+  "estimates": {
+    "title": "Estimate and approval",
+    "backToOrder": "Back to order",
+    "emptyTitle": "No estimate yet",
+    "emptyHint": "Build an estimate from order lines and inspection suggested repairs.",
+    "emptyReadOnly": "An estimate has not been created yet.",
+    "createFromSources": "Create estimate",
+    "estimateCreated": "Estimate created",
+    "notes": "Notes",
+    "notesPlaceholder": "Optional note for this revision",
+    "saving": "Saving…",
+    "revisionLabel": "Revision {number}",
+    "currentRevision": "Current",
+    "superseded": "Superseded",
+    "linesEmpty": "No estimate lines yet.",
+    "lineType": "Type",
+    "lineDescription": "Description",
+    "quantity": "Quantity",
+    "unitPrice": "Unit price (₹)",
+    "unitPriceHint": "Stored as paise. Use rupees, e.g. 250 or 250.50.",
+    "gstRate": "GST rate",
+    "gstShort": "GST",
+    "hsnOrSac": "HSN / SAC",
+    "hsnOrSacHint": "Use SAC for labour and HSN for parts.",
+    "addLineTitle": "Add line",
+    "addLine": "Add line",
+    "lineAdded": "Line added",
+    "approvalState": "Approval",
+    "approvalMethod": "How approved",
+    "approvalNote": "Note",
+    "approvalNotePlaceholder": "Optional note",
+    "saveApproval": "Save approval",
+    "approvalSaved": "Approval saved",
+    "approvalAlreadySet": "Already {state}. Change approval above to update.",
+    "totals": "Totals",
+    "totalsAll": "All lines",
+    "totalsApproved": "Approved",
+    "totalsPending": "Pending",
+    "totalsRejected": "Rejected",
+    "taxable": "Taxable",
+    "reviseTitle": "Revised estimate",
+    "reviseHint": "Creates a new revision for extra repairs. Previous revisions stay in history.",
+    "includeNewSources": "Include new order lines and suggested repairs",
+    "createRevision": "Create revision {number}",
+    "revisionCreated": "Revision created",
+    "approvalHistory": "Approval history",
+    "approvalHistoryEmpty": "No approvals recorded yet.",
+    "historyChange": "{from} → {to}",
+    "unknownActor": "Unknown",
+    "revisionHistory": "Revision history",
+    "lineCount": "{count} lines",
+    "lineTypes": {
+      "LABOUR": "Labour",
+      "PART": "Part"
+    },
+    "approvalStates": {
+      "PENDING": "Pending",
+      "APPROVED": "Approved",
+      "REJECTED": "Rejected"
+    },
+    "approvalMethods": {
+      "MANUAL": "Manual",
+      "PHONE": "Phone",
+      "WHATSAPP": "WhatsApp",
+      "ONLINE": "Online"
     }
   }
 }

@@ -4,9 +4,9 @@ import { AppError, ForbiddenError, NotFoundError } from "@/lib/errors";
 import { requireRole, type RoleSession } from "@/lib/rbac";
 import {
   buildInspectionMediaKey,
+  createPresignedDownloadUrl,
   createPresignedUploadUrl,
   deleteStoredObject,
-  publicObjectUrl,
   storageKeyBelongsToGarage,
 } from "@/lib/storage";
 import {
@@ -73,17 +73,19 @@ type InspectionDetail = NonNullable<
   Awaited<ReturnType<typeof findInspectionByServiceOrderId>>
 >;
 
-function withMediaUrls(inspection: InspectionDetail) {
-  return {
-    ...inspection,
-    items: inspection.items.map((item) => ({
+async function withMediaUrls(inspection: InspectionDetail) {
+  const items = await Promise.all(
+    inspection.items.map(async (item) => ({
       ...item,
-      media: item.media.map((m) => ({
-        ...m,
-        url: publicObjectUrl(m.storageKey),
-      })),
+      media: await Promise.all(
+        item.media.map(async (m) => ({
+          ...m,
+          url: await createPresignedDownloadUrl(m.storageKey),
+        })),
+      ),
     })),
-  };
+  );
+  return { ...inspection, items };
 }
 
 async function loadOrderForSession(session: RoleSession, orderId: string) {
@@ -108,7 +110,7 @@ export async function getOrCreateInspection(
     order.id,
   );
   if (existing) {
-    return withMediaUrls(existing);
+    return await withMediaUrls(existing);
   }
 
   // Creating requires write access; readers see empty until someone starts it.
@@ -124,7 +126,7 @@ export async function getOrCreateInspection(
   if (!created) {
     throw new AppError("INSPECTION_CREATE_FAILED", "Could not start inspection");
   }
-  return withMediaUrls(created);
+  return await withMediaUrls(created);
 }
 
 export async function getInspectionForOrder(
@@ -138,7 +140,7 @@ export async function getInspectionForOrder(
     session.garageId,
     order.id,
   );
-  return inspection ? withMediaUrls(inspection) : null;
+  return inspection ? await withMediaUrls(inspection) : null;
 }
 
 export async function updateInspectionItem(
@@ -296,7 +298,7 @@ export async function confirmMediaUpload(
 
   return {
     ...media,
-    url: publicObjectUrl(media.storageKey),
+    url: await createPresignedDownloadUrl(media.storageKey),
   };
 }
 

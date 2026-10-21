@@ -144,6 +144,17 @@ export default async function OrderDetailPage({ params }: Props) {
       </section>
 
       <section className="space-y-3">
+        <h2 className="text-lg font-medium">{t("estimateSection")}</h2>
+        <p className="text-sm text-muted-foreground">{t("estimateHint")}</p>
+        <Link
+          href={`/orders/${order.id}/estimate`}
+          className="inline-flex min-h-12 items-center justify-center rounded-md border px-4 text-base font-medium"
+        >
+          {t("openEstimate")}
+        </Link>
+      </section>
+
+      <section className="space-y-3">
         <h2 className="text-lg font-medium">{t("lines")}</h2>
         {order.lines.length === 0 ? (
           <p className="text-sm text-muted-foreground">{t("linesEmpty")}</p>

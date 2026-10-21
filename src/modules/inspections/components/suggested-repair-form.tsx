@@ -8,6 +8,7 @@ import {
   removeSuggestedRepairAction,
   type InspectionActionState,
 } from "@/app/actions/inspections";
+import { RupeePriceInput } from "@/components/rupee-price-input";
 
 const initial: InspectionActionState = { ok: false };
 
@@ -127,21 +128,11 @@ export function SuggestedRepairSection({ orderId, repairs, canEdit }: Props) {
               className={inputClass}
             />
           </div>
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor="repair-price" className="text-sm font-medium">
-              {t("unitPrice")}
-            </label>
-            <input
-              id="repair-price"
-              name="unitPriceRupees"
-              type="text"
-              inputMode="decimal"
-              defaultValue="0"
-              required
-              className={inputClass}
-            />
-            <p className="text-xs text-muted-foreground">{t("unitPriceHint")}</p>
-          </div>
+          <RupeePriceInput
+            id="repair-price"
+            label={t("unitPrice")}
+            hint={t("unitPriceHint")}
+          />
           {state.message && (
             <p
               className={

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { rupeesToPaiseSchema } from "@/lib/money";
 
 /** Default checklist keys seeded on a new inspection. */
 export const DEFAULT_CHECKLIST_ITEMS = [
@@ -35,29 +36,6 @@ const optionalNotes = z
     return trimmed === "" ? null : trimmed.slice(0, 2000);
   });
 
-/** Rupee input (string/number) → integer paise. */
-const unitPriceRupeesToPaise = z
-  .union([z.string(), z.number()])
-  .transform((value, ctx) => {
-    const raw = typeof value === "number" ? String(value) : value.trim();
-    if (raw === "") {
-      return 0;
-    }
-    if (!/^\d+(\.\d{1,2})?$/.test(raw)) {
-      ctx.addIssue({ code: "custom", message: "Invalid price" });
-      return z.NEVER;
-    }
-    const [rupeesPart, paisePart = ""] = raw.split(".");
-    const rupees = Number(rupeesPart);
-    const paise = paisePart.padEnd(2, "0").slice(0, 2);
-    const total = rupees * 100 + Number(paise);
-    if (!Number.isInteger(total) || total < 0) {
-      ctx.addIssue({ code: "custom", message: "Invalid price" });
-      return z.NEVER;
-    }
-    return total;
-  });
-
 const quantityField = z
   .union([z.string(), z.number()])
   .transform((value, ctx) => {
@@ -84,7 +62,7 @@ export const addSuggestedRepairSchema = z.object({
   type: z.enum(SUGGESTED_REPAIR_TYPES),
   description: z.string().trim().min(1).max(500),
   quantity: quantityField,
-  unitPricePaise: unitPriceRupeesToPaise,
+  unitPricePaise: rupeesToPaiseSchema,
 });
 
 export const createUploadUrlSchema = z.object({

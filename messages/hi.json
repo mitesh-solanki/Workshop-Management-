@@ -3,7 +3,9 @@
     "appName": "Workshop",
     "loading": "लोड हो रहा है…",
     "empty": "अभी कुछ नहीं है",
-    "error": "कुछ गलत हो गया"
+    "error": "कुछ गलत हो गया",
+    "unitPrice": "यूनिट कीमत (₹)",
+    "unitPriceHint": "पैसे में सहेजा जाता है। रुपये लिखें, जैसे 250 या 250.50।"
   },
   "home": {
     "title": "गैरेज वर्कशॉप",
@@ -112,6 +114,9 @@
     "inspectionSection": "डिजिटल इंस्पेक्शन",
     "inspectionHint": "चेकलिस्ट, फोटो, वीडियो और सुझाए गए रिपेयर।",
     "openInspection": "इंस्पेक्शन खोलें",
+    "estimateSection": "एस्टिमेट और अनुमोदन",
+    "estimateHint": "लेबर और पार्ट्स GST के साथ। हर लाइन अनुमोदित करें और संशोधन इतिहास रखें।",
+    "openEstimate": "एस्टिमेट खोलें",
     "lines": "लेबर और पार्ट्स",
     "linesEmpty": "अभी कोई लेबर या पार्ट लाइन नहीं।",
     "lineType": "प्रकार",
@@ -238,6 +243,73 @@
     "repairTypes": {
       "LABOUR": "लेबर",
       "PART": "पार्ट"
+    }
+  },
+  "estimates": {
+    "title": "एस्टिमेट और अनुमोदन",
+    "backToOrder": "ऑर्डर पर वापस",
+    "emptyTitle": "अभी कोई एस्टिमेट नहीं",
+    "emptyHint": "ऑर्डर लाइन और इंस्पेक्शन सुझाए गए रिपेयर से एस्टिमेट बनाएँ।",
+    "emptyReadOnly": "एस्टिमेट अभी नहीं बना है।",
+    "createFromSources": "एस्टिमेट बनाएँ",
+    "estimateCreated": "एस्टिमेट बनाया गया",
+    "notes": "नोट्स",
+    "notesPlaceholder": "इस संशोधन के लिए वैकल्पिक नोट",
+    "saving": "सहेजा जा रहा है…",
+    "revisionLabel": "संशोधन {number}",
+    "currentRevision": "वर्तमान",
+    "superseded": "पुराना",
+    "linesEmpty": "अभी कोई एस्टिमेट लाइन नहीं।",
+    "lineType": "प्रकार",
+    "lineDescription": "विवरण",
+    "quantity": "मात्रा",
+    "unitPrice": "यूनिट कीमत (₹)",
+    "unitPriceHint": "पैसे में सहेजा जाता है। रुपये लिखें, जैसे 250 या 250.50।",
+    "gstRate": "GST दर",
+    "gstShort": "GST",
+    "hsnOrSac": "HSN / SAC",
+    "hsnOrSacHint": "लेबर के लिए SAC और पार्ट्स के लिए HSN।",
+    "addLineTitle": "लाइन जोड़ें",
+    "addLine": "लाइन जोड़ें",
+    "lineAdded": "लाइन जोड़ी गई",
+    "approvalState": "अनुमोदन",
+    "approvalMethod": "अनुमोदन का तरीका",
+    "approvalNote": "नोट",
+    "approvalNotePlaceholder": "वैकल्पिक नोट",
+    "saveApproval": "अनुमोदन सहेजें",
+    "approvalSaved": "अनुमोदन सहेजा गया",
+    "approvalAlreadySet": "पहले से {state}। अपडेट करने के लिए ऊपर अनुमोदन बदलें।",
+    "totals": "कुल",
+    "totalsAll": "सभी लाइनें",
+    "totalsApproved": "अनुमोदित",
+    "totalsPending": "लंबित",
+    "totalsRejected": "अस्वीकृत",
+    "taxable": "कर योग्य",
+    "reviseTitle": "संशोधित एस्टिमेट",
+    "reviseHint": "अतिरिक्त रिपेयर के लिए नया संशोधन बनाता है। पुराने संशोधन इतिहास में रहते हैं।",
+    "includeNewSources": "नई ऑर्डर लाइन और सुझाए गए रिपेयर शामिल करें",
+    "createRevision": "संशोधन {number} बनाएँ",
+    "revisionCreated": "संशोधन बनाया गया",
+    "approvalHistory": "अनुमोदन इतिहास",
+    "approvalHistoryEmpty": "अभी कोई अनुमोदन दर्ज नहीं।",
+    "historyChange": "{from} → {to}",
+    "unknownActor": "अज्ञात",
+    "revisionHistory": "संशोधन इतिहास",
+    "lineCount": "{count} लाइनें",
+    "lineTypes": {
+      "LABOUR": "लेबर",
+      "PART": "पार्ट"
+    },
+    "approvalStates": {
+      "PENDING": "लंबित",
+      "APPROVED": "अनुमोदित",
+      "REJECTED": "अस्वीकृत"
+    },
+    "approvalMethods": {
+      "MANUAL": "मैन्युअल",
+      "PHONE": "फ़ोन",
+      "WHATSAPP": "व्हाट्सऐप",
+      "ONLINE": "ऑनलाइन"
     }
   }
 }

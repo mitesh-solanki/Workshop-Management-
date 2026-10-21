@@ -15,8 +15,10 @@ vi.mock("@/lib/storage", () => ({
     storageKey: "garages/garage-a/inspections/i1/items/item-1/abc.jpg",
     bucket: "workshop",
   })),
+  createPresignedDownloadUrl: vi.fn(
+    async (key: string) => `http://localhost:9000/workshop/${key}?X-Amz-Signature=test`,
+  ),
   deleteStoredObject: vi.fn(),
-  publicObjectUrl: vi.fn((key: string) => `http://localhost:9000/workshop/${key}`),
   storageKeyBelongsToGarage: vi.fn(
     (key: string, garageId: string) => key.startsWith(`garages/${garageId}/`),
   ),

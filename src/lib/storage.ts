@@ -3,6 +3,7 @@ import "server-only";
 import {
   CreateBucketCommand,
   DeleteObjectCommand,
+  GetObjectCommand,
   HeadBucketCommand,
   PutObjectCommand,
   S3Client,
@@ -121,18 +122,20 @@ export async function createPresignedUploadUrl(input: {
   return { uploadUrl, storageKey: input.storageKey, bucket: getBucket() };
 }
 
-/** Public-style URL for reading an object (path-style MinIO / S3). */
-export function publicObjectUrl(storageKey: string): string {
-  const endpoint = (
-    process.env.NEXT_PUBLIC_S3_ENDPOINT?.trim() ||
-    process.env.S3_ENDPOINT?.trim() ||
-    ""
-  ).replace(/\/$/, "");
-  const bucket = process.env.S3_BUCKET?.trim() || "";
-  if (!endpoint || !bucket) {
-    return "";
-  }
-  return `${endpoint}/${bucket}/${storageKey}`;
+/**
+ * Presigned GET URL so the browser can view private bucket objects
+ * (local MinIO defaults to PRIVATE; production buckets should stay private too).
+ */
+export async function createPresignedDownloadUrl(
+  storageKey: string,
+  expiresInSeconds = 3600,
+): Promise<string> {
+  const client = getClient();
+  const command = new GetObjectCommand({
+    Bucket: getBucket(),
+    Key: storageKey,
+  });
+  return getSignedUrl(client, command, { expiresIn: expiresInSeconds });
 }
 
 export async function deleteStoredObject(storageKey: string) {

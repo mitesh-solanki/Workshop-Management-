@@ -1,7 +1,15 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { getTranslations } from "next-intl/server";
+import { AuthCardBrand } from "@/components/brand/auth-card-brand";
 import { SignupForm } from "@/components/auth-forms";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { authCopy } from "@/lib/auth-copy";
 import { getOptionalSession } from "@/lib/session";
 
 export const instant = false;
@@ -12,21 +20,31 @@ export default async function SignupPage() {
     redirect("/dashboard");
   }
 
-  const t = await getTranslations("auth");
-
   return (
-    <main className="flex flex-1 flex-col gap-6">
-      <div className="space-y-2">
-        <h1 className="text-2xl font-semibold tracking-tight">{t("signupTitle")}</h1>
-        <p className="text-base text-muted-foreground">{t("signupSubtitle")}</p>
-      </div>
-      <SignupForm />
-      <p className="text-sm text-muted-foreground">
-        {t("hasAccount")}{" "}
-        <Link href="/login" className="font-medium text-foreground underline">
-          {t("loginLink")}
+    <div className="flex flex-col gap-6">
+      <Card>
+        <CardHeader className="text-center">
+          <AuthCardBrand />
+          <CardTitle className="text-2xl font-semibold tracking-tight text-slate-900">
+            {authCopy("signupTitle")}
+          </CardTitle>
+          <CardDescription className="text-sm text-slate-500">
+            {authCopy("signupSubtitle")}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <SignupForm />
+        </CardContent>
+      </Card>
+      <p className="text-center text-sm text-muted-foreground">
+        {authCopy("hasAccount")}{" "}
+        <Link
+          href="/login"
+          className="font-medium text-foreground underline underline-offset-4"
+        >
+          {authCopy("loginLink")}
         </Link>
       </p>
-    </main>
+    </div>
   );
 }

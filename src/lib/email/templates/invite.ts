@@ -44,7 +44,7 @@ export function renderInviteEmail(input: {
           <tr><td style="font-size:15px;font-weight:600;padding-bottom:24px;">${escapeHtml(role)}</td></tr>
           <tr>
             <td style="padding-bottom:20px;">
-              <a href="${escapeAttr(input.acceptUrl)}" style="display:inline-block;background:#0f766e;color:#ffffff;text-decoration:none;padding:12px 20px;border-radius:8px;font-size:15px;font-weight:600;">
+              <a href="${escapeAttr(input.acceptUrl)}" style="display:inline-block;background:#2563EB;color:#ffffff;text-decoration:none;padding:12px 20px;border-radius:8px;font-size:15px;font-weight:600;">
                 ${escapeHtml(copy.cta)}
               </a>
             </td>

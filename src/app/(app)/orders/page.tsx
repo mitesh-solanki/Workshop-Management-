@@ -1,9 +1,10 @@
 import Link from "next/link";
-import { ClipboardList } from "lucide-react";
+import { Plus } from "lucide-react";
 import { getTranslations } from "next-intl/server";
-import { EmptyState } from "@/components/ui/empty-state";
+import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/ui/page-header";
 import { requireSession } from "@/lib/session";
+import { OrdersTable } from "@/modules/service-orders/components/orders-table";
 import { listOrders } from "@/modules/service-orders/service";
 
 export const instant = false;
@@ -12,52 +13,51 @@ export default async function OrdersPage() {
   const session = await requireSession();
   const t = await getTranslations("orders");
   const orders = await listOrders(session);
+  const canWrite =
+    session.role === "OWNER" || session.role === "MANAGER";
+
+  const createAction = canWrite ? (
+    <Button asChild size="md">
+      <Link href="/orders/new">
+        <Plus className="size-4" aria-hidden />
+        {t("createShort")}
+      </Link>
+    </Button>
+  ) : undefined;
 
   return (
-    <main className="space-y-6">
+    <main className="space-y-6 sm:space-y-8">
       <PageHeader
         title={t("title")}
         description={
           session.role === "TECHNICIAN" ? t("subtitleTechnician") : t("subtitle")
         }
+        actions={createAction}
       />
 
-      {orders.length === 0 ? (
-        <EmptyState
-          icon={ClipboardList}
-          title={t("emptyTitle")}
-          description={t("empty")}
-        />
-      ) : (
-        <ul className="divide-y rounded-md border">
-          {orders.map((order) => (
-            <li key={order.id}>
-              <Link
-                href={`/orders/${order.id}`}
-                className="flex min-h-14 flex-col gap-1 px-3 py-3 hover:bg-secondary/40"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <p className="font-medium">
-                    {order.vehicle.registrationNumber}
-                  </p>
-                  <span className="shrink-0 text-xs font-medium text-muted-foreground">
-                    {t(`statuses.${order.status}`)}
-                  </span>
-                </div>
-                <p className="truncate text-sm text-muted-foreground">
-                  {order.customer.name} · {order.complaint}
-                </p>
-                {order.technician && (
-                  <p className="text-xs text-muted-foreground">
-                    {t("technician")}:{" "}
-                    {order.technician.name?.trim() || order.technician.email}
-                  </p>
-                )}
-              </Link>
-            </li>
-          ))}
-        </ul>
-      )}
+      <OrdersTable
+        canWrite={canWrite}
+        orders={orders.map((order) => ({
+          id: order.id,
+          customerId: order.customerId,
+          status: order.status,
+          complaint: order.complaint,
+          bay: order.bay,
+          vehicle: {
+            registrationNumber: order.vehicle.registrationNumber,
+            make: order.vehicle.make,
+            model: order.vehicle.model,
+          },
+          customer: { name: order.customer.name },
+          technician: order.technician
+            ? {
+                name: order.technician.name,
+                email: order.technician.email,
+              }
+            : null,
+        }))}
+        emptyAction={createAction}
+      />
     </main>
   );
 }

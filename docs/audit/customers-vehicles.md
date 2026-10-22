@@ -21,7 +21,7 @@ Be strict: if behaviour is incomplete, unproven, or only works in a mocked path,
 | P2.5 | Create and edit forms | **Done** | `customers/new`, `customers/[id]/edit`, `customers/[id]/vehicles/new`, `vehicles/[id]/edit`. |
 | P2.6 | Detail page: service history empty + communication history placeholder | **Done** | `src/app/(app)/customers/[id]/page.tsx` — `serviceHistory` / `serviceHistoryEmpty` and `communicationHistoryPlaceholder`. |
 | P2.7 | Layering: pages/actions → service → repo; Zod in schema.ts | **Done** | `src/app/actions/customers.ts`, `vehicles.ts` → `modules/*/service.ts` → `repo.ts`; Zod schemas present. |
-| P2.8 | Tests: duplicate-registration + garageId filtering | **Partial** | `tests/customers-vehicles.test.ts` covers normalise, duplicate on create, cross-garage helpers. Gaps: update-path duplicate not tested; repos mocked — no live Postgres / `P2002` integration test. |
+| P2.8 | Tests: duplicate-registration + garageId filtering | **Done** | `tests/customers-vehicles.test.ts`: create duplicate, update-path duplicate (`rejects updating a vehicle to a registration already used in the garage`), unchanged-registration update, `P2002` mapped via `isUniqueConstraintError` (`maps unique-constraint failures on update to duplicate registration`), plus garageId filtering. Repos still mocked (no live Postgres); service + unique-constraint mapping are covered. |
 | P2.9 | All three language strings | **Done** | `customers` / `vehicles` namespaces in `messages/en.json`, `hi.json`, `gu.json` (keys aligned on this branch; 113 keys, no missing hi/gu). |
 
 ### ROADMAP 1.2 “Done when”
@@ -31,23 +31,23 @@ Be strict: if behaviour is incomplete, unproven, or only works in a mocked path,
 | D1 | Add customers and vehicles | **Done** | Create flows above. |
 | D2 | Search | **Done** | Search by name/phone/registration. |
 | D3 | Edit | **Done** | Edit pages/forms. |
-| D4 | History page | **Partial** | Customer detail has history *sections*, but service history is always empty copy (no real orders yet on this branch tip). Acceptable per Prompt 2 “empty for now”, but ROADMAP “history page” is only a placeholder. |
+| D4 | History page | **Partial** | Customer detail and vehicle detail show history sections with empty copy only (`serviceHistoryEmpty` / placeholders). Prompt 2 allows “empty for now”; real order history needs Prompt 3 service orders. Not finished as a live history page. |
 | D5 | Duplicate registration blocked per garage | **Done** | Service + unique constraint + tests (mocked). |
 
 ---
 
 ## 2. UI problems
 
-| Area | Finding |
-| --- | --- |
-| Loading | No `(app)/loading.tsx` on this branch; list/detail rely on navigation without skeletons. |
-| Empty | List empty copy may always read like a “no search matches” message even when `q` is unset (`customers.empty` on `customers/page.tsx`). Vehicle empty on detail: `noVehicles` — OK. |
-| Error | Actions return English `"Something went wrong"` / `AppError.message` in places (`src/app/actions/customers.ts`, `vehicles.ts`). Zod failures become the same generic English string. |
-| Hard-coded English | Action/error strings; Zod messages in schemas (`"Invalid year"`, etc.) can surface. |
-| hi/gu | Feature message keys present and matched. |
-| Mobile / desktop | Forms use `min-h-12` targets; content still in narrow `max-w-lg` shell inherited from auth (looks sparse at 1440px). |
-| Vehicle detail | No read-only `/vehicles/[id]` page — vehicles only on customer detail + edit. |
-| Dates | Customer detail uses `toLocaleDateString()` without an explicit locale tied to next-intl. |
+| Area | Finding | Status |
+| --- | --- | --- |
+| Loading | `(app)/loading.tsx` uses `PageSpinner`. | **Done** — `src/app/(app)/loading.tsx` |
+| Empty | List distinguishes no customers vs no search matches via `hasQuery`. | **Done** — `src/app/(app)/customers/page.tsx` (`emptyTitle` / `emptySearchTitle`); proof `customers empty copy keys` in `tests/customers-vehicles.test.ts`. |
+| Error | Customers/vehicles actions use `translateError`. | **Done** — `src/app/actions/customers.ts`, `vehicles.ts` + `src/lib/translate-error.ts` (`vehicles.duplicate_registration`). |
+| Hard-coded English (Zod) | Customer/vehicle schemas emit `validation.*` keys. | **Done** — `src/modules/customers/schema.ts`, `src/modules/vehicles/schema.ts`; keys in `messages/{en,hi,gu}.json`; proof `schema validation messages are i18n keys` in `tests/customers-vehicles.test.ts`. |
+| hi/gu | Feature message keys present and matched. | **Done** |
+| Mobile / desktop | Forms use `min-h-12` targets; wider shell may still feel sparse at 1440px (shared layout, out of scope here). | Partial (layout) |
+| Vehicle detail | Read-only vehicle page. | **Done** — `src/app/(app)/vehicles/[id]/page.tsx`; linked from customer detail. |
+| Dates | Customer/vehicle detail use `getLocale()` + `Intl.DateTimeFormat`. | **Done** — `customers/[id]/page.tsx`, `vehicles/[id]/page.tsx`. |
 
 ---
 
@@ -73,4 +73,4 @@ Be strict: if behaviour is incomplete, unproven, or only works in a mocked path,
 
 ## Summary verdict
 
-Prompt 2 is **largely Done** on `feat/customers-vehicles`: solid layering, registration normalisation/uniqueness, search, CRUD pages, and matched i18n. Gaps: mocked isolation tests (no update-path duplicate / live DB), English action errors, empty-list copy wording, no vehicle detail route, no page-level loading/error routes, and history remains placeholder (allowed by the prompt, weak against a strict “history page” reading of ROADMAP).
+Prompt 2 is **largely Done** on `feat/customers-vehicles`: solid layering, registration normalisation/uniqueness (create + update paths tested), search, CRUD + vehicle detail, i18n Zod/action errors, and matched message keys. Remaining gap: **D4** history stays placeholder empty copy until service orders exist (Prompt 2 allows this). Isolation tests still mock repos (no live Postgres), which is acceptable for the Prompt 2 unit-test bar.

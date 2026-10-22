@@ -1,6 +1,8 @@
 "use client";
 
 import { useTranslations } from "next-intl";
+import { FormField } from "@/components/ui/form-field";
+import { Input } from "@/components/ui/input";
 import {
   isZeroRupeesInput,
   paiseToRupeesInput,
@@ -8,9 +10,6 @@ import {
   type Paise,
 } from "@/lib/money";
 import { cn } from "@/lib/utils";
-
-const inputClass =
-  "min-h-12 w-full rounded-md border bg-background px-3 text-base outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
 type Props = {
   id?: string;
@@ -45,11 +44,13 @@ export function RupeePriceInput({
   const resolvedHint = hint ?? t("unitPriceHint");
 
   return (
-    <div className={cn("flex flex-col gap-1.5", className)}>
-      <label htmlFor={id} className="text-sm font-medium">
-        {resolvedLabel}
-      </label>
-      <input
+    <FormField
+      id={id}
+      label={resolvedLabel}
+      hint={resolvedHint}
+      className={className}
+    >
+      <Input
         id={id}
         name={name}
         type="text"
@@ -61,7 +62,7 @@ export function RupeePriceInput({
         defaultValue={paiseToRupeesInput(defaultPaise)}
         required={required}
         disabled={disabled}
-        className={cn(inputClass, inputClassName)}
+        className={cn("h-11 min-h-11", inputClassName)}
         onFocus={(event) => {
           if (isZeroRupeesInput(event.currentTarget.value)) {
             event.currentTarget.select();
@@ -96,7 +97,6 @@ export function RupeePriceInput({
           }
         }}
       />
-      <p className="text-xs text-muted-foreground">{resolvedHint}</p>
-    </div>
+    </FormField>
   );
 }

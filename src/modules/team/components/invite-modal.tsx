@@ -111,7 +111,7 @@ export function InviteModal() {
                     aria-checked={selected}
                     onClick={() => setRole(option)}
                     className={cn(
-                      "min-h-11 rounded-md px-2 text-caption font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600",
+                      "min-h-11 rounded-md px-2 text-caption font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600",
                       selected
                         ? "bg-card text-slate-900 shadow-sm"
                         : "text-slate-600 hover:text-slate-900",

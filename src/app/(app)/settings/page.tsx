@@ -16,7 +16,7 @@ export default async function SettingsPage() {
     <main className="space-y-6">
       <PageHeader title={t("title")} description={t("subtitle")} />
       <GarageSettingsForm
-        key={`${garage.name}|${garage.address ?? ""}|${garage.gstin ?? ""}|${garage.allowNegativeStock}`}
+        key={`${garage.name}|${garage.address ?? ""}|${garage.gstin ?? ""}`}
         garage={garage}
         canEdit={canEdit}
       />

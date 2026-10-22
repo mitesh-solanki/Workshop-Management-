@@ -1,26 +1,15 @@
 import { Suspense } from "react";
-import { getTranslations } from "next-intl/server";
-import { LanguageSwitcher } from "@/components/language-switcher";
 import { PageSpinner } from "@/components/shared/page-spinner";
 
 // Auth routes read the session (crypto / connection). Allow blocking navigations.
 export const instant = false;
 
-async function AuthHeader() {
-  const common = await getTranslations("common");
-
+function AuthFallback() {
   return (
-    <div className="mb-8 flex items-center justify-between gap-3">
-      <p className="text-lg font-semibold tracking-tight">
-        {common("appName")}
-      </p>
-      <LanguageSwitcher />
+    <div className="flex min-h-svh items-center justify-center bg-muted p-6">
+      <PageSpinner />
     </div>
   );
-}
-
-function AuthFallback() {
-  return <PageSpinner />;
 }
 
 export default function AuthLayout({
@@ -29,10 +18,9 @@ export default function AuthLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="mx-auto flex min-h-full w-full max-w-lg flex-1 flex-col px-4 py-8">
+    <div className="flex h-full min-h-0 flex-1 flex-col items-center justify-center overflow-y-auto bg-muted p-6 md:p-10">
       <Suspense fallback={<AuthFallback />}>
-        <AuthHeader />
-        {children}
+        <div className="w-full max-w-sm py-6">{children}</div>
       </Suspense>
     </div>
   );

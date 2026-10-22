@@ -132,58 +132,61 @@ export function PendingInvitesSection({
           description={t("pendingEmptyDescription")}
         />
       ) : (
-        <ul className="space-y-3">
-          {invites.map((invite) => {
-            const busy = pending && pendingId === invite.id;
-            return (
-              <li key={invite.id}>
-                <Card className="py-0">
-                  <CardBody className="flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="min-w-0 space-y-1">
-                      <p className="truncate font-medium text-slate-900">
-                        {invite.email}
-                      </p>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <RoleBadge label={t(`roles.${invite.role}`)} />
-                        <span className="text-caption text-slate-500">
-                          {t("expiresOn", {
-                            date: formatInviteDate(invite.expiresAt),
-                          })}
-                        </span>
-                        {invite.lastEmailStatus === "failed" ? (
-                          <Badge variant="danger">{t("emailFailed")}</Badge>
-                        ) : null}
-                      </div>
+        <Card className="gap-0 overflow-hidden py-0">
+          <ul className="divide-y divide-border">
+            {invites.map((invite) => {
+              const busy = pending && pendingId === invite.id;
+              return (
+                <li
+                  key={invite.id}
+                  className="flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <div className="min-w-0 space-y-1">
+                    <p className="truncate font-medium text-slate-900">
+                      {invite.email}
+                    </p>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <RoleBadge label={t(`roles.${invite.role}`)} />
+                      <span className="text-caption text-slate-500">
+                        {t("expiresOn", {
+                          date: formatInviteDate(invite.expiresAt),
+                        })}
+                      </span>
+                      {invite.lastEmailStatus === "failed" ? (
+                        <Badge variant="danger">{t("emailFailed")}</Badge>
+                      ) : null}
                     </div>
-                    <div className="flex flex-wrap gap-2">
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        size="sm"
-                        loading={busy && revokeId !== invite.id}
-                        disabled={pending}
-                        onClick={() => onResend(invite.id)}
-                      >
-                        {invite.lastEmailStatus === "failed"
-                          ? t("retrySend")
-                          : t("resend")}
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        disabled={pending}
-                        onClick={() => setRevokeId(invite.id)}
-                      >
-                        {t("revoke")}
-                      </Button>
-                    </div>
-                  </CardBody>
-                </Card>
-              </li>
-            );
-          })}
-        </ul>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      loading={busy && revokeId !== invite.id}
+                      disabled={pending}
+                      className="border-blue-600 text-blue-600 hover:bg-blue-50 hover:text-blue-700"
+                      onClick={() => onResend(invite.id)}
+                    >
+                      {invite.lastEmailStatus === "failed"
+                        ? t("retrySend")
+                        : t("resend")}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={pending}
+                      className="border-danger text-danger hover:bg-danger/5 hover:text-danger"
+                      onClick={() => setRevokeId(invite.id)}
+                    >
+                      {t("revoke")}
+                    </Button>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        </Card>
       )}
 
       <ConfirmDialog

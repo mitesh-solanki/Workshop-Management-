@@ -1,17 +1,18 @@
 "use client";
 
-import { useActionState, useMemo } from "react";
+import { useActionState, useEffect, useMemo, useRef } from "react";
 import { useTranslations } from "next-intl";
 import {
   createVehicleAction,
   updateVehicleAction,
   type VehicleActionState,
 } from "@/app/actions/vehicles";
+import { Button } from "@/components/ui/button";
+import { FormField } from "@/components/ui/form-field";
+import { Input } from "@/components/ui/input";
+import { toast } from "@/components/ui/toast";
 
 const initial: VehicleActionState = { ok: false };
-
-const inputClass =
-  "min-h-12 w-full rounded-md border bg-background px-3 text-base outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
 function toDateInput(value: Date | string | null | undefined): string {
   if (!value) {
@@ -57,6 +58,17 @@ export function VehicleForm(props: Props) {
     props.mode === "create" ? createVehicleAction : boundUpdate!,
     initial,
   );
+  const handledMessage = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!state.message || state.message === handledMessage.current) return;
+    handledMessage.current = state.message;
+    if (state.ok) {
+      toast.success(state.message);
+    } else {
+      toast.error(state.message);
+    }
+  }, [state]);
 
   const defaults =
     props.mode === "edit"
@@ -73,56 +85,50 @@ export function VehicleForm(props: Props) {
         };
 
   return (
-    <form action={formAction} className="flex flex-col gap-4">
-      {props.mode === "create" && (
+    <form action={formAction} className="flex w-full flex-col gap-5">
+      {props.mode === "create" ? (
         <input type="hidden" name="customerId" value={props.customerId} />
-      )}
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor="registrationNumber" className="text-sm font-medium">
-          {t("registrationNumber")}
-        </label>
-        <input
+      ) : null}
+
+      <FormField
+        id="registrationNumber"
+        label={t("registrationNumber")}
+        hint={t("registrationHint")}
+      >
+        <Input
           id="registrationNumber"
           name="registrationNumber"
           defaultValue={defaults.registrationNumber}
           required
           autoCapitalize="characters"
-          className={inputClass}
+          className="h-11 min-h-11"
         />
-        <p className="text-xs text-muted-foreground">{t("registrationHint")}</p>
-      </div>
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor="make" className="text-sm font-medium">
-            {t("make")}
-          </label>
-          <input
+      </FormField>
+
+      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+        <FormField id="make" label={t("make")}>
+          <Input
             id="make"
             name="make"
             defaultValue={defaults.make}
             required
-            className={inputClass}
+            className="h-11 min-h-11"
           />
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor="model" className="text-sm font-medium">
-            {t("model")}
-          </label>
-          <input
+        </FormField>
+        <FormField id="model" label={t("model")}>
+          <Input
             id="model"
             name="model"
             defaultValue={defaults.model}
             required
-            className={inputClass}
+            className="h-11 min-h-11"
           />
-        </div>
+        </FormField>
       </div>
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor="year" className="text-sm font-medium">
-            {t("year")}
-          </label>
-          <input
+
+      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+        <FormField id="year" label={t("year")}>
+          <Input
             id="year"
             name="year"
             type="number"
@@ -130,81 +136,61 @@ export function VehicleForm(props: Props) {
             min={1950}
             max={2100}
             defaultValue={defaults.year ?? ""}
-            className={inputClass}
+            className="h-11 min-h-11"
           />
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor="odometer" className="text-sm font-medium">
-            {t("odometer")}
-          </label>
-          <input
+        </FormField>
+        <FormField id="odometer" label={t("odometerHint")}>
+          <Input
             id="odometer"
             name="odometer"
             type="number"
             inputMode="numeric"
             min={0}
             defaultValue={defaults.odometer ?? ""}
-            className={inputClass}
+            className="h-11 min-h-11"
           />
-        </div>
+        </FormField>
       </div>
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor="insuranceExpiry" className="text-sm font-medium">
-          {t("insuranceExpiry")}
-        </label>
-        <input
-          id="insuranceExpiry"
-          name="insuranceExpiry"
-          type="date"
-          defaultValue={toDateInput(defaults.insuranceExpiry)}
-          className={inputClass}
-        />
+
+      <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
+        <FormField id="insuranceExpiry" label={t("insuranceExpiry")}>
+          <Input
+            id="insuranceExpiry"
+            name="insuranceExpiry"
+            type="date"
+            defaultValue={toDateInput(defaults.insuranceExpiry)}
+            className="h-11 min-h-11"
+          />
+        </FormField>
+        <FormField id="pucExpiry" label={t("pucExpiry")}>
+          <Input
+            id="pucExpiry"
+            name="pucExpiry"
+            type="date"
+            defaultValue={toDateInput(defaults.pucExpiry)}
+            className="h-11 min-h-11"
+          />
+        </FormField>
+        <FormField id="fitnessExpiry" label={t("fitnessExpiry")}>
+          <Input
+            id="fitnessExpiry"
+            name="fitnessExpiry"
+            type="date"
+            defaultValue={toDateInput(defaults.fitnessExpiry)}
+            className="h-11 min-h-11"
+          />
+        </FormField>
       </div>
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor="pucExpiry" className="text-sm font-medium">
-          {t("pucExpiry")}
-        </label>
-        <input
-          id="pucExpiry"
-          name="pucExpiry"
-          type="date"
-          defaultValue={toDateInput(defaults.pucExpiry)}
-          className={inputClass}
-        />
+
+      <div className="flex flex-wrap gap-2 border-t border-border pt-4">
+        <Button type="submit" size="md" loading={pending}>
+          {pending
+            ? t("saving")
+            : props.mode === "create"
+              ? t("create")
+              : t("save")}
+        </Button>
       </div>
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor="fitnessExpiry" className="text-sm font-medium">
-          {t("fitnessExpiry")}
-        </label>
-        <input
-          id="fitnessExpiry"
-          name="fitnessExpiry"
-          type="date"
-          defaultValue={toDateInput(defaults.fitnessExpiry)}
-          className={inputClass}
-        />
-      </div>
-      {state.message && (
-        <p
-          className={
-            state.ok ? "text-sm text-foreground" : "text-sm text-destructive"
-          }
-          role="status"
-        >
-          {state.ok ? t("saved") : state.message}
-        </p>
-      )}
-      <button
-        type="submit"
-        disabled={pending}
-        className="min-h-12 rounded-md bg-primary px-4 text-base font-medium text-primary-foreground disabled:opacity-60"
-      >
-        {pending
-          ? t("saving")
-          : props.mode === "create"
-            ? t("create")
-            : t("save")}
-      </button>
     </form>
   );
 }

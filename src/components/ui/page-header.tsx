@@ -2,8 +2,8 @@ import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
 type PageHeaderProps = {
-  title: string;
-  description?: string;
+  title: ReactNode;
+  description?: ReactNode;
   /** Right-side actions (buttons). */
   actions?: ReactNode;
   /** Optional tabs row under the title. */
@@ -28,7 +28,15 @@ function PageHeader({
         <div className="min-w-0 space-y-1">
           <h1 className="text-page-title text-slate-900">{title}</h1>
           {description ? (
-            <p className="text-body text-slate-600">{description}</p>
+            typeof description === "string" ? (
+              <p className="hidden text-body text-slate-600 sm:block">
+                {description}
+              </p>
+            ) : (
+              <div className="hidden text-body text-slate-600 sm:block">
+                {description}
+              </div>
+            )
           ) : null}
         </div>
         {actions ? (

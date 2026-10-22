@@ -8,21 +8,25 @@ import {
   canTransitionStatus,
   computeBayOccupancy,
   createServiceOrderSchema,
+  updateServiceOrderSchema,
   updateServiceOrderStatusSchema,
   type AddServiceOrderLineInput,
   type CreateServiceOrderInput,
   type ServiceOrderStatusValue,
+  type UpdateServiceOrderInput,
   type UpdateServiceOrderStatusInput,
 } from "@/modules/service-orders/schema";
 import {
   createServiceOrder,
   createServiceOrderLine,
+  deleteServiceOrderById,
   findServiceOrderById,
   findTechnicianInGarage,
   listServiceOrderAuditLogs,
   listServiceOrders,
   listServiceOrdersByCustomer,
   listTechniciansInGarage,
+  updateServiceOrderDetails,
   updateServiceOrderStatus,
 } from "@/modules/service-orders/repo";
 
@@ -73,28 +77,34 @@ export async function listBoardTechnicians(session: RoleSession) {
 
 export async function listOrders(
   session: RoleSession,
-  options: { technicianId?: string } = {},
+  options: { technicianId?: string; bay?: string } = {},
 ) {
   requireRole(session, READ_ROLES);
+
+  const bay = options.bay?.trim() || undefined;
 
   if (session.role === "TECHNICIAN") {
     return listServiceOrders(session.garageId, {
       technicianId: session.userId,
+      ...(bay ? { bay } : {}),
     });
   }
 
-  const technicianId = options.technicianId?.trim();
-  if (technicianId) {
-    return listServiceOrders(session.garageId, { technicianId });
-  }
-  return listServiceOrders(session.garageId);
+  const technicianId = options.technicianId?.trim() || undefined;
+  return listServiceOrders(session.garageId, {
+    ...(technicianId ? { technicianId } : {}),
+    ...(bay ? { bay } : {}),
+  });
 }
 
+/** Bay chips for the board — scoped by technician filter only (not by selected bay). */
 export async function getBayOccupancy(
   session: RoleSession,
   options: { technicianId?: string } = {},
 ) {
-  const orders = await listOrders(session, options);
+  const orders = await listOrders(session, {
+    ...(options.technicianId ? { technicianId: options.technicianId } : {}),
+  });
   return computeBayOccupancy(orders);
 }
 
@@ -179,6 +189,69 @@ export async function createOrder(
   });
 }
 
+export async function updateOrder(
+  session: RoleSession,
+  orderId: string,
+  raw: UpdateServiceOrderInput,
+) {
+  requireRole(session, [...MANAGE_ROLES, "TECHNICIAN"]);
+  const input = updateServiceOrderSchema.parse(raw);
+
+  const order = await findServiceOrderById(session.garageId, orderId);
+  if (!order) {
+    throw new NotFoundError();
+  }
+
+  assertCanMutateOrder(session, order);
+
+  if (input.technicianId) {
+    const technician = await findTechnicianInGarage(
+      session.garageId,
+      input.technicianId,
+    );
+    if (!technician) {
+      throw new AppError("INVALID_TECHNICIAN", 400);
+    }
+  }
+
+  const updated = await updateServiceOrderDetails(session.garageId, orderId, {
+    complaint: input.complaint,
+    requestedServices: input.requestedServices,
+    odometerIn: input.odometerIn,
+    expectedCompletion: input.expectedCompletion,
+    technicianId: input.technicianId,
+    bay: input.bay,
+    priority: input.priority,
+    vehicleId: order.vehicleId,
+    actorId: session.userId,
+  });
+
+  if (!updated) {
+    throw new NotFoundError();
+  }
+
+  if (input.status && input.status !== order.status) {
+    if (!canTransitionStatus(order.status, input.status)) {
+      throw new AppError("INVALID_STATUS_TRANSITION", 400);
+    }
+    const statusUpdated = await updateServiceOrderStatus(
+      session.garageId,
+      orderId,
+      {
+        from: order.status,
+        to: input.status,
+        actorId: session.userId,
+      },
+    );
+    if (!statusUpdated) {
+      throw new AppError("STATUS_CONFLICT", 409);
+    }
+    return statusUpdated;
+  }
+
+  return updated;
+}
+
 export async function changeOrderStatus(
   session: RoleSession,
   orderId: string,
@@ -248,6 +321,28 @@ export async function addOrderLine(
   }
 
   return result.line;
+}
+
+export async function deleteOrder(session: RoleSession, orderId: string) {
+  requireRole(session, MANAGE_ROLES);
+
+  const order = await findServiceOrderById(session.garageId, orderId);
+  if (!order) {
+    throw new NotFoundError();
+  }
+
+  const deleted = await deleteServiceOrderById(session.garageId, orderId, {
+    actorId: session.userId,
+    vehicleId: order.vehicleId,
+    customerId: order.customerId,
+    registrationNumber: order.vehicle.registrationNumber,
+  });
+
+  if (!deleted) {
+    throw new NotFoundError();
+  }
+
+  return deleted;
 }
 
 /** Test helper: attempt to read while scoped to another garage id. */

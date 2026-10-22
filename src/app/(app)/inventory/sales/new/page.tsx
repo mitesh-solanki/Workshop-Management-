@@ -37,7 +37,7 @@ export default async function NewDirectSalePage() {
           gstRatePercent: p.gstRatePercent,
           quantityOnHand: p.quantityOnHand,
         }))}
-        customers={customers.map((c) => ({
+        customers={customers.items.map((c) => ({
           id: c.id,
           name: c.name,
           phone: c.phone,

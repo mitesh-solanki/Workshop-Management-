@@ -48,7 +48,7 @@ export function SidebarUserCard({
           type="button"
           aria-label={t("userMenu")}
           className={cn(
-            "flex w-full min-h-14 items-center gap-3 rounded-xl border border-sidebar-border bg-sidebar-accent/60 px-2.5 text-left transition-colors hover:bg-sidebar-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600",
+            "flex w-full min-h-14 items-center gap-3 rounded-xl border border-sidebar-border bg-sidebar-accent/60 px-2.5 text-left transition-colors hover:bg-sidebar-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600",
             collapsed && "justify-center border-0 bg-transparent px-0 hover:bg-sidebar-accent",
           )}
         >
@@ -60,7 +60,7 @@ export function SidebarUserCard({
               </p>
               <Badge
                 variant="secondary"
-                className="mt-0.5 h-5 border-0 bg-teal-100 px-1.5 text-[10px] text-teal-800"
+                className="mt-0.5 h-5 border-0 bg-blue-100 px-1.5 text-[10px] text-blue-800"
               >
                 {roleLabel}
               </Badge>

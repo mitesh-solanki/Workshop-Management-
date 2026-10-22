@@ -53,7 +53,7 @@ function assertCanMutateOrder(
     throw new ForbiddenError();
   }
   if (order.status === "COMPLETED") {
-    throw new AppError("ORDER_COMPLETED", 409);
+    throw new AppError("ORDER_COMPLETED");
   }
 }
 
@@ -186,12 +186,12 @@ export async function createEstimateFromSources(
 
   const existing = await findCurrentEstimate(session.garageId, order.id);
   if (existing) {
-    throw new AppError("ESTIMATE_EXISTS", 409);
+    throw new AppError("ESTIMATE_EXISTS");
   }
 
   const sources = await collectSourceLines(session.garageId, order.id);
   if (sources.length === 0) {
-    throw new AppError("ESTIMATE_NO_SOURCES", 400);
+    throw new AppError("ESTIMATE_NO_SOURCES");
   }
 
   const estimate = await createEstimateWithLines(session.garageId, {
@@ -202,7 +202,7 @@ export async function createEstimateFromSources(
     lines: toCreateInput(sources),
   });
   if (!estimate) {
-    throw new AppError("ESTIMATE_CREATE_FAILED", 500);
+    throw new AppError("ESTIMATE_CREATE_FAILED");
   }
   return withTotals(estimate);
 }
@@ -223,7 +223,7 @@ export async function createEstimateRevision(
 
   const current = await findCurrentEstimate(session.garageId, order.id);
   if (!current) {
-    throw new AppError("ESTIMATE_MISSING", 400);
+    throw new AppError("ESTIMATE_MISSING");
   }
 
   const copied: EstimateLineCreateInput[] = current.lines.map((line, index) => ({
@@ -279,7 +279,7 @@ export async function createEstimateRevision(
     supersedeEstimateId: current.id,
   });
   if (!estimate) {
-    throw new AppError("ESTIMATE_REVISION_FAILED", 500);
+    throw new AppError("ESTIMATE_REVISION_FAILED");
   }
   return withTotals(estimate);
 }
@@ -296,7 +296,7 @@ export async function addManualEstimateLine(
 
   const current = await findCurrentEstimate(session.garageId, order.id);
   if (!current) {
-    throw new AppError("ESTIMATE_MISSING", 400);
+    throw new AppError("ESTIMATE_MISSING");
   }
 
   const line = await addEstimateLine(session.garageId, {
@@ -311,7 +311,7 @@ export async function addManualEstimateLine(
     actorId: session.userId,
   });
   if (!line) {
-    throw new AppError("ESTIMATE_LINE_FAILED", 500);
+    throw new AppError("ESTIMATE_LINE_FAILED");
   }
   return line;
 }
@@ -329,7 +329,7 @@ export async function setEstimateLineApproval(
     throw new NotFoundError();
   }
   if (existing.estimate.supersededAt != null) {
-    throw new AppError("ESTIMATE_SUPERSEDED", 409);
+    throw new AppError("ESTIMATE_SUPERSEDED");
   }
 
   const order = await loadOrderForSession(
@@ -339,7 +339,7 @@ export async function setEstimateLineApproval(
   assertCanMutateOrder(session, order);
 
   if (existing.approvalState === input.approvalState) {
-    throw new AppError("APPROVAL_UNCHANGED", 409);
+    throw new AppError("APPROVAL_UNCHANGED");
   }
 
   const result = await recordLineApproval(session.garageId, {
@@ -353,7 +353,7 @@ export async function setEstimateLineApproval(
     recordedById: session.userId,
   });
   if (!result?.line) {
-    throw new AppError("APPROVAL_CONFLICT", 409);
+    throw new AppError("APPROVAL_CONFLICT");
   }
   return result;
 }

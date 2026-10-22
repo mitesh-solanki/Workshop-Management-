@@ -4,6 +4,7 @@ import {
   Inter,
   Noto_Sans_Devanagari,
   Noto_Sans_Gujarati,
+  Outfit,
 } from "next/font/google";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getMessages } from "next-intl/server";
@@ -17,6 +18,12 @@ import "./globals.css";
 
 const inter = Inter({
   variable: "--font-inter",
+  subsets: ["latin"],
+  display: "swap",
+});
+
+const outfit = Outfit({
+  variable: "--font-outfit",
   subsets: ["latin"],
   display: "swap",
 });
@@ -63,7 +70,9 @@ async function IntlShell({ children }: { children: React.ReactNode }) {
   return (
     <NextIntlClientProvider locale={locale} messages={messages}>
       <DocumentLang />
-      <ToastShell>{children}</ToastShell>
+      <div className="flex min-h-0 flex-1 flex-col">
+        <ToastShell>{children}</ToastShell>
+      </div>
     </NextIntlClientProvider>
   );
 }
@@ -77,11 +86,19 @@ export default function RootLayout({
     <html
       lang={defaultLocale}
       suppressHydrationWarning
-      className={`${inter.variable} ${notoDevanagari.variable} ${notoGujarati.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${inter.variable} ${outfit.variable} ${notoDevanagari.variable} ${notoGujarati.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="flex min-h-full flex-col font-sans">
-        <Suspense fallback={<LocaleFallback />}>
-          <IntlShell>{children}</IntlShell>
+      <body className="flex h-full min-h-0 flex-col overflow-hidden font-sans">
+        <Suspense
+          fallback={
+            <div className="flex min-h-0 flex-1 flex-col">
+              <LocaleFallback />
+            </div>
+          }
+        >
+          <div className="flex min-h-0 flex-1 flex-col">
+            <IntlShell>{children}</IntlShell>
+          </div>
         </Suspense>
       </body>
     </html>

@@ -51,7 +51,7 @@ export async function createVehicleRecord(
     input.registrationNumber,
   );
   if (existing) {
-    throw new AppError("DUPLICATE_REGISTRATION", 409);
+    throw new AppError("vehicles.duplicate_registration");
   }
 
   try {
@@ -68,7 +68,7 @@ export async function createVehicleRecord(
     });
   } catch (error) {
     if (isUniqueConstraintError(error)) {
-      throw new AppError("DUPLICATE_REGISTRATION", 409);
+      throw new AppError("vehicles.duplicate_registration");
     }
     throw error;
   }
@@ -93,7 +93,7 @@ export async function updateVehicleRecord(
       input.registrationNumber,
     );
     if (existing && existing.id !== vehicleId) {
-      throw new AppError("DUPLICATE_REGISTRATION", 409);
+      throw new AppError("vehicles.duplicate_registration");
     }
   }
 
@@ -116,7 +116,7 @@ export async function updateVehicleRecord(
     return vehicle;
   } catch (error) {
     if (isUniqueConstraintError(error)) {
-      throw new AppError("DUPLICATE_REGISTRATION", 409);
+      throw new AppError("vehicles.duplicate_registration");
     }
     throw error;
   }
@@ -138,7 +138,7 @@ export async function deleteVehicleRecord(
     vehicleId,
   );
   if (orderCount > 0) {
-    throw new AppError("VEHICLE_HAS_ORDERS", 409);
+    throw new AppError("VEHICLE_HAS_ORDERS");
   }
 
   const deleted = await deleteVehicleById(session.garageId, vehicleId, {

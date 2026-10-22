@@ -38,7 +38,7 @@ function assertCanViewOrder(
   order: { technicianId: string | null },
 ) {
   if (session.role === "TECHNICIAN" && order.technicianId !== session.userId) {
-    throw new ForbiddenError("Technicians can only view their assigned orders");
+    throw new ForbiddenError();
   }
 }
 
@@ -47,25 +47,20 @@ function assertCanMutateOrder(
   order: { technicianId: string | null; status: ServiceOrderStatusValue },
 ) {
   if (session.role === "ACCOUNTANT") {
-    throw new ForbiddenError("Accountants cannot change estimates");
+    throw new ForbiddenError();
   }
   if (session.role === "TECHNICIAN" && order.technicianId !== session.userId) {
-    throw new ForbiddenError(
-      "Technicians can only change estimates on their assigned orders",
-    );
+    throw new ForbiddenError();
   }
   if (order.status === "COMPLETED") {
-    throw new AppError(
-      "ORDER_COMPLETED",
-      "Completed orders cannot change estimates",
-    );
+    throw new AppError("ORDER_COMPLETED", 409);
   }
 }
 
 async function loadOrderForSession(session: RoleSession, orderId: string) {
   const order = await findServiceOrderById(session.garageId, orderId);
   if (!order) {
-    throw new NotFoundError("Service order not found");
+    throw new NotFoundError();
   }
   return order;
 }
@@ -171,7 +166,7 @@ export async function getEstimateById(session: RoleSession, estimateId: string) 
   requireRole(session, READ_ROLES);
   const estimate = await findEstimateById(session.garageId, estimateId);
   if (!estimate) {
-    throw new NotFoundError("Estimate not found");
+    throw new NotFoundError();
   }
   const order = await loadOrderForSession(session, estimate.serviceOrderId);
   assertCanViewOrder(session, order);
@@ -191,18 +186,12 @@ export async function createEstimateFromSources(
 
   const existing = await findCurrentEstimate(session.garageId, order.id);
   if (existing) {
-    throw new AppError(
-      "ESTIMATE_EXISTS",
-      "An estimate already exists. Create a revision for extra repairs.",
-    );
+    throw new AppError("ESTIMATE_EXISTS", 409);
   }
 
   const sources = await collectSourceLines(session.garageId, order.id);
   if (sources.length === 0) {
-    throw new AppError(
-      "ESTIMATE_NO_SOURCES",
-      "Add order lines or inspection suggested repairs before creating an estimate",
-    );
+    throw new AppError("ESTIMATE_NO_SOURCES", 400);
   }
 
   const estimate = await createEstimateWithLines(session.garageId, {
@@ -213,7 +202,7 @@ export async function createEstimateFromSources(
     lines: toCreateInput(sources),
   });
   if (!estimate) {
-    throw new AppError("ESTIMATE_CREATE_FAILED", "Could not create estimate");
+    throw new AppError("ESTIMATE_CREATE_FAILED", 500);
   }
   return withTotals(estimate);
 }
@@ -234,10 +223,7 @@ export async function createEstimateRevision(
 
   const current = await findCurrentEstimate(session.garageId, order.id);
   if (!current) {
-    throw new AppError(
-      "ESTIMATE_MISSING",
-      "Create an estimate before revising it",
-    );
+    throw new AppError("ESTIMATE_MISSING", 400);
   }
 
   const copied: EstimateLineCreateInput[] = current.lines.map((line, index) => ({
@@ -293,10 +279,7 @@ export async function createEstimateRevision(
     supersedeEstimateId: current.id,
   });
   if (!estimate) {
-    throw new AppError(
-      "ESTIMATE_REVISION_FAILED",
-      "Could not create estimate revision",
-    );
+    throw new AppError("ESTIMATE_REVISION_FAILED", 500);
   }
   return withTotals(estimate);
 }
@@ -313,10 +296,7 @@ export async function addManualEstimateLine(
 
   const current = await findCurrentEstimate(session.garageId, order.id);
   if (!current) {
-    throw new AppError(
-      "ESTIMATE_MISSING",
-      "Create an estimate before adding lines",
-    );
+    throw new AppError("ESTIMATE_MISSING", 400);
   }
 
   const line = await addEstimateLine(session.garageId, {
@@ -331,7 +311,7 @@ export async function addManualEstimateLine(
     actorId: session.userId,
   });
   if (!line) {
-    throw new AppError("ESTIMATE_LINE_FAILED", "Could not add estimate line");
+    throw new AppError("ESTIMATE_LINE_FAILED", 500);
   }
   return line;
 }
@@ -346,13 +326,10 @@ export async function setEstimateLineApproval(
 
   const existing = await findEstimateLineById(session.garageId, lineId);
   if (!existing) {
-    throw new NotFoundError("Estimate line not found");
+    throw new NotFoundError();
   }
   if (existing.estimate.supersededAt != null) {
-    throw new AppError(
-      "ESTIMATE_SUPERSEDED",
-      "Cannot change approval on a superseded estimate revision",
-    );
+    throw new AppError("ESTIMATE_SUPERSEDED", 409);
   }
 
   const order = await loadOrderForSession(
@@ -362,10 +339,7 @@ export async function setEstimateLineApproval(
   assertCanMutateOrder(session, order);
 
   if (existing.approvalState === input.approvalState) {
-    throw new AppError(
-      "APPROVAL_UNCHANGED",
-      "Line already has this approval state",
-    );
+    throw new AppError("APPROVAL_UNCHANGED", 409);
   }
 
   const result = await recordLineApproval(session.garageId, {
@@ -379,10 +353,7 @@ export async function setEstimateLineApproval(
     recordedById: session.userId,
   });
   if (!result?.line) {
-    throw new AppError(
-      "APPROVAL_CONFLICT",
-      "Approval could not be saved; try again",
-    );
+    throw new AppError("APPROVAL_CONFLICT", 409);
   }
   return result;
 }
@@ -394,7 +365,7 @@ export async function getEstimateForGarageId(
   serviceOrderId: string,
 ) {
   if (requestedGarageId !== session.garageId) {
-    throw new ForbiddenError("Cross-garage access denied");
+    throw new ForbiddenError();
   }
   return getEstimateForOrder(session, serviceOrderId);
 }

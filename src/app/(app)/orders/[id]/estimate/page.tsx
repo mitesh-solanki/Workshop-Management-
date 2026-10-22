@@ -191,9 +191,9 @@ export default async function OrderEstimatePage({ params }: Props) {
             ) : (
               <ul className="divide-y rounded-md border">
                 {current.approvals.map((entry) => {
-                  const line = current.lines.find(
-                    (l) => l.id === entry.estimateLineId,
-                  );
+                  const line = current.lines.find((l) => {
+                    return l.id === entry.estimateLineId;
+                  });
                   const actor =
                     entry.recordedBy?.name?.trim() ||
                     entry.recordedBy?.email ||

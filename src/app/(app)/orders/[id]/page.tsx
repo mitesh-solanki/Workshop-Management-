@@ -7,6 +7,7 @@ import { requireSession } from "@/lib/session";
 import { OrderLineForm } from "@/modules/service-orders/components/order-line-form";
 import { OrderTimeline } from "@/modules/service-orders/components/order-timeline";
 import { StatusForm } from "@/modules/service-orders/components/status-form";
+import { listParts } from "@/modules/inventory/service";
 import {
   getOrder,
   getOrderTimeline,
@@ -41,6 +42,8 @@ export default async function OrderDetailPage({ params }: Props) {
     }
     throw error;
   }
+
+  const parts = await listParts(session);
 
   const canMutate =
     (session.role === "OWNER" ||
@@ -186,7 +189,19 @@ export default async function OrderDetailPage({ params }: Props) {
             })}
           </ul>
         )}
-        {canMutate && <OrderLineForm orderId={order.id} />}
+        {canMutate && (
+          <OrderLineForm
+            orderId={order.id}
+            parts={parts.map((p) => ({
+              id: p.id,
+              name: p.name,
+              sku: p.sku,
+              unit: p.unit,
+              sellingPricePaise: p.sellingPricePaise,
+              quantityOnHand: p.quantityOnHand,
+            }))}
+          />
+        )}
       </section>
 
       <section className="space-y-3">

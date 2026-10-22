@@ -3,6 +3,7 @@ import {
   Contact,
   Kanban,
   LayoutDashboard,
+  Package,
   Settings,
   Users,
   type LucideIcon,
@@ -14,6 +15,7 @@ export type NavKey =
   | "dashboard"
   | "workshop"
   | "customers"
+  | "inventory"
   | "team"
   | "orders"
   | "settings";
@@ -33,7 +35,7 @@ export type NavItem = {
 
 /**
  * Modules that exist as routes today.
- * Later: inventory, billing, reports — add when pages ship.
+ * Later: billing, reports — add when pages ship.
  */
 export const APP_NAV_ITEMS: readonly NavItem[] = [
   {
@@ -65,12 +67,19 @@ export const APP_NAV_ITEMS: readonly NavItem[] = [
     bottomPriority: 4,
   },
   {
+    href: "/inventory",
+    key: "inventory",
+    icon: Package,
+    group: "business",
+    bottomPriority: 5,
+  },
+  {
     href: "/team",
     key: "team",
     icon: Users,
     group: "admin",
     roles: ["OWNER", "MANAGER"],
-    bottomPriority: 5,
+    bottomPriority: 6,
   },
   {
     href: "/settings",
@@ -78,7 +87,7 @@ export const APP_NAV_ITEMS: readonly NavItem[] = [
     icon: Settings,
     group: "admin",
     roles: ["OWNER", "MANAGER", "TECHNICIAN"],
-    bottomPriority: 6,
+    bottomPriority: 7,
   },
 ] as const;
 

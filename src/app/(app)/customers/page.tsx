@@ -63,7 +63,9 @@ export default async function CustomersPage({ searchParams }: Props) {
                 {customer.vehicles.length > 0 ? (
                   <p className="truncate text-sm text-muted-foreground">
                     {customer.vehicles
-                      .map((v) => v.registrationNumber)
+                      .map((v) => {
+                        return v.registrationNumber;
+                      })
                       .join(" · ")}
                   </p>
                 ) : (

@@ -24,6 +24,7 @@ export async function updateGarageSettingsAction(
       name: String(formData.get("name") ?? ""),
       address: String(formData.get("address") ?? ""),
       gstin: String(formData.get("gstin") ?? ""),
+      allowNegativeStock: formData.get("allowNegativeStock") != null,
     });
     revalidatePath("/settings");
     return { ok: true, message: t("saved") };

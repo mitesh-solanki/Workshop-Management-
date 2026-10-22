@@ -32,7 +32,7 @@ export async function listCustomers(
 export async function getCustomer(session: RoleSession, customerId: string) {
   const customer = await findCustomerById(session.garageId, customerId);
   if (!customer) {
-    throw new NotFoundError("Customer not found");
+    throw new NotFoundError();
   }
   return customer;
 }
@@ -68,7 +68,7 @@ export async function updateCustomerRecord(
   });
 
   if (!customer) {
-    throw new NotFoundError("Customer not found");
+    throw new NotFoundError();
   }
 
   return customer;
@@ -82,7 +82,7 @@ export async function deleteCustomerRecord(
 
   const customer = await findCustomerById(session.garageId, customerId);
   if (!customer) {
-    throw new NotFoundError("Customer not found");
+    throw new NotFoundError();
   }
 
   const orderCount = await countCustomerServiceOrders(
@@ -90,10 +90,7 @@ export async function deleteCustomerRecord(
     customerId,
   );
   if (orderCount > 0) {
-    throw new AppError(
-      "CUSTOMER_HAS_ORDERS",
-      "Cannot delete a customer who has service orders",
-    );
+    throw new AppError("CUSTOMER_HAS_ORDERS", 409);
   }
 
   const deleted = await deleteCustomerById(session.garageId, customerId, {
@@ -103,7 +100,7 @@ export async function deleteCustomerRecord(
   });
 
   if (!deleted) {
-    throw new NotFoundError("Customer not found");
+    throw new NotFoundError();
   }
 
   return deleted;
@@ -116,7 +113,7 @@ export async function getCustomerForGarageId(
   customerId: string,
 ) {
   if (requestedGarageId !== session.garageId) {
-    throw new ForbiddenError("Cross-garage access denied");
+    throw new ForbiddenError();
   }
   return getCustomer(session, customerId);
 }
@@ -129,7 +126,7 @@ export async function updateCustomerForGarageId(
   raw: UpdateCustomerInput,
 ) {
   if (requestedGarageId !== session.garageId) {
-    throw new ForbiddenError("Cross-garage access denied");
+    throw new ForbiddenError();
   }
   return updateCustomerRecord(session, customerId, raw);
 }
@@ -141,7 +138,7 @@ export async function deleteCustomerForGarageId(
   customerId: string,
 ) {
   if (requestedGarageId !== session.garageId) {
-    throw new ForbiddenError("Cross-garage access denied");
+    throw new ForbiddenError();
   }
   return deleteCustomerRecord(session, customerId);
 }

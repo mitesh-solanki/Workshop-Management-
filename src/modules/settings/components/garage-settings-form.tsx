@@ -3,7 +3,7 @@
 import { useActionState, useId, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
-import { Building2, Check, FileText, Languages } from "lucide-react";
+import { Building2, Check, FileText, Languages, Package } from "lucide-react";
 import {
   updateGarageSettingsAction,
   type SettingsActionState,
@@ -38,6 +38,7 @@ type Props = {
     name: string;
     address: string | null;
     gstin: string | null;
+    allowNegativeStock: boolean;
   };
   canEdit: boolean;
 };
@@ -89,6 +90,9 @@ export function GarageSettingsForm({ garage, canEdit }: Props) {
   const [name, setName] = useState(garage.name);
   const [address, setAddress] = useState(garage.address ?? "");
   const [gstin, setGstin] = useState(garage.gstin ?? "");
+  const [allowNegativeStock, setAllowNegativeStock] = useState(
+    garage.allowNegativeStock,
+  );
   const [state, formAction, pending] = useActionState(
     updateGarageSettingsAction,
     initial,
@@ -98,7 +102,8 @@ export function GarageSettingsForm({ garage, canEdit }: Props) {
     canEdit &&
     (name.trim() !== garage.name ||
       address.trim() !== (garage.address ?? "") ||
-      normalizeGstin(gstin) !== normalizeGstin(garage.gstin ?? ""));
+      normalizeGstin(gstin) !== normalizeGstin(garage.gstin ?? "") ||
+      allowNegativeStock !== garage.allowNegativeStock);
 
   const gstinNormalized = normalizeGstin(gstin);
   const gstinEmpty = gstinNormalized.length === 0;
@@ -115,6 +120,7 @@ export function GarageSettingsForm({ garage, canEdit }: Props) {
     setName(garage.name);
     setAddress(garage.address ?? "");
     setGstin(garage.gstin ?? "");
+    setAllowNegativeStock(garage.allowNegativeStock);
   }
 
   const saveDisabled = !dirty || Boolean(gstinLiveError) || !canEdit;
@@ -210,6 +216,35 @@ export function GarageSettingsForm({ garage, canEdit }: Props) {
             ) : null}
           </div>
 
+          {!canEdit ? (
+            <p className="text-body text-slate-600">{t("readOnly")}</p>
+          ) : null}
+        </SettingsSection>
+
+        <SettingsSection
+          icon={<Package className="size-5" aria-hidden />}
+          titleId={`${formId}-stock-title`}
+          title={t("sections.stockTitle")}
+          description={t("sections.stockDescription")}
+        >
+          <label className="flex min-h-12 cursor-pointer items-start gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+            <input
+              type="checkbox"
+              name="allowNegativeStock"
+              checked={allowNegativeStock}
+              onChange={(e) => setAllowNegativeStock(e.target.checked)}
+              disabled={!canEdit}
+              className="mt-1 size-4 accent-teal-700"
+            />
+            <span className="min-w-0 space-y-1">
+              <span className="block text-sm font-medium text-slate-900">
+                {t("allowNegativeStock")}
+              </span>
+              <span className="block text-sm text-slate-600">
+                {t("allowNegativeStockHint")}
+              </span>
+            </span>
+          </label>
           {!canEdit ? (
             <p className="text-body text-slate-600">{t("readOnly")}</p>
           ) : null}

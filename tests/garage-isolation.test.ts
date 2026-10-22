@@ -75,6 +75,7 @@ describe("garage isolation", () => {
       name: "Alpha Motors",
       address: null,
       gstin: null,
+      allowNegativeStock: false,
       updatedAt: new Date(),
     });
 
@@ -99,6 +100,7 @@ describe("garage isolation", () => {
       name: "Alpha Updated",
       address: "Ring Road",
       gstin: "24AAAAA0000A1Z5",
+      allowNegativeStock: false,
       updatedAt: new Date(),
     });
 
@@ -107,6 +109,7 @@ describe("garage isolation", () => {
         name: "Hacked Name",
         address: "Elsewhere",
         gstin: "24AAAAA0000A1Z5",
+        allowNegativeStock: false,
       }),
     ).rejects.toBeInstanceOf(ForbiddenError);
 
@@ -120,6 +123,7 @@ describe("garage isolation", () => {
       name: "Alpha Updated",
       address: "Ring Road",
       gstin: "24AAAAA0000A1Z5",
+      allowNegativeStock: true,
       updatedAt: new Date(),
     });
 
@@ -127,12 +131,14 @@ describe("garage isolation", () => {
       name: "Alpha Updated",
       address: "Ring Road",
       gstin: "24AAAAA0000A1Z5",
+      allowNegativeStock: true,
     });
 
     expect(updateGarageById).toHaveBeenCalledWith(garageA, {
       name: "Alpha Updated",
       address: "Ring Road",
       gstin: "24AAAAA0000A1Z5",
+      allowNegativeStock: true,
     });
     expect(updateGarageById).not.toHaveBeenCalledWith(
       garageB,

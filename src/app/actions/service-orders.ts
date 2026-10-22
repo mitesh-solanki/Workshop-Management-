@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { AppError } from "@/lib/errors";
+import { translateError } from "@/lib/translate-error";
 import { requireSession } from "@/lib/session";
 import {
   addOrderLine,
@@ -127,11 +128,13 @@ export async function addServiceOrderLineAction(
       partId: String(formData.get("partId") ?? ""),
     });
     revalidatePath(`/orders/${orderId}`);
+    revalidatePath("/inventory");
+    revalidatePath("/dashboard");
     return { ok: true, message: "lineAdded" };
   } catch (error) {
     return {
       ok: false,
-      message: error instanceof AppError ? error.message : "Something went wrong",
+      message: await translateError(error),
     };
   }
 }

@@ -69,28 +69,40 @@ enum EstimateApprovalMethod {
   ONLINE
 }
 
-model Garage {
-  id        String   @id @default(cuid())
-  name      String
-  address   String?
-  gstin     String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+enum StockMovementType {
+  IN
+  OUT
+  ADJUSTMENT
+}
 
-  users          User[]
-  invites        Invite[]
-  auditLogs      AuditLog[]
-  customers           Customer[]
-  vehicles            Vehicle[]
-  serviceOrders       ServiceOrder[]
-  serviceOrderLines   ServiceOrderLine[]
-  inspections         Inspection[]
-  inspectionItems     InspectionItem[]
-  media               Media[]
-  suggestedRepairs    SuggestedRepair[]
-  estimates           Estimate[]
-  estimateLines       EstimateLine[]
-  estimateApprovals   EstimateApproval[]
+model Garage {
+  id                 String   @id @default(cuid())
+  name               String
+  address            String?
+  gstin              String?
+  /// When false, stock OUT/ADJUSTMENT cannot take quantity below zero.
+  allowNegativeStock Boolean  @default(false)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  users             User[]
+  invites           Invite[]
+  auditLogs         AuditLog[]
+  customers         Customer[]
+  vehicles          Vehicle[]
+  serviceOrders     ServiceOrder[]
+  serviceOrderLines ServiceOrderLine[]
+  inspections       Inspection[]
+  inspectionItems   InspectionItem[]
+  media             Media[]
+  suggestedRepairs  SuggestedRepair[]
+  estimates         Estimate[]
+  estimateLines     EstimateLine[]
+  estimateApprovals EstimateApproval[]
+  parts             Part[]
+  stockMovements    StockMovement[]
+  directSales       DirectSale[]
+  directSaleLines   DirectSaleLine[]
 }
 
 model Customer {
@@ -106,6 +118,7 @@ model Customer {
 
   vehicles      Vehicle[]
   serviceOrders ServiceOrder[]
+  directSales   DirectSale[]
 
   @@index([garageId])
   @@index([garageId, phone])
@@ -156,9 +169,10 @@ model ServiceOrder {
   createdAt          DateTime             @default(now())
   updatedAt          DateTime             @updatedAt
 
-  lines       ServiceOrderLine[]
-  inspection  Inspection?
-  estimates   Estimate[]
+  lines          ServiceOrderLine[]
+  inspection     Inspection?
+  estimates      Estimate[]
+  stockMovements StockMovement[]
 
   @@index([garageId])
   @@index([garageId, status])
@@ -177,14 +191,110 @@ model ServiceOrderLine {
   description    String
   quantity       Int                   @default(1)
   unitPricePaise Int                   @default(0)
-  /// Reserved for inventory Part link (Prompt 7).
   partId         String?
+  part           Part?                 @relation(fields: [partId], references: [id], onDelete: SetNull)
   sortOrder      Int                   @default(0)
   createdAt      DateTime              @default(now())
   updatedAt      DateTime              @updatedAt
 
+  stockMovement StockMovement?
+
   @@index([garageId])
   @@index([serviceOrderId])
+  @@index([partId])
+}
+
+/// Inventory part catalogue. Current stock is derived from StockMovement rows only.
+model Part {
+  id                 String   @id @default(cuid())
+  garageId           String
+  garage             Garage   @relation(fields: [garageId], references: [id], onDelete: Cascade)
+  name               String
+  sku                String
+  unit               String
+  purchasePricePaise Int      @default(0)
+  sellingPricePaise  Int      @default(0)
+  gstRatePercent     Int      @default(18)
+  hsn                String
+  lowStockLevel      Int      @default(0)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  movements         StockMovement[]
+  serviceOrderLines ServiceOrderLine[]
+  directSaleLines   DirectSaleLine[]
+
+  @@unique([garageId, sku])
+  @@index([garageId])
+  @@index([garageId, name])
+}
+
+/// The only way stock quantity changes. quantityChange is signed (IN > 0, OUT < 0).
+model StockMovement {
+  id                 String            @id @default(cuid())
+  garageId           String
+  garage             Garage            @relation(fields: [garageId], references: [id], onDelete: Cascade)
+  partId             String
+  part               Part              @relation(fields: [partId], references: [id], onDelete: Restrict)
+  type               StockMovementType
+  quantityChange     Int
+  note               String?
+  serviceOrderId     String?
+  serviceOrder       ServiceOrder?     @relation(fields: [serviceOrderId], references: [id], onDelete: SetNull)
+  serviceOrderLineId String?           @unique
+  serviceOrderLine   ServiceOrderLine? @relation(fields: [serviceOrderLineId], references: [id], onDelete: SetNull)
+  directSaleId       String?
+  directSale         DirectSale?       @relation(fields: [directSaleId], references: [id], onDelete: SetNull)
+  directSaleLineId   String?           @unique
+  directSaleLine     DirectSaleLine?   @relation(fields: [directSaleLineId], references: [id], onDelete: SetNull)
+  createdById        String?
+  createdBy          User?             @relation("StockMovementCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt          DateTime          @default(now())
+
+  @@index([garageId, partId, createdAt])
+  @@index([garageId, createdAt])
+  @@index([serviceOrderId])
+  @@index([directSaleId])
+}
+
+/// Counter sale of parts without a service order.
+model DirectSale {
+  id          String    @id @default(cuid())
+  garageId    String
+  garage      Garage    @relation(fields: [garageId], references: [id], onDelete: Cascade)
+  customerId  String?
+  customer    Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  notes       String?
+  createdById String?
+  createdBy   User?     @relation("DirectSaleCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt   DateTime  @default(now())
+
+  lines          DirectSaleLine[]
+  stockMovements StockMovement[]
+
+  @@index([garageId, createdAt])
+  @@index([customerId])
+}
+
+model DirectSaleLine {
+  id             String     @id @default(cuid())
+  garageId       String
+  garage         Garage     @relation(fields: [garageId], references: [id], onDelete: Cascade)
+  directSaleId   String
+  directSale     DirectSale @relation(fields: [directSaleId], references: [id], onDelete: Cascade)
+  partId         String
+  part           Part       @relation(fields: [partId], references: [id], onDelete: Restrict)
+  quantity       Int
+  unitPricePaise Int
+  gstRatePercent Int        @default(18)
+  hsn            String
+  sortOrder      Int        @default(0)
+
+  stockMovement StockMovement?
+
+  @@index([garageId])
+  @@index([directSaleId])
+  @@index([partId])
 }
 
 /// Digital inspection for one service order visit.
@@ -353,12 +463,14 @@ model User {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  accounts           Account[]
-  sessions           Session[]
-  auditLogs          AuditLog[]     @relation("AuditActor")
-  assignedOrders     ServiceOrder[] @relation("ServiceOrderTechnician")
-  estimatesCreated   Estimate[]     @relation("EstimateCreatedBy")
-  approvalsRecorded  EstimateApproval[] @relation("EstimateApprovalRecorder")
+  accounts            Account[]
+  sessions            Session[]
+  auditLogs           AuditLog[]            @relation("AuditActor")
+  assignedOrders      ServiceOrder[]        @relation("ServiceOrderTechnician")
+  estimatesCreated    Estimate[]            @relation("EstimateCreatedBy")
+  approvalsRecorded   EstimateApproval[]    @relation("EstimateApprovalRecorder")
+  stockMovementsCreated StockMovement[]     @relation("StockMovementCreatedBy")
+  directSalesCreated  DirectSale[]          @relation("DirectSaleCreatedBy")
 
   @@index([garageId])
 }

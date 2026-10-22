@@ -7,6 +7,7 @@ import type {
   ServiceOrderStatus,
 } from "@prisma/client";
 import { prisma } from "@/lib/db";
+import { applyStockMovement } from "@/modules/inventory/repo";
 
 const lineSelect = {
   id: true,
@@ -236,6 +237,29 @@ export async function updateServiceOrderStatus(
   });
 }
 
+export type CreateServiceOrderLineResult =
+  | {
+      ok: true;
+      line: {
+        id: string;
+        garageId: string;
+        serviceOrderId: string;
+        type: ServiceOrderLineType;
+        description: string;
+        quantity: number;
+        unitPricePaise: number;
+        partId: string | null;
+        sortOrder: number;
+        createdAt: Date;
+        updatedAt: Date;
+      };
+    }
+  | { ok: false; reason: "PART_NOT_FOUND" | "INSUFFICIENT_STOCK" };
+
+/**
+ * Adds a labour/part line. When type is PART and partId is set, creates a
+ * StockMovement OUT in the same transaction (inventory is the only stock path).
+ */
 export async function createServiceOrderLine(
   garageId: string,
   data: {
@@ -247,47 +271,96 @@ export async function createServiceOrderLine(
     partId: string | null;
     actorId: string;
   },
-) {
-  return prisma.$transaction(async (tx) => {
-    const maxSort = await tx.serviceOrderLine.aggregate({
-      where: { garageId, serviceOrderId: data.serviceOrderId },
-      _max: { sortOrder: true },
-    });
-    const sortOrder = (maxSort._max.sortOrder ?? -1) + 1;
+): Promise<CreateServiceOrderLineResult> {
+  try {
+    const line = await prisma.$transaction(async (tx) => {
+      if (data.type === "PART" && data.partId) {
+        const part = await tx.part.findFirst({
+          where: { id: data.partId, garageId },
+          select: { id: true },
+        });
+        if (!part) {
+          throw new StockLineTxError("PART_NOT_FOUND");
+        }
+      }
 
-    const line = await tx.serviceOrderLine.create({
-      data: {
-        garageId,
-        serviceOrderId: data.serviceOrderId,
-        type: data.type,
-        description: data.description,
-        quantity: data.quantity,
-        unitPricePaise: data.unitPricePaise,
-        partId: data.partId,
-        sortOrder,
-      },
-      select: lineSelect,
-    });
+      const maxSort = await tx.serviceOrderLine.aggregate({
+        where: { garageId, serviceOrderId: data.serviceOrderId },
+        _max: { sortOrder: true },
+      });
+      const sortOrder = (maxSort._max.sortOrder ?? -1) + 1;
 
-    await tx.auditLog.create({
-      data: {
-        garageId,
-        actorId: data.actorId,
-        action: "service_order.line_added",
-        entity: "ServiceOrder",
-        entityId: data.serviceOrderId,
-        meta: {
-          lineId: line.id,
+      const created = await tx.serviceOrderLine.create({
+        data: {
+          garageId,
+          serviceOrderId: data.serviceOrderId,
           type: data.type,
           description: data.description,
           quantity: data.quantity,
           unitPricePaise: data.unitPricePaise,
-        } satisfies Prisma.InputJsonValue,
-      },
+          partId: data.type === "PART" ? data.partId : null,
+          sortOrder,
+        },
+        select: lineSelect,
+      });
+
+      if (data.type === "PART" && data.partId) {
+        const stock = await applyStockMovement(
+          garageId,
+          {
+            partId: data.partId,
+            type: "OUT",
+            quantity: data.quantity,
+            note: `Service order ${data.serviceOrderId}`,
+            actorId: data.actorId,
+            serviceOrderId: data.serviceOrderId,
+            serviceOrderLineId: created.id,
+          },
+          tx,
+        );
+        if (!stock.ok) {
+          throw new StockLineTxError(stock.reason);
+        }
+      }
+
+      await tx.auditLog.create({
+        data: {
+          garageId,
+          actorId: data.actorId,
+          action: "service_order.line_added",
+          entity: "ServiceOrder",
+          entityId: data.serviceOrderId,
+          meta: {
+            lineId: created.id,
+            type: data.type,
+            description: data.description,
+            quantity: data.quantity,
+            unitPricePaise: data.unitPricePaise,
+            partId: data.partId,
+          } satisfies Prisma.InputJsonValue,
+        },
+      });
+
+      return created;
     });
 
-    return line;
-  });
+    return { ok: true, line };
+  } catch (error) {
+    if (error instanceof StockLineTxError) {
+      return { ok: false, reason: error.reason };
+    }
+    throw error;
+  }
+}
+
+class StockLineTxError extends Error {
+  readonly reason: "PART_NOT_FOUND" | "INSUFFICIENT_STOCK";
+
+  constructor(reason: "PART_NOT_FOUND" | "INSUFFICIENT_STOCK") {
+    super(reason);
+    this.name = "StockLineTxError";
+    this.reason = reason;
+  }
 }
 
 export async function listServiceOrderAuditLogs(

@@ -35,6 +35,7 @@ export async function updateGarageSettings(
     name: input.name,
     address: input.address,
     gstin: input.gstin,
+    allowNegativeStock: input.allowNegativeStock,
   });
 
   if (!garage) {
@@ -51,6 +52,7 @@ export async function updateGarageSettings(
       name: garage.name,
       address: garage.address,
       gstin: garage.gstin,
+      allowNegativeStock: garage.allowNegativeStock,
     },
   });
 

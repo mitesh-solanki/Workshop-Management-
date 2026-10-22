@@ -36,7 +36,7 @@ function assertCanViewOrder(
   order: { technicianId: string | null },
 ) {
   if (session.role === "TECHNICIAN" && order.technicianId !== session.userId) {
-    throw new ForbiddenError("Technicians can only view their assigned orders");
+    throw new ForbiddenError();
   }
 }
 
@@ -45,20 +45,15 @@ function assertCanMutateOrder(
   order: { technicianId: string | null; status: ServiceOrderStatusValue },
 ) {
   if (session.role === "ACCOUNTANT") {
-    throw new ForbiddenError("Accountants cannot change service orders");
+    throw new ForbiddenError();
   }
   if (session.role === "TECHNICIAN") {
     if (order.technicianId !== session.userId) {
-      throw new ForbiddenError(
-        "Technicians can only change their assigned orders",
-      );
+      throw new ForbiddenError();
     }
   }
   if (order.status === "COMPLETED") {
-    throw new AppError(
-      "ORDER_COMPLETED",
-      "Completed orders cannot be changed",
-    );
+    throw new AppError("ORDER_COMPLETED", 409);
   }
 }
 
@@ -136,7 +131,7 @@ export async function getOrder(session: RoleSession, orderId: string) {
   requireRole(session, READ_ROLES);
   const order = await findServiceOrderById(session.garageId, orderId);
   if (!order) {
-    throw new NotFoundError("Service order not found");
+    throw new NotFoundError();
   }
   assertCanViewOrder(session, order);
   return order;
@@ -157,7 +152,7 @@ export async function createOrder(
 
   const vehicle = await findVehicleById(session.garageId, input.vehicleId);
   if (!vehicle) {
-    throw new NotFoundError("Vehicle not found");
+    throw new NotFoundError();
   }
 
   if (input.technicianId) {
@@ -166,10 +161,7 @@ export async function createOrder(
       input.technicianId,
     );
     if (!technician) {
-      throw new AppError(
-        "INVALID_TECHNICIAN",
-        "Assigned technician must be a technician in this garage",
-      );
+      throw new AppError("INVALID_TECHNICIAN", 400);
     }
   }
 
@@ -197,16 +189,13 @@ export async function changeOrderStatus(
 
   const order = await findServiceOrderById(session.garageId, orderId);
   if (!order) {
-    throw new NotFoundError("Service order not found");
+    throw new NotFoundError();
   }
 
   assertCanMutateOrder(session, order);
 
   if (!canTransitionStatus(order.status, input.status)) {
-    throw new AppError(
-      "INVALID_STATUS_TRANSITION",
-      `Cannot change status from ${order.status} to ${input.status}`,
-    );
+    throw new AppError("INVALID_STATUS_TRANSITION", 400);
   }
 
   const updated = await updateServiceOrderStatus(session.garageId, orderId, {
@@ -216,10 +205,7 @@ export async function changeOrderStatus(
   });
 
   if (!updated) {
-    throw new AppError(
-      "STATUS_CONFLICT",
-      "Order status changed by someone else. Refresh and try again.",
-    );
+    throw new AppError("STATUS_CONFLICT", 409);
   }
 
   return updated;
@@ -235,12 +221,16 @@ export async function addOrderLine(
 
   const order = await findServiceOrderById(session.garageId, orderId);
   if (!order) {
-    throw new NotFoundError("Service order not found");
+    throw new NotFoundError();
   }
 
   assertCanMutateOrder(session, order);
 
-  return createServiceOrderLine(session.garageId, {
+  if (input.type === "PART" && !input.partId) {
+    throw new AppError("inventory.part_required", 400);
+  }
+
+  const result = await createServiceOrderLine(session.garageId, {
     serviceOrderId: order.id,
     type: input.type,
     description: input.description,
@@ -249,6 +239,15 @@ export async function addOrderLine(
     partId: input.partId,
     actorId: session.userId,
   });
+
+  if (!result.ok) {
+    if (result.reason === "PART_NOT_FOUND") {
+      throw new NotFoundError();
+    }
+    throw new AppError("inventory.insufficient_stock", 409);
+  }
+
+  return result.line;
 }
 
 /** Test helper: attempt to read while scoped to another garage id. */
@@ -258,7 +257,7 @@ export async function getOrderForGarageId(
   orderId: string,
 ) {
   if (requestedGarageId !== session.garageId) {
-    throw new ForbiddenError("Cross-garage access denied");
+    throw new ForbiddenError();
   }
   return getOrder(session, orderId);
 }
@@ -271,7 +270,7 @@ export async function changeOrderStatusForGarageId(
   raw: UpdateServiceOrderStatusInput,
 ) {
   if (requestedGarageId !== session.garageId) {
-    throw new ForbiddenError("Cross-garage access denied");
+    throw new ForbiddenError();
   }
   return changeOrderStatus(session, orderId, raw);
 }

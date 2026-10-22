@@ -25,6 +25,7 @@ export default async function InvitePage({ params }: Props) {
   }
 
   const t = await getTranslations("auth");
+  const tRoles = await getTranslations("team.roles");
 
   return (
     <main className="flex flex-1 flex-col gap-6">
@@ -33,7 +34,7 @@ export default async function InvitePage({ params }: Props) {
         <p className="text-base text-muted-foreground">
           {t("inviteSubtitle", {
             garage: invite.garage.name,
-            role: invite.role,
+            role: tRoles(invite.role),
           })}
         </p>
       </div>

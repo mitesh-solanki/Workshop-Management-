@@ -9,39 +9,42 @@ import {
   verifyOtpAction,
   type AuthActionState,
 } from "@/app/actions/auth";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 const initial: AuthActionState = { ok: false, step: "email" };
 
 function Field({
   id,
   label,
+  error,
   children,
 }: {
   id: string;
   label: string;
+  error?: string;
   children: React.ReactNode;
 }) {
   return (
     <div className="flex flex-col gap-1.5">
-      <label htmlFor={id} className="text-sm font-medium">
-        {label}
-      </label>
+      <Label htmlFor={id}>{label}</Label>
       {children}
+      {error ? (
+        <p className="text-sm text-destructive" role="alert">
+          {error}
+        </p>
+      ) : null}
     </div>
   );
 }
 
-const inputClass =
-  "min-h-12 w-full rounded-md border bg-background px-3 text-base outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring";
-
 function OtpStep({
   email,
   action,
-  message,
 }: {
   email: string;
   action: typeof verifyOtpAction;
-  message?: string;
 }) {
   const t = useTranslations("auth");
   const [state, formAction, pending] = useActionState(action, {
@@ -54,28 +57,19 @@ function OtpStep({
     <form action={formAction} className="flex flex-col gap-4">
       <input type="hidden" name="email" value={email} />
       <p className="text-sm text-muted-foreground">{t("otpSent", { email })}</p>
-      <Field id="code" label={t("code")}>
-        <input
+      <Field id="code" label={t("code")} error={state.message}>
+        <Input
           id="code"
           name="code"
           inputMode="numeric"
           autoComplete="one-time-code"
           required
-          className={inputClass}
+          aria-invalid={Boolean(state.message)}
         />
       </Field>
-      {(state.message || message) && (
-        <p className="text-sm text-destructive" role="alert">
-          {state.message ?? message}
-        </p>
-      )}
-      <button
-        type="submit"
-        disabled={pending}
-        className="min-h-12 rounded-md bg-primary px-4 text-base font-medium text-primary-foreground disabled:opacity-60"
-      >
+      <Button type="submit" disabled={pending} size="lg" className="w-full">
         {pending ? t("verifying") : t("verify")}
-      </button>
+      </Button>
     </form>
   );
 }
@@ -94,33 +88,23 @@ export function SignupForm() {
   return (
     <form action={formAction} className="flex flex-col gap-4">
       <Field id="name" label={t("name")}>
-        <input id="name" name="name" required className={inputClass} />
+        <Input id="name" name="name" required />
       </Field>
       <Field id="email" label={t("email")}>
-        <input
+        <Input
           id="email"
           name="email"
           type="email"
           required
           autoComplete="email"
-          className={inputClass}
         />
       </Field>
-      <Field id="garageName" label={t("garageName")}>
-        <input id="garageName" name="garageName" required className={inputClass} />
+      <Field id="garageName" label={t("garageName")} error={state.message}>
+        <Input id="garageName" name="garageName" required />
       </Field>
-      {state.message && (
-        <p className="text-sm text-destructive" role="alert">
-          {state.message}
-        </p>
-      )}
-      <button
-        type="submit"
-        disabled={pending}
-        className="min-h-12 rounded-md bg-primary px-4 text-base font-medium text-primary-foreground disabled:opacity-60"
-      >
+      <Button type="submit" disabled={pending} size="lg" className="w-full">
         {pending ? t("sendingCode") : t("continue")}
-      </button>
+      </Button>
     </form>
   );
 }
@@ -138,28 +122,18 @@ export function LoginForm() {
 
   return (
     <form action={formAction} className="flex flex-col gap-4">
-      <Field id="email" label={t("email")}>
-        <input
+      <Field id="email" label={t("email")} error={state.message}>
+        <Input
           id="email"
           name="email"
           type="email"
           required
           autoComplete="email"
-          className={inputClass}
         />
       </Field>
-      {state.message && (
-        <p className="text-sm text-destructive" role="alert">
-          {state.message}
-        </p>
-      )}
-      <button
-        type="submit"
-        disabled={pending}
-        className="min-h-12 rounded-md bg-primary px-4 text-base font-medium text-primary-foreground disabled:opacity-60"
-      >
+      <Button type="submit" disabled={pending} size="lg" className="w-full">
         {pending ? t("sendingCode") : t("continue")}
-      </button>
+      </Button>
     </form>
   );
 }
@@ -185,21 +159,12 @@ export function InviteAcceptForm({
     <form action={formAction} className="flex flex-col gap-4">
       <input type="hidden" name="token" value={token} />
       <p className="text-sm text-muted-foreground">{t("inviteFor", { email })}</p>
-      <Field id="name" label={t("name")}>
-        <input id="name" name="name" required className={inputClass} />
+      <Field id="name" label={t("name")} error={state.message}>
+        <Input id="name" name="name" required />
       </Field>
-      {state.message && (
-        <p className="text-sm text-destructive" role="alert">
-          {state.message}
-        </p>
-      )}
-      <button
-        type="submit"
-        disabled={pending}
-        className="min-h-12 rounded-md bg-primary px-4 text-base font-medium text-primary-foreground disabled:opacity-60"
-      >
+      <Button type="submit" disabled={pending} size="lg" className="w-full">
         {pending ? t("sendingCode") : t("continue")}
-      </button>
+      </Button>
     </form>
   );
 }

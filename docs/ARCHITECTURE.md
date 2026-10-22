@@ -2,7 +2,7 @@
 
 ## Stack
 - **App**: Next.js (App Router) with TypeScript, as a progressive web app
-- **UI**: Tailwind CSS and shadcn/ui
+- **UI**: Tailwind CSS and shadcn/ui (`components.json`, CSS-variable tokens, `cn()`, cva, lucide-react). Components live in `src/components/ui`. Prefer `npx shadcn add` for primitives; modify those files when the design needs it, or add a new component in the same folder. Do not add a second overlay library (no Headless UI).
 - **Database**: PostgreSQL with Prisma
 - **Auth**: Auth.js (email or phone OTP), role in the session
 - **Validation**: Zod on every API input

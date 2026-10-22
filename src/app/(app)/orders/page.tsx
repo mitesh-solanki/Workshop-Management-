@@ -1,7 +1,12 @@
 import Link from "next/link";
+import { ClipboardList } from "lucide-react";
 import { getTranslations } from "next-intl/server";
+import { EmptyState } from "@/components/ui/empty-state";
+import { PageHeader } from "@/components/ui/page-header";
 import { requireSession } from "@/lib/session";
 import { listOrders } from "@/modules/service-orders/service";
+
+export const instant = false;
 
 export default async function OrdersPage() {
   const session = await requireSession();
@@ -10,15 +15,19 @@ export default async function OrdersPage() {
 
   return (
     <main className="space-y-6">
-      <div className="space-y-1">
-        <h1 className="text-2xl font-semibold tracking-tight">{t("title")}</h1>
-        <p className="text-base text-muted-foreground">
-          {session.role === "TECHNICIAN" ? t("subtitleTechnician") : t("subtitle")}
-        </p>
-      </div>
+      <PageHeader
+        title={t("title")}
+        description={
+          session.role === "TECHNICIAN" ? t("subtitleTechnician") : t("subtitle")
+        }
+      />
 
       {orders.length === 0 ? (
-        <p className="text-sm text-muted-foreground">{t("empty")}</p>
+        <EmptyState
+          icon={ClipboardList}
+          title={t("emptyTitle")}
+          description={t("empty")}
+        />
       ) : (
         <ul className="divide-y rounded-md border">
           {orders.map((order) => (

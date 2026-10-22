@@ -19,6 +19,16 @@
     "unauthorized": "जारी रखने के लिए साइन इन करें।",
     "notFound": "वह आइटम नहीं मिला।"
   },
+  "table": {
+    "showing": "{total} में से {from}–{to} दिखा रहे हैं",
+    "rowsPerPage": "प्रति पृष्ठ पंक्तियाँ",
+    "pageOf": "पृष्ठ {page} / {pages}",
+    "firstPage": "पहला पृष्ठ",
+    "previousPage": "पिछला पृष्ठ",
+    "nextPage": "अगला पृष्ठ",
+    "lastPage": "अंतिम पृष्ठ",
+    "noResults": "कोई परिणाम नहीं"
+  },
   "shell": {
     "searchLabel": "वैश्विक खोज",
     "searchPlaceholder": "ग्राहक, फ़ोन या वाहन खोजें",
@@ -40,6 +50,7 @@
   "nav": {
     "label": "मुख्य नेविगेशन",
     "dashboard": "होम",
+    "customers": "ग्राहक",
     "team": "टीम",
     "orders": "ऑर्डर",
     "settings": "सेटिंग्स",
@@ -56,8 +67,7 @@
       "workshop": "वर्कशॉप",
       "business": "व्यवसाय",
       "admin": "प्रशासन"
-    },
-    "customers": "ग्राहक"
+    }
   },
   "auth": {
     "loginTitle": "साइन इन",
@@ -195,6 +205,8 @@
       "joined": "शामिल"
     },
     "actions": "कार्रवाई",
+    "searchLabel": "सदस्य खोजें",
+    "searchPlaceholder": "नाम, ईमेल या भूमिका",
     "rowActions": "{name} के लिए कार्रवाई",
     "changeRole": "भूमिका बदलें",
     "changeRoleTitle": "भूमिका बदलें",
@@ -245,7 +257,10 @@
       "tooLong": "यह मान बहुत लंबा है।",
       "invalidGstin": "मान्य GSTIN दर्ज करें।",
       "invalidInput": "फ़ॉर्म जाँचें और फिर कोशिश करें।",
-      "required": "यह फ़ील्ड आवश्यक है।"
+      "required": "यह फ़ील्ड आवश्यक है।",
+      "invalidDate": "मान्य तारीख दर्ज करें।",
+      "invalidYear": "1950 और 2100 के बीच का वर्ष दर्ज करें।",
+      "invalidOdometer": "मान्य ओडोमीटर रीडिंग दर्ज करें।"
     }
   },
   "gst": {
@@ -295,12 +310,14 @@
   "customers": {
     "title": "ग्राहक",
     "subtitle": "नाम, फ़ोन या रजिस्ट्रेशन से खोजें।",
-    "add": "जोड़ें",
+    "add": "ग्राहक जोड़ें",
+    "addShort": "जोड़ें",
     "newTitle": "नया ग्राहक",
-    "newSubtitle": "नाम और फ़ोन ज़रूरी हैं।",
+    "newSubtitle": "नाम और फ़ोन ज़रूरी हैं। वाहन ग्राहक पेज से जोड़ें।",
     "edit": "संपादित करें",
     "editTitle": "ग्राहक संपादित करें",
     "back": "ग्राहकों पर वापस",
+    "cancel": "रद्द करें",
     "name": "नाम",
     "phone": "फ़ोन",
     "address": "पता",
@@ -309,16 +326,46 @@
     "save": "परिवर्तन सहेजें",
     "saving": "सहेजा जा रहा है…",
     "saved": "ग्राहक सहेजा गया",
+    "created": "ग्राहक बनाया गया",
     "empty": "कोई ग्राहक नहीं मिला।",
+    "emptyTitle": "अभी कोई ग्राहक नहीं",
+    "emptyDescription": "वाहन और जॉब ट्रैक करने के लिए ग्राहक जोड़ें।",
+    "emptySearchTitle": "कोई मिलान नहीं",
+    "emptySearchDescription": "अलग नाम, फ़ोन या रजिस्ट्रेशन आज़माएँ।",
     "noVehicles": "अभी कोई वाहन नहीं",
+    "noVehiclesDescription": "इस ग्राहक के लिए सर्विस ऑर्डर बनाने हेतु वाहन जोड़ें।",
     "vehicles": "वाहन",
     "search": "खोजें",
     "searching": "खोज हो रही है…",
     "searchLabel": "ग्राहक खोजें",
     "searchPlaceholder": "नाम, फ़ोन या रजिस्ट्रेशन",
+    "columns": {
+      "name": "नाम",
+      "phone": "फ़ोन",
+      "vehicles": "वाहन"
+    },
+    "actions": "कार्रवाई",
+    "view": "देखें",
+    "delete": "हटाएँ",
+    "deleteTitle": "ग्राहक हटाएँ",
+    "deleteConfirm": "{name} को हटाएँ? उनके वाहन भी हट जाएँगे। यह वापस नहीं हो सकता।",
+    "deleted": "ग्राहक हटा दिया गया",
+    "error": "ग्राहक अपडेट नहीं हो सके।",
+    "sectionsTitle": "अनुभाग",
+    "details": "विवरण",
+    "namedDetails": "{name} विवरण",
+    "detailsDescription": "फ़ाइल पर संपर्क और नोट्स।",
+    "vehiclesDescription": "इस ग्राहक से जुड़े वाहन।",
+    "backToVehicles": "सभी वाहन",
+    "customerVehicleTitle": "{customer} · {registration}",
+    "vehicleCount": "{count, plural, =0 {कोई वाहन नहीं} one {# वाहन} other {# वाहन}}",
     "serviceHistory": "सर्विस इतिहास",
-    "serviceHistoryEmpty": "अभी कोई सर्विस ऑर्डर नहीं।",
+    "serviceHistoryEmpty": "अभी कोई सर्विस ऑर्डर नहीं",
+    "serviceHistoryDescription": "इस ग्राहक के जॉब यहाँ दिखेंगे।",
+    "serviceHistoryPlaceholder": "इस ग्राहक के जॉब यहाँ दिखेंगे।",
     "communicationHistory": "संवाद इतिहास",
+    "communicationHistoryEmpty": "अभी कोई संदेश नहीं",
+    "communicationHistoryDescription": "संदेश और कॉल बाद में यहाँ दिखेंगे।",
     "communicationHistoryPlaceholder": "संदेश और कॉल बाद में यहाँ दिखेंगे।",
     "notSet": "सेट नहीं",
     "forbidden": "आपको ग्राहक बदलने की अनुमति नहीं है।"
@@ -329,12 +376,30 @@
     "newSubtitle": "{customer} के लिए वाहन जोड़ें।",
     "edit": "संपादित करें",
     "editTitle": "वाहन संपादित करें",
+    "detailTitle": "वाहन",
+    "sectionsTitle": "अनुभाग",
+    "backToCustomer": "ग्राहक पर वापस",
+    "customer": "ग्राहक",
+    "customerDescription": "इस वाहन का मालिक।",
+    "viewCustomer": "ग्राहक देखें",
+    "overview": "विवरण",
+    "namedDetails": "{name} विवरण",
+    "overviewDescription": "रजिस्ट्रेशन, मेक और उपयोग।",
+    "compliance": "दस्तावेज़ और समाप्ति",
+    "complianceDescription": "बीमा, PUC और फिटनेस तिथियाँ।",
+    "serviceHistory": "सेवा इतिहास",
+    "serviceHistoryEmpty": "अभी कोई सर्विस ऑर्डर नहीं",
+    "serviceHistoryDescription": "इस वाहन के जॉब यहाँ दिखेंगे।",
+    "serviceHistoryPlaceholder": "इस वाहन के जॉब यहाँ दिखेंगे।",
     "registrationNumber": "रजिस्ट्रेशन नंबर",
     "registrationHint": "अपरकेस में, बिना स्पेस के सहेजा जाता है।",
     "make": "मेक",
     "model": "मॉडल",
     "year": "वर्ष",
-    "odometer": "ओडोमीटर (किमी)",
+    "yearShort": "वर्ष {year}",
+    "odometer": "ओडोमीटर",
+    "odometerShort": "ओडोमीटर {value} किमी",
+    "odometerHint": "ओडोमीटर (किमी)",
     "km": "किमी",
     "insuranceExpiry": "बीमा समाप्ति",
     "pucExpiry": "PUC समाप्ति",
@@ -342,6 +407,17 @@
     "create": "वाहन जोड़ें",
     "save": "परिवर्तन सहेजें",
     "saving": "सहेजा जा रहा है…",
-    "saved": "वाहन सहेजा गया"
+    "saved": "वाहन सहेजा गया",
+    "created": "वाहन जोड़ा गया",
+    "notSet": "सेट नहीं",
+    "status": {
+      "ok": "मान्य",
+      "soon": "जल्द समाप्त",
+      "expired": "समाप्त",
+      "unset": "सेट नहीं"
+    },
+    "errors": {
+      "duplicateRegistration": "इस गैरेज में इस रजिस्ट्रेशन वाला वाहन पहले से है।"
+    }
   }
 }

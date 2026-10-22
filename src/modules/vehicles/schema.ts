@@ -13,14 +13,14 @@ const optionalDate = z
     }
     if (value instanceof Date) {
       if (Number.isNaN(value.getTime())) {
-        ctx.addIssue({ code: "custom", message: "Invalid date" });
+        ctx.addIssue({ code: "custom", message: "validation.invalidDate" });
         return z.NEVER;
       }
       return value;
     }
     const parsed = new Date(value);
     if (Number.isNaN(parsed.getTime())) {
-      ctx.addIssue({ code: "custom", message: "Invalid date" });
+      ctx.addIssue({ code: "custom", message: "validation.invalidDate" });
       return z.NEVER;
     }
     return parsed;
@@ -34,7 +34,7 @@ const optionalYear = z
     }
     const n = typeof value === "number" ? value : Number(value);
     if (!Number.isInteger(n) || n < 1950 || n > 2100) {
-      ctx.addIssue({ code: "custom", message: "Invalid year" });
+      ctx.addIssue({ code: "custom", message: "validation.invalidYear" });
       return z.NEVER;
     }
     return n;
@@ -48,25 +48,33 @@ const optionalOdometer = z
     }
     const n = typeof value === "number" ? value : Number(value);
     if (!Number.isInteger(n) || n < 0 || n > 9_999_999) {
-      ctx.addIssue({ code: "custom", message: "Invalid odometer" });
+      ctx.addIssue({ code: "custom", message: "validation.invalidOdometer" });
       return z.NEVER;
     }
     return n;
   });
 
 export const createVehicleSchema = z.object({
-  customerId: z.string().trim().min(1),
+  customerId: z.string().trim().min(1, { error: "validation.required" }),
   registrationNumber: z
     .string()
     .trim()
-    .min(1)
-    .max(20)
+    .min(1, { error: "validation.required" })
+    .max(20, { error: "validation.tooLong" })
     .transform(normaliseRegistration)
     .refine((value) => value.length >= 4, {
-      message: "Registration number is too short",
+      error: "validation.tooShort",
     }),
-  make: z.string().trim().min(1).max(80),
-  model: z.string().trim().min(1).max(80),
+  make: z
+    .string()
+    .trim()
+    .min(1, { error: "validation.required" })
+    .max(80, { error: "validation.tooLong" }),
+  model: z
+    .string()
+    .trim()
+    .min(1, { error: "validation.required" })
+    .max(80, { error: "validation.tooLong" }),
   year: optionalYear,
   odometer: optionalOdometer,
   insuranceExpiry: optionalDate,

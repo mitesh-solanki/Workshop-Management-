@@ -15,9 +15,9 @@ const buttonVariants = cva(
     variants: {
       variant: {
         primary:
-          "bg-teal-600 text-white shadow-sm hover:bg-teal-700 active:bg-teal-800",
+          "bg-teal-600 text-white shadow-sm hover:bg-teal-700 hover:text-white active:bg-teal-800 active:text-white",
         default:
-          "bg-teal-600 text-white shadow-sm hover:bg-teal-700 active:bg-teal-800",
+          "bg-teal-600 text-white shadow-sm hover:bg-teal-700 hover:text-white active:bg-teal-800 active:text-white",
         secondary:
           "border border-border bg-card text-foreground shadow-sm hover:bg-slate-50",
         ghost: "text-foreground hover:bg-slate-100",
@@ -84,7 +84,7 @@ function Button({
       data-size={size}
       disabled={disabled || loading}
       aria-busy={loading || undefined}
-      className={cn(buttonVariants({ variant, size, className }))}
+      className={cn(buttonVariants({ variant, size }), className)}
       {...props}
     >
       {content}

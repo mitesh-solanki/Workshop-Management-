@@ -1,81 +1,66 @@
-import Link from "next/link";
 import { Suspense } from "react";
+import { Users } from "lucide-react";
 import { getTranslations } from "next-intl/server";
+import { EmptyState } from "@/components/ui/empty-state";
+import { PageHeader } from "@/components/ui/page-header";
+import { Skeleton } from "@/components/ui/skeleton";
 import { requireSession } from "@/lib/session";
-import { CustomerSearch } from "@/modules/customers/components/customer-search";
+import { CreateCustomerModal } from "@/modules/customers/components/create-customer-modal";
+import { CustomersTable } from "@/modules/customers/components/customers-table";
 import { listCustomers } from "@/modules/customers/service";
 
 type Props = {
-  searchParams: Promise<{ q?: string }>;
+  searchParams: Promise<{ q?: string; page?: string; pageSize?: string }>;
 };
+
+export const instant = false;
 
 export default async function CustomersPage({ searchParams }: Props) {
   const session = await requireSession();
   const params = await searchParams;
   const t = await getTranslations("customers");
-  const customers = await listCustomers(session, { q: params.q });
+  const result = await listCustomers(session, {
+    q: params.q,
+    page: params.page,
+    pageSize: params.pageSize,
+  });
   const canWrite =
     session.role === "OWNER" ||
     session.role === "MANAGER" ||
     session.role === "TECHNICIAN";
+  const hasQuery = Boolean(params.q?.trim());
 
   return (
-    <main className="space-y-6">
-      <div className="flex items-start justify-between gap-3">
-        <div className="space-y-2">
-          <h1 className="text-2xl font-semibold tracking-tight">{t("title")}</h1>
-          <p className="text-base text-muted-foreground">{t("subtitle")}</p>
-        </div>
-        {canWrite && (
-          <Link
-            href="/customers/new"
-            className="inline-flex min-h-12 shrink-0 items-center rounded-md bg-primary px-4 text-base font-medium text-primary-foreground"
-          >
-            {t("add")}
-          </Link>
-        )}
-      </div>
+    <main className="space-y-6 sm:space-y-8">
+      <PageHeader
+        title={t("title")}
+        description={t("subtitle")}
+        actions={canWrite ? <CreateCustomerModal /> : undefined}
+      />
 
-      <Suspense
-        fallback={
-          <p className="text-sm text-muted-foreground">{t("searching")}</p>
-        }
-      >
-        <CustomerSearch />
+      <Suspense fallback={<Skeleton className="h-64 w-full" />}>
+        <CustomersTable
+          customers={result.items}
+          page={result.page}
+          pageSize={result.pageSize}
+          total={result.total}
+          canWrite={canWrite}
+          empty={
+            <EmptyState
+              icon={Users}
+              title={hasQuery ? t("emptySearchTitle") : t("emptyTitle")}
+              description={
+                hasQuery ? t("emptySearchDescription") : t("emptyDescription")
+              }
+              action={
+                canWrite && !hasQuery ? (
+                  <CreateCustomerModal size="sm" />
+                ) : undefined
+              }
+            />
+          }
+        />
       </Suspense>
-
-      {customers.length === 0 ? (
-        <p className="text-sm text-muted-foreground">{t("empty")}</p>
-      ) : (
-        <ul className="divide-y rounded-md border">
-          {customers.map((customer) => (
-            <li key={customer.id}>
-              <Link
-                href={`/customers/${customer.id}`}
-                className="flex min-h-14 flex-col gap-1 px-3 py-3 hover:bg-secondary/50"
-              >
-                <div className="flex items-baseline justify-between gap-2">
-                  <p className="truncate font-medium">{customer.name}</p>
-                  <p className="shrink-0 text-sm text-muted-foreground">
-                    {customer.phone}
-                  </p>
-                </div>
-                {customer.vehicles.length > 0 ? (
-                  <p className="truncate text-sm text-muted-foreground">
-                    {customer.vehicles
-                      .map((v) => v.registrationNumber)
-                      .join(" · ")}
-                  </p>
-                ) : (
-                  <p className="text-sm text-muted-foreground">
-                    {t("noVehicles")}
-                  </p>
-                )}
-              </Link>
-            </li>
-          ))}
-        </ul>
-      )}
     </main>
   );
 }

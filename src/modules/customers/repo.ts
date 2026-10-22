@@ -88,42 +88,64 @@ export async function findCustomerById(garageId: string, customerId: string) {
   });
 }
 
-export async function searchCustomers(
-  garageId: string,
-  q: string | undefined,
-) {
-  const query = q?.trim();
+/** Deletes a customer scoped to the garage. Vehicles cascade via Prisma. */
+export async function deleteCustomerById(garageId: string, customerId: string) {
+  const result = await prisma.customer.deleteMany({
+    where: { id: customerId, garageId },
+  });
+  return result.count > 0;
+}
 
-  return prisma.customer.findMany({
-    where: {
-      garageId,
-      ...(query
-        ? {
-            OR: [
-              { name: { contains: query, mode: "insensitive" } },
-              { phone: { contains: query } },
-              {
-                vehicles: {
-                  some: {
-                    registrationNumber: {
-                      contains: query.replace(/\s+/g, "").toUpperCase(),
-                      mode: "insensitive",
-                    },
+function customerSearchWhere(garageId: string, q: string | undefined) {
+  const query = q?.trim();
+  return {
+    garageId,
+    ...(query
+      ? {
+          OR: [
+            { name: { contains: query, mode: "insensitive" as const } },
+            { phone: { contains: query } },
+            {
+              vehicles: {
+                some: {
+                  registrationNumber: {
+                    contains: query.replace(/\s+/g, "").toUpperCase(),
+                    mode: "insensitive" as const,
                   },
                 },
               },
-            ],
-          }
-        : {}),
-    },
-    select: {
-      ...customerSelect,
-      vehicles: {
-        select: vehicleSummarySelect,
-        orderBy: { registrationNumber: "asc" },
+            },
+          ],
+        }
+      : {}),
+  };
+}
+
+export async function searchCustomers(
+  garageId: string,
+  q: string | undefined,
+  page: number,
+  pageSize: number,
+) {
+  const where = customerSearchWhere(garageId, q);
+  const skip = (page - 1) * pageSize;
+
+  const [items, total] = await Promise.all([
+    prisma.customer.findMany({
+      where,
+      select: {
+        ...customerSelect,
+        vehicles: {
+          select: vehicleSummarySelect,
+          orderBy: { registrationNumber: "asc" },
+        },
       },
-    },
-    orderBy: [{ name: "asc" }, { createdAt: "desc" }],
-    take: 100,
-  });
+      orderBy: [{ name: "asc" }, { createdAt: "desc" }],
+      skip,
+      take: pageSize,
+    }),
+    prisma.customer.count({ where }),
+  ]);
+
+  return { items, total, page, pageSize };
 }

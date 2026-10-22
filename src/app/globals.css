@@ -188,10 +188,14 @@ body {
   line-height: var(--leading-body);
 }
 
-/* Visible focus for keyboard users */
+/* Visible focus for keyboard users (form fields use their own ring) */
 :focus-visible {
-  outline: 2px solid hsl(var(--ring));
-  outline-offset: 2px;
+  outline: 1px solid hsl(var(--ring));
+  outline-offset: 1px;
+}
+
+:is(input, textarea, select, [data-slot="input"]):focus-visible {
+  outline: none;
 }
 
 @media (prefers-reduced-motion: reduce) {

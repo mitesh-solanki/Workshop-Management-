@@ -19,6 +19,16 @@
     "unauthorized": "Please sign in to continue.",
     "notFound": "That item was not found."
   },
+  "table": {
+    "showing": "Showing {from}–{to} of {total}",
+    "rowsPerPage": "Rows per page",
+    "pageOf": "Page {page} of {pages}",
+    "firstPage": "First page",
+    "previousPage": "Previous page",
+    "nextPage": "Next page",
+    "lastPage": "Last page",
+    "noResults": "No results"
+  },
   "shell": {
     "searchLabel": "Global search",
     "searchPlaceholder": "Search customer, phone or vehicle",
@@ -40,6 +50,7 @@
   "nav": {
     "label": "Main navigation",
     "dashboard": "Home",
+    "customers": "Customers",
     "team": "Team",
     "orders": "Orders",
     "settings": "Settings",
@@ -56,8 +67,7 @@
       "workshop": "Workshop",
       "business": "Business",
       "admin": "Admin"
-    },
-    "customers": "Customers"
+    }
   },
   "auth": {
     "loginTitle": "Sign in",
@@ -195,6 +205,8 @@
       "joined": "Joined"
     },
     "actions": "Actions",
+    "searchLabel": "Search members",
+    "searchPlaceholder": "Name, email or role",
     "rowActions": "Actions for {name}",
     "changeRole": "Change role",
     "changeRoleTitle": "Change role",
@@ -245,7 +257,10 @@
       "tooLong": "This value is too long.",
       "invalidGstin": "Enter a valid GSTIN.",
       "invalidInput": "Check the form and try again.",
-      "required": "This field is required."
+      "required": "This field is required.",
+      "invalidDate": "Enter a valid date.",
+      "invalidYear": "Enter a year between 1950 and 2100.",
+      "invalidOdometer": "Enter a valid odometer reading."
     }
   },
   "gst": {
@@ -295,12 +310,14 @@
   "customers": {
     "title": "Customers",
     "subtitle": "Find people and vehicles by name, phone or registration.",
-    "add": "Add",
+    "add": "Add customer",
+    "addShort": "Add",
     "newTitle": "New customer",
-    "newSubtitle": "Name and phone are required.",
+    "newSubtitle": "Name and phone are required. Add vehicles from the customer page.",
     "edit": "Edit",
     "editTitle": "Edit customer",
     "back": "Back to customers",
+    "cancel": "Cancel",
     "name": "Name",
     "phone": "Phone",
     "address": "Address",
@@ -309,16 +326,46 @@
     "save": "Save changes",
     "saving": "Saving…",
     "saved": "Customer saved",
+    "created": "Customer created",
     "empty": "No customers match your search.",
+    "emptyTitle": "No customers yet",
+    "emptyDescription": "Add a customer to start tracking vehicles and jobs.",
+    "emptySearchTitle": "No matches",
+    "emptySearchDescription": "Try a different name, phone or registration.",
     "noVehicles": "No vehicles yet",
+    "noVehiclesDescription": "Add a vehicle to create service orders for this customer.",
     "vehicles": "Vehicles",
     "search": "Search",
     "searching": "Searching…",
     "searchLabel": "Search customers",
     "searchPlaceholder": "Name, phone or registration",
+    "columns": {
+      "name": "Name",
+      "phone": "Phone",
+      "vehicles": "Vehicles"
+    },
+    "actions": "Actions",
+    "view": "View",
+    "delete": "Delete",
+    "deleteTitle": "Delete customer",
+    "deleteConfirm": "Delete {name}? Their vehicles will be removed too. This cannot be undone.",
+    "deleted": "Customer deleted",
+    "error": "Could not update customers.",
+    "sectionsTitle": "Sections",
+    "details": "Details",
+    "namedDetails": "{name} details",
+    "detailsDescription": "Contact and notes on file.",
+    "vehiclesDescription": "Vehicles linked to this customer.",
+    "backToVehicles": "All vehicles",
+    "customerVehicleTitle": "{customer} · {registration}",
+    "vehicleCount": "{count, plural, =0 {No vehicles} one {# vehicle} other {# vehicles}}",
     "serviceHistory": "Service history",
-    "serviceHistoryEmpty": "No service orders yet.",
+    "serviceHistoryEmpty": "No service orders yet",
+    "serviceHistoryDescription": "Jobs for this customer will show up here.",
+    "serviceHistoryPlaceholder": "Jobs for this customer will show up here.",
     "communicationHistory": "Communication history",
+    "communicationHistoryEmpty": "No messages yet",
+    "communicationHistoryDescription": "Messages and calls will appear here later.",
     "communicationHistoryPlaceholder": "Messages and calls will appear here later.",
     "notSet": "Not set",
     "forbidden": "You do not have permission to change customers."
@@ -329,12 +376,30 @@
     "newSubtitle": "Add a vehicle for {customer}.",
     "edit": "Edit",
     "editTitle": "Edit vehicle",
+    "detailTitle": "Vehicle",
+    "sectionsTitle": "Sections",
+    "backToCustomer": "Back to customer",
+    "customer": "Customer",
+    "customerDescription": "Owner of this vehicle.",
+    "viewCustomer": "View customer",
+    "overview": "Details",
+    "namedDetails": "{name} details",
+    "overviewDescription": "Registration, make and usage.",
+    "compliance": "Documents & expiry",
+    "complianceDescription": "Insurance, PUC and fitness dates.",
+    "serviceHistory": "Service history",
+    "serviceHistoryEmpty": "No service orders yet",
+    "serviceHistoryDescription": "Jobs for this vehicle will show up here.",
+    "serviceHistoryPlaceholder": "Jobs for this vehicle will show up here.",
     "registrationNumber": "Registration number",
     "registrationHint": "Saved in uppercase without spaces.",
     "make": "Make",
     "model": "Model",
     "year": "Year",
-    "odometer": "Odometer (km)",
+    "yearShort": "Year {year}",
+    "odometer": "Odometer",
+    "odometerShort": "Odometer {value} km",
+    "odometerHint": "Odometer (km)",
     "km": "km",
     "insuranceExpiry": "Insurance expiry",
     "pucExpiry": "PUC expiry",
@@ -342,6 +407,17 @@
     "create": "Add vehicle",
     "save": "Save changes",
     "saving": "Saving…",
-    "saved": "Vehicle saved"
+    "saved": "Vehicle saved",
+    "created": "Vehicle added",
+    "notSet": "Not set",
+    "status": {
+      "ok": "Valid",
+      "soon": "Expires soon",
+      "expired": "Expired",
+      "unset": "Not set"
+    },
+    "errors": {
+      "duplicateRegistration": "A vehicle with this registration already exists in this garage."
+    }
   }
 }

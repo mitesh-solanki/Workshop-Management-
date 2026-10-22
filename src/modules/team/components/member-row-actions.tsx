@@ -2,7 +2,6 @@
 
 import { useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
-import { MoreHorizontal } from "lucide-react";
 import {
   changeMemberRoleAction,
   removeMemberAction,
@@ -19,14 +18,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { toast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 
@@ -93,43 +84,34 @@ export function MemberRowActions({
 
   return (
     <>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            disabled={pending}
-            aria-label={t("rowActions", { name: memberName })}
-          >
-            <MoreHorizontal className="size-4" aria-hidden />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="min-w-48">
-          <DropdownMenuLabel>{t("actions")}</DropdownMenuLabel>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem
-            disabled={pending}
-            onSelect={() => {
-              setSelectedRole(
-                MEMBER_ROLES.includes(memberRole as MemberRole)
-                  ? (memberRole as MemberRole)
-                  : "MANAGER",
-              );
-              setRoleOpen(true);
-            }}
-          >
-            {t("changeRole")}
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            disabled={pending}
-            variant="destructive"
-            onSelect={() => setRemoveOpen(true)}
-          >
-            {t("removeMember")}
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+      <div className="flex flex-wrap items-center gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={pending}
+          onClick={() => {
+            setSelectedRole(
+              MEMBER_ROLES.includes(memberRole as MemberRole)
+                ? (memberRole as MemberRole)
+                : "MANAGER",
+            );
+            setRoleOpen(true);
+          }}
+        >
+          {t("changeRole")}
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={pending}
+          className="text-danger hover:bg-danger/5 hover:text-danger"
+          onClick={() => setRemoveOpen(true)}
+        >
+          {t("removeMember")}
+        </Button>
+      </div>
 
       <Dialog open={roleOpen} onOpenChange={setRoleOpen}>
         <DialogContent className="sm:max-w-md">
@@ -141,7 +123,10 @@ export function MemberRowActions({
           </DialogHeader>
 
           <div className="flex flex-col gap-2">
-            <p className="text-sm font-medium text-slate-900" id="change-role-label">
+            <p
+              className="text-sm font-medium text-slate-900"
+              id="change-role-label"
+            >
               {t("role")}
             </p>
             <div

@@ -19,6 +19,16 @@
     "unauthorized": "ચાલુ રાખવા માટે સાઇન ઇન કરો.",
     "notFound": "તે વસ્તુ મળી નહીં."
   },
+  "table": {
+    "showing": "{total}માંથી {from}–{to} બતાવી રહ્યા છીએ",
+    "rowsPerPage": "પૃષ્ઠ દીઠ પંક્તિઓ",
+    "pageOf": "પૃષ્ઠ {page} / {pages}",
+    "firstPage": "પહેલું પૃષ્ઠ",
+    "previousPage": "પાછલું પૃષ્ઠ",
+    "nextPage": "આગલું પૃષ્ઠ",
+    "lastPage": "છેલ્લું પૃષ્ઠ",
+    "noResults": "કોઈ પરિણામ નથી"
+  },
   "shell": {
     "searchLabel": "વૈશ્વિક શોધ",
     "searchPlaceholder": "ગ્રાહક, ફોન અથવા વાહન શોધો",
@@ -40,6 +50,7 @@
   "nav": {
     "label": "મુખ્ય નેવિગેશન",
     "dashboard": "હોમ",
+    "customers": "ગ્રાહકો",
     "team": "ટીમ",
     "orders": "ઓર્ડર",
     "settings": "સેટિંગ્સ",
@@ -56,8 +67,7 @@
       "workshop": "વર્કશોપ",
       "business": "વ્યવસાય",
       "admin": "એડમિન"
-    },
-    "customers": "ગ્રાહકો"
+    }
   },
   "auth": {
     "loginTitle": "સાઇન ઇન",
@@ -195,6 +205,8 @@
       "joined": "જોડાયા"
     },
     "actions": "ક્રિયાઓ",
+    "searchLabel": "સભ્યો શોધો",
+    "searchPlaceholder": "નામ, ઈમેલ અથવા ભૂમિકા",
     "rowActions": "{name} માટે ક્રિયાઓ",
     "changeRole": "ભૂમિકા બદલો",
     "changeRoleTitle": "ભૂમિકા બદલો",
@@ -245,7 +257,10 @@
       "tooLong": "આ મૂલ્ય ખૂબ લાંબું છે.",
       "invalidGstin": "માન્ય GSTIN દાખલ કરો.",
       "invalidInput": "ફોર્મ તપાસો અને ફરી પ્રયાસ કરો.",
-      "required": "આ ફીલ્ડ જરૂરી છે."
+      "required": "આ ફીલ્ડ જરૂરી છે.",
+      "invalidDate": "માન્ય તારીખ દાખલ કરો.",
+      "invalidYear": "1950 અને 2100 વચ્ચેનું વર્ષ દાખલ કરો.",
+      "invalidOdometer": "માન્ય ઓડોમીટર રીડિંગ દાખલ કરો."
     }
   },
   "gst": {
@@ -295,12 +310,14 @@
   "customers": {
     "title": "ગ્રાહકો",
     "subtitle": "નામ, ફોન અથવા રજિસ્ટ્રેશનથી શોધો.",
-    "add": "ઉમેરો",
+    "add": "ગ્રાહક ઉમેરો",
+    "addShort": "ઉમેરો",
     "newTitle": "નવો ગ્રાહક",
-    "newSubtitle": "નામ અને ફોન જરૂરી છે.",
+    "newSubtitle": "નામ અને ફોન જરૂરી છે. વાહન ગ્રાહક પેજથી ઉમેરો.",
     "edit": "સંપાદિત કરો",
     "editTitle": "ગ્રાહક સંપાદિત કરો",
     "back": "ગ્રાહકો પર પાછા",
+    "cancel": "રદ કરો",
     "name": "નામ",
     "phone": "ફોન",
     "address": "સરનામું",
@@ -309,16 +326,46 @@
     "save": "ફેરફાર સાચવો",
     "saving": "સાચવી રહ્યા છીએ…",
     "saved": "ગ્રાહક સાચવાયો",
+    "created": "ગ્રાહક બનાવાયો",
     "empty": "કોઈ ગ્રાહક મળ્યો નહીં.",
+    "emptyTitle": "હજુ કોઈ ગ્રાહક નથી",
+    "emptyDescription": "વાહન અને જોબ ટ્રૅક કરવા માટે ગ્રાહક ઉમેરો.",
+    "emptySearchTitle": "કોઈ મેળ નથી",
+    "emptySearchDescription": "અલગ નામ, ફોન અથવા રજિસ્ટ્રેશન અજમાવો.",
     "noVehicles": "હજુ કોઈ વાહન નથી",
+    "noVehiclesDescription": "આ ગ્રાહક માટે સર્વિસ ઓર્ડર બનાવવા વાહન ઉમેરો.",
     "vehicles": "વાહનો",
     "search": "શોધો",
     "searching": "શોધી રહ્યા છીએ…",
     "searchLabel": "ગ્રાહકો શોધો",
     "searchPlaceholder": "નામ, ફોન અથવા રજિસ્ટ્રેશન",
+    "columns": {
+      "name": "નામ",
+      "phone": "ફોન",
+      "vehicles": "વાહનો"
+    },
+    "actions": "ક્રિયાઓ",
+    "view": "જુઓ",
+    "delete": "કાઢી નાખો",
+    "deleteTitle": "ગ્રાહક કાઢી નાખો",
+    "deleteConfirm": "{name} ને કાઢી નાખો? તેમના વાહનો પણ દૂર થશે. આ પાછું કરી શકાશે નહીં.",
+    "deleted": "ગ્રાહક કાઢી નાખ્યો",
+    "error": "ગ્રાહકો અપડેટ થઈ શક્યા નહીં.",
+    "sectionsTitle": "વિભાગો",
+    "details": "વિગતો",
+    "namedDetails": "{name} વિગતો",
+    "detailsDescription": "ફાઇલ પર સંપર્ક અને નોંધો.",
+    "vehiclesDescription": "આ ગ્રાહક સાથે જોડાયેલ વાહનો.",
+    "backToVehicles": "બધા વાહનો",
+    "customerVehicleTitle": "{customer} · {registration}",
+    "vehicleCount": "{count, plural, =0 {કોઈ વાહન નથી} one {# વાહન} other {# વાહન}}",
     "serviceHistory": "સર્વિસ ઇતિહાસ",
-    "serviceHistoryEmpty": "હજુ કોઈ સર્વિસ ઓર્ડર નથી.",
+    "serviceHistoryEmpty": "હજુ કોઈ સર્વિસ ઓર્ડર નથી",
+    "serviceHistoryDescription": "આ ગ્રાહકના જોબ અહીં દેખાશે.",
+    "serviceHistoryPlaceholder": "આ ગ્રાહકના જોબ અહીં દેખાશે.",
     "communicationHistory": "સંદેશ ઇતિહાસ",
+    "communicationHistoryEmpty": "હજુ કોઈ સંદેશ નથી",
+    "communicationHistoryDescription": "સંદેશ અને કૉલ પછીથી અહીં દેખાશે.",
     "communicationHistoryPlaceholder": "સંદેશ અને કૉલ પછીથી અહીં દેખાશે.",
     "notSet": "સેટ નથી",
     "forbidden": "તમને ગ્રાહક બદલવાની પરવાનગી નથી."
@@ -329,12 +376,30 @@
     "newSubtitle": "{customer} માટે વાહન ઉમેરો.",
     "edit": "સંપાદિત કરો",
     "editTitle": "વાહન સંપાદિત કરો",
+    "detailTitle": "વાહન",
+    "sectionsTitle": "વિભાગો",
+    "backToCustomer": "ગ્રાહક પર પાછા",
+    "customer": "ગ્રાહક",
+    "customerDescription": "આ વાહનના માલિક.",
+    "viewCustomer": "ગ્રાહક જુઓ",
+    "overview": "વિગતો",
+    "namedDetails": "{name} વિગતો",
+    "overviewDescription": "રજિસ્ટ્રેશન, મેક અને ઉપયોગ.",
+    "compliance": "દસ્તાવેજ અને સમાપ્તિ",
+    "complianceDescription": "વીમો, PUC અને ફિટનેસ તારીખો.",
+    "serviceHistory": "સર્વિસ ઇતિહાસ",
+    "serviceHistoryEmpty": "હજુ કોઈ સર્વિસ ઓર્ડર નથી",
+    "serviceHistoryDescription": "આ વાહનના જોબ અહીં દેખાશે.",
+    "serviceHistoryPlaceholder": "આ વાહનના જોબ અહીં દેખાશે.",
     "registrationNumber": "રજિસ્ટ્રેશન નંબર",
     "registrationHint": "અપરકેસમાં, સ્પેસ વગર સાચવાય છે.",
     "make": "મેક",
     "model": "મોડલ",
     "year": "વર્ષ",
-    "odometer": "ઓડોમીટર (કિમી)",
+    "yearShort": "વર્ષ {year}",
+    "odometer": "ઓડોમીટર",
+    "odometerShort": "ઓડોમીટર {value} કિમી",
+    "odometerHint": "ઓડોમીટર (કિમી)",
     "km": "કિમી",
     "insuranceExpiry": "વીમો સમાપ્તિ",
     "pucExpiry": "PUC સમાપ્તિ",
@@ -342,6 +407,17 @@
     "create": "વાહન ઉમેરો",
     "save": "ફેરફાર સાચવો",
     "saving": "સાચવી રહ્યા છીએ…",
-    "saved": "વાહન સાચવાયું"
+    "saved": "વાહન સાચવાયું",
+    "created": "વાહન ઉમેરાયું",
+    "notSet": "સેટ નથી",
+    "status": {
+      "ok": "માન્ય",
+      "soon": "જલ્દી સમાપ્ત",
+      "expired": "સમાપ્ત",
+      "unset": "સેટ નથી"
+    },
+    "errors": {
+      "duplicateRegistration": "આ ગેરેજમાં આ રજિસ્ટ્રેશનવાળું વાહન પહેલેથી છે."
+    }
   }
 }

@@ -24,6 +24,7 @@ const APP_ERROR_MESSAGE_KEYS: Record<string, readonly [string, string]> = {
   "team.cannot_remove_owner": ["team", "errors.cannotRemoveOwner"],
   "team.email_send_failed": ["team", "errors.emailSendFailed"],
   "team.invite_expired": ["team", "errors.inviteExpired"],
+  "vehicles.duplicate_registration": ["vehicles", "errors.duplicateRegistration"],
   "errors.forbidden": ["common", "forbidden"],
   "errors.unauthorized": ["common", "unauthorized"],
   "errors.not_found": ["common", "notFound"],

@@ -4,6 +4,7 @@ import { ForbiddenError, NotFoundError } from "@/lib/errors";
 import { requireRole, type RoleSession } from "@/lib/rbac";
 import {
   createCustomer,
+  deleteCustomerById,
   findCustomerById,
   searchCustomers,
   updateCustomerById,
@@ -20,17 +21,22 @@ const WRITE_ROLES = ["OWNER", "MANAGER", "TECHNICIAN"] as const;
 
 export async function listCustomers(
   session: RoleSession,
-  raw: { q?: string } = {},
+  raw: { q?: string; page?: number | string; pageSize?: number | string } = {},
 ) {
   const input = customerSearchSchema.parse(raw);
   // garageId always comes from the session — never from the request.
-  return searchCustomers(session.garageId, input.q);
+  return searchCustomers(
+    session.garageId,
+    input.q,
+    input.page,
+    input.pageSize,
+  );
 }
 
 export async function getCustomer(session: RoleSession, customerId: string) {
   const customer = await findCustomerById(session.garageId, customerId);
   if (!customer) {
-    throw new NotFoundError("Customer not found");
+    throw new NotFoundError();
   }
   return customer;
 }
@@ -66,10 +72,21 @@ export async function updateCustomerRecord(
   });
 
   if (!customer) {
-    throw new NotFoundError("Customer not found");
+    throw new NotFoundError();
   }
 
   return customer;
+}
+
+export async function deleteCustomerRecord(
+  session: RoleSession,
+  customerId: string,
+) {
+  requireRole(session, WRITE_ROLES);
+  const deleted = await deleteCustomerById(session.garageId, customerId);
+  if (!deleted) {
+    throw new NotFoundError();
+  }
 }
 
 /** Test helper: attempt to read a customer while scoped to another garage id. */
@@ -79,7 +96,7 @@ export async function getCustomerForGarageId(
   customerId: string,
 ) {
   if (requestedGarageId !== session.garageId) {
-    throw new ForbiddenError("Cross-garage access denied");
+    throw new ForbiddenError();
   }
   return getCustomer(session, customerId);
 }
@@ -92,7 +109,7 @@ export async function updateCustomerForGarageId(
   raw: UpdateCustomerInput,
 ) {
   if (requestedGarageId !== session.garageId) {
-    throw new ForbiddenError("Cross-garage access denied");
+    throw new ForbiddenError();
   }
   return updateCustomerRecord(session, customerId, raw);
 }

@@ -1,7 +1,6 @@
 "use client";
 
 import { AppHeader } from "@/components/app-header";
-import { BottomNav } from "@/components/bottom-nav";
 import { AppSidebar } from "@/components/shared/app-sidebar";
 import type { AppRole } from "@/components/shared/nav-items";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
@@ -37,10 +36,9 @@ export function AppShell({
       />
       <SidebarInset className="min-w-0 overflow-x-hidden">
         <AppHeader appName={appName} garageName={garageName} />
-        <div className="w-full max-w-[1600px] flex-1 px-[34px] py-6 pb-24 lg:py-8 lg:pb-8">
+        <div className="w-full max-w-[1600px] flex-1 px-4 py-5 sm:px-6 sm:py-6 lg:px-[34px] lg:py-8">
           {children}
         </div>
-        <BottomNav role={role} />
       </SidebarInset>
     </SidebarProvider>
   );

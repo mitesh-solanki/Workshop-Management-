@@ -1,9 +1,11 @@
 "use server";
 
 import { AuthError } from "next-auth";
+import { getLocale, getTranslations } from "next-intl/server";
 import { redirect } from "next/navigation";
 import { signIn, signOut } from "@/lib/auth";
-import { AppError } from "@/lib/errors";
+import { getClientIp } from "@/lib/client-ip";
+import { translateError } from "@/lib/translate-error";
 import {
   requestInviteOtp,
   requestLoginOtp,
@@ -17,26 +19,24 @@ export type AuthActionState = {
   email?: string;
 };
 
-function toMessage(error: unknown) {
-  if (error instanceof AppError) {
-    return error.message;
-  }
-  return "Something went wrong";
-}
-
 export async function signupRequestOtpAction(
   _prev: AuthActionState,
   formData: FormData,
 ): Promise<AuthActionState> {
   try {
-    const result = await requestSignupOtp({
-      name: String(formData.get("name") ?? ""),
-      email: String(formData.get("email") ?? ""),
-      garageName: String(formData.get("garageName") ?? ""),
-    });
+    const locale = await getLocale();
+    const ip = await getClientIp();
+    const result = await requestSignupOtp(
+      {
+        name: String(formData.get("name") ?? ""),
+        email: String(formData.get("email") ?? ""),
+        garageName: String(formData.get("garageName") ?? ""),
+      },
+      { locale, ip },
+    );
     return { ok: true, step: "otp", email: result.email };
   } catch (error) {
-    return { ok: false, step: "email", message: toMessage(error) };
+    return { ok: false, step: "email", message: await translateError(error) };
   }
 }
 
@@ -45,12 +45,17 @@ export async function loginRequestOtpAction(
   formData: FormData,
 ): Promise<AuthActionState> {
   try {
-    const result = await requestLoginOtp({
-      email: String(formData.get("email") ?? ""),
-    });
+    const locale = await getLocale();
+    const ip = await getClientIp();
+    const result = await requestLoginOtp(
+      {
+        email: String(formData.get("email") ?? ""),
+      },
+      { locale, ip },
+    );
     return { ok: true, step: "otp", email: result.email };
   } catch (error) {
-    return { ok: false, step: "email", message: toMessage(error) };
+    return { ok: false, step: "email", message: await translateError(error) };
   }
 }
 
@@ -59,13 +64,18 @@ export async function inviteRequestOtpAction(
   formData: FormData,
 ): Promise<AuthActionState> {
   try {
-    const result = await requestInviteOtp({
-      token: String(formData.get("token") ?? ""),
-      name: String(formData.get("name") ?? ""),
-    });
+    const locale = await getLocale();
+    const ip = await getClientIp();
+    const result = await requestInviteOtp(
+      {
+        token: String(formData.get("token") ?? ""),
+        name: String(formData.get("name") ?? ""),
+      },
+      { locale, ip },
+    );
     return { ok: true, step: "otp", email: result.email };
   } catch (error) {
-    return { ok: false, step: "email", message: toMessage(error) };
+    return { ok: false, step: "email", message: await translateError(error) };
   }
 }
 
@@ -75,6 +85,7 @@ export async function verifyOtpAction(
 ): Promise<AuthActionState> {
   const email = String(formData.get("email") ?? "");
   const code = String(formData.get("code") ?? "");
+  const t = await getTranslations("auth");
 
   try {
     await signIn("email-otp", {
@@ -88,10 +99,15 @@ export async function verifyOtpAction(
         ok: false,
         step: "otp",
         email,
-        message: "Invalid or expired code",
+        message: t("errors.invalidOtp"),
       };
     }
-    return { ok: false, step: "otp", email, message: toMessage(error) };
+    return {
+      ok: false,
+      step: "otp",
+      email,
+      message: await translateError(error),
+    };
   }
 
   redirect("/dashboard");

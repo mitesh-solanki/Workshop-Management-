@@ -24,7 +24,7 @@ const WRITE_ROLES = ["OWNER", "MANAGER", "TECHNICIAN"] as const;
 async function assertCustomerInGarage(garageId: string, customerId: string) {
   const customer = await findCustomerById(garageId, customerId);
   if (!customer) {
-    throw new NotFoundError("Customer not found");
+    throw new NotFoundError();
   }
   return customer;
 }
@@ -32,7 +32,7 @@ async function assertCustomerInGarage(garageId: string, customerId: string) {
 export async function getVehicle(session: RoleSession, vehicleId: string) {
   const vehicle = await findVehicleById(session.garageId, vehicleId);
   if (!vehicle) {
-    throw new NotFoundError("Vehicle not found");
+    throw new NotFoundError();
   }
   return vehicle;
 }
@@ -51,10 +51,7 @@ export async function createVehicleRecord(
     input.registrationNumber,
   );
   if (existing) {
-    throw new AppError(
-      "DUPLICATE_REGISTRATION",
-      "A vehicle with this registration already exists in this garage",
-    );
+    throw new AppError("vehicles.duplicate_registration");
   }
 
   try {
@@ -71,10 +68,7 @@ export async function createVehicleRecord(
     });
   } catch (error) {
     if (isUniqueConstraintError(error)) {
-      throw new AppError(
-        "DUPLICATE_REGISTRATION",
-        "A vehicle with this registration already exists in this garage",
-      );
+      throw new AppError("vehicles.duplicate_registration");
     }
     throw error;
   }
@@ -90,7 +84,7 @@ export async function updateVehicleRecord(
 
   const current = await findVehicleById(session.garageId, vehicleId);
   if (!current) {
-    throw new NotFoundError("Vehicle not found");
+    throw new NotFoundError();
   }
 
   if (input.registrationNumber !== current.registrationNumber) {
@@ -99,10 +93,7 @@ export async function updateVehicleRecord(
       input.registrationNumber,
     );
     if (existing && existing.id !== vehicleId) {
-      throw new AppError(
-        "DUPLICATE_REGISTRATION",
-        "A vehicle with this registration already exists in this garage",
-      );
+      throw new AppError("vehicles.duplicate_registration");
     }
   }
 
@@ -119,16 +110,13 @@ export async function updateVehicleRecord(
     });
 
     if (!vehicle) {
-      throw new NotFoundError("Vehicle not found");
+      throw new NotFoundError();
     }
 
     return vehicle;
   } catch (error) {
     if (isUniqueConstraintError(error)) {
-      throw new AppError(
-        "DUPLICATE_REGISTRATION",
-        "A vehicle with this registration already exists in this garage",
-      );
+      throw new AppError("vehicles.duplicate_registration");
     }
     throw error;
   }
@@ -142,7 +130,7 @@ export async function deleteVehicleRecord(
 
   const vehicle = await findVehicleById(session.garageId, vehicleId);
   if (!vehicle) {
-    throw new NotFoundError("Vehicle not found");
+    throw new NotFoundError();
   }
 
   const orderCount = await countVehicleServiceOrders(
@@ -150,10 +138,7 @@ export async function deleteVehicleRecord(
     vehicleId,
   );
   if (orderCount > 0) {
-    throw new AppError(
-      "VEHICLE_HAS_ORDERS",
-      "Cannot delete a vehicle that has service orders",
-    );
+    throw new AppError("VEHICLE_HAS_ORDERS");
   }
 
   const deleted = await deleteVehicleById(session.garageId, vehicleId, {
@@ -163,7 +148,7 @@ export async function deleteVehicleRecord(
   });
 
   if (!deleted) {
-    throw new NotFoundError("Vehicle not found");
+    throw new NotFoundError();
   }
 
   return deleted;
@@ -176,7 +161,7 @@ export async function getVehicleForGarageId(
   vehicleId: string,
 ) {
   if (requestedGarageId !== session.garageId) {
-    throw new ForbiddenError("Cross-garage access denied");
+    throw new ForbiddenError();
   }
   return getVehicle(session, vehicleId);
 }
@@ -188,7 +173,7 @@ export async function createVehicleForGarageId(
   raw: CreateVehicleInput,
 ) {
   if (requestedGarageId !== session.garageId) {
-    throw new ForbiddenError("Cross-garage access denied");
+    throw new ForbiddenError();
   }
   return createVehicleRecord(session, raw);
 }
@@ -200,7 +185,7 @@ export async function deleteVehicleForGarageId(
   vehicleId: string,
 ) {
   if (requestedGarageId !== session.garageId) {
-    throw new ForbiddenError("Cross-garage access denied");
+    throw new ForbiddenError();
   }
   return deleteVehicleRecord(session, vehicleId);
 }

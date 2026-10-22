@@ -17,11 +17,7 @@ let bucketReady: Promise<void> | null = null;
 function requireEnv(name: string): string {
   const value = process.env[name]?.trim();
   if (!value) {
-    throw new AppError(
-      "STORAGE_NOT_CONFIGURED",
-      `${name} is not set. Check .env.example for MinIO settings.`,
-      500,
-    );
+    throw new AppError("STORAGE_NOT_CONFIGURED", 500);
   }
   return value;
 }

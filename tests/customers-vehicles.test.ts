@@ -1,7 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { ZodError } from "zod";
 import { AppError, ForbiddenError } from "@/lib/errors";
 import type { RoleSession } from "@/lib/rbac";
-import { normaliseRegistration } from "@/modules/vehicles/schema";
+import { createCustomerSchema } from "@/modules/customers/schema";
+import {
+  createVehicleSchema,
+  normaliseRegistration,
+} from "@/modules/vehicles/schema";
 
 vi.mock("@/modules/customers/repo", () => ({
   createCustomer: vi.fn(),
@@ -44,6 +49,8 @@ import {
   deleteVehicleById,
   findVehicleById,
   findVehicleByRegistration,
+  isUniqueConstraintError,
+  updateVehicleById,
 } from "@/modules/vehicles/repo";
 import {
   createVehicleForGarageId,
@@ -51,6 +58,7 @@ import {
   deleteVehicleForGarageId,
   deleteVehicleRecord,
   getVehicleForGarageId,
+  updateVehicleRecord,
 } from "@/modules/vehicles/service";
 
 const garageA = "garage-a";
@@ -84,6 +92,38 @@ const sampleCustomer = {
   createdAt: new Date(),
   updatedAt: new Date(),
   vehicles: [],
+};
+
+const sampleVehicle = {
+  id: "veh-a",
+  garageId: garageA,
+  customerId: "cust-a",
+  registrationNumber: "GJ01AB1234",
+  make: "Maruti",
+  model: "Swift",
+  year: 2020,
+  odometer: 10000,
+  insuranceExpiry: null,
+  pucExpiry: null,
+  fitnessExpiry: null,
+  createdAt: new Date(),
+  updatedAt: new Date(),
+  customer: {
+    id: "cust-a",
+    name: "Ravi Patel",
+    phone: "9876543210",
+  },
+};
+
+const vehicleForm = {
+  registrationNumber: "gj 01 ab 1234",
+  make: "Honda",
+  model: "City",
+  year: 2019,
+  odometer: 5000,
+  insuranceExpiry: null,
+  pucExpiry: null,
+  fitnessExpiry: null,
 };
 
 describe("normaliseRegistration", () => {
@@ -129,7 +169,7 @@ describe("duplicate registration", () => {
         fitnessExpiry: null,
       }),
     ).rejects.toMatchObject({
-      code: "DUPLICATE_REGISTRATION",
+      code: "vehicles.duplicate_registration",
     } satisfies Partial<AppError>);
 
     expect(createVehicle).not.toHaveBeenCalled();
@@ -187,6 +227,156 @@ describe("duplicate registration", () => {
     );
     expect(vehicle.garageId).toBe(garageB);
   });
+
+  it("rejects updating a vehicle to a registration already used in the garage", async () => {
+    vi.mocked(findVehicleById).mockResolvedValue(sampleVehicle);
+    vi.mocked(findVehicleByRegistration).mockResolvedValue({
+      ...sampleVehicle,
+      id: "veh-other",
+      registrationNumber: "MH12XY9999",
+    });
+
+    await expect(
+      updateVehicleRecord(ownerA, "veh-a", {
+        ...vehicleForm,
+        registrationNumber: "mh 12 xy 9999",
+        make: "Maruti",
+        model: "Swift",
+        year: 2020,
+        odometer: 10000,
+      }),
+    ).rejects.toMatchObject({
+      code: "vehicles.duplicate_registration",
+    } satisfies Partial<AppError>);
+
+    expect(updateVehicleById).not.toHaveBeenCalled();
+    expect(findVehicleByRegistration).toHaveBeenCalledWith(
+      garageA,
+      "MH12XY9999",
+    );
+  });
+
+  it("allows updating a vehicle when registration is unchanged", async () => {
+    vi.mocked(findVehicleById).mockResolvedValue(sampleVehicle);
+    vi.mocked(updateVehicleById).mockResolvedValue({
+      ...sampleVehicle,
+      odometer: 12000,
+    });
+
+    const updated = await updateVehicleRecord(ownerA, "veh-a", {
+      registrationNumber: "GJ01AB1234",
+      make: "Maruti",
+      model: "Swift",
+      year: 2020,
+      odometer: 12000,
+      insuranceExpiry: null,
+      pucExpiry: null,
+      fitnessExpiry: null,
+    });
+
+    expect(findVehicleByRegistration).not.toHaveBeenCalled();
+    expect(updateVehicleById).toHaveBeenCalledWith(
+      garageA,
+      "veh-a",
+      expect.objectContaining({
+        registrationNumber: "GJ01AB1234",
+        odometer: 12000,
+      }),
+    );
+    expect(updated.odometer).toBe(12000);
+  });
+
+  it("maps unique-constraint failures on update to duplicate registration", async () => {
+    vi.mocked(findVehicleById).mockResolvedValue(sampleVehicle);
+    vi.mocked(findVehicleByRegistration).mockResolvedValue(null);
+    vi.mocked(updateVehicleById).mockRejectedValue(new Error("P2002"));
+    vi.mocked(isUniqueConstraintError).mockReturnValue(true);
+
+    await expect(
+      updateVehicleRecord(ownerA, "veh-a", {
+        ...vehicleForm,
+        registrationNumber: "ka 01 zz 0001",
+        make: "Maruti",
+        model: "Swift",
+        year: 2020,
+        odometer: 10000,
+      }),
+    ).rejects.toMatchObject({
+      code: "vehicles.duplicate_registration",
+    } satisfies Partial<AppError>);
+  });
+});
+
+describe("schema validation messages are i18n keys", () => {
+  it("emits validation keys for invalid vehicle year and odometer", () => {
+    try {
+      createVehicleSchema.parse({
+        customerId: "cust-a",
+        registrationNumber: "GJ01AB1234",
+        make: "Honda",
+        model: "City",
+        year: "1800",
+        odometer: "5000",
+        insuranceExpiry: null,
+        pucExpiry: null,
+        fitnessExpiry: null,
+      });
+      expect.unreachable();
+    } catch (error) {
+      expect(error).toBeInstanceOf(ZodError);
+      expect((error as ZodError).issues[0]?.message).toBe(
+        "validation.invalidYear",
+      );
+    }
+
+    try {
+      createVehicleSchema.parse({
+        customerId: "cust-a",
+        registrationNumber: "GJ01AB1234",
+        make: "Honda",
+        model: "City",
+        year: "2020",
+        odometer: "-1",
+        insuranceExpiry: null,
+        pucExpiry: null,
+        fitnessExpiry: null,
+      });
+      expect.unreachable();
+    } catch (error) {
+      expect(error).toBeInstanceOf(ZodError);
+      expect((error as ZodError).issues[0]?.message).toBe(
+        "validation.invalidOdometer",
+      );
+    }
+  });
+
+  it("emits validation keys for invalid customer phone", () => {
+    try {
+      createCustomerSchema.parse({
+        name: "Ravi",
+        phone: "123",
+        address: null,
+        notes: null,
+      });
+      expect.unreachable();
+    } catch (error) {
+      expect(error).toBeInstanceOf(ZodError);
+      expect((error as ZodError).issues[0]?.message).toBe(
+        "validation.tooShort",
+      );
+    }
+  });
+});
+
+describe("customers empty copy keys", () => {
+  it("uses distinct empty vs search-empty message keys", async () => {
+    const en = await import("../messages/en.json");
+    expect(en.default.customers.emptyTitle).toBe("No customers yet");
+    expect(en.default.customers.emptySearchTitle).toBe("No matches");
+    expect(en.default.customers.emptyTitle).not.toBe(
+      en.default.customers.emptySearchTitle,
+    );
+  });
 });
 
 describe("garageId filtering", () => {
@@ -195,12 +385,22 @@ describe("garageId filtering", () => {
   });
 
   it("lists customers only for the session garage", async () => {
-    vi.mocked(searchCustomers).mockResolvedValue([]);
+    vi.mocked(searchCustomers).mockResolvedValue({
+      items: [],
+      total: 0,
+      page: 1,
+      pageSize: 10,
+    });
 
     await listCustomers(ownerA, { q: "ravi" });
 
-    expect(searchCustomers).toHaveBeenCalledWith(garageA, "ravi");
-    expect(searchCustomers).not.toHaveBeenCalledWith(garageB, expect.anything());
+    expect(searchCustomers).toHaveBeenCalledWith(garageA, "ravi", 1, 10);
+    expect(searchCustomers).not.toHaveBeenCalledWith(
+      garageB,
+      expect.anything(),
+      expect.anything(),
+      expect.anything(),
+    );
   });
 
   it("loads a customer with the session garageId", async () => {

@@ -1,11 +1,20 @@
-import { getTranslations } from "next-intl/server";
+import { getLocale, getTranslations } from "next-intl/server";
+import { Users } from "lucide-react";
+import { EmptyState } from "@/components/ui/empty-state";
+import { PageHeader } from "@/components/ui/page-header";
 import { ForbiddenError } from "@/lib/errors";
 import { requireSession } from "@/lib/session";
-import { InviteForm } from "@/modules/team/components/invite-form";
+import { InviteModal } from "@/modules/team/components/invite-modal";
+import { MembersTable } from "@/modules/team/components/members-table";
+import { PendingInvitesSection } from "@/modules/team/components/pending-invites";
 import { listTeam } from "@/modules/team/service";
+
+/** Auth session uses request-time crypto — do not prerender this route. */
+export const instant = false;
 
 export default async function TeamPage() {
   const session = await requireSession();
+  const locale = await getLocale();
   const t = await getTranslations("team");
 
   let members: Awaited<ReturnType<typeof listTeam>>["members"] = [];
@@ -24,60 +33,43 @@ export default async function TeamPage() {
     }
   }
 
+  const canInvite = session.role === "OWNER";
+  const canManageMembers = session.role === "OWNER";
+  const dateFmt = new Intl.DateTimeFormat(locale, {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+
+  const joinedLabels = Object.fromEntries(
+    members.map((member) => [member.id, dateFmt.format(member.createdAt)]),
+  );
+
   return (
     <main className="space-y-8">
-      <div className="space-y-2">
-        <h1 className="text-2xl font-semibold tracking-tight">{t("title")}</h1>
-        <p className="text-base text-muted-foreground">{t("subtitle")}</p>
-      </div>
+      <PageHeader
+        title={t("title")}
+        description={t("subtitle")}
+        actions={canInvite && !error ? <InviteModal /> : undefined}
+      />
 
       {error ? (
-        <p className="text-sm text-muted-foreground">{error}</p>
+        <EmptyState icon={Users} title={error} />
       ) : (
         <>
           <section className="space-y-3">
-            <h2 className="text-lg font-medium">{t("members")}</h2>
-            {members.length === 0 ? (
-              <p className="text-sm text-muted-foreground">{t("emptyMembers")}</p>
-            ) : (
-              <ul className="divide-y rounded-md border">
-                {members.map((member) => (
-                  <li key={member.id} className="flex min-h-14 items-center justify-between gap-3 px-3 py-2">
-                    <div className="min-w-0">
-                      <p className="truncate font-medium">
-                        {member.name ?? member.email}
-                      </p>
-                      <p className="truncate text-sm text-muted-foreground">
-                        {member.email}
-                      </p>
-                    </div>
-                    <span className="shrink-0 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                      {t(`roles.${member.role}`)}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            )}
+            <h2 className="text-section-title text-slate-900">{t("members")}</h2>
+            <MembersTable
+              members={members}
+              canManageMembers={canManageMembers}
+              currentUserId={session.userId}
+              joinedLabels={joinedLabels}
+            />
           </section>
 
-          {session.role === "OWNER" && (
-            <section className="space-y-4">
-              <h2 className="text-lg font-medium">{t("inviteTitle")}</h2>
-              <InviteForm />
-              {invites.length > 0 && (
-                <div className="space-y-2">
-                  <h3 className="text-sm font-medium">{t("pending")}</h3>
-                  <ul className="space-y-2 text-sm text-muted-foreground">
-                    {invites.map((invite) => (
-                      <li key={invite.id}>
-                        {invite.email} · {t(`roles.${invite.role}`)}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </section>
-          )}
+          {canInvite ? (
+            <PendingInvitesSection invites={invites} available />
+          ) : null}
         </>
       )}
     </main>

@@ -1,26 +1,13 @@
 import "server-only";
 
-import type { Prisma } from "@prisma/client";
-import { prisma } from "@/lib/db";
+import {
+  writeAuditLog as writeAuditLogService,
+  type WriteAuditLogInput,
+} from "@/modules/audit/service";
 
-type WriteAuditInput = {
-  garageId: string;
-  actorId?: string | null;
-  action: string;
-  entity: string;
-  entityId?: string | null;
-  meta?: Prisma.InputJsonValue;
-};
+export type { WriteAuditLogInput };
 
-export async function writeAuditLog(input: WriteAuditInput) {
-  return prisma.auditLog.create({
-    data: {
-      garageId: input.garageId,
-      actorId: input.actorId ?? null,
-      action: input.action,
-      entity: input.entity,
-      entityId: input.entityId ?? null,
-      meta: input.meta,
-    },
-  });
+/** Thin wrapper so existing call sites keep importing `@/lib/audit`. */
+export async function writeAuditLog(input: WriteAuditLogInput) {
+  return writeAuditLogService(input);
 }

@@ -45,7 +45,7 @@ function assertCanViewOrder(
   order: { technicianId: string | null },
 ) {
   if (session.role === "TECHNICIAN" && order.technicianId !== session.userId) {
-    throw new ForbiddenError("Technicians can only view their assigned orders");
+    throw new ForbiddenError();
   }
 }
 
@@ -54,18 +54,13 @@ function assertCanMutateOrder(
   order: { technicianId: string | null; status: string },
 ) {
   if (session.role === "ACCOUNTANT") {
-    throw new ForbiddenError("Accountants cannot change inspections");
+    throw new ForbiddenError();
   }
   if (session.role === "TECHNICIAN" && order.technicianId !== session.userId) {
-    throw new ForbiddenError(
-      "Technicians can only change inspections on their assigned orders",
-    );
+    throw new ForbiddenError();
   }
   if (order.status === "COMPLETED") {
-    throw new AppError(
-      "ORDER_COMPLETED",
-      "Completed orders cannot be inspected",
-    );
+    throw new AppError("ORDER_COMPLETED");
   }
 }
 
@@ -91,7 +86,7 @@ async function withMediaUrls(inspection: InspectionDetail) {
 async function loadOrderForSession(session: RoleSession, orderId: string) {
   const order = await findServiceOrderById(session.garageId, orderId);
   if (!order) {
-    throw new NotFoundError("Service order not found");
+    throw new NotFoundError();
   }
   return order;
 }
@@ -124,7 +119,7 @@ export async function getOrCreateInspection(
     actorId: session.userId,
   });
   if (!created) {
-    throw new AppError("INSPECTION_CREATE_FAILED", "Could not start inspection");
+    throw new AppError("INSPECTION_CREATE_FAILED");
   }
   return await withMediaUrls(created);
 }
@@ -153,7 +148,7 @@ export async function updateInspectionItem(
 
   const item = await findInspectionItemById(session.garageId, itemId);
   if (!item) {
-    throw new NotFoundError("Inspection item not found");
+    throw new NotFoundError();
   }
 
   const order = await loadOrderForSession(session, item.inspection.serviceOrderId);
@@ -166,7 +161,7 @@ export async function updateInspectionItem(
     serviceOrderId: order.id,
   });
   if (!updated) {
-    throw new NotFoundError("Inspection item not found");
+    throw new NotFoundError();
   }
   return updated;
 }
@@ -193,7 +188,7 @@ export async function addChecklistItem(
     });
   }
   if (!inspection) {
-    throw new AppError("INSPECTION_CREATE_FAILED", "Could not start inspection");
+    throw new AppError("INSPECTION_CREATE_FAILED");
   }
 
   return addCustomChecklistItem(session.garageId, {
@@ -212,11 +207,8 @@ export async function createMediaUploadUrl(
   const input = createUploadUrlSchema.parse(raw);
   try {
     assertMediaLimits(input.kind, input.contentType, input.byteSize);
-  } catch (error) {
-    throw new AppError(
-      "MEDIA_INVALID",
-      error instanceof Error ? error.message : "Invalid media",
-    );
+  } catch {
+    throw new AppError("MEDIA_INVALID");
   }
 
   const item = await findInspectionItemById(
@@ -224,7 +216,7 @@ export async function createMediaUploadUrl(
     input.inspectionItemId,
   );
   if (!item) {
-    throw new NotFoundError("Inspection item not found");
+    throw new NotFoundError();
   }
 
   const order = await loadOrderForSession(session, item.inspection.serviceOrderId);
@@ -259,15 +251,12 @@ export async function confirmMediaUpload(
   const input = confirmMediaSchema.parse(raw);
   try {
     assertMediaLimits(input.kind, input.contentType, input.byteSize);
-  } catch (error) {
-    throw new AppError(
-      "MEDIA_INVALID",
-      error instanceof Error ? error.message : "Invalid media",
-    );
+  } catch {
+    throw new AppError("MEDIA_INVALID");
   }
 
   if (!storageKeyBelongsToGarage(input.storageKey, session.garageId)) {
-    throw new ForbiddenError("Invalid storage key for this garage");
+    throw new ForbiddenError();
   }
 
   const item = await findInspectionItemById(
@@ -275,11 +264,11 @@ export async function confirmMediaUpload(
     input.inspectionItemId,
   );
   if (!item) {
-    throw new NotFoundError("Inspection item not found");
+    throw new NotFoundError();
   }
 
   if (!input.storageKey.includes(`/items/${item.id}/`)) {
-    throw new ForbiddenError("Storage key does not match this checklist item");
+    throw new ForbiddenError();
   }
 
   const order = await loadOrderForSession(session, item.inspection.serviceOrderId);
@@ -307,7 +296,7 @@ export async function removeMedia(session: RoleSession, mediaId: string) {
 
   const existing = await findMediaById(session.garageId, mediaId);
   if (!existing) {
-    throw new NotFoundError("Media not found");
+    throw new NotFoundError();
   }
 
   const order = await loadOrderForSession(
@@ -321,7 +310,7 @@ export async function removeMedia(session: RoleSession, mediaId: string) {
     serviceOrderId: order.id,
   });
   if (!removed) {
-    throw new NotFoundError("Media not found");
+    throw new NotFoundError();
   }
 
   try {
@@ -355,7 +344,7 @@ export async function addSuggestedRepairLine(
     });
   }
   if (!inspection) {
-    throw new AppError("INSPECTION_CREATE_FAILED", "Could not start inspection");
+    throw new AppError("INSPECTION_CREATE_FAILED");
   }
 
   return createSuggestedRepair(session.garageId, {
@@ -377,7 +366,7 @@ export async function removeSuggestedRepair(
 
   const existing = await findSuggestedRepairById(session.garageId, repairId);
   if (!existing) {
-    throw new NotFoundError("Suggested repair not found");
+    throw new NotFoundError();
   }
 
   const order = await loadOrderForSession(
@@ -391,7 +380,7 @@ export async function removeSuggestedRepair(
     serviceOrderId: order.id,
   });
   if (!deleted) {
-    throw new NotFoundError("Suggested repair not found");
+    throw new NotFoundError();
   }
 
   return deleted;
@@ -404,7 +393,7 @@ export async function getInspectionForGarageId(
   serviceOrderId: string,
 ) {
   if (requestedGarageId !== session.garageId) {
-    throw new ForbiddenError("Cross-garage access denied");
+    throw new ForbiddenError();
   }
   return getInspectionForOrder(session, serviceOrderId);
 }

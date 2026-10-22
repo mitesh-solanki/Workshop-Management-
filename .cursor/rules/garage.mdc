@@ -8,7 +8,9 @@ alwaysApply: true
 Read `docs/PRODUCT_SPEC.md` and `docs/ARCHITECTURE.md` before big changes. Follow them. If a request conflicts with them, say so and ask before changing the plan.
 
 ## Stack
-Next.js App Router, TypeScript (strict), Tailwind, shadcn/ui, PostgreSQL with Prisma, Zod, next-intl, Vitest, Playwright. Do not add other frameworks or services without asking.
+- Next.js App Router, TypeScript (strict), Tailwind, PostgreSQL with Prisma, Zod, next-intl, Vitest, Playwright. Do not add other frameworks or services without asking.
+- Tailwind CSS and shadcn/ui in `src/components/ui`. Add via `npx shadcn add`, then modify the generated file if needed, or create a new component there. One UI stack only — do not add Headless UI or a parallel component library.
+- Approved: lucide-react (icons), class-variance-authority, Inter + Noto Sans Devanagari + Noto Sans Gujarati via next/font.
 
 ## Layering
 - Routes and pages call `modules/<name>/service.ts`.
@@ -28,6 +30,12 @@ Next.js App Router, TypeScript (strict), Tailwind, shadcn/ui, PostgreSQL with Pr
 ## Quality
 - Small, focused changes. One task per chat. Do not refactor unrelated code.
 - Add tests for money, GST, stock and invoice-number logic. Run `npm run lint`, `npm run typecheck` and `npm test` before saying a task is done.
+- Responsive Design: Ensure all screens work properly from 360px mobile width up to the maximum desktop screen size.
 - Mobile first: screens must work at 360px width with large tap targets. Mechanics use phones with dirty hands.
 - Show loading, empty and error states.
 - Explain what you changed in plain language at the end, and list anything you did not finish.
+
+## Visual standard
+The app must look like a professional business admin tool (think Linear, Zoho
+Books, Stripe Dashboard): full-width layouts, clear hierarchy, colour with
+purpose, generous but consistent spacing. Never a narrow lone column on desktop.

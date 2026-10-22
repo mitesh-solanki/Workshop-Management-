@@ -1,19 +1,27 @@
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
-import { PrismaAdapter } from "@auth/prisma-adapter";
 import type { Role } from "@prisma/client";
 import { z } from "zod";
-import { prisma } from "@/lib/db";
-import { completeOtpSignIn } from "@/modules/auth/service";
+import {
+  completeOtpSignIn,
+  getAuthAdapter,
+  getUserForSessionRefresh,
+} from "@/modules/auth/service";
 
 const credentialsSchema = z.object({
   email: z.string().email(),
   code: z.string().min(4).max(12),
 });
 
+/** How long a normal signed-in session lasts (sliding refresh within this window). */
+const SESSION_MAX_AGE_SECONDS = 7 * 24 * 60 * 60; // 7 days
+
 export const { handlers, auth, signIn, signOut } = NextAuth({
-  adapter: PrismaAdapter(prisma),
-  session: { strategy: "jwt" },
+  adapter: getAuthAdapter(),
+  session: {
+    strategy: "jwt",
+    maxAge: SESSION_MAX_AGE_SECONDS,
+  },
   pages: {
     signIn: "/login",
   },
@@ -62,23 +70,22 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         return token;
       }
 
-      const dbUser = await prisma.user.findUnique({
-        where: { id: userId },
-        select: {
-          id: true,
-          email: true,
-          name: true,
-          garageId: true,
-          role: true,
-        },
-      });
-      if (dbUser) {
-        token.userId = dbUser.id;
-        token.garageId = dbUser.garageId;
-        token.role = dbUser.role;
-        token.email = dbUser.email;
-        token.name = dbUser.name;
+      const dbUser = await getUserForSessionRefresh(userId);
+      if (!dbUser) {
+        // User was removed (or no longer exists) — invalidate the JWT claims.
+        delete token.userId;
+        delete token.garageId;
+        delete token.role;
+        delete token.email;
+        delete token.name;
+        return token;
       }
+
+      token.userId = dbUser.id;
+      token.garageId = dbUser.garageId;
+      token.role = dbUser.role;
+      token.email = dbUser.email;
+      token.name = dbUser.name;
       return token;
     },
     async session({ session, token }) {
@@ -87,6 +94,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         typeof token.garageId === "string" ? token.garageId : null;
       const role = token.role;
 
+      // Missing claims (including after a removed member) → requireSession sends them to login.
       if (session.user && userId && garageId && role) {
         session.user.id = userId;
         session.user.garageId = garageId;

@@ -1,8 +1,6 @@
-import Link from "next/link";
 import { Suspense } from "react";
 import { Users } from "lucide-react";
 import { getTranslations } from "next-intl/server";
-import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -10,6 +8,7 @@ import { requireSession } from "@/lib/session";
 import { CreateCustomerModal } from "@/modules/customers/components/create-customer-modal";
 import { CustomersTable } from "@/modules/customers/components/customers-table";
 import { listCustomers } from "@/modules/customers/service";
+import { CsvExportButton } from "@/modules/data-export/components/csv-export-button";
 
 type Props = {
   searchParams: Promise<{ q?: string; page?: string; pageSize?: string }>;
@@ -39,17 +38,14 @@ export default async function CustomersPage({ searchParams }: Props) {
         description={t("subtitle")}
         actions={
           <div className="flex flex-wrap gap-2">
-            <Button asChild variant="secondary" size="md">
-              <Link
-                href={
-                  params.q
-                    ? `/customers/export?q=${encodeURIComponent(params.q)}`
-                    : "/customers/export"
-                }
-              >
-                {t("export")}
-              </Link>
-            </Button>
+            <CsvExportButton
+              href={
+                params.q
+                  ? `/customers/export?q=${encodeURIComponent(params.q)}`
+                  : "/customers/export"
+              }
+              label={t("export")}
+            />
             {canWrite ? <CreateCustomerModal /> : null}
           </div>
         }

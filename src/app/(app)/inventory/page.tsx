@@ -7,6 +7,8 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
 import { Skeleton } from "@/components/ui/skeleton";
 import { requireSession } from "@/lib/session";
+import { CsvExportButton } from "@/modules/data-export/components/csv-export-button";
+import { CreatePartModal } from "@/modules/inventory/components/create-part-modal";
 import { InventoryTable } from "@/modules/inventory/components/inventory-table";
 import { listParts } from "@/modules/inventory/service";
 
@@ -35,17 +37,14 @@ export default async function InventoryPage({ searchParams }: Props) {
         description={t("subtitle")}
         actions={
           <div className="flex flex-wrap gap-2">
-            <Button asChild variant="secondary" size="md">
-              <Link
-                href={
-                  params.q
-                    ? `/inventory/export?q=${encodeURIComponent(params.q)}`
-                    : "/inventory/export"
-                }
-              >
-                {t("export")}
-              </Link>
-            </Button>
+            <CsvExportButton
+              href={
+                params.q
+                  ? `/inventory/export?q=${encodeURIComponent(params.q)}`
+                  : "/inventory/export"
+              }
+              label={t("export")}
+            />
             {canSale ? (
               <Button asChild variant="secondary" size="md">
                 <Link href="/inventory/sales">{t("viewSales")}</Link>
@@ -56,11 +55,7 @@ export default async function InventoryPage({ searchParams }: Props) {
                 <Link href="/inventory/sales/new">{t("directSale")}</Link>
               </Button>
             ) : null}
-            {canWrite ? (
-              <Button asChild size="md">
-                <Link href="/inventory/new">{t("add")}</Link>
-              </Button>
-            ) : null}
+            {canWrite ? <CreatePartModal /> : null}
           </div>
         }
       />
@@ -68,6 +63,7 @@ export default async function InventoryPage({ searchParams }: Props) {
       <Suspense fallback={<Skeleton className="h-64 w-full" />}>
         <InventoryTable
           items={parts}
+          canWrite={canWrite}
           empty={
             <EmptyState
               icon={Package}
@@ -77,9 +73,7 @@ export default async function InventoryPage({ searchParams }: Props) {
               }
               action={
                 canWrite && !hasQuery ? (
-                  <Button asChild size="sm">
-                    <Link href="/inventory/new">{t("add")}</Link>
-                  </Button>
+                  <CreatePartModal size="sm" />
                 ) : undefined
               }
             />

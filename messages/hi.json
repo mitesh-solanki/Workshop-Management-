@@ -2,6 +2,7 @@
   "common": {
     "appName": "Workshop",
     "loading": "लोड हो रहा है…",
+    "exporting": "निर्यात हो रहा है…",
     "empty": "अभी कुछ नहीं है",
     "error": "कुछ गलत हो गया। फिर कोशिश करें।",
     "errorTitle": "कुछ गलत हो गया",
@@ -234,7 +235,6 @@
       "TECHNICIAN": "तकनीशियन",
       "ACCOUNTANT": "अकाउंटेंट"
     },
-    "sectionsTitle": "अनुभाग",
     "searchLabel": "सदस्य खोजें",
     "searchPlaceholder": "नाम, ईमेल या भूमिका"
   },
@@ -747,6 +747,13 @@
     "newTitle": "नया इन्वेंटरी आइटम",
     "newSubtitle": "इस गैरेज के स्टॉक कैटलॉग में आइटम जोड़ें।",
     "editTitle": "आइटम संपादित करें",
+    "edit": "संपादित करें",
+    "cancel": "रद्द करें",
+    "created": "आइटम बनाया गया",
+    "increaseQty": "मात्रा बढ़ाएँ",
+    "decreaseQty": "मात्रा घटाएँ",
+    "adjustIncrease": "बढ़ाएँ",
+    "adjustDecrease": "घटाएँ",
     "name": "नाम",
     "sku": "SKU",
     "unit": "इकाई",
@@ -788,7 +795,7 @@
     "stockIn": "स्टॉक इन",
     "stockOut": "स्टॉक आउट",
     "stockAdjust": "समायोजन",
-    "stockAdjustHint": "बढ़ाने के लिए धनात्मक, घटाने के लिए ऋणात्मक संख्या लिखें।",
+    "stockAdjustHint": "बढ़ाएँ या घटाएँ चुनें, फिर कितनी इकाइयाँ समायोजित करनी हैं सेट करें।",
     "quantity": "मात्रा",
     "quantityChange": "मात्रा परिवर्तन",
     "note": "नोट",

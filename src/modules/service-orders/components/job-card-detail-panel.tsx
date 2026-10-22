@@ -114,10 +114,10 @@ function SectionBlock({
   children: ReactNode;
 }) {
   return (
-    <section
+    <Card
       id={jobCardSectionDomId(id)}
       ref={sectionRef}
-      className="scroll-mt-4 border-b border-border last:border-b-0"
+      className="min-w-0 scroll-mt-4 gap-0 overflow-visible py-0"
     >
       <div className="border-b border-border px-5 py-3.5 sm:px-6">
         <h2 className="text-section-title text-slate-900">{title}</h2>
@@ -126,7 +126,7 @@ function SectionBlock({
         ) : null}
       </div>
       {children}
-    </section>
+    </Card>
   );
 }
 
@@ -180,7 +180,7 @@ export function JobCardDetailPanel({
           onSectionChange={scrollToSection}
         />
 
-        <Card className="min-w-0 gap-0 overflow-visible py-0">
+        <div className="flex min-w-0 flex-col gap-4">
           <SectionBlock
             id="details"
             title={t("details")}
@@ -333,7 +333,7 @@ export function JobCardDetailPanel({
               />
             </div>
           </SectionBlock>
-        </Card>
+        </div>
       </div>
     </div>
   );

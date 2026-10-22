@@ -2,6 +2,7 @@
   "common": {
     "appName": "Workshop",
     "loading": "Loading…",
+    "exporting": "Exporting…",
     "empty": "Nothing here yet",
     "error": "Something went wrong. Try again.",
     "errorTitle": "Something went wrong",
@@ -234,7 +235,6 @@
       "TECHNICIAN": "Technician",
       "ACCOUNTANT": "Accountant"
     },
-    "sectionsTitle": "Sections",
     "searchLabel": "Search members",
     "searchPlaceholder": "Name, email or role"
   },
@@ -747,6 +747,13 @@
     "newTitle": "New inventory item",
     "newSubtitle": "Add an item to this garage’s stock catalogue.",
     "editTitle": "Edit item",
+    "edit": "Edit",
+    "cancel": "Cancel",
+    "created": "Item created",
+    "increaseQty": "Increase quantity",
+    "decreaseQty": "Decrease quantity",
+    "adjustIncrease": "Increase",
+    "adjustDecrease": "Decrease",
     "name": "Name",
     "sku": "SKU",
     "unit": "Unit",
@@ -788,7 +795,7 @@
     "stockIn": "Stock in",
     "stockOut": "Stock out",
     "stockAdjust": "Adjustment",
-    "stockAdjustHint": "Use a positive number to increase or a negative number to decrease.",
+    "stockAdjustHint": "Choose increase or decrease, then set how many units to adjust.",
     "quantity": "Quantity",
     "quantityChange": "Quantity change",
     "note": "Note",

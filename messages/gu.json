@@ -2,6 +2,7 @@
   "common": {
     "appName": "Workshop",
     "loading": "લોડ થઈ રહ્યું છે…",
+    "exporting": "નિકાસ થઈ રહી છે…",
     "empty": "હજુ અહીં કંઈ નથી",
     "error": "કંઈક ખોટું થયું. ફરી પ્રયાસ કરો.",
     "errorTitle": "કંઈક ખોટું થયું",
@@ -234,7 +235,6 @@
       "TECHNICIAN": "ટેકનિશિયન",
       "ACCOUNTANT": "એકાઉન્ટન્ટ"
     },
-    "sectionsTitle": "વિભાગો",
     "searchLabel": "સભ્યો શોધો",
     "searchPlaceholder": "નામ, ઈમેલ અથવા ભૂમિકા"
   },
@@ -747,6 +747,13 @@
     "newTitle": "નવી ઇન્વેન્ટરી આઇટમ",
     "newSubtitle": "આ ગેરેજના સ્ટોક કેટલોગમાં આઇટમ ઉમેરો.",
     "editTitle": "આઇટમ સંપાદિત કરો",
+    "edit": "સંપાદિત કરો",
+    "cancel": "રદ કરો",
+    "created": "આઇટમ બનાવાઈ",
+    "increaseQty": "જથ્થો વધારો",
+    "decreaseQty": "જથ્થો ઘટાડો",
+    "adjustIncrease": "વધારો",
+    "adjustDecrease": "ઘટાડો",
     "name": "નામ",
     "sku": "SKU",
     "unit": "એકમ",
@@ -788,7 +795,7 @@
     "stockIn": "સ્ટોક ઇન",
     "stockOut": "સ્ટોક આઉટ",
     "stockAdjust": "સમાયોજન",
-    "stockAdjustHint": "વધારવા હકારાત્મક, ઘટાડવા નકારાત્મક સંખ્યા લખો.",
+    "stockAdjustHint": "વધારો અથવા ઘટાડો પસંદ કરો, પછી કેટલા એકમ સમાયોજિત કરવા છે તે સેટ કરો.",
     "quantity": "જથ્થો",
     "quantityChange": "જથ્થા ફેરફાર",
     "note": "નોંધ",

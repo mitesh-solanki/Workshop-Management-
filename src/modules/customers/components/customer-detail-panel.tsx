@@ -46,6 +46,7 @@ import {
   VEHICLE_SECTIONS,
 } from "@/modules/customers/customer-sections";
 import { JobCardRowActions } from "@/modules/service-orders/components/job-card-row-actions";
+import { CsvExportButton } from "@/modules/data-export/components/csv-export-button";
 import { CreateVehicleModal } from "@/modules/vehicles/components/create-vehicle-modal";
 import { DeleteVehicleButton } from "@/modules/vehicles/components/delete-vehicle-button";
 import { EditVehicleModal } from "@/modules/vehicles/components/edit-vehicle-modal";
@@ -149,10 +150,10 @@ function SectionBlock({
   children: ReactNode;
 }) {
   return (
-    <section
+    <Card
       id={id}
       ref={sectionRef}
-      className="scroll-mt-4 border-b border-border last:border-b-0"
+      className="min-w-0 scroll-mt-4 gap-0 overflow-visible py-0"
     >
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-4 sm:px-6">
         <div className="min-w-0 space-y-0.5">
@@ -162,7 +163,7 @@ function SectionBlock({
         {action}
       </div>
       {children}
-    </section>
+    </Card>
   );
 }
 
@@ -285,7 +286,7 @@ function CustomerSectionsView({
         onChange={scrollToSection}
       />
 
-      <Card className="min-w-0 gap-0 overflow-visible py-0">
+      <div className="flex min-w-0 flex-col gap-4">
         <SectionBlock
           id={sectionDomId(CUSTOMER_SECTION_ID_PREFIX, "details")}
           title={t("namedDetails", { name: customer.name })}
@@ -342,11 +343,11 @@ function CustomerSectionsView({
           sectionRef={setSectionRef("vehicles")}
           action={
             <div className="flex flex-wrap items-center gap-2">
-              <Button asChild variant="secondary" size="sm">
-                <Link href={`/customers/${customer.id}/vehicles/export`}>
-                  {tv("export")}
-                </Link>
-              </Button>
+              <CsvExportButton
+                href={`/customers/${customer.id}/vehicles/export`}
+                label={tv("export")}
+                size="sm"
+              />
               {canWrite ? (
                 <CreateVehicleModal
                   customerId={customer.id}
@@ -458,7 +459,7 @@ function CustomerSectionsView({
             centered
           />
         </SectionBlock>
-      </Card>
+      </div>
     </div>
   );
 }
@@ -580,7 +581,7 @@ function VehicleDetailView({
         ]}
       />
 
-      <Card className="min-w-0 gap-0 overflow-visible py-0">
+      <div className="flex min-w-0 flex-col gap-4">
         <SectionBlock
           id={sectionDomId(VEHICLE_SECTION_ID_PREFIX, "overview")}
           title={t("customerVehicleTitle", {
@@ -655,7 +656,7 @@ function VehicleDetailView({
             emptyAction={createJobCard("sm")}
           />
         </SectionBlock>
-      </Card>
+      </div>
     </div>
   );
 }

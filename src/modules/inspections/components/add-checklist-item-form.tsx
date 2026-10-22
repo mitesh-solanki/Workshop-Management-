@@ -6,11 +6,10 @@ import {
   addChecklistItemAction,
   type InspectionActionState,
 } from "@/app/actions/inspections";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 const initial: InspectionActionState = { ok: false };
-
-const inputClass =
-  "min-h-12 w-full rounded-md border bg-background px-3 text-base outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
 type Props = { orderId: string };
 
@@ -23,27 +22,23 @@ export function AddChecklistItemForm({ orderId }: Props) {
   const [state, formAction, pending] = useActionState(bound, initial);
 
   return (
-    <form action={formAction} className="flex flex-col gap-3 sm:flex-row">
-      <input
+    <form action={formAction} className="flex flex-col gap-2 sm:flex-row sm:items-center">
+      <Input
         name="label"
         required
         maxLength={120}
         placeholder={t("customItemPlaceholder")}
-        className={inputClass}
         aria-label={t("addCustomItem")}
+        className="h-9 min-h-9 flex-1"
       />
-      <button
-        type="submit"
-        disabled={pending}
-        className="min-h-12 shrink-0 rounded-md border px-4 text-base font-medium disabled:opacity-60"
-      >
+      <Button type="submit" size="sm" loading={pending} variant="secondary" className="shrink-0">
         {pending ? t("saving") : t("addCustomItem")}
-      </button>
-      {state.message && !state.ok && (
-        <p className="text-sm text-destructive sm:basis-full" role="status">
+      </Button>
+      {state.message && !state.ok ? (
+        <p className="text-xs text-danger sm:basis-full" role="status">
           {state.message}
         </p>
-      )}
+      ) : null}
     </form>
   );
 }

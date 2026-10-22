@@ -2,7 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { AppError } from "@/lib/errors";
+import { getTranslations } from "next-intl/server";
+import { translateError } from "@/lib/translate-error";
 import { requireSession } from "@/lib/session";
 import {
   createCustomerRecord,
@@ -13,6 +14,7 @@ import {
 export type CustomerActionState = {
   ok: boolean;
   message?: string;
+  customerId?: string;
 };
 
 export async function createCustomerAction(
@@ -30,14 +32,37 @@ export async function createCustomerAction(
     });
     customerId = customer.id;
   } catch (error) {
-    return {
-      ok: false,
-      message: error instanceof AppError ? error.message : "Something went wrong",
-    };
+    return { ok: false, message: await translateError(error) };
   }
 
   revalidatePath("/customers");
   redirect(`/customers/${customerId}`);
+}
+
+/** Modal create — returns id so the client can navigate (no redirect throw). */
+export async function createCustomerModalAction(
+  _prev: CustomerActionState,
+  formData: FormData,
+): Promise<CustomerActionState> {
+  const t = await getTranslations("customers");
+
+  try {
+    const session = await requireSession();
+    const customer = await createCustomerRecord(session, {
+      name: String(formData.get("name") ?? ""),
+      phone: String(formData.get("phone") ?? ""),
+      address: String(formData.get("address") ?? ""),
+      notes: String(formData.get("notes") ?? ""),
+    });
+    revalidatePath("/customers");
+    return {
+      ok: true,
+      message: t("created"),
+      customerId: customer.id,
+    };
+  } catch (error) {
+    return { ok: false, message: await translateError(error) };
+  }
 }
 
 export async function updateCustomerAction(
@@ -45,6 +70,8 @@ export async function updateCustomerAction(
   _prev: CustomerActionState,
   formData: FormData,
 ): Promise<CustomerActionState> {
+  const t = await getTranslations("customers");
+
   try {
     const session = await requireSession();
     await updateCustomerRecord(session, customerId, {
@@ -55,33 +82,25 @@ export async function updateCustomerAction(
     });
     revalidatePath("/customers");
     revalidatePath(`/customers/${customerId}`);
-    return { ok: true, message: "saved" };
+    return { ok: true, message: t("saved") };
   } catch (error) {
-    return {
-      ok: false,
-      message: error instanceof AppError ? error.message : "Something went wrong",
-    };
+    return { ok: false, message: await translateError(error) };
   }
 }
 
 export async function deleteCustomerAction(
   customerId: string,
-  _prev: CustomerActionState,
-  _formData: FormData,
+  _prev?: CustomerActionState,
+  _formData?: FormData,
 ): Promise<CustomerActionState> {
+  const t = await getTranslations("customers");
+
   try {
     const session = await requireSession();
     await deleteCustomerRecord(session, customerId);
+    revalidatePath("/customers");
+    return { ok: true, message: t("deleted") };
   } catch (error) {
-    if (error instanceof AppError && error.code === "CUSTOMER_HAS_ORDERS") {
-      return { ok: false, message: "cannotDeleteHasOrders" };
-    }
-    return {
-      ok: false,
-      message: error instanceof AppError ? error.message : "Something went wrong",
-    };
+    return { ok: false, message: await translateError(error) };
   }
-
-  revalidatePath("/customers");
-  redirect("/customers");
 }

@@ -1,26 +1,102 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+  Design tokens — workshop admin (Linear / Stripe / Zoho Books style).
+  Primary blue-600 = #2563EB. Surfaces: slate-50 app, white cards.
+*/
 
 :root {
-  --background: 0 0% 100%;
-  --foreground: 0 0% 3.9%;
+  /* Brand blue scale (600 = #2563EB primary) */
+  --blue-50: 214 100% 97%;
+  --blue-100: 214 95% 93%;
+  --blue-200: 213 97% 87%;
+  --blue-300: 212 96% 78%;
+  --blue-400: 213 94% 68%;
+  --blue-500: 217 91% 60%;
+  --blue-600: 221 83% 53%;
+  --blue-700: 224 76% 48%;
+  --blue-800: 226 71% 40%;
+  --blue-900: 224 64% 33%;
+  --blue-950: 226 55% 21%;
+
+  /* Sidebar — light white (shadcn sidebar tokens) */
+  --sidebar: 0 0% 100%;
+  --sidebar-foreground: 222 47% 11%;
+  --sidebar-muted: 215 16% 47%;
+  --sidebar-primary: var(--blue-600);
+  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-accent: 214 100% 97%;
+  --sidebar-accent-foreground: var(--blue-700);
+  --sidebar-border: 214 32% 91%;
+  --sidebar-ring: var(--blue-600);
+
+  /* Primary — blue-600 (#2563EB) */
+  --primary: var(--blue-600);
+  --primary-foreground: 0 0% 100%;
+
+  /* Surfaces — slate-50 / white / slate text */
+  --background: 210 40% 98%;
+  --foreground: 222 47% 11%;
   --card: 0 0% 100%;
-  --card-foreground: 0 0% 3.9%;
+  --card-foreground: 222 47% 11%;
   --popover: 0 0% 100%;
-  --popover-foreground: 0 0% 3.9%;
-  --primary: 0 0% 9%;
-  --primary-foreground: 0 0% 98%;
-  --secondary: 0 0% 96.1%;
-  --secondary-foreground: 0 0% 9%;
-  --muted: 0 0% 96.1%;
-  --muted-foreground: 0 0% 45.1%;
-  --accent: 0 0% 96.1%;
-  --accent-foreground: 0 0% 9%;
-  --destructive: 0 84.2% 60.2%;
-  --destructive-foreground: 0 0% 98%;
-  --border: 0 0% 89.8%;
-  --input: 0 0% 89.8%;
-  --ring: 0 0% 3.9%;
-  --radius: 0.5rem;
+  --popover-foreground: 222 47% 11%;
+  --secondary: 210 40% 96%;
+  --secondary-foreground: 215 25% 27%;
+  --muted: 210 40% 96%;
+  --muted-foreground: 215 16% 47%;
+  --accent: 214 100% 97%;
+  --accent-foreground: var(--blue-700);
+  --border: 214 32% 91%;
+  --input: 214 32% 91%;
+  --ring: var(--blue-600);
+
+  /* Semantic */
+  --success: 152 60% 36%;
+  --success-foreground: 0 0% 100%;
+  --warning: 38 92% 44%;
+  --warning-foreground: 30 80% 12%;
+  --danger: 0 72% 48%;
+  --danger-foreground: 0 0% 100%;
+  --info: 199 89% 40%;
+  --info-foreground: 0 0% 100%;
+  --destructive: var(--danger);
+  --destructive-foreground: var(--danger-foreground);
+
+  /* Service order status — one distinct colour each */
+  --status-waiting: 215 16% 46%;
+  --status-inspection: 199 89% 40%;
+  --status-in-progress: var(--blue-600);
+  --status-waiting-parts: 38 92% 44%;
+  --status-ready: 152 60% 36%;
+  --status-completed: 222 47% 20%;
+
+  /* radius-xl cards */
+  --radius: 0.75rem;
+
+  /* Type scale (rem) */
+  --text-page: 1.5rem;
+  --leading-page: 2rem;
+  --text-section: 1rem;
+  --leading-section: 1.5rem;
+  --text-body: 0.875rem;
+  --leading-body: 1.25rem;
+  --text-caption: 0.75rem;
+  --leading-caption: 1rem;
+
+  /* Spacing */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
 }
 
 @theme inline {
@@ -40,22 +116,146 @@
   --color-accent-foreground: hsl(var(--accent-foreground));
   --color-destructive: hsl(var(--destructive));
   --color-destructive-foreground: hsl(var(--destructive-foreground));
+  --color-success: hsl(var(--success));
+  --color-success-foreground: hsl(var(--success-foreground));
+  --color-warning: hsl(var(--warning));
+  --color-warning-foreground: hsl(var(--warning-foreground));
+  --color-danger: hsl(var(--danger));
+  --color-danger-foreground: hsl(var(--danger-foreground));
+  --color-info: hsl(var(--info));
+  --color-info-foreground: hsl(var(--info-foreground));
   --color-border: hsl(var(--border));
   --color-input: hsl(var(--input));
   --color-ring: hsl(var(--ring));
+  --color-sidebar: hsl(var(--sidebar));
+  --color-sidebar-foreground: hsl(var(--sidebar-foreground));
+  --color-sidebar-muted: hsl(var(--sidebar-muted));
+  --color-sidebar-accent: hsl(var(--sidebar-accent));
+  --color-sidebar-accent-foreground: hsl(var(--sidebar-accent-foreground));
+  --color-sidebar-primary: hsl(var(--sidebar-primary));
+  --color-sidebar-primary-foreground: hsl(
+    var(--sidebar-primary-foreground)
+  );
+  --color-sidebar-border: hsl(var(--sidebar-border));
+  --color-sidebar-ring: hsl(var(--sidebar-ring));
+  --color-blue-50: hsl(var(--blue-50));
+  --color-blue-100: hsl(var(--blue-100));
+  --color-blue-200: hsl(var(--blue-200));
+  --color-blue-300: hsl(var(--blue-300));
+  --color-blue-400: hsl(var(--blue-400));
+  --color-blue-500: hsl(var(--blue-500));
+  --color-blue-600: hsl(var(--blue-600));
+  --color-blue-700: hsl(var(--blue-700));
+  --color-blue-800: hsl(var(--blue-800));
+  --color-blue-900: hsl(var(--blue-900));
+  --color-blue-950: hsl(var(--blue-950));
+  --color-status-waiting: hsl(var(--status-waiting));
+  --color-status-inspection: hsl(var(--status-inspection));
+  --color-status-in-progress: hsl(var(--status-in-progress));
+  --color-status-waiting-parts: hsl(var(--status-waiting-parts));
+  --color-status-ready: hsl(var(--status-ready));
+  --color-status-completed: hsl(var(--status-completed));
+
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  --spacing-1: var(--space-1);
+  --spacing-2: var(--space-2);
+  --spacing-3: var(--space-3);
+  --spacing-4: var(--space-4);
+  --spacing-5: var(--space-5);
+  --spacing-6: var(--space-6);
+  --spacing-8: var(--space-8);
+  --spacing-10: var(--space-10);
+  --spacing-12: var(--space-12);
+
+  --font-sans: var(--font-inter), var(--font-noto-devanagari),
+    var(--font-noto-gujarati), system-ui, sans-serif;
+  /* Brand wordmark (Outfit) — distinct from UI Inter */
+  --font-brand: var(--font-outfit), var(--font-inter), system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
 }
 
-* {
-  border-color: hsl(var(--border));
+/* Must stay in @layer base so Tailwind border-* utilities can override it. */
+@layer base {
+  * {
+    border-color: hsl(var(--border));
+  }
 }
 
 body {
   background: hsl(var(--background));
   color: hsl(var(--foreground));
-  font-family: var(--font-geist-sans), system-ui, sans-serif;
+  font-family: var(--font-sans);
+  font-size: var(--text-body);
+  line-height: var(--leading-body);
+  /* Native controls (checkbox, radio, range, progress) follow brand blue */
+  accent-color: hsl(var(--primary));
+  caret-color: hsl(var(--primary));
+}
+
+/* Visible focus for keyboard users (form fields use their own ring) */
+:focus-visible {
+  outline: 1px solid hsl(var(--primary));
+  outline-offset: 1px;
+}
+
+:is(input, textarea, select, [data-slot="input"], [data-slot="textarea"]):focus-visible {
+  outline: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+.text-page-title {
+  font-size: var(--text-page);
+  line-height: var(--leading-page);
+  font-weight: 600;
+}
+
+.text-section-title {
+  font-size: var(--text-section);
+  line-height: var(--leading-section);
+  font-weight: 600;
+}
+
+.text-body {
+  font-size: var(--text-body);
+  line-height: var(--leading-body);
+}
+
+.text-caption {
+  font-size: var(--text-caption);
+  line-height: var(--leading-caption);
+}
+
+/* Sonner close control — right + vertically centered (shadcn toast layout) */
+[data-sonner-toaster] [data-sonner-toast] [data-close-button] {
+  left: auto !important;
+  right: 0.5rem !important;
+  top: 0 !important;
+  bottom: 0 !important;
+  margin-block: auto !important;
+  transform: none !important;
+  border: none !important;
+  background: transparent !important;
+  width: 1.5rem !important;
+  height: 1.5rem !important;
+}
+
+/* Keep toasts above the mobile bottom nav */
+@media (max-width: 1023px) {
+  [data-sonner-toaster][data-y-position="bottom"] {
+    bottom: 5.25rem !important;
+  }
 }

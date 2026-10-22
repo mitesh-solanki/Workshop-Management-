@@ -2,12 +2,15 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { AppError } from "@/lib/errors";
 import { requireSession } from "@/lib/session";
+import { translateError } from "@/lib/translate-error";
+import { getTranslations } from "next-intl/server";
 import {
   addOrderLine,
   changeOrderStatus,
   createOrder,
+  deleteOrder,
+  updateOrder,
 } from "@/modules/service-orders/service";
 
 export type ServiceOrderActionState = {
@@ -15,45 +18,95 @@ export type ServiceOrderActionState = {
   message?: string;
 };
 
+function parseCreateOrderForm(formData: FormData) {
+  return {
+    vehicleId: String(formData.get("vehicleId") ?? ""),
+    complaint: String(formData.get("complaint") ?? ""),
+    requestedServices: String(formData.get("requestedServices") ?? ""),
+    odometerIn: String(formData.get("odometerIn") ?? ""),
+    expectedCompletion: String(formData.get("expectedCompletion") ?? ""),
+    technicianId: String(formData.get("technicianId") ?? ""),
+    bay: String(formData.get("bay") ?? ""),
+    priority: String(formData.get("priority") ?? "") as
+      | ""
+      | "LOW"
+      | "NORMAL"
+      | "HIGH"
+      | "URGENT",
+  };
+}
+
+function parseUpdateOrderForm(formData: FormData) {
+  return {
+    complaint: String(formData.get("complaint") ?? ""),
+    requestedServices: String(formData.get("requestedServices") ?? ""),
+    odometerIn: String(formData.get("odometerIn") ?? ""),
+    expectedCompletion: String(formData.get("expectedCompletion") ?? ""),
+    technicianId: String(formData.get("technicianId") ?? ""),
+    bay: String(formData.get("bay") ?? ""),
+    priority: String(formData.get("priority") ?? "") as
+      | ""
+      | "LOW"
+      | "NORMAL"
+      | "HIGH"
+      | "URGENT",
+    status: String(formData.get("status") ?? "") as
+      | ""
+      | "WAITING"
+      | "INSPECTION"
+      | "IN_PROGRESS"
+      | "WAITING_FOR_PARTS"
+      | "READY"
+      | "COMPLETED",
+  };
+}
+
+/** Create basic job card, then open the edit hub to add the rest. */
 export async function createServiceOrderAction(
   _prev: ServiceOrderActionState,
   formData: FormData,
 ): Promise<ServiceOrderActionState> {
   let orderId: string;
   let customerId: string;
-  let vehicleId: string;
   try {
     const session = await requireSession();
-    vehicleId = String(formData.get("vehicleId") ?? "");
-    const order = await createOrder(session, {
-      vehicleId,
-      complaint: String(formData.get("complaint") ?? ""),
-      requestedServices: String(formData.get("requestedServices") ?? ""),
-      odometerIn: String(formData.get("odometerIn") ?? ""),
-      expectedCompletion: String(formData.get("expectedCompletion") ?? ""),
-      technicianId: String(formData.get("technicianId") ?? ""),
-      bay: String(formData.get("bay") ?? ""),
-      priority: String(formData.get("priority") ?? "") as
-        | ""
-        | "LOW"
-        | "NORMAL"
-        | "HIGH"
-        | "URGENT",
-    });
+    const order = await createOrder(session, parseCreateOrderForm(formData));
     orderId = order.id;
     customerId = order.customerId;
   } catch (error) {
     return {
       ok: false,
-      message: error instanceof AppError ? error.message : "Something went wrong",
+      message: await translateError(error),
     };
   }
 
   revalidatePath("/orders");
   revalidatePath("/workshop");
+  revalidatePath("/dashboard");
   revalidatePath(`/customers/${customerId}`);
-  revalidatePath(`/vehicles/${vehicleId}/orders/new`);
+  revalidatePath(`/orders/${orderId}`);
   redirect(`/orders/${orderId}`);
+}
+
+export async function updateServiceOrderAction(
+  orderId: string,
+  _prev: ServiceOrderActionState,
+  formData: FormData,
+): Promise<ServiceOrderActionState> {
+  const t = await getTranslations("orders");
+  try {
+    const session = await requireSession();
+    await updateOrder(session, orderId, parseUpdateOrderForm(formData));
+    revalidatePath("/orders");
+    revalidatePath("/workshop");
+    revalidatePath(`/orders/${orderId}`);
+    return { ok: true, message: t("saved") };
+  } catch (error) {
+    return {
+      ok: false,
+      message: await translateError(error),
+    };
+  }
 }
 
 export async function changeServiceOrderStatusAction(
@@ -79,7 +132,7 @@ export async function changeServiceOrderStatusAction(
   } catch (error) {
     return {
       ok: false,
-      message: error instanceof AppError ? error.message : "Something went wrong",
+      message: await translateError(error),
     };
   }
 }
@@ -107,7 +160,7 @@ export async function moveServiceOrderStatusAction(
   } catch (error) {
     return {
       ok: false,
-      message: error instanceof AppError ? error.message : "Something went wrong",
+      message: await translateError(error),
     };
   }
 }
@@ -131,7 +184,28 @@ export async function addServiceOrderLineAction(
   } catch (error) {
     return {
       ok: false,
-      message: error instanceof AppError ? error.message : "Something went wrong",
+      message: await translateError(error),
+    };
+  }
+}
+
+export async function deleteServiceOrderAction(
+  orderId: string,
+  customerId: string,
+): Promise<ServiceOrderActionState> {
+  const t = await getTranslations("orders");
+  try {
+    const session = await requireSession();
+    await deleteOrder(session, orderId);
+    revalidatePath("/orders");
+    revalidatePath("/workshop");
+    revalidatePath("/dashboard");
+    revalidatePath(`/customers/${customerId}`);
+    return { ok: true, message: t("deleted") };
+  } catch (error) {
+    return {
+      ok: false,
+      message: await translateError(error),
     };
   }
 }

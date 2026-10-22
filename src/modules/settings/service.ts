@@ -18,7 +18,7 @@ export async function getGarageSettings(session: RoleSession) {
   // garageId always comes from the session — never from the request.
   const garage = await findGarageById(session.garageId);
   if (!garage) {
-    throw new NotFoundError("Garage not found");
+    throw new NotFoundError();
   }
   return garage;
 }
@@ -35,10 +35,11 @@ export async function updateGarageSettings(
     name: input.name,
     address: input.address,
     gstin: input.gstin,
+    allowNegativeStock: input.allowNegativeStock,
   });
 
   if (!garage) {
-    throw new NotFoundError("Garage not found");
+    throw new NotFoundError();
   }
 
   await writeAuditLog({
@@ -51,6 +52,7 @@ export async function updateGarageSettings(
       name: garage.name,
       address: garage.address,
       gstin: garage.gstin,
+      allowNegativeStock: garage.allowNegativeStock,
     },
   });
 
@@ -63,7 +65,7 @@ export async function getGarageSettingsForGarageId(
   requestedGarageId: string,
 ) {
   if (requestedGarageId !== session.garageId) {
-    throw new ForbiddenError("Cross-garage access denied");
+    throw new ForbiddenError();
   }
   return getGarageSettings(session);
 }
@@ -75,7 +77,7 @@ export async function updateGarageSettingsForGarageId(
   raw: UpdateGarageSettingsInput,
 ) {
   if (requestedGarageId !== session.garageId) {
-    throw new ForbiddenError("Cross-garage access denied");
+    throw new ForbiddenError();
   }
   return updateGarageSettings(session, raw);
 }

@@ -1,13 +1,29 @@
 import { z } from "zod";
+import { GSTIN_REGEX } from "@/lib/gstin";
 
-const gstinRegex = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/;
+const booleanFromForm = z
+  .union([z.boolean(), z.string(), z.null(), z.undefined()])
+  .transform((value) => {
+    if (typeof value === "boolean") {
+      return value;
+    }
+    if (value == null || value === "") {
+      return false;
+    }
+    const normalized = String(value).toLowerCase();
+    return normalized === "true" || normalized === "on" || normalized === "1";
+  });
 
 export const updateGarageSettingsSchema = z.object({
-  name: z.string().trim().min(2).max(120),
+  name: z
+    .string()
+    .trim()
+    .min(2, { error: "validation.tooShort" })
+    .max(120, { error: "validation.tooLong" }),
   address: z
     .string()
     .trim()
-    .max(500)
+    .max(500, { error: "validation.tooLong" })
     .optional()
     .transform((value) => (value && value.length > 0 ? value : null)),
   gstin: z
@@ -16,9 +32,10 @@ export const updateGarageSettingsSchema = z.object({
     .toUpperCase()
     .optional()
     .transform((value) => (value && value.length > 0 ? value : null))
-    .refine((value) => value == null || gstinRegex.test(value), {
-      message: "Invalid GSTIN",
+    .refine((value) => value == null || GSTIN_REGEX.test(value), {
+      error: "validation.invalidGstin",
     }),
+  allowNegativeStock: booleanFromForm,
 });
 
 export type UpdateGarageSettingsInput = z.infer<typeof updateGarageSettingsSchema>;

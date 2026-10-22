@@ -11,7 +11,7 @@ vi.mock("@/lib/otp", () => ({
 }));
 
 vi.mock("@/modules/auth/repo", () => ({
-  findUserByEmail: vi.fn(),
+  findUserByEmailForLogin: vi.fn(),
 }));
 
 vi.mock("@/modules/settings/repo", () => ({
@@ -24,6 +24,11 @@ vi.mock("@/modules/team/repo", () => ({
   listUsersByGarage: vi.fn(),
   listInvitesByGarage: vi.fn(),
   createInvite: vi.fn(),
+  findPendingInviteInGarage: vi.fn(),
+  refreshInviteToken: vi.fn(),
+  deleteInviteInGarage: vi.fn(),
+  updateUserRoleInGarage: vi.fn(),
+  deleteUserInGarage: vi.fn(),
 }));
 
 import { writeAuditLog } from "@/lib/audit";
@@ -70,6 +75,7 @@ describe("garage isolation", () => {
       name: "Alpha Motors",
       address: null,
       gstin: null,
+      allowNegativeStock: false,
       updatedAt: new Date(),
     });
 
@@ -94,6 +100,7 @@ describe("garage isolation", () => {
       name: "Alpha Updated",
       address: "Ring Road",
       gstin: "24AAAAA0000A1Z5",
+      allowNegativeStock: false,
       updatedAt: new Date(),
     });
 
@@ -102,6 +109,7 @@ describe("garage isolation", () => {
         name: "Hacked Name",
         address: "Elsewhere",
         gstin: "24AAAAA0000A1Z5",
+        allowNegativeStock: false,
       }),
     ).rejects.toBeInstanceOf(ForbiddenError);
 
@@ -115,6 +123,7 @@ describe("garage isolation", () => {
       name: "Alpha Updated",
       address: "Ring Road",
       gstin: "24AAAAA0000A1Z5",
+      allowNegativeStock: true,
       updatedAt: new Date(),
     });
 
@@ -122,12 +131,14 @@ describe("garage isolation", () => {
       name: "Alpha Updated",
       address: "Ring Road",
       gstin: "24AAAAA0000A1Z5",
+      allowNegativeStock: true,
     });
 
     expect(updateGarageById).toHaveBeenCalledWith(garageA, {
       name: "Alpha Updated",
       address: "Ring Road",
       gstin: "24AAAAA0000A1Z5",
+      allowNegativeStock: true,
     });
     expect(updateGarageById).not.toHaveBeenCalledWith(
       garageB,
@@ -151,6 +162,7 @@ describe("garage isolation", () => {
     vi.mocked(findUserInGarage).mockResolvedValue({
       id: "tech-a",
       email: "tech@example.com",
+      name: "Tech",
       role: "TECHNICIAN",
       garageId: garageA,
     });

@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useMemo } from "react";
+import { useActionState, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import {
   addServiceOrderLineAction,
@@ -13,17 +13,34 @@ const initial: ServiceOrderActionState = { ok: false };
 const inputClass =
   "min-h-12 w-full rounded-md border bg-background px-3 text-base outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
-type Props = {
-  orderId: string;
+export type OrderLinePartOption = {
+  id: string;
+  name: string;
+  sku: string;
+  unit: string;
+  sellingPricePaise: number;
+  quantityOnHand: number;
 };
 
-export function OrderLineForm({ orderId }: Props) {
+type Props = {
+  orderId: string;
+  parts: OrderLinePartOption[];
+};
+
+export function OrderLineForm({ orderId, parts }: Props) {
   const t = useTranslations("orders");
+  const ti = useTranslations("inventory");
   const bound = useMemo(
     () => addServiceOrderLineAction.bind(null, orderId),
     [orderId],
   );
   const [state, formAction, pending] = useActionState(bound, initial);
+  const [lineType, setLineType] = useState<"LABOUR" | "PART">("LABOUR");
+  const [partId, setPartId] = useState(parts[0]?.id ?? "");
+  const selected = useMemo(
+    () => parts.find((p) => p.id === partId) ?? null,
+    [parts, partId],
+  );
 
   return (
     <form action={formAction} className="flex flex-col gap-4">
@@ -37,7 +54,10 @@ export function OrderLineForm({ orderId }: Props) {
             name="type"
             required
             className={inputClass}
-            defaultValue="LABOUR"
+            value={lineType}
+            onChange={(e) =>
+              setLineType(e.target.value === "PART" ? "PART" : "LABOUR")
+            }
           >
             <option value="LABOUR">{t("lineTypes.LABOUR")}</option>
             <option value="PART">{t("lineTypes.PART")}</option>
@@ -59,19 +79,62 @@ export function OrderLineForm({ orderId }: Props) {
           />
         </div>
       </div>
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor="description" className="text-sm font-medium">
-          {t("lineDescription")}
-        </label>
-        <input
-          id="description"
-          name="description"
-          required
-          maxLength={500}
-          className={inputClass}
-        />
-      </div>
-      <RupeePriceInput label={t("unitPrice")} hint={t("unitPriceHint")} />
+
+      {lineType === "PART" ? (
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="partId" className="text-sm font-medium">
+            {ti("part")}
+          </label>
+          {parts.length === 0 ? (
+            <p className="text-sm text-muted-foreground">{ti("noPartsForSale")}</p>
+          ) : (
+            <>
+              <select
+                id="partId"
+                name="partId"
+                required
+                value={partId}
+                onChange={(e) => setPartId(e.target.value)}
+                className={inputClass}
+              >
+                {parts.map((part) => (
+                  <option key={part.id} value={part.id}>
+                    {part.name} ({part.sku}) · {part.quantityOnHand} {part.unit}
+                  </option>
+                ))}
+              </select>
+              <input
+                type="hidden"
+                name="description"
+                value={selected ? `${selected.name} (${selected.sku})` : ""}
+              />
+            </>
+          )}
+        </div>
+      ) : (
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="description" className="text-sm font-medium">
+            {t("lineDescription")}
+          </label>
+          <input
+            id="description"
+            name="description"
+            required
+            maxLength={500}
+            className={inputClass}
+          />
+          <input type="hidden" name="partId" value="" />
+        </div>
+      )}
+
+      <RupeePriceInput
+        label={t("unitPrice")}
+        hint={t("unitPriceHint")}
+        defaultPaise={
+          lineType === "PART" ? (selected?.sellingPricePaise ?? 0) : 0
+        }
+        key={`${lineType}-${selected?.id ?? "labour"}`}
+      />
       {state.message && (
         <p
           className={
@@ -84,7 +147,7 @@ export function OrderLineForm({ orderId }: Props) {
       )}
       <button
         type="submit"
-        disabled={pending}
+        disabled={pending || (lineType === "PART" && parts.length === 0)}
         className="min-h-12 rounded-md border px-4 text-base font-medium disabled:opacity-60"
       >
         {pending ? t("saving") : t("addLine")}

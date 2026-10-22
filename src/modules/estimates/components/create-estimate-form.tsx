@@ -7,11 +7,11 @@ import {
   createEstimateRevisionAction,
   type EstimateActionState,
 } from "@/app/actions/estimates";
+import { Button } from "@/components/ui/button";
+import { FormField } from "@/components/ui/form-field";
+import { Textarea } from "@/components/ui/textarea";
 
 const initial: EstimateActionState = { ok: false };
-
-const inputClass =
-  "min-h-12 w-full rounded-md border bg-background px-3 text-base outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
 type CreateProps = {
   orderId: string;
@@ -37,57 +37,51 @@ export function CreateEstimateForm(props: Props) {
   const [state, formAction, pending] = useActionState(bound, initial);
 
   return (
-    <form action={formAction} className="flex flex-col gap-4">
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor="notes" className="text-sm font-medium">
-          {t("notes")}
-        </label>
-        <textarea
+    <form action={formAction} className="flex w-full max-w-xl flex-col gap-4">
+      <FormField id="notes" label={t("notes")} className="w-full">
+        <Textarea
           id="notes"
           name="notes"
-          rows={2}
+          rows={3}
           maxLength={2000}
-          className={`${inputClass} py-3`}
           placeholder={t("notesPlaceholder")}
+          className="min-h-20 w-full min-w-0 [field-sizing:fixed]"
         />
-      </div>
-      {props.mode === "revision" && (
-        <label className="flex min-h-12 items-center gap-3 text-base">
+      </FormField>
+
+      {props.mode === "revision" ? (
+        <label className="flex items-center gap-2 text-sm text-slate-700">
           <input
             type="checkbox"
             name="includeNewSources"
             value="true"
             defaultChecked
-            className="size-5 shrink-0"
+            className="size-4 shrink-0"
           />
           <span>{t("includeNewSources")}</span>
         </label>
-      )}
-      {state.message && (
-        <p
-          className={
-            state.ok ? "text-sm text-foreground" : "text-sm text-destructive"
-          }
-          role="status"
-        >
-          {state.ok
-            ? props.mode === "revision"
-              ? t("revisionCreated")
-              : t("estimateCreated")
-            : state.message}
+      ) : null}
+
+      {state.message && !state.ok ? (
+        <p className="text-sm text-red-600" role="status">
+          {state.message}
         </p>
-      )}
-      <button
-        type="submit"
-        disabled={pending}
-        className="min-h-12 rounded-md bg-primary px-4 text-base font-medium text-primary-foreground disabled:opacity-60"
-      >
-        {pending
-          ? t("saving")
-          : props.mode === "revision"
-            ? t("createRevision", { number: props.nextRevision })
-            : t("createFromSources")}
-      </button>
+      ) : null}
+
+      <div>
+        <Button
+          type="submit"
+          size="sm"
+          loading={pending}
+          className="bg-blue-600 text-white hover:bg-blue-700 hover:text-white"
+        >
+          {pending
+            ? t("saving")
+            : props.mode === "revision"
+              ? t("createRevision", { number: props.nextRevision })
+              : t("createFromSources")}
+        </Button>
+      </div>
     </form>
   );
 }

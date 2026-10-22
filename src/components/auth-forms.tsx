@@ -1,7 +1,6 @@
 "use client";
 
 import { useActionState } from "react";
-import { useTranslations } from "next-intl";
 import {
   inviteRequestOtpAction,
   loginRequestOtpAction,
@@ -9,41 +8,44 @@ import {
   verifyOtpAction,
   type AuthActionState,
 } from "@/app/actions/auth";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { authCopy } from "@/lib/auth-copy";
 
 const initial: AuthActionState = { ok: false, step: "email" };
 
 function Field({
   id,
   label,
+  error,
   children,
 }: {
   id: string;
   label: string;
+  error?: string;
   children: React.ReactNode;
 }) {
   return (
     <div className="flex flex-col gap-1.5">
-      <label htmlFor={id} className="text-sm font-medium">
-        {label}
-      </label>
+      <Label htmlFor={id}>{label}</Label>
       {children}
+      {error ? (
+        <p className="text-sm text-destructive" role="alert">
+          {error}
+        </p>
+      ) : null}
     </div>
   );
 }
 
-const inputClass =
-  "min-h-12 w-full rounded-md border bg-background px-3 text-base outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring";
-
 function OtpStep({
   email,
   action,
-  message,
 }: {
   email: string;
   action: typeof verifyOtpAction;
-  message?: string;
 }) {
-  const t = useTranslations("auth");
   const [state, formAction, pending] = useActionState(action, {
     ok: false,
     step: "otp",
@@ -53,35 +55,28 @@ function OtpStep({
   return (
     <form action={formAction} className="flex flex-col gap-4">
       <input type="hidden" name="email" value={email} />
-      <p className="text-sm text-muted-foreground">{t("otpSent", { email })}</p>
-      <Field id="code" label={t("code")}>
-        <input
+      <p className="text-sm text-muted-foreground">
+        {authCopy("otpSent", { email })}
+      </p>
+      <Field id="code" label={authCopy("code")} error={state.message}>
+        <Input
           id="code"
           name="code"
           inputMode="numeric"
           autoComplete="one-time-code"
           required
-          className={inputClass}
+          aria-invalid={Boolean(state.message)}
+          className="h-11 min-h-11"
         />
       </Field>
-      {(state.message || message) && (
-        <p className="text-sm text-destructive" role="alert">
-          {state.message ?? message}
-        </p>
-      )}
-      <button
-        type="submit"
-        disabled={pending}
-        className="min-h-12 rounded-md bg-primary px-4 text-base font-medium text-primary-foreground disabled:opacity-60"
-      >
-        {pending ? t("verifying") : t("verify")}
-      </button>
+      <Button type="submit" disabled={pending} size="lg" className="w-full">
+        {pending ? authCopy("verifying") : authCopy("verify")}
+      </Button>
     </form>
   );
 }
 
 export function SignupForm() {
-  const t = useTranslations("auth");
   const [state, formAction, pending] = useActionState(
     signupRequestOtpAction,
     initial,
@@ -93,40 +88,35 @@ export function SignupForm() {
 
   return (
     <form action={formAction} className="flex flex-col gap-4">
-      <Field id="name" label={t("name")}>
-        <input id="name" name="name" required className={inputClass} />
+      <Field id="name" label={authCopy("name")}>
+        <Input id="name" name="name" required className="h-11 min-h-11" />
       </Field>
-      <Field id="email" label={t("email")}>
-        <input
+      <Field id="email" label={authCopy("email")}>
+        <Input
           id="email"
           name="email"
           type="email"
           required
           autoComplete="email"
-          className={inputClass}
+          className="h-11 min-h-11"
         />
       </Field>
-      <Field id="garageName" label={t("garageName")}>
-        <input id="garageName" name="garageName" required className={inputClass} />
+      <Field id="garageName" label={authCopy("garageName")} error={state.message}>
+        <Input
+          id="garageName"
+          name="garageName"
+          required
+          className="h-11 min-h-11"
+        />
       </Field>
-      {state.message && (
-        <p className="text-sm text-destructive" role="alert">
-          {state.message}
-        </p>
-      )}
-      <button
-        type="submit"
-        disabled={pending}
-        className="min-h-12 rounded-md bg-primary px-4 text-base font-medium text-primary-foreground disabled:opacity-60"
-      >
-        {pending ? t("sendingCode") : t("continue")}
-      </button>
+      <Button type="submit" disabled={pending} size="lg" className="w-full">
+        {pending ? authCopy("sendingCode") : authCopy("continue")}
+      </Button>
     </form>
   );
 }
 
 export function LoginForm() {
-  const t = useTranslations("auth");
   const [state, formAction, pending] = useActionState(
     loginRequestOtpAction,
     initial,
@@ -138,28 +128,19 @@ export function LoginForm() {
 
   return (
     <form action={formAction} className="flex flex-col gap-4">
-      <Field id="email" label={t("email")}>
-        <input
+      <Field id="email" label={authCopy("email")} error={state.message}>
+        <Input
           id="email"
           name="email"
           type="email"
           required
           autoComplete="email"
-          className={inputClass}
+          className="h-11 min-h-11"
         />
       </Field>
-      {state.message && (
-        <p className="text-sm text-destructive" role="alert">
-          {state.message}
-        </p>
-      )}
-      <button
-        type="submit"
-        disabled={pending}
-        className="min-h-12 rounded-md bg-primary px-4 text-base font-medium text-primary-foreground disabled:opacity-60"
-      >
-        {pending ? t("sendingCode") : t("continue")}
-      </button>
+      <Button type="submit" disabled={pending} size="lg" className="w-full">
+        {pending ? authCopy("sendingCode") : authCopy("continue")}
+      </Button>
     </form>
   );
 }
@@ -171,7 +152,6 @@ export function InviteAcceptForm({
   token: string;
   email: string;
 }) {
-  const t = useTranslations("auth");
   const [state, formAction, pending] = useActionState(
     inviteRequestOtpAction,
     initial,
@@ -184,22 +164,15 @@ export function InviteAcceptForm({
   return (
     <form action={formAction} className="flex flex-col gap-4">
       <input type="hidden" name="token" value={token} />
-      <p className="text-sm text-muted-foreground">{t("inviteFor", { email })}</p>
-      <Field id="name" label={t("name")}>
-        <input id="name" name="name" required className={inputClass} />
+      <p className="text-sm text-muted-foreground">
+        {authCopy("inviteFor", { email })}
+      </p>
+      <Field id="name" label={authCopy("name")} error={state.message}>
+        <Input id="name" name="name" required className="h-11 min-h-11" />
       </Field>
-      {state.message && (
-        <p className="text-sm text-destructive" role="alert">
-          {state.message}
-        </p>
-      )}
-      <button
-        type="submit"
-        disabled={pending}
-        className="min-h-12 rounded-md bg-primary px-4 text-base font-medium text-primary-foreground disabled:opacity-60"
-      >
-        {pending ? t("sendingCode") : t("continue")}
-      </button>
+      <Button type="submit" disabled={pending} size="lg" className="w-full">
+        {pending ? authCopy("sendingCode") : authCopy("continue")}
+      </Button>
     </form>
   );
 }

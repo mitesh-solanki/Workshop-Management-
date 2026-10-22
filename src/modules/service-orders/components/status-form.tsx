@@ -1,11 +1,14 @@
 "use client";
 
-import { useActionState, useMemo } from "react";
+import { useActionState, useEffect, useMemo, useRef } from "react";
 import { useTranslations } from "next-intl";
 import {
   changeServiceOrderStatusAction,
   type ServiceOrderActionState,
 } from "@/app/actions/service-orders";
+import { Button } from "@/components/ui/button";
+import { FormField } from "@/components/ui/form-field";
+import { toast } from "@/components/ui/toast";
 import {
   STATUS_TRANSITIONS,
   type ServiceOrderStatusValue,
@@ -13,15 +16,21 @@ import {
 
 const initial: ServiceOrderActionState = { ok: false };
 
-const inputClass =
-  "min-h-12 w-full rounded-md border bg-background px-3 text-base outline-none focus-visible:ring-2 focus-visible:ring-ring";
+const selectClass =
+  "h-11 min-h-11 w-full rounded-md border border-input bg-transparent px-3 text-base shadow-xs outline-none focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/40 md:text-sm";
 
 type Props = {
   orderId: string;
   currentStatus: ServiceOrderStatusValue;
+  disabled?: boolean;
 };
 
-export function StatusForm({ orderId, currentStatus }: Props) {
+/** Status lives on the details form — not a separate job-card section. */
+export function StatusForm({
+  orderId,
+  currentStatus,
+  disabled = false,
+}: Props) {
   const t = useTranslations("orders");
   const bound = useMemo(
     () => changeServiceOrderStatusAction.bind(null, orderId),
@@ -29,52 +38,63 @@ export function StatusForm({ orderId, currentStatus }: Props) {
   );
   const [state, formAction, pending] = useActionState(bound, initial);
   const nextStatuses = STATUS_TRANSITIONS[currentStatus];
+  const handledMessage = useRef<string | null>(null);
 
-  if (nextStatuses.length === 0) {
+  useEffect(() => {
+    if (!state.message || state.message === handledMessage.current) return;
+    handledMessage.current = state.message;
+    if (state.ok) {
+      toast.success(t("statusUpdated"));
+    } else {
+      toast.error(state.message);
+    }
+  }, [state, t]);
+
+  if (nextStatuses.length === 0 || disabled) {
     return (
-      <p className="text-sm text-muted-foreground">{t("statusTerminal")}</p>
+      <FormField id={`status-${orderId}`} label={t("statusField")}>
+        <select
+          id={`status-${orderId}`}
+          className={selectClass}
+          value={currentStatus}
+          disabled
+        >
+          <option value={currentStatus}>
+            {t(`statuses.${currentStatus}`)}
+          </option>
+        </select>
+      </FormField>
     );
   }
 
   return (
-    <form action={formAction} className="flex flex-col gap-3 sm:flex-row sm:items-end">
-      <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-        <label htmlFor="status" className="text-sm font-medium">
-          {t("changeStatus")}
-        </label>
+    <form
+      action={formAction}
+      className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end"
+    >
+      <FormField
+        id={`status-${orderId}`}
+        label={t("statusField")}
+        hint={t("changeStatus")}
+      >
         <select
-          id="status"
+          id={`status-${orderId}`}
           name="status"
           required
-          className={inputClass}
+          className={selectClass}
           defaultValue={nextStatuses[0]}
+          disabled={pending}
         >
           {nextStatuses.map((status) => (
             <option key={status} value={status}>
-              {t(`statuses.${status}`)}
+              {`${t(`statuses.${currentStatus}`)} → ${t(`statuses.${status}`)}`}
             </option>
           ))}
         </select>
-      </div>
-      <button
-        type="submit"
-        disabled={pending}
-        className="min-h-12 shrink-0 rounded-md bg-primary px-4 text-base font-medium text-primary-foreground disabled:opacity-60"
-      >
+      </FormField>
+      <Button type="submit" size="md" loading={pending} className="shrink-0">
         {pending ? t("saving") : t("updateStatus")}
-      </button>
-      {state.message && (
-        <p
-          className={
-            state.ok
-              ? "text-sm text-foreground sm:basis-full"
-              : "text-sm text-destructive sm:basis-full"
-          }
-          role="status"
-        >
-          {state.ok ? t("statusUpdated") : state.message}
-        </p>
-      )}
+      </Button>
     </form>
   );
 }

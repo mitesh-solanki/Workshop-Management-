@@ -1,17 +1,20 @@
 "use client";
 
-import { useActionState, useMemo } from "react";
+import { useActionState, useEffect, useMemo, useRef } from "react";
 import { useTranslations } from "next-intl";
 import {
   createCustomerAction,
   updateCustomerAction,
   type CustomerActionState,
 } from "@/app/actions/customers";
+import { Button } from "@/components/ui/button";
+import { FormField } from "@/components/ui/form-field";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { toast } from "@/components/ui/toast";
+import { cn } from "@/lib/utils";
 
 const initial: CustomerActionState = { ok: false };
-
-const inputClass =
-  "min-h-12 w-full rounded-md border bg-background px-3 text-base outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
 type CustomerValues = {
   name: string;
@@ -21,8 +24,13 @@ type CustomerValues = {
 };
 
 type Props =
-  | { mode: "create" }
-  | { mode: "edit"; customerId: string; customer: CustomerValues };
+  | { mode: "create"; className?: string }
+  | {
+      mode: "edit";
+      customerId: string;
+      customer: CustomerValues;
+      className?: string;
+    };
 
 export function CustomerForm(props: Props) {
   const t = useTranslations("customers");
@@ -37,6 +45,17 @@ export function CustomerForm(props: Props) {
     props.mode === "create" ? createCustomerAction : boundUpdate!,
     initial,
   );
+  const handledMessage = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!state.message || state.message === handledMessage.current) return;
+    handledMessage.current = state.message;
+    if (state.ok) {
+      toast.success(state.message);
+    } else {
+      toast.error(state.message);
+    }
+  }, [state]);
 
   const defaults =
     props.mode === "edit"
@@ -44,80 +63,59 @@ export function CustomerForm(props: Props) {
       : { name: "", phone: "", address: null, notes: null };
 
   return (
-    <form action={formAction} className="flex flex-col gap-4">
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor="name" className="text-sm font-medium">
-          {t("name")}
-        </label>
-        <input
-          id="name"
-          name="name"
-          defaultValue={defaults.name}
-          required
-          autoComplete="name"
-          className={inputClass}
-        />
+    <form
+      action={formAction}
+      className={cn("flex flex-col gap-5", props.className)}
+    >
+      <div className="grid gap-4 sm:grid-cols-2">
+        <FormField id="name" label={t("name")}>
+          <Input
+            id="name"
+            name="name"
+            defaultValue={defaults.name}
+            required
+            autoComplete="name"
+            className="h-11 min-h-11"
+          />
+        </FormField>
+        <FormField id="phone" label={t("phone")}>
+          <Input
+            id="phone"
+            name="phone"
+            type="tel"
+            defaultValue={defaults.phone}
+            required
+            autoComplete="tel"
+            inputMode="tel"
+            className="h-11 min-h-11"
+          />
+        </FormField>
       </div>
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor="phone" className="text-sm font-medium">
-          {t("phone")}
-        </label>
-        <input
-          id="phone"
-          name="phone"
-          type="tel"
-          defaultValue={defaults.phone}
-          required
-          autoComplete="tel"
-          inputMode="tel"
-          className={inputClass}
-        />
-      </div>
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor="address" className="text-sm font-medium">
-          {t("address")}
-        </label>
-        <textarea
+      <FormField id="address" label={t("address")}>
+        <Textarea
           id="address"
           name="address"
           defaultValue={defaults.address ?? ""}
           rows={3}
-          className={`${inputClass} min-h-24 py-3`}
         />
-      </div>
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor="notes" className="text-sm font-medium">
-          {t("notes")}
-        </label>
-        <textarea
+      </FormField>
+      <FormField id="notes" label={t("notes")}>
+        <Textarea
           id="notes"
           name="notes"
           defaultValue={defaults.notes ?? ""}
           rows={3}
-          className={`${inputClass} min-h-24 py-3`}
         />
+      </FormField>
+      <div className="flex flex-wrap gap-2 border-t border-border pt-4">
+        <Button type="submit" size="md" loading={pending}>
+          {pending
+            ? t("saving")
+            : props.mode === "create"
+              ? t("create")
+              : t("save")}
+        </Button>
       </div>
-      {state.message && (
-        <p
-          className={
-            state.ok ? "text-sm text-foreground" : "text-sm text-destructive"
-          }
-          role="status"
-        >
-          {state.ok ? t("saved") : state.message}
-        </p>
-      )}
-      <button
-        type="submit"
-        disabled={pending}
-        className="min-h-12 rounded-md bg-primary px-4 text-base font-medium text-primary-foreground disabled:opacity-60"
-      >
-        {pending
-          ? t("saving")
-          : props.mode === "create"
-            ? t("create")
-            : t("save")}
-      </button>
     </form>
   );
 }

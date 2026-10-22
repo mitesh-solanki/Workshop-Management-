@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import { useTranslations } from "next-intl";
 import { deleteVehicleAction } from "@/app/actions/vehicles";
 import { ConfirmDeleteButton } from "@/components/confirm-delete-button";
+import { cn } from "@/lib/utils";
 
 type Props = {
   vehicleId: string;
@@ -27,11 +28,12 @@ export function DeleteVehicleButton({
       label={t("delete")}
       confirmingLabel={t("deleting")}
       confirmMessage={t("confirmDelete")}
-      className={className}
+      className={cn(
+        "min-h-11 rounded-lg border-danger px-4 text-sm text-danger hover:bg-danger/5",
+        className,
+      )}
       action={action}
-      translateMessage={(key) =>
-        key === "cannotDeleteHasOrders" ? t("cannotDeleteHasOrders") : key
-      }
+      translateMessage={(message) => message}
     />
   );
 }

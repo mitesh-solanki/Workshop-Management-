@@ -61,7 +61,7 @@
     },
     "workshop": "Board",
     "customers": "Customers",
-    "inventory": "Parts"
+    "inventory": "Inventory"
   },
   "auth": {
     "loginTitle": "Sign in",
@@ -515,7 +515,8 @@
     "serviceHistoryDescription": "Jobs for this customer will show up here.",
     "serviceHistoryPlaceholder": "Jobs for this customer will show up here.",
     "communicationHistoryEmpty": "No messages yet",
-    "communicationHistoryDescription": "Messages and calls will appear here later."
+    "communicationHistoryDescription": "Messages and calls will appear here later.",
+    "export": "Export CSV"
   },
   "vehicles": {
     "add": "Add vehicle",
@@ -570,7 +571,8 @@
     "errors": {
       "duplicateRegistration": "A vehicle with this registration already exists in this garage."
     },
-    "deleted": "Vehicle deleted"
+    "deleted": "Vehicle deleted",
+    "export": "Export CSV"
   },
   "inspections": {
     "title": "Digital inspection",
@@ -736,14 +738,15 @@
     }
   },
   "inventory": {
-    "title": "Parts",
-    "subtitle": "Catalogue, stock levels and direct sales.",
-    "add": "Add part",
-    "back": "Back to parts",
+    "title": "Inventory",
+    "subtitle": "Stock catalogue, levels and direct sales.",
+    "add": "Add item",
+    "export": "Export CSV",
+    "back": "Back to inventory",
     "backToSales": "Back to sales",
-    "newTitle": "New part",
-    "newSubtitle": "Add a part to this garage’s inventory.",
-    "editTitle": "Edit part",
+    "newTitle": "New inventory item",
+    "newSubtitle": "Add an item to this garage’s stock catalogue.",
+    "editTitle": "Edit item",
     "name": "Name",
     "sku": "SKU",
     "unit": "Unit",
@@ -755,21 +758,32 @@
     "lowStockLevel": "Low-stock level",
     "openingStock": "Opening stock",
     "openingStockHint": "Creates a stock-in movement when you save.",
-    "create": "Create part",
+    "create": "Create item",
     "save": "Save changes",
     "saving": "Saving…",
-    "saved": "Part saved",
+    "saved": "Item saved",
     "search": "Search",
-    "searchLabel": "Search parts",
+    "searchLabel": "Search inventory",
     "searchPlaceholder": "Name, SKU or HSN",
-    "emptyTitle": "No parts yet",
-    "emptyDescription": "Add parts to track stock and use them on service orders.",
+    "emptyTitle": "No inventory items yet",
+    "emptyDescription": "Add items to track stock and use them on service orders.",
+    "emptySearchTitle": "No matching items",
+    "emptySearchDescription": "Try another name, SKU or HSN.",
+    "columns": {
+      "name": "Item",
+      "unit": "Unit",
+      "stock": "Stock",
+      "price": "Sell price",
+      "hsn": "HSN"
+    },
+    "actions": "Actions",
+    "view": "View",
     "stockCount": "{count} {unit}",
     "lowBadge": "Low",
     "onHand": "{count} on hand",
-    "part": "Part",
+    "part": "Item",
     "directSale": "Direct sale",
-    "viewSales": "View direct sales",
+    "viewSales": "Sales",
     "stockActions": "Stock movements",
     "stockIn": "Stock in",
     "stockOut": "Stock out",
@@ -788,13 +802,14 @@
     "movements": "Movement history",
     "movementsEmpty": "No movements yet.",
     "salesTitle": "Direct sales",
-    "salesSubtitle": "Parts sold without a service order.",
+    "salesSubtitle": "Items sold without a service order.",
     "salesEmpty": "No direct sales yet.",
+    "salesEmptyTitle": "No sales yet",
     "newSale": "New sale",
     "newSaleTitle": "Direct sale",
-    "newSaleSubtitle": "Sell parts from stock without opening a job card.",
+    "newSaleSubtitle": "Sell stock without opening a job card.",
     "completeSale": "Complete sale",
-    "noPartsForSale": "Add parts to inventory before selling or using them.",
+    "noPartsForSale": "Add inventory items before selling or using them.",
     "customer": "Customer",
     "saleLines": "Lines",
     "addLine": "Add line",
@@ -824,8 +839,8 @@
     },
     "errors": {
       "insufficientStock": "Not enough stock for that quantity.",
-      "skuExists": "A part with this SKU already exists.",
-      "partRequired": "Choose a part from inventory for part lines."
+      "skuExists": "An item with this SKU already exists.",
+      "partRequired": "Choose an inventory item for part lines."
     }
   },
   "table": {
@@ -837,5 +852,111 @@
     "nextPage": "Next page",
     "lastPage": "Last page",
     "noResults": "No results"
+  },
+  "dataImport": {
+    "title": "Import data",
+    "subtitle": "Bring customers, vehicles or parts from a CSV file.",
+    "backToSettings": "Back to settings",
+    "settingsCardTitle": "CSV import",
+    "settingsCardDescription": "Upload a CSV to add many customers, vehicles or parts at once. From Excel: File → Save As → CSV.",
+    "openImport": "Open import",
+    "steps": {
+      "upload": "Upload",
+      "map": "Map columns",
+      "preview": "Preview",
+      "done": "Done"
+    },
+    "entityLabel": "What are you importing?",
+    "entities": {
+      "customers": "Customers",
+      "vehicles": "Vehicles",
+      "parts": "Parts"
+    },
+    "entityHelp": {
+      "customers": "Name and phone are required. Address and notes are optional.",
+      "vehicles": "Customer phone must already exist. Registration, make and model are required.",
+      "parts": "Prices are in rupees. Opening stock creates a stock-in movement."
+    },
+    "downloadSample": "Download sample",
+    "chooseFile": "Choose CSV file",
+    "parsing": "Reading file…",
+    "fileHint": "CSV only (UTF-8). From Excel use Save As → CSV. Up to 1,000 data rows and 2 MB.",
+    "fileLoaded": "{filename} · {count} rows",
+    "field": "Field",
+    "column": "File column",
+    "unmapped": "— Not mapped —",
+    "emptyHeader": "Column {index}",
+    "startOver": "Start over",
+    "validate": "Validate rows",
+    "stats": {
+      "total": "Total rows",
+      "valid": "Valid",
+      "invalid": "With errors"
+    },
+    "errorsFound": "Some rows have errors. Download the report, fix the file, or skip bad rows.",
+    "allValid": "All rows look valid.",
+    "downloadErrors": "Download error report",
+    "row": "Row",
+    "status": "Status",
+    "details": "Details",
+    "rowStatus": {
+      "valid": "Valid",
+      "invalid": "Error"
+    },
+    "modeLabel": "How should we import?",
+    "modes": {
+      "all_or_nothing": "All or nothing",
+      "all_or_nothingHelp": "Import only if every row is valid. Nothing is saved if any row fails.",
+      "skip_invalid": "Skip bad rows",
+      "skip_invalidHelp": "Import valid rows only. Invalid rows are skipped after you confirm."
+    },
+    "backToMap": "Back to mapping",
+    "confirmImport": "Confirm import",
+    "success": "Imported {imported} rows. Skipped {skipped}.",
+    "importAnother": "Import another file",
+    "report": {
+      "rowNumber": "rowNumber",
+      "errors": "errors"
+    },
+    "fields": {
+      "customers": {
+        "name": "Name",
+        "phone": "Phone",
+        "address": "Address",
+        "notes": "Notes"
+      },
+      "vehicles": {
+        "customerPhone": "Customer phone",
+        "registrationNumber": "Registration",
+        "make": "Make",
+        "model": "Model",
+        "year": "Year",
+        "odometer": "Odometer",
+        "insuranceExpiry": "Insurance expiry",
+        "pucExpiry": "PUC expiry",
+        "fitnessExpiry": "Fitness expiry"
+      },
+      "parts": {
+        "name": "Name",
+        "sku": "SKU",
+        "unit": "Unit",
+        "purchasePrice": "Purchase price (₹)",
+        "sellingPrice": "Selling price (₹)",
+        "gstRatePercent": "GST %",
+        "hsn": "HSN",
+        "lowStockLevel": "Low-stock level",
+        "openingStock": "Opening stock"
+      }
+    },
+    "errors": {
+      "emptyFile": "The file is empty or has no data rows.",
+      "tooManyRows": "Too many rows. Split the file to 1,000 data rows or fewer.",
+      "fileTooLarge": "That file is too large (max 2 MB).",
+      "unsupportedType": "Use a .csv file. In Excel: File → Save As → CSV.",
+      "mappingIncomplete": "Map every required field: {fields}",
+      "hasInvalidRows": "Fix {errorCount} invalid row(s), or choose skip bad rows.",
+      "noValidRows": "No valid rows to import.",
+      "invalidEntity": "Choose customers, vehicles or parts."
+    }
   }
 }

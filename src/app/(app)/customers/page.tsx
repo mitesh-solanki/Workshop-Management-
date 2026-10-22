@@ -1,6 +1,8 @@
+import Link from "next/link";
 import { Suspense } from "react";
 import { Users } from "lucide-react";
 import { getTranslations } from "next-intl/server";
+import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -35,7 +37,22 @@ export default async function CustomersPage({ searchParams }: Props) {
       <PageHeader
         title={t("title")}
         description={t("subtitle")}
-        actions={canWrite ? <CreateCustomerModal /> : undefined}
+        actions={
+          <div className="flex flex-wrap gap-2">
+            <Button asChild variant="secondary" size="md">
+              <Link
+                href={
+                  params.q
+                    ? `/customers/export?q=${encodeURIComponent(params.q)}`
+                    : "/customers/export"
+                }
+              >
+                {t("export")}
+              </Link>
+            </Button>
+            {canWrite ? <CreateCustomerModal /> : null}
+          </div>
+        }
       />
 
       <Suspense fallback={<Skeleton className="h-64 w-full" />}>

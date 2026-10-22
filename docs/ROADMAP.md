@@ -17,11 +17,11 @@ Work in this order. A task is finished only when every "Done when" item is true 
 | 1.3 Service orders | 3 | Done (`feat/service-orders`) | Create an order from a vehicle; complaints, technician, dates; status changes logged |
 | 1.4 Inspection | 4 | Done (`feat/service-orders`) | Checklist with photo upload; suggested repairs saved |
 | 1.5 Estimates and approval | 5 | Done (`feat/service-orders`) | Estimate with GST; approve, partly approve or reject per line; revision for extra work; history kept |
-| 1.6 Workshop board | 6 | Next | Columns by status; drag to change status; technician filter |
-| 1.7 Inventory basics | 7 | Pending (new branch after 3–6 merge) | Parts, stock in, stock out, low-stock alert; parts used on an order reduce stock |
-| 1.8 GST billing and payments | 8 | Pending | Finalized invoice with correct GST and sequential number; PDF; partial and mixed payments; credit note; tests pass |
+| 1.6 Workshop board | 6 | Done (`feat/service-orders`) | Columns by status; drag to change status; technician filter |
+| 1.7 Inventory basics | 7 | Done (`feat/inventory-management`) | Parts, stock in, stock out, low-stock alert; parts used on an order reduce stock |
+| 1.8 GST billing and payments | 8 | Next | Finalized invoice with correct GST and sequential number; PDF; partial and mixed payments; credit note; tests pass |
 | 1.9 UPI link and Customer Live Link | 9 | Pending | Customer opens a link on a phone with no login, sees status and photos, approves lines, pays |
-| 1.10 Excel and CSV import | 10 | Pending | Customers, vehicles and parts import with an error report |
+| 1.10 CSV import | 10 | Done (`feat/csv-export`) | Customers, vehicles and parts CSV import with an error report (Excel via Save As → CSV) |
 
 Gate: 5 pilot garages use it daily for 4 weeks with correct invoices and payments.
 

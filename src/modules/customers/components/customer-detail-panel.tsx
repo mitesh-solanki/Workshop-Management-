@@ -341,13 +341,20 @@ function CustomerSectionsView({
           subtitle={t("vehiclesDescription")}
           sectionRef={setSectionRef("vehicles")}
           action={
-            canWrite ? (
-              <CreateVehicleModal
-                customerId={customer.id}
-                customerName={customer.name}
-                onCreated={() => scrollToSection("vehicles")}
-              />
-            ) : null
+            <div className="flex flex-wrap items-center gap-2">
+              <Button asChild variant="secondary" size="sm">
+                <Link href={`/customers/${customer.id}/vehicles/export`}>
+                  {tv("export")}
+                </Link>
+              </Button>
+              {canWrite ? (
+                <CreateVehicleModal
+                  customerId={customer.id}
+                  customerName={customer.name}
+                  onCreated={() => scrollToSection("vehicles")}
+                />
+              ) : null}
+            </div>
           }
         >
           {vehicles.length === 0 ? (

@@ -61,7 +61,7 @@
     },
     "workshop": "बोर्ड",
     "customers": "ग्राहक",
-    "inventory": "पार्ट्स"
+    "inventory": "इन्वेंटरी"
   },
   "auth": {
     "loginTitle": "साइन इन",
@@ -515,7 +515,8 @@
     "serviceHistoryDescription": "इस ग्राहक के जॉब यहाँ दिखेंगे।",
     "serviceHistoryPlaceholder": "इस ग्राहक के जॉब यहाँ दिखेंगे।",
     "communicationHistoryEmpty": "अभी कोई संदेश नहीं",
-    "communicationHistoryDescription": "संदेश और कॉल बाद में यहाँ दिखेंगे।"
+    "communicationHistoryDescription": "संदेश और कॉल बाद में यहाँ दिखेंगे।",
+    "export": "CSV निर्यात"
   },
   "vehicles": {
     "add": "वाहन जोड़ें",
@@ -570,7 +571,8 @@
     "errors": {
       "duplicateRegistration": "इस गैरेज में इस रजिस्ट्रेशन वाला वाहन पहले से है।"
     },
-    "deleted": "वाहन हटा दिया गया"
+    "deleted": "वाहन हटा दिया गया",
+    "export": "CSV निर्यात"
   },
   "inspections": {
     "title": "डिजिटल इंस्पेक्शन",
@@ -736,14 +738,15 @@
     }
   },
   "inventory": {
-    "title": "पार्ट्स",
-    "subtitle": "कैटलॉग, स्टॉक स्तर और सीधी बिक्री।",
-    "add": "पार्ट जोड़ें",
-    "back": "पार्ट्स पर वापस",
+    "title": "इन्वेंटरी",
+    "subtitle": "स्टॉक कैटलॉग, स्तर और सीधी बिक्री।",
+    "add": "आइटम जोड़ें",
+    "export": "CSV निर्यात",
+    "back": "इन्वेंटरी पर वापस",
     "backToSales": "बिक्री पर वापस",
-    "newTitle": "नया पार्ट",
-    "newSubtitle": "इस गैरेज की इन्वेंटरी में पार्ट जोड़ें।",
-    "editTitle": "पार्ट संपादित करें",
+    "newTitle": "नया इन्वेंटरी आइटम",
+    "newSubtitle": "इस गैरेज के स्टॉक कैटलॉग में आइटम जोड़ें।",
+    "editTitle": "आइटम संपादित करें",
     "name": "नाम",
     "sku": "SKU",
     "unit": "इकाई",
@@ -755,21 +758,32 @@
     "lowStockLevel": "कम-स्टॉक स्तर",
     "openingStock": "आरंभिक स्टॉक",
     "openingStockHint": "सहेजने पर स्टॉक-इन मूवमेंट बनता है।",
-    "create": "पार्ट बनाएँ",
+    "create": "आइटम बनाएँ",
     "save": "परिवर्तन सहेजें",
     "saving": "सहेजा जा रहा है…",
-    "saved": "पार्ट सहेजा गया",
+    "saved": "आइटम सहेजा गया",
     "search": "खोजें",
-    "searchLabel": "पार्ट्स खोजें",
+    "searchLabel": "इन्वेंटरी खोजें",
     "searchPlaceholder": "नाम, SKU या HSN",
-    "emptyTitle": "अभी कोई पार्ट नहीं",
-    "emptyDescription": "स्टॉक ट्रैक करने और सर्विस ऑर्डर पर उपयोग के लिए पार्ट्स जोड़ें।",
+    "emptyTitle": "अभी कोई इन्वेंटरी आइटम नहीं",
+    "emptyDescription": "स्टॉक ट्रैक करने और सर्विस ऑर्डर पर उपयोग के लिए आइटम जोड़ें।",
+    "emptySearchTitle": "कोई मेल नहीं मिला",
+    "emptySearchDescription": "दूसरा नाम, SKU या HSN आज़माएँ।",
+    "columns": {
+      "name": "आइटम",
+      "unit": "इकाई",
+      "stock": "स्टॉक",
+      "price": "बिक्री मूल्य",
+      "hsn": "HSN"
+    },
+    "actions": "कार्रवाई",
+    "view": "देखें",
     "stockCount": "{count} {unit}",
     "lowBadge": "कम",
     "onHand": "{count} उपलब्ध",
-    "part": "पार्ट",
+    "part": "आइटम",
     "directSale": "सीधी बिक्री",
-    "viewSales": "सीधी बिक्री देखें",
+    "viewSales": "बिक्री",
     "stockActions": "स्टॉक मूवमेंट",
     "stockIn": "स्टॉक इन",
     "stockOut": "स्टॉक आउट",
@@ -788,13 +802,14 @@
     "movements": "मूवमेंट इतिहास",
     "movementsEmpty": "अभी कोई मूवमेंट नहीं।",
     "salesTitle": "सीधी बिक्री",
-    "salesSubtitle": "बिना सर्विस ऑर्डर के बेचे गए पार्ट्स।",
+    "salesSubtitle": "बिना सर्विस ऑर्डर के बेचे गए आइटम।",
     "salesEmpty": "अभी कोई सीधी बिक्री नहीं।",
+    "salesEmptyTitle": "अभी कोई बिक्री नहीं",
     "newSale": "नई बिक्री",
     "newSaleTitle": "सीधी बिक्री",
-    "newSaleSubtitle": "जॉब कार्ड खोले बिना स्टॉक से पार्ट्स बेचें।",
+    "newSaleSubtitle": "जॉब कार्ड खोले बिना स्टॉक बेचें।",
     "completeSale": "बिक्री पूरी करें",
-    "noPartsForSale": "बेचने या उपयोग से पहले इन्वेंटरी में पार्ट्स जोड़ें।",
+    "noPartsForSale": "बेचने या उपयोग से पहले इन्वेंटरी आइटम जोड़ें।",
     "customer": "ग्राहक",
     "saleLines": "लाइनें",
     "addLine": "लाइन जोड़ें",
@@ -824,8 +839,8 @@
     },
     "errors": {
       "insufficientStock": "उस मात्रा के लिए पर्याप्त स्टॉक नहीं है।",
-      "skuExists": "इस SKU वाला पार्ट पहले से मौजूद है।",
-      "partRequired": "पार्ट लाइनों के लिए इन्वेंटरी से पार्ट चुनें।"
+      "skuExists": "इस SKU वाला आइटम पहले से मौजूद है।",
+      "partRequired": "पार्ट लाइनों के लिए इन्वेंटरी आइटम चुनें।"
     }
   },
   "table": {
@@ -837,5 +852,111 @@
     "nextPage": "अगला पृष्ठ",
     "lastPage": "अंतिम पृष्ठ",
     "noResults": "कोई परिणाम नहीं"
+  },
+  "dataImport": {
+    "title": "डेटा आयात",
+    "subtitle": "CSV फ़ाइल से ग्राहक, वाहन या पार्ट्स जोड़ें।",
+    "backToSettings": "सेटिंग्स पर वापस",
+    "settingsCardTitle": "CSV आयात",
+    "settingsCardDescription": "CSV अपलोड करके कई ग्राहक, वाहन या पार्ट्स एक साथ जोड़ें। Excel में: फ़ाइल → इस रूप में सहेजें → CSV।",
+    "openImport": "आयात खोलें",
+    "steps": {
+      "upload": "अपलोड",
+      "map": "कॉलम मैप करें",
+      "preview": "पूर्वावलोकन",
+      "done": "पूर्ण"
+    },
+    "entityLabel": "आप क्या आयात कर रहे हैं?",
+    "entities": {
+      "customers": "ग्राहक",
+      "vehicles": "वाहन",
+      "parts": "पार्ट्स"
+    },
+    "entityHelp": {
+      "customers": "नाम और फ़ोन आवश्यक हैं। पता और नोट्स वैकल्पिक हैं।",
+      "vehicles": "ग्राहक का फ़ोन पहले से मौजूद होना चाहिए। रजिस्ट्रेशन, मेक और मॉडल आवश्यक हैं।",
+      "parts": "कीमतें रुपये में हैं। ओपनिंग स्टॉक एक स्टॉक-इन मूवमेंट बनाता है।"
+    },
+    "downloadSample": "नमूना डाउनलोड करें",
+    "chooseFile": "CSV फ़ाइल चुनें",
+    "parsing": "फ़ाइल पढ़ी जा रही है…",
+    "fileHint": "केवल CSV (UTF-8)। Excel में इस रूप में सहेजें → CSV। अधिकतम 1,000 डेटा पंक्तियाँ और 2 MB।",
+    "fileLoaded": "{filename} · {count} पंक्तियाँ",
+    "field": "फ़ील्ड",
+    "column": "फ़ाइल कॉलम",
+    "unmapped": "— मैप नहीं —",
+    "emptyHeader": "कॉलम {index}",
+    "startOver": "फिर से शुरू करें",
+    "validate": "पंक्तियाँ जाँचें",
+    "stats": {
+      "total": "कुल पंक्तियाँ",
+      "valid": "मान्य",
+      "invalid": "त्रुटि वाली"
+    },
+    "errorsFound": "कुछ पंक्तियों में त्रुटियाँ हैं। रिपोर्ट डाउनलोड करें, फ़ाइल ठीक करें, या खराब पंक्तियाँ छोड़ें।",
+    "allValid": "सभी पंक्तियाँ मान्य लगती हैं।",
+    "downloadErrors": "त्रुटि रिपोर्ट डाउनलोड करें",
+    "row": "पंक्ति",
+    "status": "स्थिति",
+    "details": "विवरण",
+    "rowStatus": {
+      "valid": "मान्य",
+      "invalid": "त्रुटि"
+    },
+    "modeLabel": "हम कैसे आयात करें?",
+    "modes": {
+      "all_or_nothing": "सभी या कुछ नहीं",
+      "all_or_nothingHelp": "केवल तभी आयात करें जब हर पंक्ति मान्य हो। किसी भी विफलता पर कुछ नहीं सहेजा जाता।",
+      "skip_invalid": "खराब पंक्तियाँ छोड़ें",
+      "skip_invalidHelp": "केवल मान्य पंक्तियाँ आयात करें। पुष्टि के बाद अमान्य पंक्तियाँ छोड़ दी जाती हैं।"
+    },
+    "backToMap": "मैपिंग पर वापस",
+    "confirmImport": "आयात की पुष्टि करें",
+    "success": "{imported} पंक्तियाँ आयात हुईं। {skipped} छोड़ी गईं।",
+    "importAnother": "दूसरी फ़ाइल आयात करें",
+    "report": {
+      "rowNumber": "rowNumber",
+      "errors": "errors"
+    },
+    "fields": {
+      "customers": {
+        "name": "नाम",
+        "phone": "फ़ोन",
+        "address": "पता",
+        "notes": "नोट्स"
+      },
+      "vehicles": {
+        "customerPhone": "ग्राहक फ़ोन",
+        "registrationNumber": "रजिस्ट्रेशन",
+        "make": "मेक",
+        "model": "मॉडल",
+        "year": "वर्ष",
+        "odometer": "ओडोमीटर",
+        "insuranceExpiry": "बीमा समाप्ति",
+        "pucExpiry": "PUC समाप्ति",
+        "fitnessExpiry": "फिटनेस समाप्ति"
+      },
+      "parts": {
+        "name": "नाम",
+        "sku": "SKU",
+        "unit": "इकाई",
+        "purchasePrice": "खरीद मूल्य (₹)",
+        "sellingPrice": "विक्रय मूल्य (₹)",
+        "gstRatePercent": "GST %",
+        "hsn": "HSN",
+        "lowStockLevel": "लो-स्टॉक स्तर",
+        "openingStock": "ओपनिंग स्टॉक"
+      }
+    },
+    "errors": {
+      "emptyFile": "फ़ाइल खाली है या कोई डेटा पंक्ति नहीं है।",
+      "tooManyRows": "बहुत अधिक पंक्तियाँ। फ़ाइल को 1,000 या उससे कम डेटा पंक्तियों में बाँटें।",
+      "fileTooLarge": "फ़ाइल बहुत बड़ी है (अधिकतम 2 MB)।",
+      "unsupportedType": ".csv फ़ाइल उपयोग करें। Excel में: फ़ाइल → इस रूप में सहेजें → CSV।",
+      "mappingIncomplete": "हर आवश्यक फ़ील्ड मैप करें: {fields}",
+      "hasInvalidRows": "{errorCount} अमान्य पंक्ति(याँ) ठीक करें, या खराब पंक्तियाँ छोड़ना चुनें।",
+      "noValidRows": "आयात के लिए कोई मान्य पंक्ति नहीं।",
+      "invalidEntity": "ग्राहक, वाहन या पार्ट्स चुनें।"
+    }
   }
 }

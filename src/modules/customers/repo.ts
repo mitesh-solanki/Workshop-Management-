@@ -184,3 +184,16 @@ export async function searchCustomers(
 
   return { items, total, page, pageSize };
 }
+
+/** Unpaginated customer rows for CSV export (capped). */
+export async function listCustomersForExport(
+  garageId: string,
+  q: string | undefined,
+) {
+  return prisma.customer.findMany({
+    where: customerSearchWhere(garageId, q),
+    select: customerSelect,
+    orderBy: [{ name: "asc" }, { createdAt: "desc" }],
+    take: 20_000,
+  });
+}

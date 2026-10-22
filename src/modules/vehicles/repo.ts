@@ -45,6 +45,18 @@ export async function findVehicleByRegistration(
   });
 }
 
+export async function listVehiclesByCustomerId(
+  garageId: string,
+  customerId: string,
+) {
+  return prisma.vehicle.findMany({
+    where: { garageId, customerId },
+    select: vehicleSelect,
+    orderBy: { registrationNumber: "asc" },
+    take: 500,
+  });
+}
+
 export async function createVehicle(
   garageId: string,
   data: {

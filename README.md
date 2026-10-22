@@ -14,9 +14,22 @@ Next.js (App Router, TypeScript strict), Tailwind, shadcn/ui, PostgreSQL + Prism
 4. Generate the Prisma client and apply migrations: `npx prisma generate` then `npx prisma migrate dev`  
    If engine download fails with a certificate error on your network, retry with  
    `set PRISMA_ENGINES_CHECKSUM_IGNORE_MISSING=1` (Windows) then `npx prisma generate`.
-5. Optional for local OTP testing: set `AUTH_DEV_OTP=123456` in `.env` (ignored in production). Codes are also printed in the server log.
+5. Configure Resend (required for development and production — see below).
 6. Install Playwright browsers when you need e2e: `npx playwright install chromium`
 7. Run the app: `npm run dev`
+
+## Email (Resend)
+
+OTP codes and team invites are sent with **Resend** in both development and production. There is no console/SMTP mailer path.
+
+1. Create an account at [resend.com](https://resend.com).
+2. Verify a sending domain (DNS records), or while experimenting use Resend’s test sender `onboarding@resend.dev` (only delivers to your own Resend account email).
+3. Create an API key under **API Keys** and set in `.env`:
+   - `RESEND_API_KEY=re_...`
+   - `EMAIL_FROM="Workshop <you@your-verified-domain.com>"` (or `Workshop <onboarding@resend.dev>` for the test sender)
+   - `APP_URL=http://localhost:3000` (invite links are `APP_URL/invite/[token]`)
+4. Request a login OTP or send a team invite — the message should arrive in the inbox. The UI never shows OTP codes or raw invite tokens.
+5. For Playwright e2e only, you may set `AUTH_DEV_OTP=123456` when `NODE_ENV` is not `production`. That fixed code is never used in production and is never displayed in the UI.
 
 ## Scripts
 

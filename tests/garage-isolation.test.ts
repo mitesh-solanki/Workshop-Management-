@@ -11,7 +11,7 @@ vi.mock("@/lib/otp", () => ({
 }));
 
 vi.mock("@/modules/auth/repo", () => ({
-  findUserByEmail: vi.fn(),
+  findUserByEmailForLogin: vi.fn(),
 }));
 
 vi.mock("@/modules/settings/repo", () => ({
@@ -24,6 +24,11 @@ vi.mock("@/modules/team/repo", () => ({
   listUsersByGarage: vi.fn(),
   listInvitesByGarage: vi.fn(),
   createInvite: vi.fn(),
+  findPendingInviteInGarage: vi.fn(),
+  refreshInviteToken: vi.fn(),
+  deleteInviteInGarage: vi.fn(),
+  updateUserRoleInGarage: vi.fn(),
+  deleteUserInGarage: vi.fn(),
 }));
 
 import { writeAuditLog } from "@/lib/audit";
@@ -151,6 +156,7 @@ describe("garage isolation", () => {
     vi.mocked(findUserInGarage).mockResolvedValue({
       id: "tech-a",
       email: "tech@example.com",
+      name: "Tech",
       role: "TECHNICIAN",
       garageId: garageA,
     });

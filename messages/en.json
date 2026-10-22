@@ -390,6 +390,7 @@
     "title": "Customers",
     "subtitle": "Find people and vehicles by name, phone or registration.",
     "add": "Add",
+    "export": "Export CSV",
     "newTitle": "New customer",
     "newSubtitle": "Name and phone are required.",
     "edit": "Edit",
@@ -423,6 +424,7 @@
   },
   "vehicles": {
     "add": "Add vehicle",
+    "export": "Export CSV",
     "newTitle": "New vehicle",
     "newSubtitle": "Add a vehicle for {customer}.",
     "edit": "Edit",
@@ -565,6 +567,7 @@
     "title": "Parts",
     "subtitle": "Catalogue, stock levels and direct sales.",
     "add": "Add part",
+    "export": "Export CSV",
     "back": "Back to parts",
     "backToSales": "Back to sales",
     "newTitle": "New part",
@@ -652,6 +655,112 @@
       "insufficientStock": "Not enough stock for that quantity.",
       "skuExists": "A part with this SKU already exists.",
       "partRequired": "Choose a part from inventory for part lines."
+    }
+  },
+  "dataImport": {
+    "title": "Import data",
+    "subtitle": "Bring customers, vehicles or parts from a CSV file.",
+    "backToSettings": "Back to settings",
+    "settingsCardTitle": "CSV import",
+    "settingsCardDescription": "Upload a CSV to add many customers, vehicles or parts at once. From Excel: File → Save As → CSV.",
+    "openImport": "Open import",
+    "steps": {
+      "upload": "Upload",
+      "map": "Map columns",
+      "preview": "Preview",
+      "done": "Done"
+    },
+    "entityLabel": "What are you importing?",
+    "entities": {
+      "customers": "Customers",
+      "vehicles": "Vehicles",
+      "parts": "Parts"
+    },
+    "entityHelp": {
+      "customers": "Name and phone are required. Address and notes are optional.",
+      "vehicles": "Customer phone must already exist. Registration, make and model are required.",
+      "parts": "Prices are in rupees. Opening stock creates a stock-in movement."
+    },
+    "downloadSample": "Download sample",
+    "chooseFile": "Choose CSV file",
+    "parsing": "Reading file…",
+    "fileHint": "CSV only (UTF-8). From Excel use Save As → CSV. Up to 1,000 data rows and 2 MB.",
+    "fileLoaded": "{filename} · {count} rows",
+    "field": "Field",
+    "column": "File column",
+    "unmapped": "— Not mapped —",
+    "emptyHeader": "Column {index}",
+    "startOver": "Start over",
+    "validate": "Validate rows",
+    "stats": {
+      "total": "Total rows",
+      "valid": "Valid",
+      "invalid": "With errors"
+    },
+    "errorsFound": "Some rows have errors. Download the report, fix the file, or skip bad rows.",
+    "allValid": "All rows look valid.",
+    "downloadErrors": "Download error report",
+    "row": "Row",
+    "status": "Status",
+    "details": "Details",
+    "rowStatus": {
+      "valid": "Valid",
+      "invalid": "Error"
+    },
+    "modeLabel": "How should we import?",
+    "modes": {
+      "all_or_nothing": "All or nothing",
+      "all_or_nothingHelp": "Import only if every row is valid. Nothing is saved if any row fails.",
+      "skip_invalid": "Skip bad rows",
+      "skip_invalidHelp": "Import valid rows only. Invalid rows are skipped after you confirm."
+    },
+    "backToMap": "Back to mapping",
+    "confirmImport": "Confirm import",
+    "success": "Imported {imported} rows. Skipped {skipped}.",
+    "importAnother": "Import another file",
+    "report": {
+      "rowNumber": "rowNumber",
+      "errors": "errors"
+    },
+    "fields": {
+      "customers": {
+        "name": "Name",
+        "phone": "Phone",
+        "address": "Address",
+        "notes": "Notes"
+      },
+      "vehicles": {
+        "customerPhone": "Customer phone",
+        "registrationNumber": "Registration",
+        "make": "Make",
+        "model": "Model",
+        "year": "Year",
+        "odometer": "Odometer",
+        "insuranceExpiry": "Insurance expiry",
+        "pucExpiry": "PUC expiry",
+        "fitnessExpiry": "Fitness expiry"
+      },
+      "parts": {
+        "name": "Name",
+        "sku": "SKU",
+        "unit": "Unit",
+        "purchasePrice": "Purchase price (₹)",
+        "sellingPrice": "Selling price (₹)",
+        "gstRatePercent": "GST %",
+        "hsn": "HSN",
+        "lowStockLevel": "Low-stock level",
+        "openingStock": "Opening stock"
+      }
+    },
+    "errors": {
+      "emptyFile": "The file is empty or has no data rows.",
+      "tooManyRows": "Too many rows. Split the file to 1,000 data rows or fewer.",
+      "fileTooLarge": "That file is too large (max 2 MB).",
+      "unsupportedType": "Use a .csv file. In Excel: File → Save As → CSV.",
+      "mappingIncomplete": "Map every required field: {fields}",
+      "hasInvalidRows": "Fix {errorCount} invalid row(s), or choose skip bad rows.",
+      "noValidRows": "No valid rows to import.",
+      "invalidEntity": "Choose customers, vehicles or parts."
     }
   }
 }

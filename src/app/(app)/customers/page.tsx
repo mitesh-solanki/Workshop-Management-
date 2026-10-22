@@ -26,14 +26,26 @@ export default async function CustomersPage({ searchParams }: Props) {
           <h1 className="text-2xl font-semibold tracking-tight">{t("title")}</h1>
           <p className="text-base text-muted-foreground">{t("subtitle")}</p>
         </div>
-        {canWrite && (
+        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
           <Link
-            href="/customers/new"
-            className="inline-flex min-h-12 shrink-0 items-center rounded-md bg-primary px-4 text-base font-medium text-primary-foreground"
+            href={
+              params.q
+                ? `/customers/export?q=${encodeURIComponent(params.q)}`
+                : "/customers/export"
+            }
+            className="inline-flex min-h-12 items-center rounded-md border px-4 text-base font-medium"
           >
-            {t("add")}
+            {t("export")}
           </Link>
-        )}
+          {canWrite ? (
+            <Link
+              href="/customers/new"
+              className="inline-flex min-h-12 items-center rounded-md bg-primary px-4 text-base font-medium text-primary-foreground"
+            >
+              {t("add")}
+            </Link>
+          ) : null}
+        </div>
       </div>
 
       <Suspense

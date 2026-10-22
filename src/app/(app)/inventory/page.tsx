@@ -30,6 +30,17 @@ export default async function InventoryPage({ searchParams }: Props) {
         description={t("subtitle")}
         actions={
           <div className="flex flex-wrap gap-2">
+            <Button asChild variant="secondary" size="md">
+              <Link
+                href={
+                  params.q
+                    ? `/inventory/export?q=${encodeURIComponent(params.q)}`
+                    : "/inventory/export"
+                }
+              >
+                {t("export")}
+              </Link>
+            </Button>
             {canSale ? (
               <Button asChild variant="secondary" size="md">
                 <Link href="/inventory/sales/new">{t("directSale")}</Link>

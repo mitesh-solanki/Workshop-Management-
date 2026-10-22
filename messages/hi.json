@@ -390,6 +390,7 @@
     "title": "ग्राहक",
     "subtitle": "नाम, फ़ोन या रजिस्ट्रेशन से खोजें।",
     "add": "जोड़ें",
+    "export": "CSV निर्यात",
     "newTitle": "नया ग्राहक",
     "newSubtitle": "नाम और फ़ोन ज़रूरी हैं।",
     "edit": "संपादित करें",
@@ -423,6 +424,7 @@
   },
   "vehicles": {
     "add": "वाहन जोड़ें",
+    "export": "CSV निर्यात",
     "newTitle": "नया वाहन",
     "newSubtitle": "{customer} के लिए वाहन जोड़ें।",
     "edit": "संपादित करें",
@@ -565,6 +567,7 @@
     "title": "पार्ट्स",
     "subtitle": "कैटलॉग, स्टॉक स्तर और सीधी बिक्री।",
     "add": "पार्ट जोड़ें",
+    "export": "CSV निर्यात",
     "back": "पार्ट्स पर वापस",
     "backToSales": "बिक्री पर वापस",
     "newTitle": "नया पार्ट",
@@ -652,6 +655,112 @@
       "insufficientStock": "उस मात्रा के लिए पर्याप्त स्टॉक नहीं है।",
       "skuExists": "इस SKU वाला पार्ट पहले से मौजूद है।",
       "partRequired": "पार्ट लाइनों के लिए इन्वेंटरी से पार्ट चुनें।"
+    }
+  },
+  "dataImport": {
+    "title": "डेटा आयात",
+    "subtitle": "CSV फ़ाइल से ग्राहक, वाहन या पार्ट्स जोड़ें।",
+    "backToSettings": "सेटिंग्स पर वापस",
+    "settingsCardTitle": "CSV आयात",
+    "settingsCardDescription": "CSV अपलोड करके कई ग्राहक, वाहन या पार्ट्स एक साथ जोड़ें। Excel में: फ़ाइल → इस रूप में सहेजें → CSV।",
+    "openImport": "आयात खोलें",
+    "steps": {
+      "upload": "अपलोड",
+      "map": "कॉलम मैप करें",
+      "preview": "पूर्वावलोकन",
+      "done": "पूर्ण"
+    },
+    "entityLabel": "आप क्या आयात कर रहे हैं?",
+    "entities": {
+      "customers": "ग्राहक",
+      "vehicles": "वाहन",
+      "parts": "पार्ट्स"
+    },
+    "entityHelp": {
+      "customers": "नाम और फ़ोन आवश्यक हैं। पता और नोट्स वैकल्पिक हैं।",
+      "vehicles": "ग्राहक का फ़ोन पहले से मौजूद होना चाहिए। रजिस्ट्रेशन, मेक और मॉडल आवश्यक हैं।",
+      "parts": "कीमतें रुपये में हैं। ओपनिंग स्टॉक एक स्टॉक-इन मूवमेंट बनाता है।"
+    },
+    "downloadSample": "नमूना डाउनलोड करें",
+    "chooseFile": "CSV फ़ाइल चुनें",
+    "parsing": "फ़ाइल पढ़ी जा रही है…",
+    "fileHint": "केवल CSV (UTF-8)। Excel में इस रूप में सहेजें → CSV। अधिकतम 1,000 डेटा पंक्तियाँ और 2 MB।",
+    "fileLoaded": "{filename} · {count} पंक्तियाँ",
+    "field": "फ़ील्ड",
+    "column": "फ़ाइल कॉलम",
+    "unmapped": "— मैप नहीं —",
+    "emptyHeader": "कॉलम {index}",
+    "startOver": "फिर से शुरू करें",
+    "validate": "पंक्तियाँ जाँचें",
+    "stats": {
+      "total": "कुल पंक्तियाँ",
+      "valid": "मान्य",
+      "invalid": "त्रुटि वाली"
+    },
+    "errorsFound": "कुछ पंक्तियों में त्रुटियाँ हैं। रिपोर्ट डाउनलोड करें, फ़ाइल ठीक करें, या खराब पंक्तियाँ छोड़ें।",
+    "allValid": "सभी पंक्तियाँ मान्य लगती हैं।",
+    "downloadErrors": "त्रुटि रिपोर्ट डाउनलोड करें",
+    "row": "पंक्ति",
+    "status": "स्थिति",
+    "details": "विवरण",
+    "rowStatus": {
+      "valid": "मान्य",
+      "invalid": "त्रुटि"
+    },
+    "modeLabel": "हम कैसे आयात करें?",
+    "modes": {
+      "all_or_nothing": "सभी या कुछ नहीं",
+      "all_or_nothingHelp": "केवल तभी आयात करें जब हर पंक्ति मान्य हो। किसी भी विफलता पर कुछ नहीं सहेजा जाता।",
+      "skip_invalid": "खराब पंक्तियाँ छोड़ें",
+      "skip_invalidHelp": "केवल मान्य पंक्तियाँ आयात करें। पुष्टि के बाद अमान्य पंक्तियाँ छोड़ दी जाती हैं।"
+    },
+    "backToMap": "मैपिंग पर वापस",
+    "confirmImport": "आयात की पुष्टि करें",
+    "success": "{imported} पंक्तियाँ आयात हुईं। {skipped} छोड़ी गईं।",
+    "importAnother": "दूसरी फ़ाइल आयात करें",
+    "report": {
+      "rowNumber": "rowNumber",
+      "errors": "errors"
+    },
+    "fields": {
+      "customers": {
+        "name": "नाम",
+        "phone": "फ़ोन",
+        "address": "पता",
+        "notes": "नोट्स"
+      },
+      "vehicles": {
+        "customerPhone": "ग्राहक फ़ोन",
+        "registrationNumber": "रजिस्ट्रेशन",
+        "make": "मेक",
+        "model": "मॉडल",
+        "year": "वर्ष",
+        "odometer": "ओडोमीटर",
+        "insuranceExpiry": "बीमा समाप्ति",
+        "pucExpiry": "PUC समाप्ति",
+        "fitnessExpiry": "फिटनेस समाप्ति"
+      },
+      "parts": {
+        "name": "नाम",
+        "sku": "SKU",
+        "unit": "इकाई",
+        "purchasePrice": "खरीद मूल्य (₹)",
+        "sellingPrice": "विक्रय मूल्य (₹)",
+        "gstRatePercent": "GST %",
+        "hsn": "HSN",
+        "lowStockLevel": "लो-स्टॉक स्तर",
+        "openingStock": "ओपनिंग स्टॉक"
+      }
+    },
+    "errors": {
+      "emptyFile": "फ़ाइल खाली है या कोई डेटा पंक्ति नहीं है।",
+      "tooManyRows": "बहुत अधिक पंक्तियाँ। फ़ाइल को 1,000 या उससे कम डेटा पंक्तियों में बाँटें।",
+      "fileTooLarge": "फ़ाइल बहुत बड़ी है (अधिकतम 2 MB)।",
+      "unsupportedType": ".csv फ़ाइल उपयोग करें। Excel में: फ़ाइल → इस रूप में सहेजें → CSV।",
+      "mappingIncomplete": "हर आवश्यक फ़ील्ड मैप करें: {fields}",
+      "hasInvalidRows": "{errorCount} अमान्य पंक्ति(याँ) ठीक करें, या खराब पंक्तियाँ छोड़ना चुनें।",
+      "noValidRows": "आयात के लिए कोई मान्य पंक्ति नहीं।",
+      "invalidEntity": "ग्राहक, वाहन या पार्ट्स चुनें।"
     }
   }
 }

@@ -390,6 +390,7 @@
     "title": "ગ્રાહકો",
     "subtitle": "નામ, ફોન અથવા રજિસ્ટ્રેશનથી શોધો.",
     "add": "ઉમેરો",
+    "export": "CSV નિકાસ",
     "newTitle": "નવો ગ્રાહક",
     "newSubtitle": "નામ અને ફોન જરૂરી છે.",
     "edit": "સંપાદિત કરો",
@@ -423,6 +424,7 @@
   },
   "vehicles": {
     "add": "વાહન ઉમેરો",
+    "export": "CSV નિકાસ",
     "newTitle": "નવું વાહન",
     "newSubtitle": "{customer} માટે વાહન ઉમેરો.",
     "edit": "સંપાદિત કરો",
@@ -565,6 +567,7 @@
     "title": "પાર્ટ્સ",
     "subtitle": "કેટલોગ, સ્ટોક સ્તર અને સીધું વેચાણ.",
     "add": "પાર્ટ ઉમેરો",
+    "export": "CSV નિકાસ",
     "back": "પાર્ટ્સ પર પાછા",
     "backToSales": "વેચાણ પર પાછા",
     "newTitle": "નવો પાર્ટ",
@@ -652,6 +655,112 @@
       "insufficientStock": "આ જથ્થા માટે પૂરતો સ્ટોક નથી.",
       "skuExists": "આ SKU વાળો પાર્ટ પહેલેથી છે.",
       "partRequired": "પાર્ટ લાઇન માટે ઇન્વેન્ટરીમાંથી પાર્ટ પસંદ કરો."
+    }
+  },
+  "dataImport": {
+    "title": "ડેટા આયાત",
+    "subtitle": "CSV ફાઇલથી ગ્રાહકો, વાહનો અથવા પાર્ટ્સ ઉમેરો.",
+    "backToSettings": "સેટિંગ્સ પર પાછા",
+    "settingsCardTitle": "CSV આયાત",
+    "settingsCardDescription": "CSV અપલોડ કરીને ઘણા ગ્રાહકો, વાહનો અથવા પાર્ટ્સ એકસાથે ઉમેરો. Excelમાં: File → Save As → CSV.",
+    "openImport": "આયાત ખોલો",
+    "steps": {
+      "upload": "અપલોડ",
+      "map": "કૉલમ મેપ કરો",
+      "preview": "પૂર્વાવલોકન",
+      "done": "પૂર્ણ"
+    },
+    "entityLabel": "તમે શું આયાત કરી રહ્યા છો?",
+    "entities": {
+      "customers": "ગ્રાહકો",
+      "vehicles": "વાહનો",
+      "parts": "પાર્ટ્સ"
+    },
+    "entityHelp": {
+      "customers": "નામ અને ફોન જરૂરી છે. સરનામું અને નોંધ વૈકલ્પિક છે.",
+      "vehicles": "ગ્રાહકનો ફોન પહેલેથી હોવો જોઈએ. રજિસ્ટ્રેશન, મેક અને મોડલ જરૂરી છે.",
+      "parts": "કિંમતો રૂપિયામાં છે. ઓપનિંગ સ્ટોક સ્ટોક-ઇન મૂવમેન્ટ બનાવે છે."
+    },
+    "downloadSample": "નમૂનો ડાઉનલોડ કરો",
+    "chooseFile": "CSV ફાઇલ પસંદ કરો",
+    "parsing": "ફાઇલ વાંચાઈ રહી છે…",
+    "fileHint": "માત્ર CSV (UTF-8). Excelમાં Save As → CSV. વધુમાં વધુ 1,000 ડેટા પંક્તિઓ અને 2 MB.",
+    "fileLoaded": "{filename} · {count} પંક્તિઓ",
+    "field": "ફીલ્ડ",
+    "column": "ફાઇલ કૉલમ",
+    "unmapped": "— મેપ નથી —",
+    "emptyHeader": "કૉલમ {index}",
+    "startOver": "ફરી શરૂ કરો",
+    "validate": "પંક્તિઓ તપાસો",
+    "stats": {
+      "total": "કુલ પંક્તિઓ",
+      "valid": "માન્ય",
+      "invalid": "ભૂલવાળી"
+    },
+    "errorsFound": "કેટલીક પંક્તિઓમાં ભૂલો છે. રિપોર્ટ ડાઉનલોડ કરો, ફાઇલ સુધારો, અથવા ખરાબ પંક્તિઓ છોડો.",
+    "allValid": "બધી પંક્તિઓ માન્ય લાગે છે.",
+    "downloadErrors": "ભૂલ રિપોર્ટ ડાઉનલોડ કરો",
+    "row": "પંક્તિ",
+    "status": "સ્થિતિ",
+    "details": "વિગતો",
+    "rowStatus": {
+      "valid": "માન્ય",
+      "invalid": "ભૂલ"
+    },
+    "modeLabel": "આયાત કેવી રીતે કરીએ?",
+    "modes": {
+      "all_or_nothing": "બધું અથવા કંઈ નહીં",
+      "all_or_nothingHelp": "દરેક પંક્તિ માન્ય હોય ત્યારે જ આયાત. કોઈપણ નિષ્ફળતા પર કંઈ સેવ થતું નથી.",
+      "skip_invalid": "ખરાબ પંક્તિઓ છોડો",
+      "skip_invalidHelp": "માત્ર માન્ય પંક્તિઓ આયાત કરો. પુષ્ટિ પછી અમાન્ય પંક્તિઓ છોડાય છે."
+    },
+    "backToMap": "મેપિંગ પર પાછા",
+    "confirmImport": "આયાતની પુષ્ટિ કરો",
+    "success": "{imported} પંક્તિઓ આયાત થઈ. {skipped} છોડાઈ.",
+    "importAnother": "બીજી ફાઇલ આયાત કરો",
+    "report": {
+      "rowNumber": "rowNumber",
+      "errors": "errors"
+    },
+    "fields": {
+      "customers": {
+        "name": "નામ",
+        "phone": "ફોન",
+        "address": "સરનામું",
+        "notes": "નોંધ"
+      },
+      "vehicles": {
+        "customerPhone": "ગ્રાહક ફોન",
+        "registrationNumber": "રજિસ્ટ્રેશન",
+        "make": "મેક",
+        "model": "મોડલ",
+        "year": "વર્ષ",
+        "odometer": "ઓડોમીટર",
+        "insuranceExpiry": "વીમા સમાપ્તિ",
+        "pucExpiry": "PUC સમાપ્તિ",
+        "fitnessExpiry": "ફિટનેસ સમાપ્તિ"
+      },
+      "parts": {
+        "name": "નામ",
+        "sku": "SKU",
+        "unit": "એકમ",
+        "purchasePrice": "ખરીદ કિંમત (₹)",
+        "sellingPrice": "વેચાણ કિંમત (₹)",
+        "gstRatePercent": "GST %",
+        "hsn": "HSN",
+        "lowStockLevel": "લો-સ્ટોક સ્તર",
+        "openingStock": "ઓપનિંગ સ્ટોક"
+      }
+    },
+    "errors": {
+      "emptyFile": "ફાઇલ ખાલી છે અથવા ડેટા પંક્તિ નથી.",
+      "tooManyRows": "ખૂબ વધારે પંક્તિઓ. ફાઇલને 1,000 અથવા ઓછી ડેટા પંક્તિઓમાં વહેંચો.",
+      "fileTooLarge": "ફાઇલ ખૂબ મોટી છે (મહત્તમ 2 MB).",
+      "unsupportedType": ".csv ફાઇલ વાપરો. Excelમાં: File → Save As → CSV.",
+      "mappingIncomplete": "દરેક જરૂરી ફીલ્ડ મેપ કરો: {fields}",
+      "hasInvalidRows": "{errorCount} અમાન્ય પંક્તિ(ઓ) સુધારો, અથવા ખરાબ પંક્તિઓ છોડવાનું પસંદ કરો.",
+      "noValidRows": "આયાત માટે કોઈ માન્ય પંક્તિ નથી.",
+      "invalidEntity": "ગ્રાહકો, વાહનો અથવા પાર્ટ્સ પસંદ કરો."
     }
   }
 }

@@ -81,14 +81,22 @@ export default async function CustomerDetailPage({ params }: Props) {
       <section className="space-y-3">
         <div className="flex items-center justify-between gap-3">
           <h2 className="text-lg font-medium">{t("vehicles")}</h2>
-          {canWrite && (
+          <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
             <Link
-              href={`/customers/${customer.id}/vehicles/new`}
-              className="inline-flex min-h-12 items-center rounded-md bg-primary px-4 text-base font-medium text-primary-foreground"
+              href={`/customers/${customer.id}/vehicles/export`}
+              className="inline-flex min-h-12 items-center rounded-md border px-4 text-base font-medium"
             >
-              {tv("add")}
+              {tv("export")}
             </Link>
-          )}
+            {canWrite ? (
+              <Link
+                href={`/customers/${customer.id}/vehicles/new`}
+                className="inline-flex min-h-12 items-center rounded-md bg-primary px-4 text-base font-medium text-primary-foreground"
+              >
+                {tv("add")}
+              </Link>
+            ) : null}
+          </div>
         </div>
         {customer.vehicles.length === 0 ? (
           <p className="text-sm text-muted-foreground">{t("noVehicles")}</p>

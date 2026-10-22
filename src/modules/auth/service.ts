@@ -115,11 +115,16 @@ export async function createEmailOtp(input: {
     text: rendered.text,
   });
 
-  if (!sent.ok) {
+  // Local/dev with AUTH_DEV_OTP: allow verify with the fixed code even if
+  // Resend fails. Never return or surface the code in the UI.
+  const allowDevOtpBypass =
+    process.env.NODE_ENV !== "production" &&
+    Boolean(process.env.AUTH_DEV_OTP?.trim());
+
+  if (!sent.ok && !allowDevOtpBypass) {
     throw new AppError("auth.email_send_failed", 502);
   }
 
-  // Never return or log the code. Delivery is via Resend only.
   return { email, expiresInSeconds: OTP_TTL_MS / 1000 };
 }
 

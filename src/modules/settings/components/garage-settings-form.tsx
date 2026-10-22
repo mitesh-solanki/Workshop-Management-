@@ -62,7 +62,7 @@ function SettingsSection({
     <Card className="h-full gap-0 overflow-hidden py-0">
       <CardHeader className="border-b border-slate-100 bg-slate-50/80">
         <div className="flex items-start gap-3">
-          <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-teal-50 text-teal-700 ring-1 ring-teal-100">
+          <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-700 ring-1 ring-blue-100">
             {icon}
           </span>
           <div className="min-w-0 space-y-1">
@@ -202,7 +202,7 @@ export function GarageSettingsForm({ garage, canEdit }: Props) {
               {stateCode ? (
                 <Badge
                   variant="secondary"
-                  className="w-fit border-0 bg-teal-50 px-2.5 py-1 font-mono text-teal-800"
+                  className="w-fit border-0 bg-blue-50 px-2.5 py-1 font-mono text-blue-800"
                 >
                   {stateCode}
                 </Badge>
@@ -244,10 +244,10 @@ export function GarageSettingsForm({ garage, canEdit }: Props) {
                     });
                   }}
                   className={cn(
-                    "flex min-h-12 w-full items-center justify-between gap-3 px-4 py-3 text-left text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-teal-600",
+                    "flex min-h-12 w-full items-center justify-between gap-3 px-4 py-3 text-left text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-600",
                     index > 0 && "border-t border-slate-200 sm:border-t-0 sm:border-l",
                     selected
-                      ? "bg-teal-50 text-teal-950"
+                      ? "bg-blue-50 text-blue-950"
                       : "bg-card text-slate-800 hover:bg-slate-50",
                     localePending && "opacity-70",
                   )}
@@ -255,7 +255,7 @@ export function GarageSettingsForm({ garage, canEdit }: Props) {
                   <span>{tLang(code)}</span>
                   {selected ? (
                     <Check
-                      className="size-4 shrink-0 text-teal-700"
+                      className="size-4 shrink-0 text-blue-700"
                       aria-hidden
                     />
                   ) : null}

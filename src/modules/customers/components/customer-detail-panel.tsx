@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import { useState } from "react";
+import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import {
@@ -12,18 +13,13 @@ import {
   NotebookPen,
   Pencil,
   Phone,
+  Plus,
   Wrench,
   type LucideIcon,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardBody,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardDescription } from "@/components/ui/card";
 import {
   DescriptionDetails,
   DescriptionItem,
@@ -31,13 +27,27 @@ import {
   DescriptionTerm,
 } from "@/components/ui/description-list";
 import { ListCard, ListCardGroup } from "@/components/ui/list-card";
+import { SectionSideNav } from "@/components/shared/section-side-nav";
+import {
+  sectionDomId,
+  useSectionScrollSpy,
+} from "@/hooks/use-section-scroll-spy";
 import { getDateStatus, type DateStatus } from "@/lib/date-status";
+import type { ServiceOrderStatus } from "@/lib/service-order-status";
 import { cn } from "@/lib/utils";
 import {
   EditCustomerModal,
   type EditCustomerValues,
 } from "@/modules/customers/components/edit-customer-modal";
+import {
+  CUSTOMER_SECTION_ID_PREFIX,
+  CUSTOMER_SECTIONS,
+  VEHICLE_SECTION_ID_PREFIX,
+  VEHICLE_SECTIONS,
+} from "@/modules/customers/customer-sections";
+import { JobCardRowActions } from "@/modules/service-orders/components/job-card-row-actions";
 import { CreateVehicleModal } from "@/modules/vehicles/components/create-vehicle-modal";
+import { DeleteVehicleButton } from "@/modules/vehicles/components/delete-vehicle-button";
 import { EditVehicleModal } from "@/modules/vehicles/components/edit-vehicle-modal";
 
 type VehicleRow = {
@@ -50,6 +60,18 @@ type VehicleRow = {
   insuranceExpiry: Date | string | null;
   pucExpiry: Date | string | null;
   fitnessExpiry: Date | string | null;
+};
+
+export type ServiceHistoryRow = {
+  id: string;
+  status: ServiceOrderStatus;
+  complaint: string;
+  createdAt: Date | string;
+  expectedCompletion: Date | string | null;
+  vehicle: {
+    id: string;
+    registrationNumber: string;
+  };
 };
 
 function asDate(value: Date | string | null): Date | null {
@@ -77,13 +99,12 @@ function vehicleListSubtitle(
   return parts.join(" · ");
 }
 
-type CustomerSection = "details" | "vehicles" | "service" | "communication";
-type VehicleSection = "overview" | "service";
-
 type Props = {
   customer: EditCustomerValues;
   vehicles: VehicleRow[];
+  serviceHistory: ServiceHistoryRow[];
   canWrite: boolean;
+  canCreateOrder: boolean;
   locale: string;
   initialVehicleId?: string | null;
 };
@@ -112,15 +133,48 @@ function formatDate(value: Date | null, locale: string, empty: string) {
   }).format(value);
 }
 
+function SectionBlock({
+  id,
+  title,
+  subtitle,
+  action,
+  sectionRef,
+  children,
+}: {
+  id: string;
+  title: string;
+  subtitle?: string;
+  action?: ReactNode;
+  sectionRef: (node: HTMLElement | null) => void;
+  children: ReactNode;
+}) {
+  return (
+    <section
+      id={id}
+      ref={sectionRef}
+      className="scroll-mt-4 border-b border-border last:border-b-0"
+    >
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-4 sm:px-6">
+        <div className="min-w-0 space-y-0.5">
+          <h2 className="text-section-title text-slate-900">{title}</h2>
+          {subtitle ? <CardDescription>{subtitle}</CardDescription> : null}
+        </div>
+        {action}
+      </div>
+      {children}
+    </section>
+  );
+}
+
 export function CustomerDetailPanel({
   customer,
   vehicles,
+  serviceHistory,
   canWrite,
+  canCreateOrder,
   locale,
   initialVehicleId = null,
 }: Props) {
-  const t = useTranslations("customers");
-  const tv = useTranslations("vehicles");
   const router = useRouter();
   const pathname = usePathname();
 
@@ -129,14 +183,9 @@ export function CustomerDetailPanel({
       ? initialVehicleId
       : null;
 
-  const [section, setSection] = useState<CustomerSection>(
-    initialVehicle ? "vehicles" : "details",
-  );
   const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(
     initialVehicle,
   );
-  const [vehicleSection, setVehicleSection] =
-    useState<VehicleSection>("overview");
 
   const selectedVehicle =
     vehicles.find((vehicle) => vehicle.id === selectedVehicleId) ?? null;
@@ -149,285 +198,302 @@ export function CustomerDetailPanel({
   }
 
   function openVehicle(vehicleId: string) {
-    setSection("vehicles");
     setSelectedVehicleId(vehicleId);
-    setVehicleSection("overview");
     setVehicleQuery(vehicleId);
   }
 
   function closeVehicle() {
     setSelectedVehicleId(null);
-    setVehicleSection("overview");
-    setSection("vehicles");
     setVehicleQuery(null);
   }
 
-  function goToCustomerSection(next: CustomerSection) {
-    setSelectedVehicleId(null);
-    setVehicleSection("overview");
-    setVehicleQuery(null);
-    setSection(next);
+  if (selectedVehicle) {
+    return (
+      <VehicleDetailView
+        key={selectedVehicle.id}
+        customerId={customer.id}
+        customerName={customer.name}
+        vehicle={selectedVehicle}
+        serviceHistory={serviceHistory.filter(
+          (order) => order.vehicle.id === selectedVehicle.id,
+        )}
+        canWrite={canWrite}
+        canCreateOrder={canCreateOrder}
+        locale={locale}
+        onBack={closeVehicle}
+      />
+    );
   }
 
-  const customerNav: {
-    id: CustomerSection;
-    label: string;
-    icon: LucideIcon;
-  }[] = [
-    { id: "details", label: t("details"), icon: NotebookPen },
-    { id: "vehicles", label: t("vehicles"), icon: Car },
-    { id: "service", label: t("serviceHistory"), icon: Wrench },
+  return (
+    <CustomerSectionsView
+      customer={customer}
+      vehicles={vehicles}
+      serviceHistory={serviceHistory}
+      canWrite={canWrite}
+      canCreateOrder={canCreateOrder}
+      locale={locale}
+      openVehicle={openVehicle}
+    />
+  );
+}
+
+function CustomerSectionsView({
+  customer,
+  vehicles,
+  serviceHistory,
+  canWrite,
+  canCreateOrder,
+  locale,
+  openVehicle,
+}: {
+  customer: EditCustomerValues;
+  vehicles: VehicleRow[];
+  serviceHistory: ServiceHistoryRow[];
+  canWrite: boolean;
+  canCreateOrder: boolean;
+  locale: string;
+  openVehicle: (vehicleId: string) => void;
+}) {
+  const t = useTranslations("customers");
+  const tv = useTranslations("vehicles");
+  const to = useTranslations("orders");
+  const { activeSection, scrollToSection, setSectionRef } =
+    useSectionScrollSpy({
+      sections: CUSTOMER_SECTIONS,
+      idPrefix: CUSTOMER_SECTION_ID_PREFIX,
+      initialSection: "details",
+    });
+
+  const navItems = [
+    { id: "details" as const, label: t("details"), icon: NotebookPen },
+    { id: "vehicles" as const, label: t("vehicles"), icon: Car },
+    { id: "service" as const, label: t("serviceHistory"), icon: Wrench },
     {
-      id: "communication",
+      id: "communication" as const,
       label: t("communicationHistory"),
       icon: MessageSquare,
     },
   ];
 
-  const vehicleNav: {
-    id: VehicleSection;
-    label: string;
-    icon: LucideIcon;
-  }[] = [
-    { id: "overview", label: tv("overview"), icon: Car },
-    { id: "service", label: tv("serviceHistory"), icon: Wrench },
-  ];
-
-  const viewingVehicle = selectedVehicle != null;
-
   return (
     <div className="grid items-start gap-4 lg:grid-cols-[minmax(220px,260px)_minmax(0,1fr)] lg:gap-6">
-      <Card className="gap-0 overflow-hidden py-0 lg:sticky lg:top-6">
-        <CardHeader className="border-b border-border px-4 py-3">
-          <CardTitle>
-            {viewingVehicle ? tv("sectionsTitle") : t("sectionsTitle")}
-          </CardTitle>
-        </CardHeader>
-        <CardBody className="p-2">
-          {viewingVehicle ? (
-            <nav
-              aria-label={tv("sectionsTitle")}
-              className="flex flex-col gap-0.5"
-            >
-              <button
-                type="button"
-                onClick={closeVehicle}
-                className="inline-flex min-h-11 w-full items-center gap-2 rounded-lg px-3 text-left text-body font-medium text-slate-700 transition-colors hover:bg-muted"
-              >
-                <ChevronLeft className="size-4 shrink-0" aria-hidden />
-                <span className="truncate">{t("backToVehicles")}</span>
-              </button>
-              {vehicleNav.map((item) => {
-                const Icon = item.icon;
-                const active = vehicleSection === item.id;
-                return (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => setVehicleSection(item.id)}
-                    className={cn(
-                      "inline-flex min-h-11 w-full items-center gap-2.5 rounded-lg px-3 text-left text-body font-medium transition-colors",
-                      active
-                        ? "bg-teal-600 text-white"
-                        : "text-slate-700 hover:bg-muted",
-                    )}
-                  >
-                    <Icon className="size-4 shrink-0 opacity-90" aria-hidden />
-                    <span className="truncate">{item.label}</span>
-                  </button>
-                );
-              })}
-            </nav>
-          ) : (
-            <nav
-              aria-label={t("sectionsTitle")}
-              className="flex flex-col gap-0.5"
-            >
-              {customerNav.map((item) => {
-                const Icon = item.icon;
-                const active = section === item.id;
-                return (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => goToCustomerSection(item.id)}
-                    className={cn(
-                      "inline-flex min-h-11 w-full items-center gap-2.5 rounded-lg px-3 text-left text-body font-medium transition-colors",
-                      active
-                        ? "bg-teal-600 text-white"
-                        : "text-slate-700 hover:bg-muted",
-                    )}
-                  >
-                    <Icon className="size-4 shrink-0 opacity-90" aria-hidden />
-                    <span className="truncate">{item.label}</span>
-                  </button>
-                );
-              })}
-            </nav>
-          )}
-        </CardBody>
-      </Card>
+      <SectionSideNav
+        title={t("sectionsTitle")}
+        items={navItems}
+        active={activeSection}
+        onChange={scrollToSection}
+      />
 
-      <Card className="gap-0 overflow-hidden py-0">
-        {viewingVehicle && selectedVehicle ? (
-          <VehicleContent
-            customerId={customer.id}
-            customerName={customer.name}
-            vehicle={selectedVehicle}
-            section={vehicleSection}
-            canWrite={canWrite}
-            locale={locale}
-          />
-        ) : null}
-
-        {!viewingVehicle && section === "details" ? (
-          <div>
-            <SectionHeader
-              title={t("namedDetails", { name: customer.name })}
-              subtitle={t("detailsDescription")}
-              action={
-                canWrite ? (
-                  <EditCustomerModal
-                    customer={customer}
-                    trigger={
-                      <Button type="button" variant="outline" size="md">
-                        <Pencil className="size-4" aria-hidden />
-                        {t("edit")}
-                      </Button>
-                    }
-                  />
-                ) : null
-              }
-            />
-            <dl className="grid gap-4 px-5 py-5 sm:grid-cols-2 sm:gap-x-8 sm:px-6">
-              <Fact
-                icon={Phone}
-                label={t("phone")}
-                value={
-                  <a
-                    href={`tel:${customer.phone}`}
-                    className="font-medium text-teal-700 hover:underline"
-                  >
-                    {customer.phone}
-                  </a>
+      <Card className="min-w-0 gap-0 overflow-visible py-0">
+        <SectionBlock
+          id={sectionDomId(CUSTOMER_SECTION_ID_PREFIX, "details")}
+          title={t("namedDetails", { name: customer.name })}
+          subtitle={t("detailsDescription")}
+          sectionRef={setSectionRef("details")}
+          action={
+            canWrite ? (
+              <EditCustomerModal
+                customer={customer}
+                trigger={
+                  <Button type="button" variant="outline" size="md">
+                    <Pencil className="size-4" aria-hidden />
+                    {t("edit")}
+                  </Button>
                 }
               />
-              <Fact
-                icon={MapPin}
-                label={t("address")}
-                value={customer.address ?? t("notSet")}
-                muted={!customer.address}
-              />
-              <Fact
-                icon={NotebookPen}
-                label={t("notes")}
-                value={customer.notes ?? t("notSet")}
-                muted={!customer.notes}
-                multiline
-                className="sm:col-span-2"
-              />
-            </dl>
-          </div>
-        ) : null}
+            ) : null
+          }
+        >
+          <dl className="grid gap-4 px-5 py-5 sm:grid-cols-2 sm:gap-x-8 sm:px-6">
+            <Fact
+              icon={Phone}
+              label={t("phone")}
+              value={
+                <a
+                  href={`tel:${customer.phone}`}
+                  className="font-medium text-blue-700 hover:underline"
+                >
+                  {customer.phone}
+                </a>
+              }
+            />
+            <Fact
+              icon={MapPin}
+              label={t("address")}
+              value={customer.address ?? t("notSet")}
+              muted={!customer.address}
+            />
+            <Fact
+              icon={NotebookPen}
+              label={t("notes")}
+              value={customer.notes ?? t("notSet")}
+              muted={!customer.notes}
+              multiline
+              className="sm:col-span-2"
+            />
+          </dl>
+        </SectionBlock>
 
-        {!viewingVehicle && section === "vehicles" ? (
-          <div>
-            <SectionHeader
-              title={t("vehicles")}
-              subtitle={t("vehiclesDescription")}
+        <SectionBlock
+          id={sectionDomId(CUSTOMER_SECTION_ID_PREFIX, "vehicles")}
+          title={t("vehicles")}
+          subtitle={t("vehiclesDescription")}
+          sectionRef={setSectionRef("vehicles")}
+          action={
+            canWrite ? (
+              <CreateVehicleModal
+                customerId={customer.id}
+                customerName={customer.name}
+                onCreated={() => scrollToSection("vehicles")}
+              />
+            ) : null
+          }
+        >
+          {vehicles.length === 0 ? (
+            <EmptyState
+              icon={Car}
+              title={t("noVehicles")}
+              body={t("noVehiclesDescription")}
               action={
                 canWrite ? (
                   <CreateVehicleModal
                     customerId={customer.id}
                     customerName={customer.name}
-                    onCreated={() => setSection("vehicles")}
                   />
                 ) : null
               }
             />
+          ) : (
+            <ListCardGroup className="rounded-none border-0 shadow-none">
+              {vehicles.map((vehicle) => (
+                <li key={vehicle.id}>
+                  <ListCard
+                    onClick={() => openVehicle(vehicle.id)}
+                    title={vehicle.registrationNumber}
+                    subtitle={vehicleListSubtitle(vehicle, locale, tv)}
+                    className="px-5 py-3.5 sm:px-6"
+                  />
+                </li>
+              ))}
+            </ListCardGroup>
+          )}
+        </SectionBlock>
 
-            {vehicles.length === 0 ? (
-              <EmptyState
-                icon={Car}
-                title={t("noVehicles")}
-                body={t("noVehiclesDescription")}
-                action={
-                  canWrite ? (
-                    <CreateVehicleModal
-                      customerId={customer.id}
-                      customerName={customer.name}
-                    />
-                  ) : null
-                }
-              />
-            ) : (
-              <ListCardGroup className="rounded-none border-0 shadow-none">
-                {vehicles.map((vehicle) => (
-                  <li key={vehicle.id}>
-                    <ListCard
-                      onClick={() => openVehicle(vehicle.id)}
-                      title={vehicle.registrationNumber}
-                      subtitle={vehicleListSubtitle(vehicle, locale, tv)}
-                      className="px-5 py-3.5 sm:px-6"
-                    />
-                  </li>
-                ))}
-              </ListCardGroup>
-            )}
-          </div>
-        ) : null}
+        <SectionBlock
+          id={sectionDomId(CUSTOMER_SECTION_ID_PREFIX, "service")}
+          title={t("serviceHistory")}
+          subtitle={t("serviceHistoryDescription")}
+          sectionRef={setSectionRef("service")}
+          action={
+            canCreateOrder && vehicles.length > 0 ? (
+              vehicles.length === 1 ? (
+                <Button asChild size="md">
+                  <Link href={`/orders/new?vehicleId=${vehicles[0]!.id}`}>
+                    <Plus className="size-4" aria-hidden />
+                    {to("createShort")}
+                  </Link>
+                </Button>
+              ) : (
+                <Button asChild size="md">
+                  <Link href="/orders/new">
+                    <Plus className="size-4" aria-hidden />
+                    {to("createShort")}
+                  </Link>
+                </Button>
+              )
+            ) : undefined
+          }
+        >
+          <ServiceHistoryList
+            orders={serviceHistory}
+            locale={locale}
+            customerId={customer.id}
+            canWrite={canCreateOrder}
+            emptyTitle={t("serviceHistoryEmpty")}
+            emptyBody={
+              vehicles.length === 0
+                ? t("noVehiclesDescription")
+                : t("serviceHistoryPlaceholder")
+            }
+            showRegistration
+            statusLabel={(status) => to(`statuses.${status}`)}
+            emptyAction={
+              canCreateOrder && vehicles.length === 1 ? (
+                <Button asChild size="sm">
+                  <Link href={`/orders/new?vehicleId=${vehicles[0]!.id}`}>
+                    <Plus className="size-4" aria-hidden />
+                    {to("createShort")}
+                  </Link>
+                </Button>
+              ) : canCreateOrder && vehicles.length > 1 ? (
+                <Button asChild size="sm">
+                  <Link href="/orders/new">
+                    <Plus className="size-4" aria-hidden />
+                    {to("createPickVehicle")}
+                  </Link>
+                </Button>
+              ) : undefined
+            }
+          />
+        </SectionBlock>
 
-        {!viewingVehicle && section === "service" ? (
-          <div>
-            <SectionHeader
-              title={t("serviceHistory")}
-              subtitle={t("serviceHistoryDescription")}
-            />
-            <EmptyState
-              icon={Wrench}
-              title={t("serviceHistoryEmpty")}
-              body={t("serviceHistoryPlaceholder")}
-              centered
-            />
-          </div>
-        ) : null}
-
-        {!viewingVehicle && section === "communication" ? (
-          <div>
-            <SectionHeader
-              title={t("communicationHistory")}
-              subtitle={t("communicationHistoryDescription")}
-            />
-            <EmptyState
-              icon={MessageSquare}
-              title={t("communicationHistoryEmpty")}
-              body={t("communicationHistoryPlaceholder")}
-              centered
-            />
-          </div>
-        ) : null}
+        <SectionBlock
+          id={sectionDomId(CUSTOMER_SECTION_ID_PREFIX, "communication")}
+          title={t("communicationHistory")}
+          subtitle={t("communicationHistoryDescription")}
+          sectionRef={setSectionRef("communication")}
+        >
+          <EmptyState
+            icon={MessageSquare}
+            title={t("communicationHistoryEmpty")}
+            body={t("communicationHistoryPlaceholder")}
+            centered
+          />
+        </SectionBlock>
       </Card>
     </div>
   );
 }
 
-function VehicleContent({
+function VehicleDetailView({
   customerId,
   customerName,
   vehicle,
-  section,
+  serviceHistory,
   canWrite,
+  canCreateOrder,
   locale,
+  onBack,
 }: {
   customerId: string;
   customerName: string;
   vehicle: VehicleRow;
-  section: VehicleSection;
+  serviceHistory: ServiceHistoryRow[];
   canWrite: boolean;
+  canCreateOrder: boolean;
   locale: string;
+  onBack: () => void;
 }) {
   const t = useTranslations("customers");
   const tv = useTranslations("vehicles");
+  const to = useTranslations("orders");
+  const { activeSection, scrollToSection, setSectionRef } =
+    useSectionScrollSpy({
+      sections: VEHICLE_SECTIONS,
+      idPrefix: VEHICLE_SECTION_ID_PREFIX,
+      initialSection: "overview",
+    });
+
+  const createJobCard = (size: "sm" | "md" = "md") =>
+    canCreateOrder ? (
+      <Button asChild size={size}>
+        <Link href={`/orders/new?vehicleId=${vehicle.id}`}>
+          <Plus className="size-4" aria-hidden />
+          {to("createShort")}
+        </Link>
+      </Button>
+    ) : null;
 
   const expiryRows = [
     {
@@ -452,114 +518,219 @@ function VehicleContent({
 
   const subtitle = `${vehicle.make} ${vehicle.model}`.trim();
 
-  const editAction = canWrite ? (
-    <EditVehicleModal
-      vehicle={{
-        id: vehicle.id,
-        customerId,
-        registrationNumber: vehicle.registrationNumber,
-        make: vehicle.make,
-        model: vehicle.model,
-        year: vehicle.year,
-        odometer: vehicle.odometer,
-        insuranceExpiry: vehicle.insuranceExpiry,
-        pucExpiry: vehicle.pucExpiry,
-        fitnessExpiry: vehicle.fitnessExpiry,
-      }}
-    />
-  ) : null;
+  const headerActions = (
+    <div className="flex flex-wrap items-center gap-2">
+      {createJobCard()}
+      {canWrite ? (
+        <EditVehicleModal
+          vehicle={{
+            id: vehicle.id,
+            customerId,
+            registrationNumber: vehicle.registrationNumber,
+            make: vehicle.make,
+            model: vehicle.model,
+            year: vehicle.year,
+            odometer: vehicle.odometer,
+            insuranceExpiry: vehicle.insuranceExpiry,
+            pucExpiry: vehicle.pucExpiry,
+            fitnessExpiry: vehicle.fitnessExpiry,
+          }}
+        />
+      ) : null}
+      {canWrite ? (
+        <DeleteVehicleButton
+          vehicleId={vehicle.id}
+          customerId={customerId}
+          className="min-h-11"
+        />
+      ) : null}
+    </div>
+  );
 
-  if (section === "overview") {
-    return (
-      <div>
-        <SectionHeader
+  return (
+    <div className="grid items-start gap-4 lg:grid-cols-[minmax(220px,260px)_minmax(0,1fr)] lg:gap-6">
+      <SectionSideNav
+        title={tv("sectionsTitle")}
+        active={activeSection}
+        onChange={scrollToSection}
+        leading={
+          <button
+            type="button"
+            onClick={onBack}
+            className="inline-flex min-h-11 w-full items-center gap-2 rounded-lg px-3 text-left text-body font-medium text-slate-700 transition-colors hover:bg-muted"
+          >
+            <ChevronLeft className="size-4 shrink-0" aria-hidden />
+            <span className="truncate">{t("backToVehicles")}</span>
+          </button>
+        }
+        items={[
+          { id: "overview" as const, label: tv("overview"), icon: Car },
+          {
+            id: "service" as const,
+            label: tv("serviceHistory"),
+            icon: Wrench,
+          },
+        ]}
+      />
+
+      <Card className="min-w-0 gap-0 overflow-visible py-0">
+        <SectionBlock
+          id={sectionDomId(VEHICLE_SECTION_ID_PREFIX, "overview")}
           title={t("customerVehicleTitle", {
             customer: customerName,
             registration: vehicle.registrationNumber,
           })}
           subtitle={subtitle}
-          action={editAction}
-        />
-        <div className="px-5 py-5 sm:px-6">
-          <DescriptionList>
-            <DescriptionItem>
-              <DescriptionTerm>{tv("registrationNumber")}</DescriptionTerm>
-              <DescriptionDetails className="font-medium tracking-wide">
-                {vehicle.registrationNumber}
-              </DescriptionDetails>
-            </DescriptionItem>
-            <DescriptionItem>
-              <DescriptionTerm>{tv("make")}</DescriptionTerm>
-              <DescriptionDetails>{vehicle.make}</DescriptionDetails>
-            </DescriptionItem>
-            <DescriptionItem>
-              <DescriptionTerm>{tv("model")}</DescriptionTerm>
-              <DescriptionDetails>{vehicle.model}</DescriptionDetails>
-            </DescriptionItem>
-            <DescriptionItem>
-              <DescriptionTerm>{tv("year")}</DescriptionTerm>
-              <DescriptionDetails>
-                {vehicle.year ?? tv("notSet")}
-              </DescriptionDetails>
-            </DescriptionItem>
-            <DescriptionItem>
-              <DescriptionTerm>{tv("odometer")}</DescriptionTerm>
-              <DescriptionDetails>
-                {vehicle.odometer != null
-                  ? `${vehicle.odometer.toLocaleString(locale)} ${tv("km")}`
-                  : tv("notSet")}
-              </DescriptionDetails>
-            </DescriptionItem>
-            {expiryRows.map((row) => (
-              <DescriptionItem key={row.key}>
-                <DescriptionTerm>{row.term}</DescriptionTerm>
-                <DescriptionDetails className="inline-flex flex-wrap items-center gap-2">
-                  <span>{formatDate(row.value, locale, tv("notSet"))}</span>
-                  <Badge variant={statusVariant(row.status)}>
-                    {tv(`status.${row.status}`)}
-                  </Badge>
+          sectionRef={setSectionRef("overview")}
+          action={headerActions}
+        >
+          <div className="px-5 py-5 sm:px-6">
+            <DescriptionList>
+              <DescriptionItem>
+                <DescriptionTerm>{tv("registrationNumber")}</DescriptionTerm>
+                <DescriptionDetails className="font-medium tracking-wide">
+                  {vehicle.registrationNumber}
                 </DescriptionDetails>
               </DescriptionItem>
-            ))}
-          </DescriptionList>
-        </div>
-      </div>
-    );
-  }
+              <DescriptionItem>
+                <DescriptionTerm>{tv("make")}</DescriptionTerm>
+                <DescriptionDetails>{vehicle.make}</DescriptionDetails>
+              </DescriptionItem>
+              <DescriptionItem>
+                <DescriptionTerm>{tv("model")}</DescriptionTerm>
+                <DescriptionDetails>{vehicle.model}</DescriptionDetails>
+              </DescriptionItem>
+              <DescriptionItem>
+                <DescriptionTerm>{tv("year")}</DescriptionTerm>
+                <DescriptionDetails>
+                  {vehicle.year ?? tv("notSet")}
+                </DescriptionDetails>
+              </DescriptionItem>
+              <DescriptionItem>
+                <DescriptionTerm>{tv("odometer")}</DescriptionTerm>
+                <DescriptionDetails>
+                  {vehicle.odometer != null
+                    ? `${vehicle.odometer.toLocaleString(locale)} ${tv("km")}`
+                    : tv("notSet")}
+                </DescriptionDetails>
+              </DescriptionItem>
+              {expiryRows.map((row) => (
+                <DescriptionItem key={row.key}>
+                  <DescriptionTerm>{row.term}</DescriptionTerm>
+                  <DescriptionDetails className="inline-flex flex-wrap items-center gap-2">
+                    <span>{formatDate(row.value, locale, tv("notSet"))}</span>
+                    <Badge variant={statusVariant(row.status)}>
+                      {tv(`status.${row.status}`)}
+                    </Badge>
+                  </DescriptionDetails>
+                </DescriptionItem>
+              ))}
+            </DescriptionList>
+          </div>
+        </SectionBlock>
 
-  return (
-    <div>
-      <SectionHeader
-        title={tv("serviceHistory")}
-        subtitle={tv("serviceHistoryDescription")}
-      />
-      <EmptyState
-        icon={Wrench}
-        title={tv("serviceHistoryEmpty")}
-        body={tv("serviceHistoryPlaceholder")}
-        centered
-      />
+        <SectionBlock
+          id={sectionDomId(VEHICLE_SECTION_ID_PREFIX, "service")}
+          title={tv("serviceHistory")}
+          subtitle={tv("serviceHistoryDescription")}
+          sectionRef={setSectionRef("service")}
+          action={createJobCard()}
+        >
+          <ServiceHistoryList
+            orders={serviceHistory}
+            locale={locale}
+            customerId={customerId}
+            canWrite={canCreateOrder}
+            emptyTitle={tv("serviceHistoryEmpty")}
+            emptyBody={tv("serviceHistoryPlaceholder")}
+            showRegistration={false}
+            statusLabel={(status) => to(`statuses.${status}`)}
+            emptyAction={createJobCard("sm")}
+          />
+        </SectionBlock>
+      </Card>
     </div>
   );
 }
 
-function SectionHeader({
-  title,
-  subtitle,
-  action,
+function ServiceHistoryList({
+  orders,
+  locale,
+  customerId,
+  canWrite,
+  emptyTitle,
+  emptyBody,
+  showRegistration,
+  statusLabel,
+  emptyAction,
 }: {
-  title: string;
-  subtitle: string;
-  action?: ReactNode;
+  orders: ServiceHistoryRow[];
+  locale: string;
+  customerId: string;
+  canWrite: boolean;
+  emptyTitle: string;
+  emptyBody: string;
+  showRegistration: boolean;
+  statusLabel: (status: ServiceOrderStatus) => string;
+  emptyAction?: ReactNode;
 }) {
+  if (orders.length === 0) {
+    return (
+      <EmptyState
+        icon={Wrench}
+        title={emptyTitle}
+        body={emptyBody}
+        action={emptyAction}
+        centered
+      />
+    );
+  }
+
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-4 sm:px-6">
-      <div className="min-w-0 space-y-0.5">
-        <h2 className="text-section-title text-slate-900">{title}</h2>
-        <CardDescription>{subtitle}</CardDescription>
-      </div>
-      {action}
-    </div>
+    <ul className="divide-y divide-slate-100">
+      {orders.map((order) => {
+        const created = asDate(order.createdAt);
+        const title = showRegistration
+          ? order.vehicle.registrationNumber
+          : order.complaint;
+        const subtitle = showRegistration
+          ? order.complaint
+          : created
+            ? formatDate(created, locale, "")
+            : undefined;
+        return (
+          <li
+            key={order.id}
+            className="flex flex-col gap-3 px-5 py-3.5 sm:flex-row sm:items-center sm:gap-4 sm:px-6"
+          >
+            <Link
+              href={`/orders/${order.id}`}
+              className="min-w-0 flex-1 space-y-0.5 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-teal-600"
+            >
+              <div className="flex items-baseline justify-between gap-2">
+                <p className="truncate text-body font-medium text-slate-900">
+                  {title}
+                </p>
+                <span className="shrink-0 text-caption text-slate-500">
+                  {statusLabel(order.status)}
+                </span>
+              </div>
+              {subtitle ? (
+                <p className="truncate text-caption text-slate-600">
+                  {subtitle}
+                </p>
+              ) : null}
+            </Link>
+            <JobCardRowActions
+              orderId={order.id}
+              customerId={customerId}
+              label={title}
+              canWrite={canWrite}
+            />
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 
@@ -626,7 +797,7 @@ function EmptyState({
           "flex size-10 items-center justify-center rounded-lg",
           centered
             ? "bg-muted text-muted-foreground"
-            : "bg-teal-50 text-teal-700 ring-1 ring-teal-100",
+            : "bg-blue-50 text-blue-700 ring-1 ring-blue-100",
         )}
       >
         <Icon className="size-5" aria-hidden />

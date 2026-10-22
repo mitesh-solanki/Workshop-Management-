@@ -1,3 +1,6 @@
+import { History } from "lucide-react";
+import { EmptyState } from "@/components/ui/empty-state";
+
 type TimelineActor = {
   id: string;
   name: string | null;
@@ -28,20 +31,24 @@ export function OrderTimeline({
   formatWhen,
 }: Props) {
   if (events.length === 0) {
-    return <p className="text-sm text-muted-foreground">{emptyLabel}</p>;
+    return (
+      <EmptyState compact icon={History} title={emptyLabel} className="border-0 shadow-none" />
+    );
   }
 
   return (
-    <ol className="space-y-3 border-l-2 border-border pl-4">
+    <ol className="space-y-4 border-l-2 border-slate-200 pl-4">
       {events.map((event) => (
         <li key={event.id} className="relative space-y-0.5">
           <span
-            className="absolute -left-[1.35rem] top-1.5 size-2.5 rounded-full bg-foreground"
+            className="absolute -left-[1.35rem] top-1.5 size-2.5 rounded-full bg-blue-600 ring-4 ring-card"
             aria-hidden
           />
-          <p className="text-sm font-medium">{formatEvent(event)}</p>
-          <p className="text-xs text-muted-foreground">
-            {formatActor(event.actor)} · {formatWhen(event.createdAt)}
+          <p className="text-body font-medium text-slate-900">
+            {formatEvent(event)}
+          </p>
+          <p className="text-caption text-slate-500">
+            {`${formatActor(event.actor)} · ${formatWhen(event.createdAt)}`}
           </p>
         </li>
       ))}

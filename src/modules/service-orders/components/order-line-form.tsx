@@ -1,17 +1,21 @@
 "use client";
 
-import { useActionState, useMemo } from "react";
+import { useActionState, useEffect, useMemo, useRef } from "react";
 import { useTranslations } from "next-intl";
 import {
   addServiceOrderLineAction,
   type ServiceOrderActionState,
 } from "@/app/actions/service-orders";
 import { RupeePriceInput } from "@/components/rupee-price-input";
+import { Button } from "@/components/ui/button";
+import { FormField } from "@/components/ui/form-field";
+import { Input } from "@/components/ui/input";
+import { toast } from "@/components/ui/toast";
 
 const initial: ServiceOrderActionState = { ok: false };
 
-const inputClass =
-  "min-h-12 w-full rounded-md border bg-background px-3 text-base outline-none focus-visible:ring-2 focus-visible:ring-ring";
+const selectClass =
+  "h-11 min-h-11 w-full rounded-md border border-input bg-transparent px-3 text-base shadow-xs outline-none focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/30 md:text-sm";
 
 type Props = {
   orderId: string;
@@ -24,30 +28,35 @@ export function OrderLineForm({ orderId }: Props) {
     [orderId],
   );
   const [state, formAction, pending] = useActionState(bound, initial);
+  const handledMessage = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!state.message || state.message === handledMessage.current) return;
+    handledMessage.current = state.message;
+    if (state.ok) {
+      toast.success(t("lineAdded"));
+    } else {
+      toast.error(state.message);
+    }
+  }, [state, t]);
 
   return (
     <form action={formAction} className="flex flex-col gap-4">
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor="type" className="text-sm font-medium">
-            {t("lineType")}
-          </label>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <FormField id="type" label={t("lineType")}>
           <select
             id="type"
             name="type"
             required
-            className={inputClass}
+            className={selectClass}
             defaultValue="LABOUR"
           >
             <option value="LABOUR">{t("lineTypes.LABOUR")}</option>
             <option value="PART">{t("lineTypes.PART")}</option>
           </select>
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor="quantity" className="text-sm font-medium">
-            {t("quantity")}
-          </label>
-          <input
+        </FormField>
+        <FormField id="quantity" label={t("quantity")}>
+          <Input
             id="quantity"
             name="quantity"
             type="number"
@@ -55,40 +64,25 @@ export function OrderLineForm({ orderId }: Props) {
             min={1}
             defaultValue={1}
             required
-            className={inputClass}
+            className="h-11 min-h-11"
           />
-        </div>
+        </FormField>
       </div>
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor="description" className="text-sm font-medium">
-          {t("lineDescription")}
-        </label>
-        <input
+      <FormField id="description" label={t("lineDescription")}>
+        <Input
           id="description"
           name="description"
           required
           maxLength={500}
-          className={inputClass}
+          className="h-11 min-h-11"
         />
-      </div>
+      </FormField>
       <RupeePriceInput label={t("unitPrice")} hint={t("unitPriceHint")} />
-      {state.message && (
-        <p
-          className={
-            state.ok ? "text-sm text-foreground" : "text-sm text-destructive"
-          }
-          role="status"
-        >
-          {state.ok ? t("lineAdded") : state.message}
-        </p>
-      )}
-      <button
-        type="submit"
-        disabled={pending}
-        className="min-h-12 rounded-md border px-4 text-base font-medium disabled:opacity-60"
-      >
-        {pending ? t("saving") : t("addLine")}
-      </button>
+      <div className="flex flex-wrap gap-2 border-t border-border pt-4">
+        <Button type="submit" variant="secondary" size="md" loading={pending}>
+          {pending ? t("saving") : t("addLine")}
+        </Button>
+      </div>
     </form>
   );
 }

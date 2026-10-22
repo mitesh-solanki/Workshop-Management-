@@ -47,8 +47,8 @@ export function AppHeader({ appName, garageName }: AppHeaderProps) {
     : tNav("toggleSidebar");
 
   return (
-    <header className="sticky top-0 z-30 border-b border-slate-200 bg-card/85 backdrop-blur-md supports-backdrop-filter:bg-card/70">
-      <div className="flex h-16 w-full items-center gap-2 px-[34px]">
+    <header className="sticky top-0 z-30 shrink-0 border-b border-slate-200 bg-card/95 backdrop-blur-md supports-backdrop-filter:bg-card/80">
+      <div className="flex h-16 w-full items-center gap-2 px-4 sm:px-6 lg:px-[34px]">
         <SidebarTrigger
           aria-label={triggerLabel}
           className="-ml-3 shrink-0 text-slate-500 hover:bg-slate-100 hover:text-slate-900"
@@ -64,7 +64,7 @@ export function AppHeader({ appName, garageName }: AppHeaderProps) {
           >
             <Link
               href="/dashboard"
-              className="truncate hover:text-slate-800 focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600"
+              className="truncate hover:text-slate-800 focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
             >
               {garageName}
             </Link>

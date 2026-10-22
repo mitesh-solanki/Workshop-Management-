@@ -5,8 +5,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { ForbiddenError } from "@/lib/errors";
 import { requireSession } from "@/lib/session";
 import { InviteModal } from "@/modules/team/components/invite-modal";
-import { MembersTable } from "@/modules/team/components/members-table";
-import { PendingInvitesSection } from "@/modules/team/components/pending-invites";
+import { TeamPagePanel } from "@/modules/team/components/team-page-panel";
 import { listTeam } from "@/modules/team/service";
 
 /** Auth session uses request-time crypto — do not prerender this route. */
@@ -56,21 +55,14 @@ export default async function TeamPage() {
       {error ? (
         <EmptyState icon={Users} title={error} />
       ) : (
-        <>
-          <section className="space-y-3">
-            <h2 className="text-section-title text-slate-900">{t("members")}</h2>
-            <MembersTable
-              members={members}
-              canManageMembers={canManageMembers}
-              currentUserId={session.userId}
-              joinedLabels={joinedLabels}
-            />
-          </section>
-
-          {canInvite ? (
-            <PendingInvitesSection invites={invites} available />
-          ) : null}
-        </>
+        <TeamPagePanel
+          members={members}
+          invites={invites}
+          canInvite={canInvite}
+          canManageMembers={canManageMembers}
+          currentUserId={session.userId}
+          joinedLabels={joinedLabels}
+        />
       )}
     </main>
   );

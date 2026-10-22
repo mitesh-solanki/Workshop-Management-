@@ -85,7 +85,7 @@ export async function findTechnicianInGarage(
 
 export async function listServiceOrders(
   garageId: string,
-  options: { technicianId?: string } = {},
+  options: { technicianId?: string; bay?: string } = {},
 ) {
   return prisma.serviceOrder.findMany({
     where: {
@@ -93,6 +93,7 @@ export async function listServiceOrders(
       ...(options.technicianId
         ? { technicianId: options.technicianId }
         : {}),
+      ...(options.bay ? { bay: options.bay } : {}),
     },
     select: orderListSelect,
     orderBy: [{ createdAt: "desc" }],
@@ -191,6 +192,71 @@ export async function createServiceOrder(
           from: null,
           to: "WAITING",
           created: true,
+        } satisfies Prisma.InputJsonValue,
+      },
+    });
+
+    return order;
+  });
+}
+
+export async function updateServiceOrderDetails(
+  garageId: string,
+  orderId: string,
+  data: {
+    complaint: string;
+    requestedServices: string | null;
+    odometerIn: number | null;
+    expectedCompletion: Date | null;
+    technicianId: string | null;
+    bay: string | null;
+    priority: ServiceOrderPriority;
+    vehicleId: string;
+    actorId: string;
+  },
+) {
+  return prisma.$transaction(async (tx) => {
+    const existing = await tx.serviceOrder.findFirst({
+      where: { id: orderId, garageId },
+      select: { id: true },
+    });
+    if (!existing) {
+      return null;
+    }
+
+    const order = await tx.serviceOrder.update({
+      where: { id: orderId },
+      data: {
+        complaint: data.complaint,
+        requestedServices: data.requestedServices,
+        odometerIn: data.odometerIn,
+        expectedCompletion: data.expectedCompletion,
+        technicianId: data.technicianId,
+        bay: data.bay,
+        priority: data.priority,
+      },
+      select: orderListSelect,
+    });
+
+    if (data.odometerIn != null) {
+      await tx.vehicle.updateMany({
+        where: { id: data.vehicleId, garageId },
+        data: { odometer: data.odometerIn },
+      });
+    }
+
+    await tx.auditLog.create({
+      data: {
+        garageId,
+        actorId: data.actorId,
+        action: "service_order.updated",
+        entity: "ServiceOrder",
+        entityId: orderId,
+        meta: {
+          complaint: data.complaint,
+          priority: data.priority,
+          bay: data.bay,
+          technicianId: data.technicianId,
         } satisfies Prisma.InputJsonValue,
       },
     });
@@ -314,5 +380,49 @@ export async function listServiceOrderAuditLogs(
       },
     },
     orderBy: { createdAt: "asc" },
+  });
+}
+
+export async function deleteServiceOrderById(
+  garageId: string,
+  orderId: string,
+  data: {
+    actorId: string;
+    vehicleId: string;
+    customerId: string;
+    registrationNumber: string;
+  },
+) {
+  return prisma.$transaction(async (tx) => {
+    const existing = await tx.serviceOrder.findFirst({
+      where: { id: orderId, garageId },
+      select: { id: true, status: true, complaint: true },
+    });
+    if (!existing) {
+      return null;
+    }
+
+    await tx.serviceOrder.delete({
+      where: { id: orderId },
+    });
+
+    await tx.auditLog.create({
+      data: {
+        garageId,
+        actorId: data.actorId,
+        action: "service_order.deleted",
+        entity: "ServiceOrder",
+        entityId: orderId,
+        meta: {
+          status: existing.status,
+          complaint: existing.complaint,
+          vehicleId: data.vehicleId,
+          customerId: data.customerId,
+          registrationNumber: data.registrationNumber,
+        } satisfies Prisma.InputJsonValue,
+      },
+    });
+
+    return existing;
   });
 }

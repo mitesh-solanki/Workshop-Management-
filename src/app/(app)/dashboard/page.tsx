@@ -14,13 +14,17 @@ import {
 import { getLocale, getTranslations } from "next-intl/server";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
+import { ListCard, ListCardGroup } from "@/components/ui/list-card";
 import { StatCard, type StatCardTone } from "@/components/ui/stat-card";
+import { StatusBadge } from "@/components/ui/status-badge";
 import {
   SERVICE_ORDER_STATUSES,
   type ServiceOrderStatus,
 } from "@/lib/service-order-status";
 import { requireSession } from "@/lib/session";
 import { getGarageSettings } from "@/modules/settings/service";
+import { countOrdersByStatus } from "@/modules/service-orders/schema";
+import { listOrders } from "@/modules/service-orders/service";
 
 /** Auth session uses request-time crypto — do not prerender this route. */
 export const instant = false;
@@ -48,7 +52,8 @@ export default async function DashboardPage() {
   const garage = await getGarageSettings(session);
   const locale = await getLocale();
   const t = await getTranslations("dashboard");
-  const tStatus = await getTranslations("orders.status");
+  const tStatus = await getTranslations("orders.statuses");
+  const orders = await listOrders(session);
 
   const displayName = session.name ?? session.email;
   const isTechnician = session.role === "TECHNICIAN";
@@ -63,15 +68,29 @@ export default async function DashboardPage() {
     year: "numeric",
   }).format(new Date());
 
-  const statusCounts: Record<ServiceOrderStatus, number> = {
-    WAITING: 0,
-    INSPECTION: 0,
-    IN_PROGRESS: 0,
-    WAITING_FOR_PARTS: 0,
-    READY: 0,
-    COMPLETED: 0,
-  };
-  const overdueCount = 0;
+  const statusCounts = countOrdersByStatus(orders);
+
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  const endOfToday = new Date(startOfToday);
+  endOfToday.setDate(endOfToday.getDate() + 1);
+
+  const overdueCount = orders.filter((order) => {
+    if (order.status === "COMPLETED" || !order.expectedCompletion) {
+      return false;
+    }
+    return order.expectedCompletion < startOfToday;
+  }).length;
+
+  const dueToday = orders.filter((order) => {
+    if (order.status === "COMPLETED" || !order.expectedCompletion) {
+      return false;
+    }
+    return (
+      order.expectedCompletion >= startOfToday &&
+      order.expectedCompletion < endOfToday
+    );
+  });
 
   if (isTechnician) {
     return (
@@ -90,17 +109,37 @@ export default async function DashboardPage() {
           <h2 id="my-jobs-heading" className="text-section-title text-slate-900">
             {t("myJobs")}
           </h2>
-          <EmptyState
-            compact
-            icon={ClipboardList}
-            title={t("myJobsEmptyTitle")}
-            description={t("myJobsEmptyDescription")}
-            action={
-              <Button asChild variant="secondary" size="sm">
-                <Link href="/orders">{t("viewOrders")}</Link>
-              </Button>
-            }
-          />
+          {orders.length === 0 ? (
+            <EmptyState
+              compact
+              icon={ClipboardList}
+              title={t("myJobsEmptyTitle")}
+              description={t("myJobsEmptyDescription")}
+              action={
+                <Button asChild variant="secondary" size="sm">
+                  <Link href="/orders">{t("viewOrders")}</Link>
+                </Button>
+              }
+            />
+          ) : (
+            <ListCardGroup>
+              {orders.slice(0, 8).map((order) => (
+                <li key={order.id}>
+                  <ListCard
+                    href={`/orders/${order.id}`}
+                    title={order.vehicle.registrationNumber}
+                    subtitle={order.complaint}
+                    trailing={
+                      <StatusBadge
+                        status={order.status}
+                        label={tStatus(order.status)}
+                      />
+                    }
+                  />
+                </li>
+              ))}
+            </ListCardGroup>
+          )}
         </section>
       </main>
     );
@@ -127,7 +166,7 @@ export default async function DashboardPage() {
               </Link>
             </Button>
             <Button asChild size="md">
-              <Link href="/orders">
+              <Link href="/orders/new">
                 <Plus className="size-4" aria-hidden />
                 {t("newOrder")}
               </Link>
@@ -141,17 +180,12 @@ export default async function DashboardPage() {
           className="space-y-3"
           aria-labelledby="orders-by-status-heading"
         >
-          <div className="flex flex-wrap items-end justify-between gap-2">
-            <h2
-              id="orders-by-status-heading"
-              className="text-section-title text-slate-900"
-            >
-              {t("ordersByStatus")}
-            </h2>
-            <p className="text-caption text-slate-500">
-              {t("countsPlaceholder")}
-            </p>
-          </div>
+          <h2
+            id="orders-by-status-heading"
+            className="text-section-title text-slate-900"
+          >
+            {t("ordersByStatus")}
+          </h2>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {SERVICE_ORDER_STATUSES.map((status) => {
               const count = statusCounts[status];
@@ -185,26 +219,46 @@ export default async function DashboardPage() {
             <h2 className="text-section-title text-slate-900">
               {t("dueToday")}
             </h2>
-            <EmptyState
-              compact
-              icon={ClipboardList}
-              title={t("dueTodayEmptyTitle")}
-              description={t("dueTodayEmptyDescription")}
-              action={
-                canCreateWorkshop ? (
-                  <Button asChild size="sm">
-                    <Link href="/orders">
-                      <Plus className="size-4" aria-hidden />
-                      {t("newOrder")}
-                    </Link>
-                  </Button>
-                ) : (
-                  <Button asChild variant="secondary" size="sm">
-                    <Link href="/orders">{t("viewOrders")}</Link>
-                  </Button>
-                )
-              }
-            />
+            {dueToday.length === 0 ? (
+              <EmptyState
+                compact
+                icon={ClipboardList}
+                title={t("dueTodayEmptyTitle")}
+                description={t("dueTodayEmptyDescription")}
+                action={
+                  canCreateWorkshop ? (
+                    <Button asChild size="sm">
+                      <Link href="/orders/new">
+                        <Plus className="size-4" aria-hidden />
+                        {t("newOrder")}
+                      </Link>
+                    </Button>
+                  ) : (
+                    <Button asChild variant="secondary" size="sm">
+                      <Link href="/orders">{t("viewOrders")}</Link>
+                    </Button>
+                  )
+                }
+              />
+            ) : (
+              <ListCardGroup>
+                {dueToday.map((order) => (
+                  <li key={order.id}>
+                    <ListCard
+                      href={`/orders/${order.id}`}
+                      title={order.vehicle.registrationNumber}
+                      subtitle={`${order.customer.name} · ${order.complaint}`}
+                      trailing={
+                        <StatusBadge
+                          status={order.status}
+                          label={tStatus(order.status)}
+                        />
+                      }
+                    />
+                  </li>
+                ))}
+              </ListCardGroup>
+            )}
           </div>
         ) : null}
 

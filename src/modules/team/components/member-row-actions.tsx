@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { Trash2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import {
   changeMemberRoleAction,
@@ -84,12 +85,13 @@ export function MemberRowActions({
 
   return (
     <>
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex items-center gap-1.5 whitespace-nowrap">
         <Button
           type="button"
           variant="outline"
           size="sm"
           disabled={pending}
+          className="text-sm capitalize"
           onClick={() => {
             setSelectedRole(
               MEMBER_ROLES.includes(memberRole as MemberRole)
@@ -104,12 +106,13 @@ export function MemberRowActions({
         <Button
           type="button"
           variant="outline"
-          size="sm"
+          size="icon-sm"
           disabled={pending}
           className="text-danger hover:bg-danger/5 hover:text-danger"
+          aria-label={t("removeMember")}
           onClick={() => setRemoveOpen(true)}
         >
-          {t("removeMember")}
+          <Trash2 className="size-4" aria-hidden />
         </Button>
       </div>
 
@@ -144,7 +147,7 @@ export function MemberRowActions({
                     aria-checked={selected}
                     onClick={() => setSelectedRole(option)}
                     className={cn(
-                      "min-h-11 rounded-md px-2 text-caption font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600",
+                      "min-h-11 rounded-md px-2 text-caption font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600",
                       selected
                         ? "bg-card text-slate-900 shadow-sm"
                         : "text-slate-600 hover:text-slate-900",

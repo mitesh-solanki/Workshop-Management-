@@ -18,11 +18,14 @@ export function CustomerSearch({ className }: CustomerSearchProps) {
   const [pending, startTransition] = useTransition();
   const urlQuery = searchParams.get("q") ?? "";
   const [value, setValue] = useState(urlQuery);
+  const [syncedUrlQuery, setSyncedUrlQuery] = useState(urlQuery);
 
   // Keep input in sync when the URL changes (back/forward, clear).
-  useEffect(() => {
+  // Adjust during render — avoids setState-in-effect cascading renders.
+  if (urlQuery !== syncedUrlQuery) {
+    setSyncedUrlQuery(urlQuery);
     setValue(urlQuery);
-  }, [urlQuery]);
+  }
 
   // Debounced search — no Enter required.
   useEffect(() => {

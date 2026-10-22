@@ -104,15 +104,14 @@ export async function deleteVehicleAction(
   _prev?: VehicleActionState,
   _formData?: FormData,
 ): Promise<VehicleActionState> {
-  const t = await getTranslations("vehicles");
-
   try {
     const session = await requireSession();
     await deleteVehicleRecord(session, vehicleId);
     revalidatePath("/customers");
     revalidatePath(`/customers/${customerId}`);
-    return { ok: true, message: t("deleted") };
   } catch (error) {
     return { ok: false, message: await translateError(error) };
   }
+
+  redirect(`/customers/${customerId}`);
 }

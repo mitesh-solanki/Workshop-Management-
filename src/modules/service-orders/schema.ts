@@ -65,6 +65,20 @@ export function computeBayOccupancy(
   return [...byBay.values()].sort((a, b) => a.bay.localeCompare(b.bay));
 }
 
+/** Counts orders per status for dashboard tiles. */
+export function countOrdersByStatus(
+  orders: ReadonlyArray<{ status: ServiceOrderStatusValue }>,
+): Record<ServiceOrderStatusValue, number> {
+  const counts = Object.fromEntries(
+    SERVICE_ORDER_STATUSES.map((status) => [status, 0]),
+  ) as Record<ServiceOrderStatusValue, number>;
+
+  for (const order of orders) {
+    counts[order.status] += 1;
+  }
+  return counts;
+}
+
 /** Allowed next statuses from each current status. COMPLETED is terminal. */
 export const STATUS_TRANSITIONS: Record<
   ServiceOrderStatusValue,
@@ -96,7 +110,7 @@ const optionalOdometer = z
     }
     const n = typeof value === "number" ? value : Number(value);
     if (!Number.isInteger(n) || n < 0 || n > 9_999_999) {
-      ctx.addIssue({ code: "custom", message: "Invalid odometer" });
+      ctx.addIssue({ code: "custom", message: "validation.invalidOdometer" });
       return z.NEVER;
     }
     return n;
@@ -110,14 +124,14 @@ const optionalDateTime = z
     }
     if (value instanceof Date) {
       if (Number.isNaN(value.getTime())) {
-        ctx.addIssue({ code: "custom", message: "Invalid date" });
+        ctx.addIssue({ code: "custom", message: "validation.invalidDate" });
         return z.NEVER;
       }
       return value;
     }
     const parsed = new Date(value);
     if (Number.isNaN(parsed.getTime())) {
-      ctx.addIssue({ code: "custom", message: "Invalid date" });
+      ctx.addIssue({ code: "custom", message: "validation.invalidDate" });
       return z.NEVER;
     }
     return parsed;
@@ -157,7 +171,7 @@ const quantityField = z
   .transform((value, ctx) => {
     const n = typeof value === "number" ? value : Number(value);
     if (!Number.isInteger(n) || n < 1 || n > 99_999) {
-      ctx.addIssue({ code: "custom", message: "Invalid quantity" });
+      ctx.addIssue({ code: "custom", message: "validation.invalidQuantity" });
       return z.NEVER;
     }
     return n;
@@ -188,6 +202,21 @@ export const updateServiceOrderStatusSchema = z.object({
   status: z.enum(SERVICE_ORDER_STATUSES),
 });
 
+/** Editable job-card fields (customer/vehicle stay fixed after create). */
+export const updateServiceOrderSchema = z.object({
+  complaint: z.string().trim().min(1).max(4000),
+  requestedServices: optionalRequestedServices,
+  odometerIn: optionalOdometer,
+  expectedCompletion: optionalDateTime,
+  technicianId: optionalTechnicianId,
+  bay: optionalBay,
+  priority: priorityField,
+  /** Optional — same as current status means no transition. */
+  status: z
+    .union([z.enum(SERVICE_ORDER_STATUSES), z.literal(""), z.undefined()])
+    .transform((value) => (value === "" || value == null ? undefined : value)),
+});
+
 export const addServiceOrderLineSchema = z.object({
   type: z.enum(["LABOUR", "PART"]),
   description: z.string().trim().min(1).max(500),
@@ -204,6 +233,7 @@ export const addServiceOrderLineSchema = z.object({
 });
 
 export type CreateServiceOrderInput = z.input<typeof createServiceOrderSchema>;
+export type UpdateServiceOrderInput = z.input<typeof updateServiceOrderSchema>;
 export type UpdateServiceOrderStatusInput = z.input<
   typeof updateServiceOrderStatusSchema
 >;

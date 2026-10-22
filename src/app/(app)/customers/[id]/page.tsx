@@ -6,6 +6,7 @@ import { NotFoundError } from "@/lib/errors";
 import { requireSession } from "@/lib/session";
 import { CustomerDetailPanel } from "@/modules/customers/components/customer-detail-panel";
 import { getCustomer } from "@/modules/customers/service";
+import { listCustomerServiceHistory } from "@/modules/service-orders/service";
 
 type Props = {
   params: Promise<{ id: string }>;
@@ -34,10 +35,14 @@ export default async function CustomerDetailPage({
     throw error;
   }
 
+  const serviceHistory = await listCustomerServiceHistory(session, customer.id);
+
   const canWrite =
     session.role === "OWNER" ||
     session.role === "MANAGER" ||
     session.role === "TECHNICIAN";
+  const canCreateOrder =
+    session.role === "OWNER" || session.role === "MANAGER";
 
   return (
     <main className="w-full space-y-4">
@@ -68,7 +73,9 @@ export default async function CustomerDetailPage({
           pucExpiry: vehicle.pucExpiry,
           fitnessExpiry: vehicle.fitnessExpiry,
         }))}
+        serviceHistory={serviceHistory}
         canWrite={canWrite}
+        canCreateOrder={canCreateOrder}
         locale={locale}
         initialVehicleId={vehicleId ?? null}
       />

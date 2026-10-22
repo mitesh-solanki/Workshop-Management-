@@ -68,7 +68,7 @@ function ListCard({
   const classes = cn(
     "flex min-h-14 w-full items-center gap-3 px-3 py-3 text-left transition-colors",
     interactive &&
-      "hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600",
+      "hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600",
     className,
   );
 

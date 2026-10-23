@@ -64,18 +64,25 @@ function Button({
     loading?: boolean;
   }) {
   const Comp = asChild ? Slot.Root : "button";
+  const isIconSize =
+    size === "icon" ||
+    size === "icon-xs" ||
+    size === "icon-sm" ||
+    size === "icon-lg";
   // Slot requires exactly one React element child — never mix a loader with asChild.
-  const content =
-    asChild ? (
-      children
-    ) : (
-      <>
-        {loading ? (
-          <Loader2 className="size-4 animate-spin" aria-hidden />
-        ) : null}
-        {children}
-      </>
-    );
+  const content = asChild ? (
+    children
+  ) : loading ? (
+    <>
+      <Loader2
+        className={cn("animate-spin", isIconSize ? "size-5" : "size-4")}
+        aria-hidden
+      />
+      {isIconSize ? null : children}
+    </>
+  ) : (
+    children
+  );
 
   return (
     <Comp

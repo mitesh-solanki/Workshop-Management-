@@ -19,12 +19,14 @@ import type { PdfLocale } from "@/modules/billing/schema";
 import {
   createCreditNoteSchema,
   createInvoiceFromEstimateSchema,
+  deleteDraftInvoiceSchema,
   finalizeInvoiceSchema,
   normalizePaymentBreakdown,
   recordPaymentSchema,
   recordRefundSchema,
   type CreateCreditNoteInput,
   type CreateInvoiceFromEstimateInput,
+  type DeleteDraftInvoiceInput,
   type FinalizeInvoiceInput,
   type InvoiceLineTypeValue,
   type RecordPaymentInput,
@@ -34,6 +36,7 @@ import {
   createAndFinalizeInvoice,
   createCreditNoteRow,
   createDraftInvoice,
+  deleteDraftInvoiceRow,
   finalizeInvoiceInTransaction,
   findGarageBillingProfile,
   findInvoiceById,
@@ -145,6 +148,12 @@ export async function getInvoicesForOrder(
   return invoices.map(withBalance);
 }
 
+/** Garage name/address for invoice preview paper (same garage as session). */
+export async function getGarageBillingProfile(session: RoleSession) {
+  requireRole(session, READ_ROLES);
+  return findGarageBillingProfile(session.garageId);
+}
+
 export async function getInvoice(
   session: RoleSession,
   invoiceId: string,
@@ -200,22 +209,41 @@ export async function createInvoiceFromApprovedEstimate(
     placeOfSupplyStateCode,
   );
 
+  const existingInvoices = await listInvoicesForOrder(
+    session.garageId,
+    order.id,
+  );
+  const billedEstimateLineIds = new Set<string>();
+  for (const invoice of existingInvoices) {
+    for (const line of invoice.lines) {
+      if (line.estimateLineId) {
+        billedEstimateLineIds.add(line.estimateLineId);
+      }
+    }
+  }
+
   const lineRows = buildLinesFromApproved(
-    estimate.lines.map((line) => ({
-      id: line.id,
-      type: line.type,
-      description: line.description,
-      quantity: line.quantity,
-      unitPricePaise: line.unitPricePaise,
-      gstRatePercent: line.gstRatePercent,
-      hsnOrSac: line.hsnOrSac,
-      approvalState: line.approvalState,
-    })),
+    estimate.lines
+      .filter((line) => !billedEstimateLineIds.has(line.id))
+      .map((line) => ({
+        id: line.id,
+        type: line.type,
+        description: line.description,
+        quantity: line.quantity,
+        unitPricePaise: line.unitPricePaise,
+        gstRatePercent: line.gstRatePercent,
+        hsnOrSac: line.hsnOrSac,
+        approvalState: line.approvalState,
+      })),
     sameState,
   );
 
   if (lineRows.length === 0) {
-    throw new AppError("billing.no_approved_lines");
+    throw new AppError(
+      billedEstimateLineIds.size > 0
+        ? "billing.no_unbilled_approved_lines"
+        : "billing.no_approved_lines",
+    );
   }
 
   const gstInputs: GstLineInput[] = lineRows.map((line) => ({
@@ -287,6 +315,34 @@ export async function finalizeInvoice(
     throw new AppError("billing.invoice_finalize_failed");
   }
   return withBalance(result.invoice);
+}
+
+export async function deleteDraftInvoice(
+  session: RoleSession,
+  raw: DeleteDraftInvoiceInput,
+) {
+  requireRole(session, WRITE_ROLES);
+  const input = deleteDraftInvoiceSchema.parse(raw);
+
+  const invoice = await findInvoiceById(session.garageId, input.invoiceId);
+  if (!invoice) {
+    throw new NotFoundError();
+  }
+  await loadOrder(session, invoice.serviceOrderId);
+
+  if (invoice.status !== "DRAFT") {
+    throw new AppError("billing.invoice_immutable");
+  }
+
+  const deleted = await deleteDraftInvoiceRow(
+    session.garageId,
+    input.invoiceId,
+    session.userId,
+  );
+  if (!deleted) {
+    throw new AppError("billing.invoice_immutable");
+  }
+  return deleted;
 }
 
 /** Finalized invoices cannot be edited — call sites should use this guard. */

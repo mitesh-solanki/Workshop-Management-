@@ -67,14 +67,20 @@ const PAGE = {
   height: 841.89,
 } as const;
 
-/** Soft slate header; accent blue matches admin primary (#2563EB). */
+/** Paper-style invoice colours aligned with HTML bill preview. */
 const COLORS = {
-  text: "#0f172a",
-  muted: "#475569",
-  line: "#cbd5e1",
-  headerBg: "#e2e8f0",
-  headerText: "#0f172a",
-  accent: "#2563EB",
+  text: "#172a42",
+  muted: "#6c7a8b",
+  metaLabel: "#7a8899",
+  metaBody: "#67788c",
+  line: "#e7ebf2",
+  summaryRule: "#dfe7f4",
+  headerBg: "#eff4ff",
+  headerText: "#354e73",
+  accent: "#285de5",
+  accentText: "#2454c9",
+  brandRule: "#2559df",
+  footer: "#8491a3",
 } as const;
 
 type Doc = PDFKit.PDFDocument;
@@ -163,35 +169,54 @@ function drawHRule(doc: Doc, y: number, color: string = COLORS.line): void {
 
 type Col = { key: string; label: string; width: number; align: "left" | "right" | "center" };
 
+/** Scale fixed column weights so the table spans the full content width (no right gap). */
+function fitColumns(cols: Col[], targetWidth: number): Col[] {
+  const sum = cols.reduce((total, col) => total + col.width, 0);
+  if (sum <= 0 || Math.abs(sum - targetWidth) < 0.5) {
+    return cols;
+  }
+  const scaled = cols.map((col) => ({
+    ...col,
+    width: (col.width / sum) * targetWidth,
+  }));
+  const scaledSum = scaled.reduce((total, col) => total + col.width, 0);
+  const last = scaled[scaled.length - 1];
+  if (last) {
+    last.width += targetWidth - scaledSum;
+  }
+  return scaled;
+}
+
 function tableColumns(
   labels: InvoicePdfLabels,
   gstSplit: "CGST_SGST" | "IGST",
 ): Col[] {
-  if (gstSplit === "CGST_SGST") {
-    return [
-      { key: "sno", label: "#", width: 18, align: "center" },
-      { key: "description", label: labels.description, width: 118, align: "left" },
-      { key: "hsn", label: labels.hsnOrSac, width: 48, align: "center" },
-      { key: "qty", label: labels.qty, width: 26, align: "center" },
-      { key: "rate", label: labels.rate, width: 54, align: "right" },
-      { key: "taxable", label: labels.taxable, width: 54, align: "right" },
-      { key: "gst", label: labels.gstRate, width: 30, align: "center" },
-      { key: "cgst", label: labels.cgst, width: 50, align: "right" },
-      { key: "sgst", label: labels.sgst, width: 50, align: "right" },
-      { key: "total", label: labels.lineTotal, width: 57, align: "right" },
-    ];
-  }
-  return [
-    { key: "sno", label: "#", width: 18, align: "center" },
-    { key: "description", label: labels.description, width: 140, align: "left" },
-    { key: "hsn", label: labels.hsnOrSac, width: 52, align: "center" },
-    { key: "qty", label: labels.qty, width: 28, align: "center" },
-    { key: "rate", label: labels.rate, width: 58, align: "right" },
-    { key: "taxable", label: labels.taxable, width: 58, align: "right" },
-    { key: "gst", label: labels.gstRate, width: 32, align: "center" },
-    { key: "igst", label: labels.igst, width: 58, align: "right" },
-    { key: "total", label: labels.lineTotal, width: 61, align: "right" },
-  ];
+  const base: Col[] =
+    gstSplit === "CGST_SGST"
+      ? [
+          { key: "sno", label: "#", width: 18, align: "center" },
+          { key: "description", label: labels.description, width: 108, align: "left" },
+          { key: "hsn", label: labels.hsnOrSac, width: 44, align: "center" },
+          { key: "qty", label: labels.qty, width: 24, align: "center" },
+          { key: "rate", label: labels.rate, width: 52, align: "right" },
+          { key: "taxable", label: labels.taxable, width: 52, align: "right" },
+          { key: "gst", label: labels.gstRate, width: 28, align: "center" },
+          { key: "cgst", label: labels.cgst, width: 48, align: "right" },
+          { key: "sgst", label: labels.sgst, width: 48, align: "right" },
+          { key: "total", label: labels.lineTotal, width: 68, align: "right" },
+        ]
+      : [
+          { key: "sno", label: "#", width: 18, align: "center" },
+          { key: "description", label: labels.description, width: 130, align: "left" },
+          { key: "hsn", label: labels.hsnOrSac, width: 48, align: "center" },
+          { key: "qty", label: labels.qty, width: 26, align: "center" },
+          { key: "rate", label: labels.rate, width: 56, align: "right" },
+          { key: "taxable", label: labels.taxable, width: 56, align: "right" },
+          { key: "gst", label: labels.gstRate, width: 30, align: "center" },
+          { key: "igst", label: labels.igst, width: 56, align: "right" },
+          { key: "total", label: labels.lineTotal, width: 70, align: "right" },
+        ];
+  return fitColumns(base, contentWidth());
 }
 
 function cellText(
@@ -225,14 +250,14 @@ function drawTableHeader(
   y: number,
   fontPath: string | null,
 ): number {
-  const rowH = 28;
+  const rowH = 30;
   const totalW = cols.reduce((sum, col) => sum + col.width, 0);
   doc.rect(PAGE.margin, y, totalW, rowH).fill(COLORS.headerBg);
 
   let x = PAGE.margin;
   for (const col of cols) {
-    setBoldFont(doc, fontPath, 7.5);
-    doc.fillColor(COLORS.headerText).text(col.label, x + 3, y + 9, {
+    setBoldFont(doc, fontPath, 7);
+    doc.fillColor(COLORS.headerText).text(col.label, x + 3, y + 10, {
       width: col.width - 6,
       align: col.align,
       lineBreak: false,
@@ -249,7 +274,7 @@ function drawLineRow(
   y: number,
   fontPath: string | null,
 ): number {
-  const padY = 10;
+  const padY = 12;
   let contentH = 10;
   for (const col of cols) {
     setBodyFont(doc, fontPath, 7.5);
@@ -273,6 +298,7 @@ function drawLineRow(
       col.align,
       7.5,
       fontPath,
+      col.key === "description",
     );
     x += col.width;
   }
@@ -359,105 +385,117 @@ export async function generateInvoicePdf(
   const rightW = contentWidth() * 0.38;
   const rightX = PAGE.width - PAGE.margin - rightW;
 
-  // —— Header: garage (left) + invoice meta (right) ——
-  setBoldFont(doc, fontPath, 16);
-  doc.fillColor(COLORS.accent).text(input.garage.name, PAGE.margin, PAGE.margin, {
-    width: leftW,
+  // —— Brand mark + garage (left) | INVOICE meta (right) ——
+  const markSize = 36;
+  doc
+    .roundedRect(PAGE.margin, PAGE.margin, markSize, markSize, 8)
+    .fill(COLORS.accent);
+  setBoldFont(doc, fontPath, 13);
+  doc.fillColor("#ffffff").text(
+    input.garage.name.slice(0, 2).toUpperCase(),
+    PAGE.margin,
+    PAGE.margin + 11,
+    { width: markSize, align: "center", lineBreak: false },
+  );
+
+  const brandX = PAGE.margin + markSize + 10;
+  setBoldFont(doc, fontPath, 14);
+  doc.fillColor(COLORS.text).text(input.garage.name.toUpperCase(), brandX, PAGE.margin + 2, {
+    width: leftW - markSize - 10,
     lineBreak: true,
   });
   let leftY = doc.y + 2;
   setBodyFont(doc, fontPath, 8);
   doc.fillColor(COLORS.muted);
   if (input.garage.address) {
-    doc.text(input.garage.address, PAGE.margin, leftY, { width: leftW });
+    doc.text(input.garage.address, brandX, leftY, {
+      width: leftW - markSize - 10,
+    });
     leftY = doc.y + 2;
   }
   if (input.garage.gstin) {
     setBoldFont(doc, fontPath, 8);
     doc.fillColor(COLORS.text).text(
       `${labels.gstin}: ${input.garage.gstin}`,
-      PAGE.margin,
+      brandX,
       leftY,
-      { width: leftW },
+      { width: leftW - markSize - 10 },
     );
     leftY = doc.y + 2;
   }
 
-  setBoldFont(doc, fontPath, 18);
-  doc.fillColor(COLORS.text).text(title, rightX, PAGE.margin, {
+  setBoldFont(doc, fontPath, 20);
+  doc.fillColor(COLORS.accentText).text(title.toUpperCase(), rightX, PAGE.margin, {
     width: rightW,
     align: "right",
   });
-  let rightY = PAGE.margin + 26;
-  rightY = drawMetaPair(
-    doc,
-    labels.invoiceNumber,
-    input.invoiceNumber ?? "—",
+  let rightY = PAGE.margin + 28;
+  setBoldFont(doc, fontPath, 9);
+  doc.fillColor(COLORS.text).text(
+    input.invoiceNumber ?? labels.draftTitle,
     rightX,
     rightY,
-    rightW * 0.45,
-    rightW * 0.55,
-    fontPath,
+    { width: rightW, align: "right", lineBreak: false },
   );
-  rightY = drawMetaPair(
-    doc,
-    labels.date,
-    dateLabel(input.issuedAt),
-    rightX,
-    rightY,
-    rightW * 0.45,
-    rightW * 0.55,
-    fontPath,
-  );
+  rightY += 14;
+  setBodyFont(doc, fontPath, 8);
+  doc.fillColor(COLORS.muted).text(dateLabel(input.issuedAt), rightX, rightY, {
+    width: rightW,
+    align: "right",
+    lineBreak: false,
+  });
+  rightY += 12;
   rightY = drawMetaPair(
     doc,
     labels.reverseCharge,
     labels.reverseChargeNo,
     rightX,
     rightY,
-    rightW * 0.45,
     rightW * 0.55,
+    rightW * 0.45,
     fontPath,
   );
 
-  const headerBottom = Math.max(leftY, rightY) + 8;
-  drawHRule(doc, headerBottom, COLORS.accent);
-  doc.y = headerBottom + 12;
+  const headerBottom = Math.max(leftY, rightY, PAGE.margin + markSize) + 12;
+  drawHRule(doc, headerBottom, COLORS.brandRule);
+  doc.y = headerBottom + 16;
 
   // —— Bill to | Vehicle (two columns) ——
-  const colGap = 16;
+  const colGap = 20;
   const half = (contentWidth() - colGap) / 2;
   const billX = PAGE.margin;
   const vehicleX = PAGE.margin + half + colGap;
   const sectionTop = doc.y;
 
-  setBoldFont(doc, fontPath, 8);
-  doc.fillColor(COLORS.accent).text(labels.billTo.toUpperCase(), billX, sectionTop, {
+  setBoldFont(doc, fontPath, 7.5);
+  doc.fillColor(COLORS.metaLabel).text(labels.billTo.toUpperCase(), billX, sectionTop, {
     width: half,
+    characterSpacing: 0.8,
   });
   let billY = sectionTop + 14;
   setBoldFont(doc, fontPath, 11);
   doc.fillColor(COLORS.text).text(input.customer.name, billX, billY, {
     width: half,
   });
-  billY = doc.y + 2;
+  billY = doc.y + 3;
   setBodyFont(doc, fontPath, 9);
-  doc.fillColor(COLORS.text).text(input.customer.phone, billX, billY, {
+  doc.fillColor(COLORS.metaBody).text(input.customer.phone, billX, billY, {
     width: half,
   });
-  billY = doc.y + 2;
+  billY = doc.y + 3;
   if (input.customer.address) {
-    doc.fillColor(COLORS.muted).text(input.customer.address, billX, billY, {
+    doc.fillColor(COLORS.metaBody).text(input.customer.address, billX, billY, {
       width: half,
     });
-    billY = doc.y + 2;
+    billY = doc.y + 3;
   }
 
-  setBoldFont(doc, fontPath, 8);
+  setBoldFont(doc, fontPath, 7.5);
   doc
-    .fillColor(COLORS.accent)
+    .fillColor(COLORS.metaLabel)
     .text(labels.vehicleDetails.toUpperCase(), vehicleX, sectionTop, {
       width: half,
+      characterSpacing: 0.8,
     });
   let vehY = sectionTop + 14;
   if (input.vehicle) {
@@ -465,21 +503,21 @@ export async function generateInvoicePdf(
     doc
       .fillColor(COLORS.text)
       .text(input.vehicle.registrationNumber, vehicleX, vehY, { width: half });
-    vehY = doc.y + 2;
+    vehY = doc.y + 3;
     setBodyFont(doc, fontPath, 9);
     doc
-      .fillColor(COLORS.text)
+      .fillColor(COLORS.metaBody)
       .text(`${input.vehicle.make} ${input.vehicle.model}`, vehicleX, vehY, {
         width: half,
       });
-    vehY = doc.y + 2;
+    vehY = doc.y + 3;
   } else {
     setBodyFont(doc, fontPath, 9);
     doc.fillColor(COLORS.muted).text("—", vehicleX, vehY, { width: half });
-    vehY = doc.y + 2;
+    vehY = doc.y + 3;
   }
 
-  doc.y = Math.max(billY, vehY) + 14;
+  doc.y = Math.max(billY, vehY) + 16;
 
   // —— Line items table ——
   const cols = tableColumns(labels, input.gstSplit);
@@ -532,18 +570,77 @@ export async function generateInvoicePdf(
       .stroke();
   }
 
-  doc.y = tableY + 12;
+  doc.y = tableY + 18;
 
-  // —— Totals: right-aligned rows with dividers (no box) ——
-  const totalsW = 220;
-  const totalsX = PAGE.margin + tableW - totalsW;
-  ensureSpace(doc, 120);
+  // —— Paper summary: customer note (left) | totals (right) ——
+  const totalsW = 200;
+  const remarkW = contentWidth() - totalsW - 24;
+  const totalsX = PAGE.margin + remarkW + 24;
+  ensureSpace(doc, 140);
+
+  const summaryTop = doc.y;
+  setBoldFont(doc, fontPath, 9);
+  doc.fillColor(COLORS.text).text(labels.notes, PAGE.margin, summaryTop, {
+    width: remarkW,
+  });
+  setBodyFont(doc, fontPath, 8);
+  doc.fillColor(COLORS.metaBody).text(input.notes?.trim() || "—", PAGE.margin, doc.y + 4, {
+    width: remarkW,
+  });
+  let remarkBottom = doc.y + 10;
+
+  if (input.payments.length > 0) {
+    setBoldFont(doc, fontPath, 8);
+    doc.fillColor(COLORS.text).text(labels.payments, PAGE.margin, remarkBottom, {
+      width: remarkW,
+    });
+    remarkBottom = doc.y + 3;
+    setBodyFont(doc, fontPath, 7.5);
+    doc.fillColor(COLORS.metaBody);
+    for (const payment of input.payments) {
+      doc.text(
+        `${dateLabel(payment.receivedAt)}  ·  ${payment.method}  ·  ${money(payment.amountPaise)}`,
+        PAGE.margin,
+        remarkBottom,
+        { width: remarkW },
+      );
+      remarkBottom = doc.y + 2;
+    }
+    remarkBottom += 6;
+  }
+
+  if (input.creditNotes.length > 0) {
+    setBoldFont(doc, fontPath, 8);
+    doc.fillColor(COLORS.text).text(labels.creditNotes, PAGE.margin, remarkBottom, {
+      width: remarkW,
+    });
+    remarkBottom = doc.y + 3;
+    setBodyFont(doc, fontPath, 7.5);
+    doc.fillColor(COLORS.metaBody);
+    for (const note of input.creditNotes) {
+      doc.text(
+        `${note.creditNoteNumber}  ·  ${note.reason}  ·  ${money(note.totalPaise)}`,
+        PAGE.margin,
+        remarkBottom,
+        { width: remarkW },
+      );
+      remarkBottom = doc.y + 2;
+    }
+    remarkBottom += 6;
+  }
+
+  setBodyFont(doc, fontPath, 7);
+  doc.fillColor(COLORS.footer).text(labels.notEInvoice, PAGE.margin, remarkBottom + 8, {
+    width: remarkW,
+  });
+  remarkBottom = doc.y + 4;
 
   const totalRows: Array<{
     label: string;
     value: string;
     bold?: boolean;
     accent?: boolean;
+    large?: boolean;
     ruleBefore?: "thin" | "thick";
   }> = [{ label: labels.taxableTotal, value: money(input.taxablePaise) }];
   if (input.gstSplit === "CGST_SGST") {
@@ -565,6 +662,7 @@ export async function generateInvoicePdf(
     value: money(input.totalPaise),
     bold: true,
     accent: true,
+    large: true,
     ruleBefore: "thick",
   });
   totalRows.push(
@@ -573,101 +671,60 @@ export async function generateInvoicePdf(
       label: labels.pendingBalance,
       value: money(pending),
       bold: true,
-      ruleBefore: "thin",
     },
   );
 
-  const rowH = 16;
-  let rowY = doc.y;
+  let rowY = summaryTop;
   for (const row of totalRows) {
     if (row.ruleBefore) {
       doc
-        .strokeColor(row.ruleBefore === "thick" ? COLORS.accent : COLORS.line)
-        .lineWidth(row.ruleBefore === "thick" ? 1 : 0.5)
-        .moveTo(totalsX, rowY - 3)
-        .lineTo(totalsX + totalsW, rowY - 3)
+        .strokeColor(COLORS.summaryRule)
+        .lineWidth(1)
+        .moveTo(totalsX, rowY)
+        .lineTo(totalsX + totalsW, rowY)
         .stroke();
-      rowY += 4;
+      rowY += 8;
     }
-    if (row.bold) {
-      setBoldFont(doc, fontPath, 9);
+    const fontSize = row.large ? 11 : row.bold ? 9 : 8;
+    if (row.bold || row.large) {
+      setBoldFont(doc, fontPath, fontSize);
     } else {
-      setBodyFont(doc, fontPath, 8);
+      setBodyFont(doc, fontPath, fontSize);
     }
-    doc.fillColor(row.accent ? COLORS.accent : COLORS.text);
+    doc.fillColor(row.accent ? COLORS.accentText : COLORS.muted);
     doc.text(row.label, totalsX, rowY, {
-      width: totalsW * 0.5,
+      width: totalsW * 0.48,
       lineBreak: false,
     });
-    doc.text(row.value, totalsX + totalsW * 0.5, rowY, {
-      width: totalsW * 0.5,
+    doc.fillColor(row.accent ? COLORS.accentText : COLORS.text);
+    doc.text(row.value, totalsX + totalsW * 0.48, rowY, {
+      width: totalsW * 0.52,
       align: "right",
       lineBreak: false,
     });
-    rowY += rowH;
-  }
-  doc.y = rowY + 12;
-
-  // —— Payments / credit notes / notes ——
-  if (input.payments.length > 0) {
-    ensureSpace(doc, 40);
-    setBoldFont(doc, fontPath, 9);
-    doc.fillColor(COLORS.accent).text(labels.payments, PAGE.margin, doc.y);
-    doc.moveDown(0.3);
-    setBodyFont(doc, fontPath, 8);
-    doc.fillColor(COLORS.text);
-    for (const payment of input.payments) {
-      doc.text(
-        `${dateLabel(payment.receivedAt)}  ·  ${payment.method}  ·  ${money(payment.amountPaise)}`,
-        PAGE.margin,
-        doc.y,
-        { width: contentWidth() },
-      );
+    rowY += row.large ? 22 : 16;
+    if (row.ruleBefore === "thick") {
+      doc
+        .strokeColor(COLORS.summaryRule)
+        .lineWidth(1)
+        .moveTo(totalsX, rowY - 4)
+        .lineTo(totalsX + totalsW, rowY - 4)
+        .stroke();
+      rowY += 4;
     }
-    doc.moveDown(0.6);
   }
 
-  if (input.creditNotes.length > 0) {
-    ensureSpace(doc, 40);
-    setBoldFont(doc, fontPath, 9);
-    doc.fillColor(COLORS.accent).text(labels.creditNotes, PAGE.margin, doc.y);
-    doc.moveDown(0.3);
-    setBodyFont(doc, fontPath, 8);
-    doc.fillColor(COLORS.text);
-    for (const note of input.creditNotes) {
-      doc.text(
-        `${note.creditNoteNumber}  ·  ${note.reason}  ·  ${money(note.totalPaise)}`,
-        PAGE.margin,
-        doc.y,
-        { width: contentWidth() },
-      );
-    }
-    doc.moveDown(0.6);
-  }
+  doc.y = Math.max(remarkBottom, rowY) + 18;
 
-  if (input.notes) {
-    ensureSpace(doc, 36);
-    setBoldFont(doc, fontPath, 9);
-    doc.fillColor(COLORS.accent).text(labels.notes, PAGE.margin, doc.y);
-    doc.moveDown(0.3);
-    setBodyFont(doc, fontPath, 8);
-    doc.fillColor(COLORS.text).text(input.notes, PAGE.margin, doc.y, {
-      width: contentWidth(),
-    });
-    doc.moveDown(0.6);
-  }
-
-  // —— Disclaimer only (no signature block) ——
-  ensureSpace(doc, 28);
-  const footY = Math.max(doc.y + 10, PAGE.height - PAGE.margin - 28);
+  // —— Centered thank-you footer ——
+  ensureSpace(doc, 36);
+  const footY = Math.max(doc.y + 8, PAGE.height - PAGE.margin - 36);
   drawHRule(doc, footY, COLORS.line);
-  setBodyFont(doc, fontPath, 7);
-  doc
-    .fillColor(COLORS.muted)
-    .text(labels.notEInvoice, PAGE.margin, footY + 8, {
-      width: contentWidth(),
-      align: "left",
-    });
+  setBodyFont(doc, fontPath, 8);
+  doc.fillColor(COLORS.footer).text(labels.thankYou, PAGE.margin, footY + 10, {
+    width: contentWidth(),
+    align: "center",
+  });
 
   doc.end();
   const buffer = await done;

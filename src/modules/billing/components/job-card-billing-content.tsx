@@ -1,225 +1,330 @@
 import { getLocale, getTranslations } from "next-intl/server";
 import { formatRupees } from "@/lib/money";
+import {
+  BillingInvoiceWorkspace,
+  type BillingInvoiceCardModel,
+} from "@/modules/billing/components/billing-invoice-workspace";
 import { CreateInvoiceForm } from "@/modules/billing/components/create-invoice-form";
-import { CreditNoteForm } from "@/modules/billing/components/credit-note-form";
-import { DownloadInvoicePdfButton } from "@/modules/billing/components/download-invoice-pdf-button";
-import { FinalizeInvoiceForm } from "@/modules/billing/components/finalize-invoice-form";
-import { RecordPaymentForm } from "@/modules/billing/components/record-payment-form";
-import { RecordRefundForm } from "@/modules/billing/components/record-refund-form";
+import { InvoicePreviewButton } from "@/modules/billing/components/invoice-preview-button";
+import type { InvoicePreviewData } from "@/modules/billing/components/invoice-preview-dialog";
 import type { getInvoicesForOrder } from "@/modules/billing/service";
 
 type InvoiceList = Awaited<ReturnType<typeof getInvoicesForOrder>>;
+
+export type BillingPreviewContext = {
+  garageName: string;
+  garageAddress: string | null;
+  garageGstin: string | null;
+  customerName: string;
+  customerPhone: string;
+  vehicleRegistration: string;
+  vehicleLabel: string;
+  jobLabel: string;
+  placeOfSupplyLabel: string;
+  approvedLines: Array<{
+    id: string;
+    description: string;
+    typeLabel: string;
+    quantity: number;
+    unitPricePaise: number;
+    taxablePaise: number;
+    taxPaise: number;
+    totalPaise: number;
+  }>;
+  approvedTaxablePaise: number;
+  approvedTaxPaise: number;
+  approvedTotalPaise: number;
+  approvedTaxLabel: string;
+};
 
 type Props = {
   orderId: string;
   canEdit: boolean;
   invoices: InvoiceList;
-  /** True when the current estimate has at least one approved line. */
   hasApprovedEstimateLines: boolean;
-  /** GST state code from the vehicle — default place of supply. */
+  hasUnbilledApprovedLines: boolean;
   defaultPlaceOfSupplyStateCode: string;
+  preview: BillingPreviewContext;
 };
+
+function formatIssuedAt(date: Date, locale: string) {
+  return new Intl.DateTimeFormat(locale, {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  }).format(date);
+}
 
 export async function JobCardBillingContent({
   orderId,
   canEdit,
   invoices,
   hasApprovedEstimateLines,
+  hasUnbilledApprovedLines,
   defaultPlaceOfSupplyStateCode,
+  preview,
 }: Props) {
   const t = await getTranslations("billing");
   const locale = await getLocale();
-  const pdfLocale =
-    locale === "hi" || locale === "gu" ? locale : "en";
+  const pdfLocale = locale === "hi" || locale === "gu" ? locale : "en";
+
+  const draftPreview: InvoicePreviewData | null =
+    hasUnbilledApprovedLines && preview.approvedLines.length > 0
+      ? {
+          heading: t("previewTitle"),
+          invoiceNumber: null,
+          issuedAtLabel: formatIssuedAt(new Date(), locale),
+          garageName: preview.garageName,
+          garageAddress: preview.garageAddress,
+          garagePhone: null,
+          garageGstin: preview.garageGstin,
+          customerName: preview.customerName,
+          customerPhone: preview.customerPhone,
+          customerGstin: null,
+          vehicleLabel: preview.vehicleRegistration,
+          jobLabel: `${preview.vehicleLabel} · ${preview.jobLabel}`,
+          placeOfSupplyLabel: preview.placeOfSupplyLabel,
+          notes: null,
+          lines: preview.approvedLines.map((line) => ({
+            id: line.id,
+            description: line.description,
+            typeLabel: line.typeLabel,
+            quantity: line.quantity,
+            unitPricePaise: line.unitPricePaise,
+            totalPaise: line.totalPaise,
+          })),
+          taxablePaise: preview.approvedTaxablePaise,
+          taxLabel: preview.approvedTaxLabel,
+          taxPaise: preview.approvedTaxPaise,
+          totalPaise: preview.approvedTotalPaise,
+          amountPaidPaise: 0,
+          pendingBalancePaise: preview.approvedTotalPaise,
+          isPreview: true,
+        }
+      : null;
+
+  const invoiceCards: BillingInvoiceCardModel[] = invoices.map((invoice) => {
+    const taxPaise =
+      invoice.gstSplit === "CGST_SGST"
+        ? invoice.cgstPaise + invoice.sgstPaise
+        : invoice.igstPaise;
+    const taxLabel =
+      invoice.gstSplit === "CGST_SGST"
+        ? t("gstSplit.CGST_SGST")
+        : t("gstSplit.IGST");
+
+    return {
+      id: invoice.id,
+      status: invoice.status,
+      invoiceNumber: invoice.invoiceNumber,
+      gstSplit: invoice.gstSplit,
+      taxablePaise: invoice.taxablePaise,
+      cgstPaise: invoice.cgstPaise,
+      sgstPaise: invoice.sgstPaise,
+      igstPaise: invoice.igstPaise,
+      totalPaise: invoice.totalPaise,
+      amountPaidPaise: invoice.amountPaidPaise,
+      pendingBalancePaise: invoice.pendingBalancePaise,
+      refundDuePaise: invoice.refundDuePaise,
+      placeOfSupplyStateCode: invoice.placeOfSupplyStateCode,
+      notes: invoice.notes,
+      lines: invoice.lines.map((line) => ({
+        id: line.id,
+        description: line.description,
+        quantity: line.quantity,
+        unitPricePaise: line.unitPricePaise,
+        totalPaise: line.totalPaise,
+      })),
+      payments: invoice.payments.map((payment) => ({
+        id: payment.id,
+        method: payment.method,
+        amountPaise: payment.amountPaise,
+        isRefund: payment.isRefund,
+      })),
+      creditNotes: invoice.creditNotes.map((note) => ({
+        id: note.id,
+        creditNoteNumber: note.creditNoteNumber,
+        reason: note.reason,
+        totalPaise: note.totalPaise,
+      })),
+      preview: {
+        heading:
+          invoice.status === "FINALIZED"
+            ? t("viewBillTitle")
+            : t("previewTitle"),
+        invoiceNumber: invoice.invoiceNumber,
+        issuedAtLabel: formatIssuedAt(
+          invoice.finalizedAt ?? invoice.createdAt,
+          locale,
+        ),
+        garageName: preview.garageName,
+        garageAddress: preview.garageAddress,
+        garagePhone: null,
+        garageGstin: preview.garageGstin,
+        customerName: invoice.customer.name,
+        customerPhone: invoice.customer.phone,
+        customerGstin: null,
+        vehicleLabel:
+          invoice.serviceOrder.vehicle?.registrationNumber ??
+          preview.vehicleRegistration,
+        jobLabel: preview.jobLabel,
+        placeOfSupplyLabel: `${t("placeOfSupply")}: ${invoice.placeOfSupplyStateCode}`,
+        notes: invoice.notes,
+        lines: invoice.lines.map((line) => ({
+          id: line.id,
+          description: line.description,
+          typeLabel: line.type,
+          quantity: line.quantity,
+          unitPricePaise: line.unitPricePaise,
+          totalPaise: line.totalPaise,
+        })),
+        taxablePaise: invoice.taxablePaise,
+        taxLabel,
+        taxPaise,
+        totalPaise: invoice.totalPaise,
+        amountPaidPaise: invoice.amountPaidPaise,
+        pendingBalancePaise: invoice.pendingBalancePaise,
+        isPreview: invoice.status !== "FINALIZED",
+      },
+    };
+  });
 
   return (
-    <div className="space-y-5 px-5 py-4 sm:px-6">
-      <p className="text-caption text-slate-500">{t("notEInvoice")}</p>
+    <div className="space-y-5 px-4 py-5 sm:px-5">
+      <div className="flex gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3.5">
+        <span className="grid size-8 shrink-0 place-items-center rounded-full bg-emerald-100 text-[17px] font-black text-emerald-700">
+          ✓
+        </span>
+        <div>
+          <strong className="text-[13px] font-semibold text-slate-900">
+            {hasUnbilledApprovedLines
+              ? t("readyForBilling", { count: preview.approvedLines.length })
+              : hasApprovedEstimateLines
+                ? t("createAnotherEmpty")
+                : t("emptyNeedApproval")}
+          </strong>
+          <p className="mt-1 text-[13px] leading-relaxed text-slate-600">
+            {t("notEInvoice")}
+          </p>
+        </div>
+      </div>
 
       {invoices.length === 0 ? (
-        <section className="space-y-3">
-          <p className="text-sm text-slate-600">
-            {canEdit
-              ? hasApprovedEstimateLines
-                ? t("emptyHint")
-                : t("emptyNeedApproval")
-              : t("emptyReadOnly")}
-          </p>
-          {canEdit && hasApprovedEstimateLines ? (
-            <CreateInvoiceForm
-              orderId={orderId}
-              defaultPlaceOfSupplyStateCode={defaultPlaceOfSupplyStateCode}
-            />
-          ) : null}
-        </section>
-      ) : (
-        <ul className="space-y-4">
-          {invoices.map((invoice) => (
-            <li
-              key={invoice.id}
-              className="space-y-3 rounded-lg border border-slate-200 p-3 sm:p-4"
-            >
-              <div className="flex flex-wrap items-start justify-between gap-2">
-                <div className="min-w-0 space-y-0.5">
-                  <p className="text-sm font-semibold text-slate-900">
-                    {invoice.invoiceNumber ?? t("draftLabel")}
-                  </p>
-                  <p className="text-caption text-slate-500">
-                    {t(`statuses.${invoice.status}`)}
-                    {" · "}
-                    {t(`gstSplit.${invoice.gstSplit}`)}
-                    {" · "}
-                    {formatRupees(invoice.totalPaise)}
+        <section className="space-y-5">
+          {hasUnbilledApprovedLines ? (
+            <>
+              <div className="overflow-hidden rounded-xl border border-slate-300 bg-white shadow-[0_3px_17px_rgba(36,58,99,0.06)]">
+                <div className="border-b border-slate-200 bg-[#f8fafc] px-4 py-3.5">
+                  <strong className="block text-[15px] text-slate-900">
+                    {t("stepCheckWork")}
+                  </strong>
+                  <p className="mt-1 text-[13px] text-slate-500">
+                    {t("stepCheckWorkHint")}
                   </p>
                 </div>
-                {invoice.status === "FINALIZED" ? (
-                  <DownloadInvoicePdfButton
-                    orderId={orderId}
-                    invoiceId={invoice.id}
-                    invoiceNumber={invoice.invoiceNumber}
-                    locale={pdfLocale}
-                  />
-                ) : null}
+                <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3 text-[13px]">
+                  <b className="text-slate-800">{t("workIncluded")}</b>
+                  <small className="text-slate-500">
+                    {t("itemCount", { count: preview.approvedLines.length })}
+                  </small>
+                </div>
+                {preview.approvedLines.map((line) => (
+                  <div
+                    key={line.id}
+                    className="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-3 last:border-b-0"
+                  >
+                    <span className="min-w-0 text-[14px] text-slate-800">
+                      {line.description}
+                      <span className="text-slate-500">
+                        {" "}
+                        · {line.quantity} × {formatRupees(line.unitPricePaise)}
+                      </span>
+                    </span>
+                    <span className="shrink-0 text-[14px] font-semibold text-slate-900">
+                      {formatRupees(line.totalPaise)}
+                    </span>
+                  </div>
+                ))}
+                <dl className="flex flex-wrap items-start justify-between gap-3 border-t border-slate-200 bg-slate-50 px-4 py-3.5">
+                  <div>
+                    <dt className="text-[13px] text-slate-500">{t("taxable")}</dt>
+                    <dd className="mt-0.5 text-[14px] font-semibold text-slate-900">
+                      {formatRupees(preview.approvedTaxablePaise)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-[13px] text-slate-500">
+                      {preview.approvedTaxLabel}
+                    </dt>
+                    <dd className="mt-0.5 text-[14px] font-semibold text-slate-900">
+                      {formatRupees(preview.approvedTaxPaise)}
+                    </dd>
+                  </div>
+                  <div className="text-right">
+                    <dt className="text-[13px] text-slate-500">
+                      {t("customerPays")}
+                    </dt>
+                    <dd className="mt-0.5 text-[15px] font-bold text-blue-700">
+                      {formatRupees(preview.approvedTotalPaise)}
+                    </dd>
+                  </div>
+                </dl>
               </div>
 
-              <dl className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
-                <div>
-                  <dt className="text-caption text-slate-500">{t("taxable")}</dt>
-                  <dd className="font-medium text-slate-900">
-                    {formatRupees(invoice.taxablePaise)}
-                  </dd>
-                </div>
-                {invoice.gstSplit === "CGST_SGST" ? (
-                  <>
-                    <div>
-                      <dt className="text-caption text-slate-500">{t("cgst")}</dt>
-                      <dd className="font-medium text-slate-900">
-                        {formatRupees(invoice.cgstPaise)}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt className="text-caption text-slate-500">{t("sgst")}</dt>
-                      <dd className="font-medium text-slate-900">
-                        {formatRupees(invoice.sgstPaise)}
-                      </dd>
-                    </div>
-                  </>
-                ) : (
-                  <div>
-                    <dt className="text-caption text-slate-500">{t("igst")}</dt>
-                    <dd className="font-medium text-slate-900">
-                      {formatRupees(invoice.igstPaise)}
-                    </dd>
-                  </div>
-                )}
-                <div>
-                  <dt className="text-caption text-slate-500">
-                    {t("pendingBalance")}
-                  </dt>
-                  <dd className="font-medium text-slate-900">
-                    {formatRupees(invoice.pendingBalancePaise)}
-                  </dd>
-                </div>
-                {invoice.refundDuePaise > 0 ? (
-                  <div>
-                    <dt className="text-caption text-slate-500">{t("refundDue")}</dt>
-                    <dd className="font-medium text-amber-800">
-                      {formatRupees(invoice.refundDuePaise)}
-                    </dd>
-                  </div>
-                ) : null}
-              </dl>
-
-              {invoice.lines.length > 0 ? (
-                <ul className="divide-y overflow-hidden rounded-md border border-slate-100">
-                  {invoice.lines.map((line) => (
-                    <li
-                      key={line.id}
-                      className="flex flex-wrap items-baseline justify-between gap-2 px-3 py-2 text-sm"
-                    >
-                      <span className="min-w-0 text-slate-800">
-                        {line.description}
-                        <span className="ml-1 text-caption text-slate-500">
-                          · {line.quantity} × {formatRupees(line.unitPricePaise)}
-                        </span>
-                      </span>
-                      <span className="shrink-0 font-medium text-slate-900">
-                        {formatRupees(line.totalPaise)}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
-
-              {canEdit && invoice.status === "DRAFT" ? (
-                <FinalizeInvoiceForm invoiceId={invoice.id} orderId={orderId} />
-              ) : null}
-
-              {canEdit && invoice.status === "FINALIZED" ? (
-                <div className="space-y-4 border-t border-slate-100 pt-3">
-                  <RecordPaymentForm
-                    invoiceId={invoice.id}
-                    orderId={orderId}
-                    pendingPaise={invoice.pendingBalancePaise}
-                  />
-                  <RecordRefundForm
-                    invoiceId={invoice.id}
-                    orderId={orderId}
-                    refundDuePaise={invoice.refundDuePaise}
-                  />
-                  <CreditNoteForm invoiceId={invoice.id} orderId={orderId} />
-                </div>
-              ) : null}
-
-              {invoice.payments.length > 0 ? (
-                <div className="space-y-1">
-                  <p className="text-caption font-medium text-slate-600">
-                    {t("payments")}
+              <div className="overflow-hidden rounded-xl border border-slate-300 bg-white shadow-[0_3px_17px_rgba(36,58,99,0.06)]">
+                <div className="border-b border-slate-200 bg-[#f8fafc] px-4 py-3.5">
+                  <strong className="block text-[15px] text-slate-900">
+                    {t("stepConfirmBill")}
+                  </strong>
+                  <p className="mt-1 text-[13px] text-slate-500">
+                    {t("stepConfirmBillHint")}
                   </p>
-                  <ul className="space-y-1 text-sm text-slate-700">
-                    {invoice.payments.map((payment) => (
-                      <li key={payment.id}>
-                        {payment.isRefund ? t("refundPaymentLabel") : t(`methods.${payment.method}`)}
-                        {" · "}
-                        {formatRupees(payment.amountPaise)}
-                        {payment.isRefund
-                          ? ` · ${t(`methods.${payment.method}`)}`
-                          : null}
-                      </li>
-                    ))}
-                  </ul>
+                </div>
+                <div className="p-4 sm:p-5">
+                  {canEdit ? (
+                    <CreateInvoiceForm
+                      orderId={orderId}
+                      defaultPlaceOfSupplyStateCode={
+                        defaultPlaceOfSupplyStateCode
+                      }
+                    />
+                  ) : (
+                    <p className="text-sm text-slate-600">{t("emptyReadOnly")}</p>
+                  )}
+                </div>
+              </div>
+
+              {draftPreview && canEdit ? (
+                <div className="flex flex-col gap-3 rounded-xl border border-blue-200 bg-blue-50/70 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <strong className="text-[13px] text-slate-900">
+                      {t("previewBeforeCreate")}
+                    </strong>
+                    <p className="mt-1 text-[13px] text-slate-600">
+                      {t("previewBeforeCreateHint")}
+                    </p>
+                  </div>
+                  <InvoicePreviewButton data={draftPreview} variant="soft" />
                 </div>
               ) : null}
-
-              {invoice.creditNotes.length > 0 ? (
-                <div className="space-y-1">
-                  <p className="text-caption font-medium text-slate-600">
-                    {t("creditNotes")}
-                  </p>
-                  <ul className="space-y-1 text-sm text-slate-700">
-                    {invoice.creditNotes.map((note) => (
-                      <li key={note.id}>
-                        {note.creditNoteNumber} · {t(`reasons.${note.reason}`)} ·{" "}
-                        {formatRupees(note.totalPaise)}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ) : null}
-            </li>
-          ))}
-        </ul>
-      )}
-
-      {canEdit && invoices.length > 0 && hasApprovedEstimateLines ? (
-        <section className="border-t border-slate-100 pt-4">
-          <p className="mb-2 text-sm text-slate-600">{t("createAnotherHint")}</p>
-          <CreateInvoiceForm
-            orderId={orderId}
-            defaultPlaceOfSupplyStateCode={defaultPlaceOfSupplyStateCode}
-          />
+            </>
+          ) : (
+            <p className="text-sm text-slate-600">
+              {canEdit ? t("emptyNeedApproval") : t("emptyReadOnly")}
+            </p>
+          )}
         </section>
-      ) : null}
+      ) : (
+        <BillingInvoiceWorkspace
+          orderId={orderId}
+          canEdit={canEdit}
+          pdfLocale={pdfLocale}
+          invoices={invoiceCards}
+          unbilledLines={preview.approvedLines}
+          hasUnbilledApprovedLines={hasUnbilledApprovedLines}
+          defaultPlaceOfSupplyStateCode={defaultPlaceOfSupplyStateCode}
+        />
+      )}
     </div>
   );
 }

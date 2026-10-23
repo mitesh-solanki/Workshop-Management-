@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Bell, ChevronRight, Search } from "lucide-react";
 import { LanguageSwitcher } from "@/components/language-switcher";
+import { usePageChrome } from "@/components/page-chrome";
 import type { NavKey } from "@/components/shared/nav-items";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -33,13 +34,17 @@ export function AppHeader({ appName, garageName }: AppHeaderProps) {
   const tNav = useTranslations("nav");
   const tShell = useTranslations("shell");
   const { isMobile, openMobile } = useSidebar();
+  const chrome = usePageChrome();
+  const detailLabel = chrome?.detailLabel ?? null;
 
   const match = TITLE_BY_PREFIX.find(
     (item) =>
       pathname === item.prefix || pathname.startsWith(`${item.prefix}/`),
   );
-  const pageTitle = match ? tNav(match.key) : appName;
+  const sectionTitle = match ? tNav(match.key) : appName;
+  const pageTitle = detailLabel ?? sectionTitle;
   const isHome = pathname === "/dashboard" || pathname.startsWith("/dashboard/");
+  const sectionHref = match?.prefix ?? "/dashboard";
   const triggerLabel = isMobile
     ? openMobile
       ? tNav("closeMenu")
@@ -71,9 +76,27 @@ export function AppHeader({ appName, garageName }: AppHeaderProps) {
             {!isHome && match ? (
               <>
                 <ChevronRight className="size-3 shrink-0 opacity-60" aria-hidden />
-                <span className="truncate text-slate-600" aria-current="page">
-                  {pageTitle}
-                </span>
+                {detailLabel ? (
+                  <>
+                    <Link
+                      href={sectionHref}
+                      className="truncate hover:text-slate-800 focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
+                    >
+                      {sectionTitle}
+                    </Link>
+                    <ChevronRight
+                      className="size-3 shrink-0 opacity-60"
+                      aria-hidden
+                    />
+                    <span className="truncate text-slate-600" aria-current="page">
+                      {detailLabel}
+                    </span>
+                  </>
+                ) : (
+                  <span className="truncate text-slate-600" aria-current="page">
+                    {sectionTitle}
+                  </span>
+                )}
               </>
             ) : null}
           </nav>

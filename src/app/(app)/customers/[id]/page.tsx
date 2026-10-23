@@ -67,6 +67,7 @@ export default async function CustomerDetailPage({
           registrationNumber: vehicle.registrationNumber,
           make: vehicle.make,
           model: vehicle.model,
+          stateCode: vehicle.stateCode,
           year: vehicle.year,
           odometer: vehicle.odometer,
           insuranceExpiry: vehicle.insuranceExpiry,

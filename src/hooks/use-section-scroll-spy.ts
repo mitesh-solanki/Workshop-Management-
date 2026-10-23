@@ -26,6 +26,7 @@ export function useSectionScrollSpy<T extends string>({
 }: Options<T>) {
   const first = initialSection ?? sections[0]!;
   const [activeSection, setActiveSection] = useState<T>(first);
+  const [prevFirst, setPrevFirst] = useState(first);
   const [mountedCount, setMountedCount] = useState(0);
   const nodesRef = useRef<Map<T, HTMLElement>>(new Map());
   const scrollingToRef = useRef<T | null>(null);
@@ -33,8 +34,18 @@ export function useSectionScrollSpy<T extends string>({
   const activeRef = useRef(activeSection);
   const onChangeRef = useRef(onSectionChange);
 
-  activeRef.current = activeSection;
-  onChangeRef.current = onSectionChange;
+  if (first !== prevFirst) {
+    setPrevFirst(first);
+    setActiveSection(first);
+  }
+
+  useEffect(() => {
+    activeRef.current = activeSection;
+  }, [activeSection]);
+
+  useEffect(() => {
+    onChangeRef.current = onSectionChange;
+  }, [onSectionChange]);
 
   const setSectionRef = useCallback(
     (section: T) => (node: HTMLElement | null) => {
@@ -67,10 +78,6 @@ export function useSectionScrollSpy<T extends string>({
     },
     [],
   );
-
-  useEffect(() => {
-    setActiveSection(first);
-  }, [first]);
 
   useEffect(() => {
     if (!initialSection || initialSection === sections[0]) {

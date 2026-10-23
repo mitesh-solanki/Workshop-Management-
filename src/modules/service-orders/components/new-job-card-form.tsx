@@ -6,6 +6,7 @@ import {
   ClipboardList,
   FileText,
   History,
+  Receipt,
   Search,
   type LucideIcon,
 } from "lucide-react";
@@ -115,6 +116,7 @@ export function NewJobCardForm({
   const t = useTranslations("orders");
   const ti = useTranslations("inspections");
   const te = useTranslations("estimates");
+  const tb = useTranslations("billing");
   const [vehicleId, setVehicleId] = useState(initialVehicleId);
   const { activeSection, scrollToSection, setSectionRef } = useJobCardSections();
 
@@ -208,6 +210,15 @@ export function NewJobCardForm({
           sectionRef={setSectionRef("estimate")}
         >
           <LockedBody icon={FileText} onGoDetails={goToDetails} />
+        </SectionBlock>
+
+        <SectionBlock
+          id="billing"
+          title={tb("title")}
+          subtitle={t("billingHint")}
+          sectionRef={setSectionRef("billing")}
+        >
+          <LockedBody icon={Receipt} onGoDetails={goToDetails} />
         </SectionBlock>
 
         <SectionBlock

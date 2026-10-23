@@ -87,6 +87,7 @@ const sampleVehicle = {
   registrationNumber: "GJ01AB1234",
   make: "Maruti",
   model: "Swift",
+  stateCode: "24",
   year: 2020,
   odometer: 12000,
   insuranceExpiry: null,
@@ -129,6 +130,7 @@ function sampleOrder(
       registrationNumber: "GJ01AB1234",
       make: "Maruti",
       model: "Swift",
+      stateCode: "24",
     },
     customer: { id: customerId, name: "Ravi", phone: "9876543210" },
     technician: {

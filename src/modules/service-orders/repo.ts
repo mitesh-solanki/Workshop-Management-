@@ -44,6 +44,7 @@ const orderListSelect = {
       registrationNumber: true,
       make: true,
       model: true,
+      stateCode: true,
     },
   },
   customer: {

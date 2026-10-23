@@ -232,9 +232,18 @@ export const addServiceOrderLineSchema = z.object({
     }),
 });
 
+export const updateServiceOrderLineSchema = z.object({
+  description: z.string().trim().min(1).max(500),
+  quantity: quantityField,
+  unitPricePaise: rupeesToPaiseSchema,
+});
+
 export type CreateServiceOrderInput = z.input<typeof createServiceOrderSchema>;
 export type UpdateServiceOrderInput = z.input<typeof updateServiceOrderSchema>;
 export type UpdateServiceOrderStatusInput = z.input<
   typeof updateServiceOrderStatusSchema
 >;
 export type AddServiceOrderLineInput = z.input<typeof addServiceOrderLineSchema>;
+export type UpdateServiceOrderLineInput = z.input<
+  typeof updateServiceOrderLineSchema
+>;

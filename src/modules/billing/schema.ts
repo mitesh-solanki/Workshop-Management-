@@ -93,6 +93,12 @@ export const finalizeInvoiceSchema = z.object({
 
 export type FinalizeInvoiceInput = z.input<typeof finalizeInvoiceSchema>;
 
+export const deleteDraftInvoiceSchema = z.object({
+  invoiceId: z.string().trim().min(1),
+});
+
+export type DeleteDraftInvoiceInput = z.input<typeof deleteDraftInvoiceSchema>;
+
 const paymentBreakdownSchema = z
   .object({
     method: z.enum(PAYMENT_METHODS),

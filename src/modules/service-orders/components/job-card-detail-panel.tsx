@@ -4,18 +4,14 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { usePageDetailLabel } from "@/components/page-chrome";
-import {
-  Card,
-  CardDescription,
-} from "@/components/ui/card";
-import { StatusBadge } from "@/components/ui/status-badge";
-import { formatRupees, multiplyByQuantity } from "@/lib/money";
+import { cn } from "@/lib/utils";
 import type { ServiceOrderStatus } from "@/lib/service-order-status";
 import { JobCardSectionNav } from "@/modules/service-orders/components/job-card-section-nav";
 import {
   OrderLineForm,
   type OrderLinePartOption,
 } from "@/modules/service-orders/components/order-line-form";
+import { OrderLinesTable } from "@/modules/service-orders/components/order-lines-table";
 import { OrderTimeline } from "@/modules/service-orders/components/order-timeline";
 import {
   datetimeLocalFromOrder,
@@ -83,6 +79,16 @@ type Props = {
   liveLinkContent: ReactNode;
 };
 
+const SECTION_NUMBERS: Record<JobCardSection, string> = {
+  details: "01",
+  lines: "02",
+  inspection: "03",
+  estimate: "04",
+  billing: "05",
+  liveLink: "06",
+  timeline: "07",
+};
+
 function asDate(value: Date | string | null): Date | null {
   if (!value) return null;
   const date = value instanceof Date ? value : new Date(value);
@@ -104,29 +110,39 @@ function SectionBlock({
   id,
   title,
   subtitle,
-  sectionRef,
+  open,
   children,
 }: {
   id: JobCardSection;
   title: string;
   subtitle?: string;
-  sectionRef: (node: HTMLElement | null) => void;
+  open: boolean;
   children: ReactNode;
 }) {
   return (
-    <Card
+    <section
       id={jobCardSectionDomId(id)}
-      ref={sectionRef}
-      className="min-w-0 scroll-mt-4 gap-0 overflow-visible py-0"
+      hidden={!open}
+      className={cn(
+        "min-w-0 overflow-hidden rounded-[14px] border border-[#d7deea] bg-white shadow-[0_3px_17px_rgba(36,58,99,0.06)]",
+        !open && "hidden",
+      )}
     >
-      <div className="border-b border-border px-5 py-3.5 sm:px-6">
-        <h2 className="text-section-title text-slate-900">{title}</h2>
-        {subtitle ? (
-          <CardDescription className="mt-0.5">{subtitle}</CardDescription>
-        ) : null}
+      <div className="flex items-start gap-3 border-b border-[#d7deea] bg-[#f8fafc] px-4 py-4 sm:px-5">
+        <span className="grid size-9 shrink-0 place-items-center rounded-[10px] bg-[#e8efff] text-[13px] font-black text-[#1f5eff]">
+          {SECTION_NUMBERS[id]}
+        </span>
+        <div className="min-w-0 flex-1 pt-0.5">
+          <h2 className="text-[17px] font-semibold tracking-tight text-[#152238]">
+            {title}
+          </h2>
+          {subtitle ? (
+            <p className="mt-1 text-[13px] text-[#5c6b7e]">{subtitle}</p>
+          ) : null}
+        </div>
       </div>
-      {children}
-    </Card>
+      <div className="min-w-0">{children}</div>
+    </section>
   );
 }
 
@@ -150,49 +166,68 @@ export function JobCardDetailPanel({
   const tb = useTranslations("billing");
   const tl = useTranslations("liveLink");
   usePageDetailLabel(order.vehicle.registrationNumber);
-  const { activeSection, scrollToSection, setSectionRef } = useJobCardSections({
+  const { activeSection, scrollToSection } = useJobCardSections({
     initialSection,
     syncUrl: true,
+    mode: "tabs",
   });
+
+  const labourCount = order.lines.filter((line) => line.type === "LABOUR").length;
+  const techLabel =
+    order.technician?.name?.trim() ||
+    order.technician?.email ||
+    t("technicianUnassigned");
+  const vehicleLabel = `${order.vehicle.make} ${order.vehicle.model}`.trim();
+  const metaParts = [
+    order.customer.name,
+    vehicleLabel,
+    order.bay || null,
+    techLabel,
+  ].filter(Boolean);
 
   return (
     <div className="w-full space-y-4">
-      <header className="flex flex-col gap-2 border-b border-border pb-3 sm:flex-row sm:items-center sm:justify-between">
+      <header className="flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
-          <h1 className="truncate text-page-title text-slate-900">
+          <h1 className="truncate text-[clamp(24px,3.5vw,30px)] leading-tight font-semibold tracking-[0.02em] text-[#152238]">
             {order.vehicle.registrationNumber}
           </h1>
-          <p className="mt-0.5 truncate text-sm text-slate-600">
+          <p className="mt-1 truncate text-[14px] text-[#5c6b7e]">
             <Link
               href={`/customers/${order.customerId}`}
-              className="text-teal-700 underline-offset-4 hover:underline"
+              className="font-medium text-[#1f5eff] underline-offset-4 hover:underline"
             >
               {order.customer.name}
             </Link>
-            <span className="text-slate-400"> · </span>
-            <span>{`${order.vehicle.make} ${order.vehicle.model}`.trim()}</span>
+            {metaParts.slice(1).map((part) => (
+              <span key={String(part)}>
+                <span className="text-slate-300"> · </span>
+                {part}
+              </span>
+            ))}
           </p>
         </div>
-        <StatusBadge
-          status={order.status}
-          label={t(`statuses.${order.status}`)}
-        />
+        <span className="inline-flex min-h-9 items-center rounded-full border border-[#c9d8ff] bg-[#e8efff] px-3 py-1.5 text-[13px] font-extrabold text-[#1f5eff]">
+          {t(`statuses.${order.status}`)}
+        </span>
       </header>
 
-      <div className="grid w-full items-start gap-4 lg:grid-cols-[220px_minmax(0,1fr)] xl:grid-cols-[240px_minmax(0,1fr)]">
-        <JobCardSectionNav
-          section={activeSection}
-          onSectionChange={scrollToSection}
-        />
+      <div className="flex w-full flex-col gap-4 lg:flex-row lg:items-start">
+        <aside className="sticky top-0 z-20 w-full shrink-0 bg-background pb-1 lg:top-4 lg:w-[220px] lg:bg-transparent lg:pb-0">
+          <JobCardSectionNav
+            section={activeSection}
+            onSectionChange={scrollToSection}
+          />
+        </aside>
 
-        <div className="flex min-w-0 flex-col gap-4">
+        <div className="min-w-0 flex-1">
           <SectionBlock
             id="details"
             title={t("details")}
             subtitle={t("detailsHint")}
-            sectionRef={setSectionRef("details")}
+            open={activeSection === "details"}
           >
-            <div className="space-y-6 px-5 py-5 sm:px-6">
+            <div className="px-4 py-5 sm:px-5">
               <ServiceOrderForm
                 mode="edit"
                 orderId={order.id}
@@ -201,8 +236,7 @@ export function JobCardDetailPanel({
                 locked={{
                   customerName: order.customer.name,
                   registrationNumber: order.vehicle.registrationNumber,
-                  vehicleLabel:
-                    `${order.vehicle.make} ${order.vehicle.model}`.trim(),
+                  vehicleLabel,
                 }}
                 defaults={{
                   complaint: order.complaint,
@@ -224,46 +258,46 @@ export function JobCardDetailPanel({
             id="lines"
             title={t("lines")}
             subtitle={t("linesDescription")}
-            sectionRef={setSectionRef("lines")}
+            open={activeSection === "lines"}
           >
-            <div className="space-y-5 px-5 py-5 sm:px-6">
-              {order.lines.length === 0 ? (
-                <p className="text-sm text-slate-600">{t("linesEmpty")}</p>
-              ) : (
-                <ul className="divide-y overflow-hidden rounded-lg border border-slate-200">
-                  {order.lines.map((line) => {
-                    const total = multiplyByQuantity(
-                      line.unitPricePaise,
-                      line.quantity,
-                    );
-                    const typeKey =
-                      line.type === "PART" || line.type === "LABOUR"
-                        ? line.type
-                        : "LABOUR";
-                    return (
-                      <li key={line.id} className="space-y-0.5 px-3 py-3">
-                        <div className="flex flex-wrap items-start justify-between gap-2">
-                          <p className="min-w-0 text-sm font-medium text-slate-900">
-                            {line.description}
-                          </p>
-                          <span className="shrink-0 rounded-md border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs font-medium text-slate-700">
-                            {t(`lineTypes.${typeKey}`)}
-                          </span>
-                        </div>
-                        <p className="text-caption text-slate-500">
-                          {`${line.quantity} × ${formatRupees(line.unitPricePaise)} = ${formatRupees(total)}`}
-                        </p>
-                      </li>
-                    );
+            <div className="space-y-5 px-4 py-5 sm:px-5">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <strong className="text-[14px] font-semibold text-slate-900">
+                  {t("linesAdded")}
+                </strong>
+                <small className="text-[13px] text-slate-500">
+                  {t("labourPartsCount", {
+                    labour: labourCount,
+                    parts: order.lines.length - labourCount,
                   })}
-                </ul>
+                </small>
+              </div>
+
+              {order.lines.length === 0 ? (
+                <p className="rounded-[10px] border border-dashed border-slate-300 bg-slate-50/50 px-4 py-6 text-[14px] text-slate-600">
+                  {t("linesEmpty")}
+                </p>
+              ) : (
+                <OrderLinesTable
+                  orderId={order.id}
+                  canMutate={canMutate}
+                  lines={order.lines}
+                />
               )}
+
               {canMutate ? (
-                <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50/60 p-4">
-                  <p className="mb-3 text-sm font-medium text-slate-800">
-                    {t("addLine")}
-                  </p>
-                  <OrderLineForm orderId={order.id} parts={parts} />
+                <div className="space-y-3 border-t border-slate-300 pt-5">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <strong className="text-[14px] font-semibold text-slate-900">
+                      {t("addLine")}
+                    </strong>
+                    <small className="text-[13px] text-slate-500">
+                      {t("addLineHint")}
+                    </small>
+                  </div>
+                  <div className="rounded-[10px] border border-[#e8edf5] bg-[#fafcff] p-4 sm:p-5">
+                    <OrderLineForm orderId={order.id} parts={parts} />
+                  </div>
                 </div>
               ) : null}
             </div>
@@ -273,7 +307,7 @@ export function JobCardDetailPanel({
             id="inspection"
             title={ti("title")}
             subtitle={t("inspectionHint")}
-            sectionRef={setSectionRef("inspection")}
+            open={activeSection === "inspection"}
           >
             {inspectionContent}
           </SectionBlock>
@@ -282,7 +316,7 @@ export function JobCardDetailPanel({
             id="estimate"
             title={te("title")}
             subtitle={t("estimateHint")}
-            sectionRef={setSectionRef("estimate")}
+            open={activeSection === "estimate"}
           >
             {estimateContent}
           </SectionBlock>
@@ -291,7 +325,7 @@ export function JobCardDetailPanel({
             id="billing"
             title={tb("title")}
             subtitle={t("billingHint")}
-            sectionRef={setSectionRef("billing")}
+            open={activeSection === "billing"}
           >
             {billingContent}
           </SectionBlock>
@@ -300,7 +334,7 @@ export function JobCardDetailPanel({
             id="liveLink"
             title={tl("title")}
             subtitle={tl("subtitle")}
-            sectionRef={setSectionRef("liveLink")}
+            open={activeSection === "liveLink"}
           >
             {liveLinkContent}
           </SectionBlock>
@@ -308,9 +342,10 @@ export function JobCardDetailPanel({
           <SectionBlock
             id="timeline"
             title={t("timeline")}
-            sectionRef={setSectionRef("timeline")}
+            subtitle={t("timelineHint")}
+            open={activeSection === "timeline"}
           >
-            <div className="px-5 py-5 sm:px-6">
+            <div className="px-4 py-5 sm:px-5">
               <OrderTimeline
                 events={timeline.map((event) => ({
                   ...event,

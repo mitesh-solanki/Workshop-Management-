@@ -1,6 +1,7 @@
 import {
   ClipboardList,
   Contact,
+  FileText,
   Kanban,
   LayoutDashboard,
   Package,
@@ -15,6 +16,7 @@ export type NavKey =
   | "dashboard"
   | "workshop"
   | "customers"
+  | "invoices"
   | "inventory"
   | "team"
   | "orders"
@@ -33,7 +35,7 @@ export type NavItem = {
 
 /**
  * Modules that exist as routes today.
- * Later: billing, reports — add when pages ship.
+ * Later: reports — add when pages ship.
  */
 export const APP_NAV_ITEMS: readonly NavItem[] = [
   {
@@ -59,6 +61,13 @@ export const APP_NAV_ITEMS: readonly NavItem[] = [
     key: "customers",
     icon: Contact,
     group: "business",
+  },
+  {
+    href: "/invoices",
+    key: "invoices",
+    icon: FileText,
+    group: "business",
+    roles: ["OWNER", "MANAGER", "ACCOUNTANT"],
   },
   {
     href: "/inventory",

@@ -414,6 +414,192 @@ export async function createServiceOrderLine(
     return { ok: true, line };
   } catch (error) {
     if (error instanceof StockLineTxError) {
+      if (error.reason === "NOT_FOUND") {
+        return { ok: false, reason: "PART_NOT_FOUND" };
+      }
+      return { ok: false, reason: error.reason };
+    }
+    throw error;
+  }
+}
+
+type ServiceOrderLineRow = {
+  id: string;
+  garageId: string;
+  serviceOrderId: string;
+  type: ServiceOrderLineType;
+  description: string;
+  quantity: number;
+  unitPricePaise: number;
+  partId: string | null;
+  sortOrder: number;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+export type UpdateServiceOrderLineResult =
+  | { ok: true; line: ServiceOrderLineRow }
+  | { ok: false; reason: "NOT_FOUND" | "PART_NOT_FOUND" | "INSUFFICIENT_STOCK" };
+
+export async function updateServiceOrderLine(
+  garageId: string,
+  data: {
+    lineId: string;
+    serviceOrderId: string;
+    description: string;
+    quantity: number;
+    unitPricePaise: number;
+    actorId: string;
+  },
+): Promise<UpdateServiceOrderLineResult> {
+  try {
+    const line = await prisma.$transaction(async (tx) => {
+      const existing = await tx.serviceOrderLine.findFirst({
+        where: {
+          id: data.lineId,
+          garageId,
+          serviceOrderId: data.serviceOrderId,
+        },
+        select: lineSelect,
+      });
+      if (!existing) {
+        throw new StockLineTxError("NOT_FOUND");
+      }
+
+      const quantityDelta = data.quantity - existing.quantity;
+      if (
+        existing.type === "PART" &&
+        existing.partId &&
+        quantityDelta !== 0
+      ) {
+        const stock = await applyStockMovement(
+          garageId,
+          {
+            partId: existing.partId,
+            type: quantityDelta > 0 ? "OUT" : "IN",
+            quantity: Math.abs(quantityDelta),
+            note: `Service order line update ${data.serviceOrderId}`,
+            actorId: data.actorId,
+            serviceOrderId: data.serviceOrderId,
+            serviceOrderLineId: existing.id,
+          },
+          tx,
+        );
+        if (!stock.ok) {
+          throw new StockLineTxError(stock.reason);
+        }
+      }
+
+      const updated = await tx.serviceOrderLine.update({
+        where: { id: existing.id },
+        data: {
+          description: data.description,
+          quantity: data.quantity,
+          unitPricePaise: data.unitPricePaise,
+        },
+        select: lineSelect,
+      });
+
+      await tx.auditLog.create({
+        data: {
+          garageId,
+          actorId: data.actorId,
+          action: "service_order.line_updated",
+          entity: "ServiceOrder",
+          entityId: data.serviceOrderId,
+          meta: {
+            lineId: updated.id,
+            type: updated.type,
+            description: updated.description,
+            quantity: updated.quantity,
+            unitPricePaise: updated.unitPricePaise,
+            previousQuantity: existing.quantity,
+            previousUnitPricePaise: existing.unitPricePaise,
+          } satisfies Prisma.InputJsonValue,
+        },
+      });
+
+      return updated;
+    });
+
+    return { ok: true, line };
+  } catch (error) {
+    if (error instanceof StockLineTxError) {
+      return { ok: false, reason: error.reason };
+    }
+    throw error;
+  }
+}
+
+export type DeleteServiceOrderLineResult =
+  | { ok: true }
+  | { ok: false; reason: "NOT_FOUND" | "PART_NOT_FOUND" | "INSUFFICIENT_STOCK" };
+
+export async function deleteServiceOrderLine(
+  garageId: string,
+  data: {
+    lineId: string;
+    serviceOrderId: string;
+    actorId: string;
+  },
+): Promise<DeleteServiceOrderLineResult> {
+  try {
+    await prisma.$transaction(async (tx) => {
+      const existing = await tx.serviceOrderLine.findFirst({
+        where: {
+          id: data.lineId,
+          garageId,
+          serviceOrderId: data.serviceOrderId,
+        },
+        select: lineSelect,
+      });
+      if (!existing) {
+        throw new StockLineTxError("NOT_FOUND");
+      }
+
+      if (existing.type === "PART" && existing.partId) {
+        const stock = await applyStockMovement(
+          garageId,
+          {
+            partId: existing.partId,
+            type: "IN",
+            quantity: existing.quantity,
+            note: `Service order line removed ${data.serviceOrderId}`,
+            actorId: data.actorId,
+            serviceOrderId: data.serviceOrderId,
+            serviceOrderLineId: existing.id,
+          },
+          tx,
+        );
+        if (!stock.ok) {
+          throw new StockLineTxError(stock.reason);
+        }
+      }
+
+      await tx.serviceOrderLine.delete({ where: { id: existing.id } });
+
+      await tx.auditLog.create({
+        data: {
+          garageId,
+          actorId: data.actorId,
+          action: "service_order.line_removed",
+          entity: "ServiceOrder",
+          entityId: data.serviceOrderId,
+          meta: {
+            lineId: existing.id,
+            type: existing.type,
+            description: existing.description,
+            quantity: existing.quantity,
+            unitPricePaise: existing.unitPricePaise,
+            partId: existing.partId,
+          } satisfies Prisma.InputJsonValue,
+        },
+      });
+    });
+
+    return { ok: true };
+  } catch (error) {
+    if (error instanceof StockLineTxError) {
       return { ok: false, reason: error.reason };
     }
     throw error;
@@ -421,9 +607,9 @@ export async function createServiceOrderLine(
 }
 
 class StockLineTxError extends Error {
-  readonly reason: "PART_NOT_FOUND" | "INSUFFICIENT_STOCK";
+  readonly reason: "NOT_FOUND" | "PART_NOT_FOUND" | "INSUFFICIENT_STOCK";
 
-  constructor(reason: "PART_NOT_FOUND" | "INSUFFICIENT_STOCK") {
+  constructor(reason: "NOT_FOUND" | "PART_NOT_FOUND" | "INSUFFICIENT_STOCK") {
     super(reason);
     this.name = "StockLineTxError";
     this.reason = reason;

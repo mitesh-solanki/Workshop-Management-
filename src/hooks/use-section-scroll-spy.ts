@@ -6,46 +6,85 @@ type Options<T extends string> = {
   sections: readonly T[];
   idPrefix: string;
   initialSection?: T;
-  /** Called when the active section changes (click or scroll). */
-  onSectionChange?: (section: T) => void;
+  /**
+   * Fired only when the user clicks the nav (or we deep-link once on load).
+   * Never fired while the user is scrolling by hand — that only updates highlight.
+   */
+  onNavigate?: (section: T) => void;
 };
 
 export function sectionDomId(prefix: string, section: string): string {
   return `${prefix}${section}`;
 }
 
+function getNearestScrollRoot(el: Element | null): HTMLElement | null {
+  let node: Element | null = el;
+  while (node && node !== document.documentElement) {
+    if (node instanceof HTMLElement) {
+      const style = window.getComputedStyle(node);
+      const overflowY = style.overflowY;
+      if (
+        (overflowY === "auto" ||
+          overflowY === "scroll" ||
+          overflowY === "overlay") &&
+        node.scrollHeight > node.clientHeight + 1
+      ) {
+        return node;
+      }
+    }
+    node = node.parentElement;
+  }
+  return null;
+}
+
+/** Section whose top is at / just above the reading line (near top of scroll pane). */
+function sectionAtReadingLine<T extends string>(
+  sections: readonly T[],
+  nodes: Map<T, HTMLElement>,
+  root: HTMLElement | null,
+): T | null {
+  const rootTop = root ? root.getBoundingClientRect().top : 0;
+  // Match sticky aside offset: mobile ~ top-0 + nav, desktop ~ top-4.
+  const readingLine = rootTop + 96;
+
+  let current: T | null = null;
+  for (const section of sections) {
+    const node = nodes.get(section);
+    if (!node) continue;
+    if (node.getBoundingClientRect().top <= readingLine) {
+      current = section;
+    }
+  }
+  return current ?? sections[0] ?? null;
+}
+
 /**
- * Stack sections on the page, highlight the one in view, scroll on nav click.
- * Shared by job card, customer, team, etc.
+ * Click nav → scroll that section to the top + highlight.
+ * Manual scroll → highlight only (never jumps, never updates URL).
  */
 export function useSectionScrollSpy<T extends string>({
   sections,
   idPrefix,
   initialSection,
-  onSectionChange,
+  onNavigate,
 }: Options<T>) {
-  const first = initialSection ?? sections[0]!;
-  const [activeSection, setActiveSection] = useState<T>(first);
-  const [prevFirst, setPrevFirst] = useState(first);
+  const start = initialSection ?? sections[0]!;
+  const [activeSection, setActiveSection] = useState<T>(start);
   const [mountedCount, setMountedCount] = useState(0);
   const nodesRef = useRef<Map<T, HTMLElement>>(new Map());
-  const scrollingToRef = useRef<T | null>(null);
-  const scrollClearTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const activeRef = useRef(activeSection);
-  const onChangeRef = useRef(onSectionChange);
-
-  if (first !== prevFirst) {
-    setPrevFirst(first);
-    setActiveSection(first);
-  }
+  const onNavigateRef = useRef(onNavigate);
+  const programmaticRef = useRef(false);
+  const programClearTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const deepLinkedRef = useRef(false);
 
   useEffect(() => {
     activeRef.current = activeSection;
   }, [activeSection]);
 
   useEffect(() => {
-    onChangeRef.current = onSectionChange;
-  }, [onSectionChange]);
+    onNavigateRef.current = onNavigate;
+  }, [onNavigate]);
 
   const setSectionRef = useCallback(
     (section: T) => (node: HTMLElement | null) => {
@@ -59,104 +98,86 @@ export function useSectionScrollSpy<T extends string>({
     [],
   );
 
-  const scrollToSection = useCallback(
-    (section: T) => {
-      const node = nodesRef.current.get(section);
-      setActiveSection(section);
-      onChangeRef.current?.(section);
-      if (!node) {
-        return;
-      }
-      scrollingToRef.current = section;
-      if (scrollClearTimer.current) {
-        clearTimeout(scrollClearTimer.current);
-      }
-      node.scrollIntoView({ behavior: "smooth", block: "start" });
-      scrollClearTimer.current = setTimeout(() => {
-        scrollingToRef.current = null;
-      }, 700);
-    },
-    [],
-  );
+  const scrollToSection = useCallback((section: T) => {
+    const node = nodesRef.current.get(section);
+    setActiveSection(section);
+    onNavigateRef.current?.(section);
+    if (!node) {
+      return;
+    }
 
+    programmaticRef.current = true;
+    if (programClearTimer.current) {
+      clearTimeout(programClearTimer.current);
+    }
+    node.scrollIntoView({ behavior: "smooth", block: "start" });
+    programClearTimer.current = setTimeout(() => {
+      programmaticRef.current = false;
+    }, 1000);
+  }, []);
+
+  // Deep link `?section=` once after sections mount — never again on URL churn.
   useEffect(() => {
+    if (deepLinkedRef.current) {
+      return;
+    }
     if (!initialSection || initialSection === sections[0]) {
+      deepLinkedRef.current = true;
       return;
     }
     if (mountedCount < sections.length) {
       return;
     }
-    const frame = requestAnimationFrame(() => {
-      const node = nodesRef.current.get(initialSection);
-      if (!node) {
-        return;
-      }
-      scrollingToRef.current = initialSection;
+
+    const node = nodesRef.current.get(initialSection);
+    if (!node) {
+      return;
+    }
+
+    deepLinkedRef.current = true;
+    setActiveSection(initialSection);
+    programmaticRef.current = true;
+    requestAnimationFrame(() => {
       node.scrollIntoView({ behavior: "auto", block: "start" });
-      scrollClearTimer.current = setTimeout(() => {
-        scrollingToRef.current = null;
-      }, 100);
+      programClearTimer.current = setTimeout(() => {
+        programmaticRef.current = false;
+      }, 200);
     });
-    return () => cancelAnimationFrame(frame);
   }, [initialSection, mountedCount, sections]);
 
+  // Manual scroll: highlight only.
   useEffect(() => {
     if (mountedCount < sections.length) {
       return;
     }
 
-    const ratios = new Map<T, number>();
+    const firstNode = nodesRef.current.get(sections[0]!);
+    const root = getNearestScrollRoot(firstNode ?? null);
+    const target: HTMLElement | Window = root ?? window;
 
-    const observer = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) {
-          const rawId = entry.target.id;
-          if (!rawId.startsWith(idPrefix)) {
-            continue;
-          }
-          const id = rawId.slice(idPrefix.length) as T;
-          ratios.set(id, entry.isIntersecting ? entry.intersectionRatio : 0);
-        }
-        if (scrollingToRef.current) {
-          return;
-        }
-
-        let best: T | null = null;
-        let bestRatio = 0;
-        for (const section of sections) {
-          const ratio = ratios.get(section) ?? 0;
-          if (ratio > bestRatio) {
-            bestRatio = ratio;
-            best = section;
-          }
-        }
-        if (!best || bestRatio <= 0 || best === activeRef.current) {
-          return;
-        }
-        setActiveSection(best);
-        onChangeRef.current?.(best);
-      },
-      {
-        root: null,
-        rootMargin: "-15% 0px -55% 0px",
-        threshold: [0, 0.1, 0.25, 0.5, 0.75, 1],
-      },
-    );
-
-    for (const section of sections) {
-      const node = nodesRef.current.get(section);
-      if (node) {
-        observer.observe(node);
+    const updateHighlight = () => {
+      if (programmaticRef.current) {
+        return;
       }
-    }
+      const next = sectionAtReadingLine(sections, nodesRef.current, root);
+      if (!next || next === activeRef.current) {
+        return;
+      }
+      setActiveSection(next);
+    };
+
+    updateHighlight();
+    target.addEventListener("scroll", updateHighlight, { passive: true });
+    window.addEventListener("resize", updateHighlight, { passive: true });
 
     return () => {
-      observer.disconnect();
-      if (scrollClearTimer.current) {
-        clearTimeout(scrollClearTimer.current);
+      target.removeEventListener("scroll", updateHighlight);
+      window.removeEventListener("resize", updateHighlight);
+      if (programClearTimer.current) {
+        clearTimeout(programClearTimer.current);
       }
     };
-  }, [idPrefix, mountedCount, sections]);
+  }, [mountedCount, sections]);
 
   return {
     activeSection,

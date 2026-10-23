@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import {
   sectionDomId,
@@ -19,22 +19,26 @@ export function jobCardSectionDomId(section: JobCardSection): string {
 
 type Options = {
   initialSection?: JobCardSection;
-  /** Keep `?section=` in sync (edit page). */
+  /** Write `?section=` only when the user clicks the left nav. */
   syncUrl?: boolean;
+  /**
+   * `tabs` — one section visible (dummy job-card style).
+   * `scroll` — all sections stacked with scroll-spy highlight.
+   */
+  mode?: "tabs" | "scroll";
 };
 
 export function useJobCardSections({
   initialSection = "details",
   syncUrl = false,
+  mode = "scroll",
 }: Options = {}) {
   const router = useRouter();
   const pathname = usePathname();
 
-  const onSectionChange = useCallback(
+  const syncSectionToUrl = useCallback(
     (section: JobCardSection) => {
-      if (!syncUrl) {
-        return;
-      }
+      if (!syncUrl) return;
       const params = new URLSearchParams();
       if (section !== "details") {
         params.set("section", section);
@@ -47,10 +51,45 @@ export function useJobCardSections({
     [pathname, router, syncUrl],
   );
 
-  return useSectionScrollSpy({
+  const [tabSection, setTabSection] = useState<JobCardSection>(initialSection);
+
+  useEffect(() => {
+    if (mode !== "tabs") return;
+    setTabSection(initialSection);
+  }, [initialSection, mode]);
+
+  const scrollSpy = useSectionScrollSpy({
     sections: JOB_CARD_SECTIONS,
     idPrefix: SECTION_ID_PREFIX,
     initialSection,
-    onSectionChange: syncUrl ? onSectionChange : undefined,
+    onNavigate: syncUrl ? syncSectionToUrl : undefined,
   });
+
+  const scrollToSection = useCallback(
+    (section: JobCardSection) => {
+      if (mode === "tabs") {
+        setTabSection(section);
+        syncSectionToUrl(section);
+        return;
+      }
+      scrollSpy.scrollToSection(section);
+    },
+    [mode, scrollSpy, syncSectionToUrl],
+  );
+
+  if (mode === "tabs") {
+    return {
+      activeSection: tabSection,
+      scrollToSection,
+      setSectionRef: (_section: JobCardSection) => (_node: HTMLElement | null) => {
+        /* refs unused in tabs mode */
+      },
+      sections: JOB_CARD_SECTIONS,
+    };
+  }
+
+  return {
+    ...scrollSpy,
+    sections: JOB_CARD_SECTIONS,
+  };
 }

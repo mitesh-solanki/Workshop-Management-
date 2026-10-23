@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useRef, useState, useTransition, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
 import { Camera, Film, X } from "lucide-react";
 import { compressImageFile } from "@/lib/compress-image";
@@ -25,6 +25,17 @@ type Props = {
   canEdit: boolean;
   /** Tighter controls for checklist rows. */
   compact?: boolean;
+  /**
+   * Single blue “Proof” control that accepts photo or video.
+   * When set, the split Add photo / Add video buttons are hidden.
+   */
+  proofButton?: boolean;
+  /** When false, thumbnails are not rendered (use a second instance for gallery). */
+  showGallery?: boolean;
+  /** When false, upload controls are hidden (gallery / read-only strip). */
+  showControls?: boolean;
+  /** e.g. Save — sits on the right of the photo/video row. */
+  trailingActions?: ReactNode;
 };
 
 export function ItemMediaUploader({
@@ -33,10 +44,15 @@ export function ItemMediaUploader({
   media,
   canEdit,
   compact = false,
+  proofButton = false,
+  showGallery = true,
+  showControls = true,
+  trailingActions,
 }: Props) {
   const t = useTranslations("inspections");
   const photoInputRef = useRef<HTMLInputElement>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
+  const proofInputRef = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -95,34 +111,64 @@ export function ItemMediaUploader({
     });
   }
 
-  if (media.length === 0 && !canEdit) {
+  function onProofPick(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) {
+      return;
+    }
+    const kind: "PHOTO" | "VIDEO" = file.type.startsWith("video/")
+      ? "VIDEO"
+      : "PHOTO";
+    startTransition(() => {
+      void uploadFile(file, kind);
+    });
+  }
+
+  const controlsVisible = showControls && (canEdit || trailingActions);
+  const galleryVisible = showGallery && media.length > 0;
+
+  if (!galleryVisible && !controlsVisible && !error) {
     return null;
   }
 
   return (
     <div className={cn("space-y-1.5", compact && "sm:contents")}>
-      {canEdit ? (
+      {canEdit && showControls ? (
         <>
-          <input
-            ref={photoInputRef}
-            type="file"
-            accept="image/*"
-            className="hidden"
-            disabled={pending}
-            onChange={(e) => onPick(e, "PHOTO")}
-          />
-          <input
-            ref={videoInputRef}
-            type="file"
-            accept="video/*"
-            className="hidden"
-            disabled={pending}
-            onChange={(e) => onPick(e, "VIDEO")}
-          />
+          {proofButton ? (
+            <input
+              ref={proofInputRef}
+              type="file"
+              accept="image/*,video/*"
+              className="hidden"
+              disabled={pending}
+              onChange={onProofPick}
+            />
+          ) : (
+            <>
+              <input
+                ref={photoInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                disabled={pending}
+                onChange={(e) => onPick(e, "PHOTO")}
+              />
+              <input
+                ref={videoInputRef}
+                type="file"
+                accept="video/*"
+                className="hidden"
+                disabled={pending}
+                onChange={(e) => onPick(e, "VIDEO")}
+              />
+            </>
+          )}
         </>
       ) : null}
 
-      {media.length > 0 ? (
+      {galleryVisible ? (
         <ul
           className={cn(
             "flex flex-wrap gap-1.5",
@@ -171,42 +217,70 @@ export function ItemMediaUploader({
         </ul>
       ) : null}
 
-      {canEdit ? (
+      {controlsVisible ? (
         <div className="flex shrink-0 flex-wrap items-center gap-2">
-          <button
-            type="button"
-            disabled={pending}
-            title={t("addPhoto")}
-            className={cn(
-              "inline-flex min-h-9 items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 text-xs font-medium text-slate-700 hover:border-slate-400 hover:bg-slate-50",
-              pending && "opacity-60",
-            )}
-            onClick={(event) => {
-              event.preventDefault();
-              event.stopPropagation();
-              photoInputRef.current?.click();
-            }}
-          >
-            <Camera className="size-3.5 shrink-0" aria-hidden />
-            {t("addPhoto")}
-          </button>
-          <button
-            type="button"
-            disabled={pending}
-            title={t("addVideo")}
-            className={cn(
-              "inline-flex min-h-9 items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 text-xs font-medium text-slate-700 hover:border-slate-400 hover:bg-slate-50",
-              pending && "opacity-60",
-            )}
-            onClick={(event) => {
-              event.preventDefault();
-              event.stopPropagation();
-              videoInputRef.current?.click();
-            }}
-          >
-            <Film className="size-3.5 shrink-0" aria-hidden />
-            {t("addVideo")}
-          </button>
+          {canEdit && showControls && proofButton ? (
+            <button
+              type="button"
+              disabled={pending}
+              title={t("proofMediaHint")}
+              className={cn(
+                "inline-flex min-h-9 items-center gap-1.5 rounded-md bg-blue-600 px-3 text-xs font-bold text-white hover:bg-blue-700",
+                pending && "opacity-60",
+              )}
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                proofInputRef.current?.click();
+              }}
+            >
+              <Camera className="size-3.5 shrink-0" aria-hidden />
+              {pending ? t("saving") : t("proofMedia")}
+            </button>
+          ) : null}
+          {canEdit && showControls && !proofButton ? (
+            <>
+              <button
+                type="button"
+                disabled={pending}
+                title={t("addPhoto")}
+                className={cn(
+                  "inline-flex min-h-9 items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 text-xs font-medium text-slate-700 hover:border-slate-400 hover:bg-slate-50",
+                  pending && "opacity-60",
+                )}
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  photoInputRef.current?.click();
+                }}
+              >
+                <Camera className="size-3.5 shrink-0" aria-hidden />
+                {t("addPhoto")}
+              </button>
+              <button
+                type="button"
+                disabled={pending}
+                title={t("addVideo")}
+                className={cn(
+                  "inline-flex min-h-9 items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 text-xs font-medium text-slate-700 hover:border-slate-400 hover:bg-slate-50",
+                  pending && "opacity-60",
+                )}
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  videoInputRef.current?.click();
+                }}
+              >
+                <Film className="size-3.5 shrink-0" aria-hidden />
+                {t("addVideo")}
+              </button>
+            </>
+          ) : null}
+          {trailingActions ? (
+            <div className="ml-auto flex shrink-0 items-center gap-2">
+              {trailingActions}
+            </div>
+          ) : null}
         </div>
       ) : null}
 

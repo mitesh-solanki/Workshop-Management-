@@ -2,20 +2,9 @@
 
 import { useMemo, useState, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
-import {
-  ClipboardList,
-  FileText,
-  History,
-  Receipt,
-  Search,
-  type LucideIcon,
-} from "lucide-react";
-import {
-  Card,
-  CardDescription,
-} from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FormField } from "@/components/ui/form-field";
+import { Input } from "@/components/ui/input";
 import { JobCardSectionNav } from "@/modules/service-orders/components/job-card-section-nav";
 import { ServiceOrderForm } from "@/modules/service-orders/components/service-order-form";
 import type { JobCardSection } from "@/modules/service-orders/job-card-sections";
@@ -42,12 +31,21 @@ type TechnicianOption = {
 type Props = {
   vehicles: VehicleOption[];
   technicians: TechnicianOption[];
-  /** Prefill when opened from a vehicle. */
   initialVehicleId?: string;
 };
 
 const selectClass =
   "h-11 min-h-11 w-full rounded-md border border-input bg-transparent px-3 text-base shadow-xs outline-none focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/40 md:text-sm";
+
+const SECTION_NUMBERS: Record<JobCardSection, string> = {
+  details: "01",
+  lines: "02",
+  inspection: "03",
+  estimate: "04",
+  billing: "05",
+  liveLink: "06",
+  timeline: "07",
+};
 
 function SectionBlock({
   id,
@@ -66,32 +64,32 @@ function SectionBlock({
     <section
       id={jobCardSectionDomId(id)}
       ref={sectionRef}
-      className="scroll-mt-4 border-b border-border last:border-b-0"
+      className="min-w-0 scroll-mt-24 overflow-hidden rounded-[14px] border border-[#d7deea] bg-white shadow-[0_3px_17px_rgba(36,58,99,0.06)] lg:scroll-mt-6"
     >
-      <div className="border-b border-border px-5 py-3.5 sm:px-6">
-        <h2 className="text-section-title text-slate-900">{title}</h2>
-        {subtitle ? (
-          <CardDescription className="mt-0.5">{subtitle}</CardDescription>
-        ) : null}
+      <div className="flex items-start gap-3 border-b border-[#d7deea] bg-[#f8fafc] px-4 py-4 sm:px-5">
+        <span className="grid size-9 shrink-0 place-items-center rounded-[10px] bg-[#e8efff] text-[13px] font-black text-[#1f5eff]">
+          {SECTION_NUMBERS[id]}
+        </span>
+        <div className="min-w-0 flex-1 pt-0.5">
+          <h2 className="text-[17px] font-semibold tracking-tight text-[#152238]">
+            {title}
+          </h2>
+          {subtitle ? (
+            <p className="mt-1 text-[12px] text-[#5c6b7e]">{subtitle}</p>
+          ) : null}
+        </div>
       </div>
       {children}
     </section>
   );
 }
 
-function LockedBody({
-  icon: Icon,
-  onGoDetails,
-}: {
-  icon: LucideIcon;
-  onGoDetails: () => void;
-}) {
+function LockedBody({ onGoDetails }: { onGoDetails: () => void }) {
   const t = useTranslations("orders");
   return (
     <div className="px-5 py-5 sm:px-6">
       <EmptyState
         compact
-        icon={Icon}
         title={t("createSectionsLockedTitle")}
         description={t("createSectionsLockedBody")}
         action={
@@ -117,6 +115,7 @@ export function NewJobCardForm({
   const ti = useTranslations("inspections");
   const te = useTranslations("estimates");
   const tb = useTranslations("billing");
+  const tl = useTranslations("liveLink");
   const [vehicleId, setVehicleId] = useState(initialVehicleId);
   const { activeSection, scrollToSection, setSectionRef } = useJobCardSections();
 
@@ -130,13 +129,15 @@ export function NewJobCardForm({
   }
 
   return (
-    <div className="grid w-full items-start gap-4 lg:grid-cols-[220px_minmax(0,1fr)] xl:grid-cols-[240px_minmax(0,1fr)]">
-      <JobCardSectionNav
-        section={activeSection}
-        onSectionChange={scrollToSection}
-      />
+    <div className="flex w-full flex-col gap-4 lg:flex-row lg:items-start">
+      <aside className="sticky top-0 z-20 w-full shrink-0 bg-background pb-1 lg:top-4 lg:w-[220px] lg:bg-transparent lg:pb-0 xl:w-[240px]">
+        <JobCardSectionNav
+          section={activeSection}
+          onSectionChange={scrollToSection}
+        />
+      </aside>
 
-      <Card className="min-w-0 gap-0 overflow-visible py-0">
+      <div className="flex min-w-0 flex-1 flex-col gap-4">
         <SectionBlock
           id="details"
           title={t("details")}
@@ -144,25 +145,37 @@ export function NewJobCardForm({
           sectionRef={setSectionRef("details")}
         >
           <div className="space-y-6 px-5 py-5 sm:px-6">
-            <FormField
-              id="vehicleId-picker"
-              label={t("selectVehicle")}
-              hint={t("selectVehicleHint")}
-            >
-              <select
+            <div className="grid gap-4 sm:grid-cols-2">
+              <FormField
                 id="vehicleId-picker"
-                className={selectClass}
-                value={vehicleId}
-                onChange={(event) => setVehicleId(event.target.value)}
+                label={t("selectVehicle")}
+                hint={t("selectVehicleHint")}
               >
-                <option value="">{t("selectVehiclePlaceholder")}</option>
-                {vehicles.map((vehicle) => (
-                  <option key={vehicle.id} value={vehicle.id}>
-                    {`${vehicle.registrationNumber} — ${vehicle.customerName} (${vehicle.make} ${vehicle.model})`}
-                  </option>
-                ))}
-              </select>
-            </FormField>
+                <select
+                  id="vehicleId-picker"
+                  className={selectClass}
+                  value={vehicleId}
+                  onChange={(event) => setVehicleId(event.target.value)}
+                >
+                  <option value="">{t("selectVehiclePlaceholder")}</option>
+                  {vehicles.map((vehicle) => (
+                    <option key={vehicle.id} value={vehicle.id}>
+                      {`${vehicle.registrationNumber} — ${vehicle.make} ${vehicle.model}`}
+                    </option>
+                  ))}
+                </select>
+              </FormField>
+              <FormField id="locked-customer" label={t("customer")}>
+                <Input
+                  id="locked-customer"
+                  value={selected?.customerName ?? ""}
+                  placeholder={t("selectVehiclePlaceholder")}
+                  disabled
+                  readOnly
+                  className="h-11 min-h-11"
+                />
+              </FormField>
+            </div>
 
             {selected ? (
               <ServiceOrderForm
@@ -171,11 +184,6 @@ export function NewJobCardForm({
                 vehicleId={selected.id}
                 defaultOdometer={selected.odometer}
                 technicians={technicians}
-                locked={{
-                  customerName: selected.customerName,
-                  registrationNumber: selected.registrationNumber,
-                  vehicleLabel: `${selected.make} ${selected.model}`.trim(),
-                }}
               />
             ) : (
               <p className="rounded-lg border border-dashed border-slate-200 bg-slate-50/80 px-4 py-8 text-center text-body text-slate-600">
@@ -191,7 +199,7 @@ export function NewJobCardForm({
           subtitle={t("linesDescription")}
           sectionRef={setSectionRef("lines")}
         >
-          <LockedBody icon={ClipboardList} onGoDetails={goToDetails} />
+          <LockedBody onGoDetails={goToDetails} />
         </SectionBlock>
 
         <SectionBlock
@@ -200,7 +208,7 @@ export function NewJobCardForm({
           subtitle={t("inspectionHint")}
           sectionRef={setSectionRef("inspection")}
         >
-          <LockedBody icon={Search} onGoDetails={goToDetails} />
+          <LockedBody onGoDetails={goToDetails} />
         </SectionBlock>
 
         <SectionBlock
@@ -209,7 +217,7 @@ export function NewJobCardForm({
           subtitle={t("estimateHint")}
           sectionRef={setSectionRef("estimate")}
         >
-          <LockedBody icon={FileText} onGoDetails={goToDetails} />
+          <LockedBody onGoDetails={goToDetails} />
         </SectionBlock>
 
         <SectionBlock
@@ -218,17 +226,27 @@ export function NewJobCardForm({
           subtitle={t("billingHint")}
           sectionRef={setSectionRef("billing")}
         >
-          <LockedBody icon={Receipt} onGoDetails={goToDetails} />
+          <LockedBody onGoDetails={goToDetails} />
+        </SectionBlock>
+
+        <SectionBlock
+          id="liveLink"
+          title={tl("title")}
+          subtitle={tl("subtitle")}
+          sectionRef={setSectionRef("liveLink")}
+        >
+          <LockedBody onGoDetails={goToDetails} />
         </SectionBlock>
 
         <SectionBlock
           id="timeline"
           title={t("timeline")}
+          subtitle={t("timelineHint")}
           sectionRef={setSectionRef("timeline")}
         >
-          <LockedBody icon={History} onGoDetails={goToDetails} />
+          <LockedBody onGoDetails={goToDetails} />
         </SectionBlock>
-      </Card>
+      </div>
     </div>
   );
 }

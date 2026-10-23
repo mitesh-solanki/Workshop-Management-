@@ -21,7 +21,7 @@ src/
     (auth)/ (app)/ live/[token]/   # live/[token] is the public customer link
   modules/
     customers/ vehicles/ service-orders/ inspections/ estimates/
-    inventory/ vendors/ purchases/ billing/ payments/
+    inventory/ vendors/ purchases/ billing/ invoices/ payments/
     reminders/ reports/ team/ appointments/ settings/
     # each module: schema.ts (zod), service.ts (logic), repo.ts (db), components/
   lib/                 # db, auth, i18n, money, gst, audit, storage

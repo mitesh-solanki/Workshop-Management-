@@ -12,20 +12,24 @@ import {
   DEFAULT_GST_RATE_PERCENT,
   defaultHsnOrSac,
   setLineApprovalSchema,
+  updatePermissionLineSchema,
   type AddEstimateLineInput,
   type CreateEstimateInput,
   type CreateEstimateRevisionInput,
   type EstimateLineTypeValue,
   type SetLineApprovalInput,
+  type UpdatePermissionLineInput,
 } from "@/modules/estimates/schema";
 import {
   addEstimateLine,
   createEstimateWithLines,
+  deleteEstimateLine,
   findCurrentEstimate,
   findEstimateById,
   findEstimateLineById,
   listEstimatesForOrder,
   recordLineApproval,
+  updateEstimateLineDetails,
   type EstimateLineCreateInput,
 } from "@/modules/estimates/repo";
 import { computeEstimateTotals } from "@/modules/estimates/totals";
@@ -316,6 +320,41 @@ export async function addManualEstimateLine(
   return line;
 }
 
+export async function removeEstimateLine(
+  session: RoleSession,
+  lineId: string,
+) {
+  requireRole(session, WRITE_ROLES);
+
+  const existing = await findEstimateLineById(session.garageId, lineId);
+  if (!existing) {
+    throw new NotFoundError();
+  }
+  if (existing.estimate.supersededAt != null) {
+    throw new AppError("ESTIMATE_SUPERSEDED");
+  }
+
+  const order = await loadOrderForSession(
+    session,
+    existing.estimate.serviceOrderId,
+  );
+  assertCanMutateOrder(session, order);
+
+  const result = await deleteEstimateLine(session.garageId, {
+    lineId: existing.id,
+    estimateId: existing.estimateId,
+    serviceOrderId: order.id,
+    description: existing.description,
+    actorId: session.userId,
+  });
+  if (result === "not_found") {
+    throw new NotFoundError();
+  }
+  if (result === "billed") {
+    throw new AppError("ESTIMATE_LINE_BILLED");
+  }
+}
+
 export async function setEstimateLineApproval(
   session: RoleSession,
   lineId: string,
@@ -356,6 +395,73 @@ export async function setEstimateLineApproval(
     throw new AppError("APPROVAL_CONFLICT");
   }
   return result;
+}
+
+export async function savePermissionLine(
+  session: RoleSession,
+  lineId: string,
+  raw: UpdatePermissionLineInput,
+) {
+  requireRole(session, WRITE_ROLES);
+  const input = updatePermissionLineSchema.parse(raw);
+
+  const existing = await findEstimateLineById(session.garageId, lineId);
+  if (!existing) {
+    throw new NotFoundError();
+  }
+  if (existing.estimate.supersededAt != null) {
+    throw new AppError("ESTIMATE_SUPERSEDED");
+  }
+
+  const order = await loadOrderForSession(
+    session,
+    existing.estimate.serviceOrderId,
+  );
+  assertCanMutateOrder(session, order);
+
+  const detailsChanged =
+    existing.description !== input.description ||
+    existing.quantity !== input.quantity ||
+    existing.unitPricePaise !== input.unitPricePaise;
+  const approvalChanged = existing.approvalState !== input.approvalState;
+
+  if (!detailsChanged && !approvalChanged) {
+    throw new AppError("APPROVAL_UNCHANGED");
+  }
+
+  if (detailsChanged) {
+    const updated = await updateEstimateLineDetails(session.garageId, {
+      lineId: existing.id,
+      estimateId: existing.estimateId,
+      serviceOrderId: order.id,
+      description: input.description,
+      quantity: input.quantity,
+      unitPricePaise: input.unitPricePaise,
+      actorId: session.userId,
+    });
+    if (!updated) {
+      throw new NotFoundError();
+    }
+  }
+
+  if (approvalChanged) {
+    const result = await recordLineApproval(session.garageId, {
+      estimateId: existing.estimateId,
+      estimateLineId: existing.id,
+      serviceOrderId: order.id,
+      fromState: existing.approvalState,
+      toState: input.approvalState,
+      method: input.method,
+      note: input.note,
+      recordedById: session.userId,
+    });
+    if (!result?.line) {
+      throw new AppError("APPROVAL_CONFLICT");
+    }
+    return result;
+  }
+
+  return { line: existing };
 }
 
 /** Test helper: cross-garage read attempt. */

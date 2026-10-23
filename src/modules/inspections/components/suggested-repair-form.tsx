@@ -42,7 +42,7 @@ export function SuggestedRepairSection({ orderId, repairs, canEdit }: Props) {
   const [removing, startRemove] = useTransition();
 
   return (
-    <section className="space-y-2 border-t border-slate-200 pt-4">
+    <section className="space-y-2">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h3 className="text-sm font-semibold text-slate-900">
           {t("suggestedRepairs")}
@@ -51,7 +51,7 @@ export function SuggestedRepairSection({ orderId, repairs, canEdit }: Props) {
       </div>
 
       {repairs.length > 0 ? (
-        <ul className="rounded-lg border border-slate-200 bg-white">
+        <ul className="rounded-lg border border-slate-300 bg-white">
           {repairs.map((repair) => {
             const total = multiplyByQuantity(
               repair.unitPricePaise,
@@ -60,7 +60,7 @@ export function SuggestedRepairSection({ orderId, repairs, canEdit }: Props) {
             return (
               <li
                 key={repair.id}
-                className="flex items-center justify-between gap-2 border-b border-slate-100 px-3 py-2 last:border-b-0"
+                className="flex items-center justify-between gap-2 border-b border-slate-300 px-3 py-2 last:border-b-0"
               >
                 <div className="min-w-0">
                   <p className="truncate text-sm font-medium text-slate-900">
@@ -153,7 +153,7 @@ export function SuggestedRepairSection({ orderId, repairs, canEdit }: Props) {
               type="submit"
               size="sm"
               loading={pending}
-              className="h-8 shrink-0 bg-blue-600 text-white hover:bg-blue-700 hover:text-white"
+              className="h-8 min-h-8 shrink-0 bg-blue-600 px-3 text-white hover:bg-blue-700 hover:text-white"
             >
               {pending ? t("saving") : t("addRepair")}
             </Button>

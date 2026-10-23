@@ -14,6 +14,8 @@ import { JobCardEstimateContent } from "@/modules/estimates/components/job-card-
 import { getEstimateForOrder } from "@/modules/estimates/service";
 import { JobCardInspectionContent } from "@/modules/inspections/components/job-card-inspection-content";
 import { getOrCreateInspection } from "@/modules/inspections/service";
+import { LiveLinkStaffPanel } from "@/modules/live-link/components/live-link-staff-panel";
+import { getLiveLinkStatusForOrder } from "@/modules/live-link/service";
 import { JobCardDetailPanel } from "@/modules/service-orders/components/job-card-detail-panel";
 import { isJobCardSection } from "@/modules/service-orders/job-card-sections";
 import { listParts } from "@/modules/inventory/service";
@@ -48,19 +50,31 @@ export default async function OrderEditPage({ params, searchParams }: Props) {
   let technicians: Awaited<ReturnType<typeof listAssignableTechnicians>>;
   let parts: Awaited<ReturnType<typeof listParts>> = [];
   let garage: Awaited<ReturnType<typeof getGarageBillingProfile>> = null;
+  let liveLinkStatus: Awaited<ReturnType<typeof getLiveLinkStatusForOrder>> = {
+    active: null,
+  };
 
   try {
     order = await getOrder(session, id);
-    [timeline, inspection, estimate, invoices, technicians, parts, garage] =
-      await Promise.all([
-        getOrderTimeline(session, id),
-        getOrCreateInspection(session, id),
-        getEstimateForOrder(session, id),
-        getInvoicesForOrder(session, id),
-        listAssignableTechnicians(session),
-        listParts(session),
-        getGarageBillingProfile(session),
-      ]);
+    [
+      timeline,
+      inspection,
+      estimate,
+      invoices,
+      technicians,
+      parts,
+      garage,
+      liveLinkStatus,
+    ] = await Promise.all([
+      getOrderTimeline(session, id),
+      getOrCreateInspection(session, id),
+      getEstimateForOrder(session, id),
+      getInvoicesForOrder(session, id),
+      listAssignableTechnicians(session),
+      listParts(session),
+      getGarageBillingProfile(session),
+      getLiveLinkStatusForOrder(session, id).catch(() => ({ active: null })),
+    ]);
   } catch (error) {
     if (error instanceof NotFoundError || error instanceof ForbiddenError) {
       notFound();
@@ -241,6 +255,13 @@ export default async function OrderEditPage({ params, searchParams }: Props) {
               approvedTotalPaise,
               approvedTaxLabel: te("gstShort"),
             }}
+          />
+        }
+        liveLinkContent={
+          <LiveLinkStaffPanel
+            orderId={order.id}
+            active={liveLinkStatus.active}
+            canEdit={canBill}
           />
         }
       />

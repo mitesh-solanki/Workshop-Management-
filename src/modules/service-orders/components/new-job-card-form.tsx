@@ -43,7 +43,8 @@ const SECTION_NUMBERS: Record<JobCardSection, string> = {
   inspection: "03",
   estimate: "04",
   billing: "05",
-  timeline: "06",
+  liveLink: "06",
+  timeline: "07",
 };
 
 function SectionBlock({
@@ -114,6 +115,7 @@ export function NewJobCardForm({
   const ti = useTranslations("inspections");
   const te = useTranslations("estimates");
   const tb = useTranslations("billing");
+  const tl = useTranslations("liveLink");
   const [vehicleId, setVehicleId] = useState(initialVehicleId);
   const { activeSection, scrollToSection, setSectionRef } = useJobCardSections();
 
@@ -228,8 +230,18 @@ export function NewJobCardForm({
         </SectionBlock>
 
         <SectionBlock
+          id="liveLink"
+          title={tl("title")}
+          subtitle={tl("subtitle")}
+          sectionRef={setSectionRef("liveLink")}
+        >
+          <LockedBody onGoDetails={goToDetails} />
+        </SectionBlock>
+
+        <SectionBlock
           id="timeline"
           title={t("timeline")}
+          subtitle={t("timelineHint")}
           sectionRef={setSectionRef("timeline")}
         >
           <LockedBody onGoDetails={goToDetails} />

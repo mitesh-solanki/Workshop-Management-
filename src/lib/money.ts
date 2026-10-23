@@ -4,29 +4,54 @@ import { z } from "zod";
 
 export type Paise = number;
 
-function assertPaise(value: number, label: string): asserts value is Paise {
-  if (!Number.isInteger(value)) {
+/**
+ * Coerce values from Prisma / RSC / forms into integer paise.
+ * Accepts number, numeric string, or Decimal-like `{ toNumber() }`.
+ */
+export function toPaise(value: unknown, label = "amountPaise"): Paise {
+  let n: number;
+  if (typeof value === "number") {
+    n = value;
+  } else if (typeof value === "bigint") {
+    n = Number(value);
+  } else if (typeof value === "string" && value.trim() !== "") {
+    n = Number(value);
+  } else if (
+    value != null &&
+    typeof value === "object" &&
+    "toNumber" in value &&
+    typeof (value as { toNumber: unknown }).toNumber === "function"
+  ) {
+    n = (value as { toNumber: () => number }).toNumber();
+  } else {
+    n = Number.NaN;
+  }
+  if (!Number.isFinite(n)) {
     throw new Error(`${label} must be an integer number of paise`);
   }
+  return Math.round(n);
+}
+
+function assertPaise(value: unknown, label: string): Paise {
+  return toPaise(value, label);
 }
 
 /** Sum paise amounts. */
 export function add(...amounts: Paise[]): Paise {
   let total = 0;
   for (const amount of amounts) {
-    assertPaise(amount, "amount");
-    total += amount;
+    total += assertPaise(amount, "amount");
   }
   return total;
 }
 
 /** Multiply a unit price in paise by a quantity (integer or decimal). Result is rounded to nearest paise. */
 export function multiplyByQuantity(unitPaise: Paise, quantity: number): Paise {
-  assertPaise(unitPaise, "unitPaise");
+  const unit = assertPaise(unitPaise, "unitPaise");
   if (!Number.isFinite(quantity)) {
     throw new Error("quantity must be a finite number");
   }
-  return Math.round(unitPaise * quantity);
+  return Math.round(unit * quantity);
 }
 
 /**
@@ -34,17 +59,17 @@ export function multiplyByQuantity(unitPaise: Paise, quantity: number): Paise {
  * Uses half-up rounding via Math.round (e.g. GST line rounding).
  */
 export function percentage(amountPaise: Paise, percent: number): Paise {
-  assertPaise(amountPaise, "amountPaise");
+  const amount = assertPaise(amountPaise, "amountPaise");
   if (!Number.isFinite(percent)) {
     throw new Error("percent must be a finite number");
   }
-  return Math.round((amountPaise * percent) / 100);
+  return Math.round((amount * percent) / 100);
 }
 
 /** Format paise as Indian rupees, e.g. 125050 → "₹1,250.50". */
 export function formatRupees(amountPaise: Paise, locale = "en-IN"): string {
-  assertPaise(amountPaise, "amountPaise");
-  const rupees = amountPaise / 100;
+  const amount = assertPaise(amountPaise, "amountPaise");
+  const rupees = amount / 100;
   return new Intl.NumberFormat(locale, {
     style: "currency",
     currency: "INR",
@@ -77,12 +102,12 @@ export function parseRupeesToPaise(value: string | number): Paise | null {
 
 /** Format paise for an editable rupee input. Zero → empty so typing does not leave a leading 0. */
 export function paiseToRupeesInput(amountPaise: Paise): string {
-  assertPaise(amountPaise, "amountPaise");
-  if (amountPaise === 0) {
+  const amount = assertPaise(amountPaise, "amountPaise");
+  if (amount === 0) {
     return "";
   }
-  const rupees = Math.floor(amountPaise / 100);
-  const paise = amountPaise % 100;
+  const rupees = Math.floor(amount / 100);
+  const paise = amount % 100;
   if (paise === 0) {
     return String(rupees);
   }

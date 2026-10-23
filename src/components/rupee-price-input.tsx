@@ -7,6 +7,7 @@ import {
   isZeroRupeesInput,
   paiseToRupeesInput,
   sanitizeRupeesTyping,
+  toPaise,
   type Paise,
 } from "@/lib/money";
 import { cn } from "@/lib/utils";
@@ -23,6 +24,14 @@ type Props = {
   className?: string;
   inputClassName?: string;
 };
+
+function safeDefaultPaise(value: unknown): Paise {
+  try {
+    return toPaise(value ?? 0, "defaultPaise");
+  } catch {
+    return 0;
+  }
+}
 
 /**
  * Shared rupee price field for labour/parts forms.
@@ -42,6 +51,7 @@ export function RupeePriceInput({
   const t = useTranslations("common");
   const resolvedLabel = label ?? t("unitPrice");
   const resolvedHint = hint ?? t("unitPriceHint");
+  const initialPaise = safeDefaultPaise(defaultPaise);
 
   return (
     <FormField
@@ -59,7 +69,7 @@ export function RupeePriceInput({
         placeholder="0"
         pattern="^\d+(\.\d{1,2})?$"
         title={resolvedHint}
-        defaultValue={paiseToRupeesInput(defaultPaise)}
+        defaultValue={paiseToRupeesInput(initialPaise)}
         required={required}
         disabled={disabled}
         className={cn("h-11 min-h-11", inputClassName)}

@@ -367,6 +367,7 @@
       "inspection": "તપાસ + ફોટો",
       "estimate": "કિંમત + હા/ના",
       "billing": "બિલ + પૈસા",
+      "liveLink": "ગ્રાહક સાથે શેર",
       "timeline": "શું થયું"
     },
 
@@ -1229,6 +1230,11 @@
       "CARD": "કાર્ડ",
       "MIXED": "મિક્સ્ડ"
     },
+    "paymentStatuses": {
+      "PENDING": "UPI રાહ જુએ છે",
+      "PAID": "ચૂકવેલ",
+      "FAILED": "નિષ્ફળ"
+    },
     "reasons": {
       "CORRECTION": "સુધારો",
       "REFUND": "રિફંડ",
@@ -1253,6 +1259,102 @@
       "creditNoteRequiresFinalized": "ક્રેડિટ નોટ ફક્ત અંતિમ ઇનવૉઇસ માટે.",
       "creditNoteExceedsInvoice": "ક્રેડિટ નોટ કુલ ઇનવૉઇસ કુલ કરતાં વધુ ન હોઈ શકે.",
       "creditNoteFailed": "ક્રેડિટ નોટ બની શક્યું નહીં."
+    },
+    "upiPayTitle": "UPI ચુકવણી (Razorpay)",
+    "upiPayHint": "બાકી માટે QR અને ચુકવણી લિંક બનાવો. વેબહુક ચુકવણીને એક જ વાર ચૂકવેલ ચિહ્નિત કરે છે.",
+    "generateUpi": "UPI QR / લિંક બનાવો",
+    "upiReady": "UPI ચુકવણી તૈયાર",
+    "upiAmount": "રકમ: {amount}",
+    "upiQrAlt": "UPI ચુકવણી QR કોડ",
+    "openUpiLink": "ચુકવણી લિંક ખોલો",
+    "manualPayTitle": "રોકડ, UPI અથવા કાર્ડ નોંધો",
+    "manualPayHint": "જ્યારે ગ્રાહક કાઉન્ટર પર પહેલેથી ચૂકવી ચૂક્યો હોય. ઓનલાઇન UPI QR ઉપર છે."
+  },
+  "liveLink": {
+    "title": "ગ્રાહક લાઇવ લિંક",
+    "subtitle": "લિંક શેર કરો જેથી ગ્રાહક સ્થિતિ જુએ, અંદાજ મંજૂર કરે અને ચૂકવે.",
+    "staffHint": "લિંક આપમેળે સમાપ્ત થાય છે. નવી લિંક જૂનીને રદ કરે છે. ફક્ત ટોકન હેશ સંગ્રહાય છે.",
+    "expiryLabel": "લિંક સમાપ્ત થાય",
+    "expiry24h": "24 કલાક",
+    "expiry3d": "3 દિવસ",
+    "expiry7d": "7 દિવસ",
+    "createLink": "લાઇવ લિંક બનાવો",
+    "renewLink": "નવી લિંક બનાવો",
+    "revokeLink": "લિંક રદ કરો",
+    "linkCreated": "લાઇવ લિંક બની — હમણાં કૉપિ કરો",
+    "linkRevoked": "લાઇવ લિંક રદ",
+    "linkActive": "એક લાઇવ લિંક સક્રિય છે",
+    "linkReady": "આ લિંક કૉપિ કરો (એક વાર દેખાય)",
+    "urlHiddenHint": "પૂર્ણ URL ફક્ત લિંક બનાવતી અથવા નવી બનાવતી વખતે દેખાય છે.",
+    "expiresAt": "સમાપ્તિ {when}",
+    "copyLink": "લિંક કૉપિ કરો",
+    "copied": "લિંક કૉપિ થઈ",
+    "copyFailed": "કૉપિ થઈ શકી નહીં. લિંક પસંદ કરીને જાતે કૉપિ કરો.",
+    "saving": "સેવ થઈ રહ્યું છે…",
+    "readOnly": "ફક્ત {owner}, {manager} અથવા {accountant} લાઇવ લિંક મેનેજ કરી શકે.",
+    "inspectionTitle": "નિરીક્ષણ ફોટો અને વિડિયો",
+    "mediaEmpty": "હજુ કોઈ નિરીક્ષણ મીડિયા નથી.",
+    "estimateTitle": "અંદાજ",
+    "estimateEmpty": "અંદાજ હજુ તૈયાર નથી.",
+    "invoiceTitle": "ઇનવૉઇસ",
+    "invoiceEmpty": "ઇનવૉઇસ હજુ તૈયાર નથી.",
+    "invoiceDraft": "ઇનવૉઇસ",
+    "invoiceTotal": "કુલ",
+    "paidBadge": "ચૂકવેલ",
+    "alreadyPaid": "આ ઇનવૉઇસ સંપૂર્ણ ચૂકવાયેલ છે.",
+    "balanceDue": "બાકી",
+    "payNow": "હમણાં ચૂકવો",
+    "payReady": "ચુકવણી તૈયાર — QR સ્કેન કરો અથવા લિંક ખોલો",
+    "payAmount": "{amount} ચૂકવો",
+    "qrAlt": "UPI QR કોડ",
+    "scanQr": "કોઈપણ UPI એપથી સ્કેન કરો",
+    "openPaymentLink": "ચુકવણી લિંક ખોલો",
+    "approve": "મંજૂર",
+    "reject": "નકાર",
+    "lineApproved": "લાઇન મંજૂર",
+    "lineRejected": "લાઇન નકારાઈ",
+    "expectedCompletion": "અપેક્ષિત {when}",
+    "paymentReturnHint": "જો તમે હમણાં ચૂકવ્યું હોય, પુષ્ટિ પછી સ્થિતિ અપડેટ થશે.",
+    "approval": {
+      "PENDING": "બાકી",
+      "APPROVED": "મંજૂર",
+      "REJECTED": "નકારાયેલ"
+    },
+    "unavailable": {
+      "wrong_token": {
+        "title": "અમાન્ય લિંક",
+        "body": "આ લિંક અમાન્ય છે. ગેરાજ પાસેથી નવી લાઇવ લિંક માંગો."
+      },
+      "expired": {
+        "title": "લિંક સમાપ્ત",
+        "body": "આ લિંક સમાપ્ત થઈ ગઈ છે. ગેરાજ પાસેથી નવી લાઇવ લિંક માંગો."
+      },
+      "revoked": {
+        "title": "લિંક રદ",
+        "body": "આ લિંક હવે સક્રિય નથી. ગેરાજ પાસેથી નવી લાઇવ લિંક માંગો."
+      },
+      "rate_limited": {
+        "title": "ખૂબ વિનંતીઓ",
+        "body": "થોડી મિનિટ રાહ જુઓ અને ફરી પ્રયાસ કરો."
+      }
+    },
+    "errors": {
+      "wrong_token": "આ લિંક અમાન્ય છે.",
+      "expired": "આ લિંક સમાપ્ત થઈ ગઈ છે.",
+      "revoked": "આ લિંક હવે સક્રિય નથી.",
+      "rate_limited": "ખૂબ વિનંતીઓ. થોડી મિનિટ પછી ફરી પ્રયાસ કરો."
+    }
+  },
+  "payments": {
+    "linkDescription": "ઇનવૉઇસ {number}",
+    "linkDescriptionFallback": "ઇનવૉઇસ ચુકવણી",
+    "providerNote": "Razorpay UPI",
+    "errors": {
+      "razorpayNotConfigured": "Razorpay ગોઠવાયેલ નથી. પર્યાવરણમાં કી ઉમેરો.",
+      "providerFailed": "UPI ચુકવણી બની શકી નહીં. ફરી પ્રયાસ કરો.",
+      "nothingDue": "આ ઇનવૉઇસ પર કંઈ બાકી નથી.",
+      "invalidWebhookSignature": "અમાન્ય ચુકવણી વેબહુક સહી.",
+      "invalidWebhookBody": "અમાન્ય ચુકવણી વેબહુક બોડી."
     }
   }
 }

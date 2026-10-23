@@ -98,6 +98,18 @@ enum PaymentMethod {
   MIXED
 }
 
+enum PaymentProvider {
+  NONE
+  RAZORPAY
+}
+
+/// Manual cash/card rows are PAID immediately. UPI provider rows start PENDING.
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+}
+
 enum CreditNoteReason {
   CORRECTION
   REFUND
@@ -139,6 +151,7 @@ model Garage {
   creditNoteLines   CreditNoteLine[]
   creditNoteNumberCounters CreditNoteNumberCounter[]
   payments          Payment[]
+  liveLinks         LiveLink[]
 }
 
 model Customer {
@@ -213,6 +226,7 @@ model ServiceOrder {
   estimates      Estimate[]
   invoices       Invoice[]
   stockMovements StockMovement[]
+  liveLinks      LiveLink[]
 
   @@index([garageId])
   @@index([garageId, status])
@@ -660,13 +674,46 @@ model Payment {
   upiPaise    Int           @default(0)
   cardPaise   Int           @default(0)
   note        String?
+  /// Manual payments are PAID; Razorpay UPI starts PENDING until webhook.
+  status      PaymentStatus @default(PAID)
+  provider    PaymentProvider @default(NONE)
+  /// Razorpay payment id (pay_…). Unique when set — webhook marks paid once.
+  providerPaymentId     String?
+  providerOrderId       String?
+  providerPaymentLinkId String?
+  paymentLinkUrl        String?
+  qrImageDataUrl        String?  @db.Text
   receivedAt  DateTime      @default(now())
   createdById String?
   createdBy   User?         @relation("PaymentCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
   createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
 
+  @@unique([provider, providerPaymentId])
   @@index([garageId])
   @@index([invoiceId, receivedAt])
+  @@index([providerPaymentLinkId])
+}
+
+/// Public customer live link for one service order. Store only the token hash.
+model LiveLink {
+  id             String    @id @default(cuid())
+  garageId       String
+  garage         Garage    @relation(fields: [garageId], references: [id], onDelete: Cascade)
+  serviceOrderId String
+  serviceOrder   ServiceOrder @relation(fields: [serviceOrderId], references: [id], onDelete: Cascade)
+  /// SHA-256 of the 32-byte raw token. Raw token is never stored.
+  tokenHash      String    @unique
+  expiresAt      DateTime
+  revokedAt      DateTime?
+  createdById    String?
+  createdBy      User?     @relation("LiveLinkCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([garageId])
+  @@index([serviceOrderId, revokedAt])
+  @@index([expiresAt])
 }
 
 model User {
@@ -692,6 +739,7 @@ model User {
   invoicesCreated     Invoice[]             @relation("InvoiceCreatedBy")
   creditNotesCreated  CreditNote[]          @relation("CreditNoteCreatedBy")
   paymentsCreated     Payment[]             @relation("PaymentCreatedBy")
+  liveLinksCreated    LiveLink[]            @relation("LiveLinkCreatedBy")
 
   @@index([garageId])
 }

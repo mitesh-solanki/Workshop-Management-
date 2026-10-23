@@ -4,7 +4,7 @@ import { useActionState } from "react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { FormField } from "@/components/ui/form-field";
-import { formatRupees, paiseToRupeesInput } from "@/lib/money";
+import { formatRupees, paiseToRupeesInput, toPaise } from "@/lib/money";
 import {
   recordRefundAction,
   type BillingActionState,
@@ -64,7 +64,7 @@ export function RecordRefundForm({
           id="refund-amountRupees"
           name="amountRupees"
           className="flex h-11 w-full rounded-md border border-input bg-background px-3 text-sm"
-          defaultValue={paiseToRupeesInput(refundDuePaise)}
+          defaultValue={paiseToRupeesInput(toPaise(refundDuePaise))}
           inputMode="decimal"
         />
       </FormField>

@@ -9,9 +9,22 @@ import {
   percentage,
   rupeesToPaiseSchema,
   sanitizeRupeesTyping,
+  toPaise,
 } from "@/lib/money";
 
 describe("money", () => {
+  describe("toPaise", () => {
+    it("rounds near-integer floats from serialization", () => {
+      expect(toPaise(10.5)).toBe(11);
+      expect(toPaise("25000")).toBe(25000);
+    });
+
+    it("rejects non-finite values", () => {
+      expect(() => toPaise(Number.NaN)).toThrow(/integer/);
+      expect(() => toPaise(Number.POSITIVE_INFINITY)).toThrow(/integer/);
+    });
+  });
+
   describe("add", () => {
     it("sums paise amounts", () => {
       expect(add(100, 250, 50)).toBe(400);
@@ -21,8 +34,8 @@ describe("money", () => {
       expect(add()).toBe(0);
     });
 
-    it("rejects non-integer paise", () => {
-      expect(() => add(10.5)).toThrow(/integer/);
+    it("rounds non-integer paise then sums", () => {
+      expect(add(10.4, 10.4)).toBe(20);
     });
   });
 
@@ -36,8 +49,8 @@ describe("money", () => {
       expect(multiplyByQuantity(101, 0.5)).toBe(51);
     });
 
-    it("rejects non-integer unit price", () => {
-      expect(() => multiplyByQuantity(10.2, 1)).toThrow(/integer/);
+    it("rounds non-integer unit price before multiply", () => {
+      expect(multiplyByQuantity(10.2, 1)).toBe(10);
     });
   });
 

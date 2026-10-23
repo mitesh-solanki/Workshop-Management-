@@ -1,3 +1,4 @@
+import { connection } from "next/server";
 import { getTranslations } from "next-intl/server";
 import { getClientIp } from "@/lib/client-ip";
 import { PublicLiveViewPanel } from "@/modules/live-link/components/public-live-view";
@@ -23,6 +24,7 @@ function isAccessFailure(reason: string): reason is LiveLinkAccessFailure {
 }
 
 export default async function LiveLinkPage({ params, searchParams }: Props) {
+  await connection();
   const { token } = await params;
   const { paid } = await searchParams;
   const t = await getTranslations("liveLink");

@@ -6,6 +6,7 @@ import { getAppUrl } from "@/lib/email/env";
 import { paymentLinkQrDataUrl } from "@/lib/qr";
 import {
   createRazorpayPaymentLink,
+  isRazorpayConfigured,
   verifyRazorpayWebhookSignature,
 } from "@/lib/razorpay";
 import { requireRole, type RoleSession } from "@/lib/rbac";
@@ -83,13 +84,22 @@ async function createUpiPaymentSession(input: {
   const description = invoice.invoiceNumber
     ? tPay("linkDescription", { number: invoice.invoiceNumber })
     : tPay("linkDescriptionFallback");
-  const providerNote = tPay("providerNote");
+  const callbackUrl = `${appBaseUrl()}${callbackPath}`;
+
+  if (!isRazorpayConfigured()) {
+    throw new AppError("payments.razorpay_not_configured", 503);
+  }
+
+  // Razorpay requires a unique reference_id per payment link.
+  const referenceId = `${invoice.id.slice(0, 24)}_${Date.now()}`
+    .replace(/[^a-zA-Z0-9_]/g, "")
+    .slice(0, 40);
 
   const link = await createRazorpayPaymentLink({
     amountPaise,
     description,
-    referenceId: invoice.id.slice(0, 40),
-    callbackUrl: `${appBaseUrl()}${callbackPath}`,
+    referenceId,
+    callbackUrl,
     notes: {
       garageId: input.garageId,
       invoiceId: invoice.id,
@@ -105,7 +115,7 @@ async function createUpiPaymentSession(input: {
     providerPaymentLinkId: link.id,
     paymentLinkUrl: link.short_url,
     qrImageDataUrl,
-    note: providerNote,
+    note: tPay("providerNote"),
     actorId: input.actorId ?? null,
   });
 }

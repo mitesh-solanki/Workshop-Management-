@@ -20,16 +20,27 @@ export type LiveLinkActionState = {
   paymentLinkUrl?: string;
   qrImageDataUrl?: string;
   amountPaise?: number;
+  alreadyPaid?: boolean;
 };
 
 export async function createLiveLinkAction(
   orderId: string,
   _prev: LiveLinkActionState,
-  _formData: FormData,
+  formData: FormData,
 ): Promise<LiveLinkActionState> {
   try {
     const session = await requireSession();
-    const result = await createLiveLink(session, { serviceOrderId: orderId });
+    const rawHours = formData.get("expiresInHours");
+    const expiresInHours =
+      typeof rawHours === "string" && rawHours.length > 0
+        ? Number.parseInt(rawHours, 10)
+        : undefined;
+    const result = await createLiveLink(session, {
+      serviceOrderId: orderId,
+      ...(expiresInHours != null && !Number.isNaN(expiresInHours)
+        ? { expiresInHours }
+        : {}),
+    });
     revalidatePath(`/orders/${orderId}`);
     return {
       ok: true,
@@ -113,12 +124,19 @@ export async function liveStartPayAction(
       amountPaise: result.amountPaise,
     };
   } catch (error) {
+    if (error instanceof AppError && error.code === "payments.nothing_due") {
+      revalidatePath(`/live/${token}`);
+      return { ok: true, alreadyPaid: true, amountPaise: 0 };
+    }
+    console.error("liveStartPayAction failed", error);
+    if (error instanceof AppError) {
+      return { ok: false, message: await translateError(error) };
+    }
     return {
       ok: false,
-      message:
-        error instanceof AppError
-          ? await translateError(error)
-          : await translateError(new AppError("errors.not_found")),
+      message: await translateError(
+        new AppError("payments.provider_failed"),
+      ),
     };
   }
 }

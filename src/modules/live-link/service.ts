@@ -233,7 +233,12 @@ export async function getPublicLiveView(
     for (const item of snapshot.inspection.items) {
       for (const m of item.media) {
         try {
-          const url = await createPresignedDownloadUrl(m.storageKey, 3600);
+          const url = await Promise.race([
+            createPresignedDownloadUrl(m.storageKey, 3600),
+            new Promise<never>((_, reject) => {
+              setTimeout(() => reject(new Error("storage_timeout")), 4_000);
+            }),
+          ]);
           media.push({
             id: m.id,
             kind: m.kind,
@@ -242,7 +247,7 @@ export async function getPublicLiveView(
             itemLabel: item.label,
           });
         } catch {
-          // Skip media if storage is unavailable; page still loads.
+          // Skip media if storage is unavailable or slow; page still loads.
         }
       }
     }
@@ -383,6 +388,7 @@ export async function startPayViaLiveLink(
     amountPaise: payment.amountPaise,
     paymentLinkUrl: payment.paymentLinkUrl,
     qrImageDataUrl: payment.qrImageDataUrl,
+    providerPaymentLinkId: payment.providerPaymentLinkId,
   };
 }
 

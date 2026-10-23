@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/toast";
+import { toPaise } from "@/lib/money";
 
 const initial: ServiceOrderActionState = { ok: false };
 
@@ -134,7 +135,9 @@ export function OrderLineForm({ orderId, parts }: Props) {
         label={t("unitPrice")}
         hint={t("unitPriceHint")}
         defaultPaise={
-          lineType === "PART" ? (selected?.sellingPricePaise ?? 0) : 0
+          lineType === "PART"
+            ? toPaise(selected?.sellingPricePaise ?? 0)
+            : 0
         }
         key={`${lineType}-${selected?.id ?? "labour"}`}
       />

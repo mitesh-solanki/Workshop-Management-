@@ -32,12 +32,15 @@ export async function startUpiPaymentAction(
       amountPaise: payment.amountPaise,
     };
   } catch (error) {
+    console.error("startUpiPaymentAction failed", error);
+    if (error instanceof AppError) {
+      return { ok: false, message: await translateError(error) };
+    }
     return {
       ok: false,
-      message:
-        error instanceof AppError
-          ? await translateError(error)
-          : await translateError(new AppError("errors.not_found")),
+      message: await translateError(
+        new AppError("payments.provider_failed"),
+      ),
     };
   }
 }

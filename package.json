@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "node --use-system-ca ./node_modules/next/dist/bin/next dev",
     "build": "next build",
-    "start": "next start",
+    "start": "node --use-system-ca ./node_modules/next/dist/bin/next start",
     "lint": "eslint . && npm run i18n:check",
     "i18n:check": "node scripts/i18n-check.mjs",
     "typecheck": "tsc --noEmit",
@@ -17,7 +17,9 @@
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:seed": "node prisma/seed.mjs",
-    "db:studio": "prisma studio"
+    "db:studio": "prisma studio",
+    "razorpay:webhook-local": "node scripts/razorpay-webhook-local.mjs",
+    "ngrok": "node scripts/start-ngrok.mjs"
   },
   "prisma": {
     "seed": "node prisma/seed.mjs"

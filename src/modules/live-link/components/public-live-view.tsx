@@ -24,7 +24,7 @@ export async function PublicLiveViewPanel({
   return (
     <div className="mx-auto w-full max-w-2xl space-y-6 px-4 py-8 sm:px-6">
       <header className="space-y-2 border-b border-border pb-4">
-        <p className="text-sm font-medium text-teal-800">{view.garageName}</p>
+        <p className="text-sm font-medium text-blue-800">{view.garageName}</p>
         <h1 className="text-page-title text-slate-900">
           {view.vehicleRegistration}
         </h1>
@@ -41,7 +41,7 @@ export async function PublicLiveViewPanel({
           </p>
         ) : null}
         {paidReturn ? (
-          <p className="rounded-md bg-teal-50 px-3 py-2 text-sm text-teal-900">
+          <p className="rounded-md bg-blue-50 px-3 py-2 text-sm text-blue-900">
             {t("paymentReturnHint")}
           </p>
         ) : null}
@@ -127,7 +127,7 @@ export async function PublicLiveViewPanel({
                 </p>
               </div>
               {view.invoice.paid ? (
-                <span className="rounded-md bg-teal-50 px-2 py-1 text-xs font-medium text-teal-800">
+                <span className="rounded-md bg-blue-50 px-2 py-1 text-xs font-medium text-blue-800">
                   {t("paidBadge")}
                 </span>
               ) : null}

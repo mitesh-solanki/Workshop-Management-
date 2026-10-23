@@ -12,6 +12,12 @@ import {
 
 const initial: LiveLinkActionState = { ok: false };
 
+const EXPIRY_OPTIONS = [
+  { hours: 24, labelKey: "expiry24h" as const },
+  { hours: 72, labelKey: "expiry3d" as const },
+  { hours: 168, labelKey: "expiry7d" as const },
+];
+
 type Props = {
   orderId: string;
   active: { id: string; expiresAt: Date | string } | null;
@@ -97,14 +103,14 @@ export function LiveLinkStaffPanel({ orderId, active, canEdit }: Props) {
       ) : null}
 
       {displayUrl ? (
-        <div className="space-y-2 rounded-lg border border-teal-200 bg-teal-50/40 p-3">
+        <div className="space-y-2 rounded-lg border border-blue-200 bg-blue-50/40 p-3">
           <p className="text-sm font-medium text-slate-900">{t("linkReady")}</p>
           {expiresLabel ? (
             <p className="text-caption text-slate-500">
               {t("expiresAt", { when: expiresLabel })}
             </p>
           ) : null}
-          <p className="break-all text-sm text-teal-800">{displayUrl}</p>
+          <p className="break-all text-sm text-blue-800">{displayUrl}</p>
           <Button
             type="button"
             variant="outline"
@@ -117,8 +123,28 @@ export function LiveLinkStaffPanel({ orderId, active, canEdit }: Props) {
       ) : null}
 
       {canEdit ? (
-        <div className="flex flex-wrap gap-2">
-          <form action={createAction}>
+        <div className="space-y-3">
+          <form action={createAction} className="space-y-3">
+            <div className="space-y-1.5">
+              <label
+                htmlFor="expiresInHours"
+                className="text-sm font-medium text-slate-800"
+              >
+                {t("expiryLabel")}
+              </label>
+              <select
+                id="expiresInHours"
+                name="expiresInHours"
+                defaultValue="168"
+                className="flex h-11 w-full max-w-xs rounded-md border border-input bg-background px-3 text-sm"
+              >
+                {EXPIRY_OPTIONS.map((opt) => (
+                  <option key={opt.hours} value={opt.hours}>
+                    {t(opt.labelKey)}
+                  </option>
+                ))}
+              </select>
+            </div>
             <Button type="submit" disabled={createPending} className="min-h-11">
               {createPending
                 ? t("saving")

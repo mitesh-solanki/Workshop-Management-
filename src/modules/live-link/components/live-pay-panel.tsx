@@ -28,16 +28,18 @@ export function LivePayPanel({ token, invoiceId, pendingPaise }: Props) {
   useEffect(() => {
     if (state === lastState.current) return;
     lastState.current = state;
-    if (state.ok && state.paymentLinkUrl) {
+    if (state.ok && state.alreadyPaid) {
+      toast.success(t("alreadyPaid"));
+    } else if (state.ok && state.paymentLinkUrl) {
       toast.success(t("payReady"));
     } else if (state.message && !state.ok) {
       toast.error(state.message);
     }
   }, [state, t]);
 
-  if (pendingPaise <= 0) {
+  if (pendingPaise <= 0 || state.alreadyPaid) {
     return (
-      <p className="text-sm font-medium text-teal-800">{t("alreadyPaid")}</p>
+      <p className="text-sm font-medium text-blue-800">{t("alreadyPaid")}</p>
     );
   }
 

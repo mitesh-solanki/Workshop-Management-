@@ -13,6 +13,13 @@ export type RazorpayPaymentLink = {
   status: string;
 };
 
+export function isRazorpayConfigured() {
+  return Boolean(
+    process.env.RAZORPAY_KEY_ID?.trim() &&
+      process.env.RAZORPAY_KEY_SECRET?.trim(),
+  );
+}
+
 function getCredentials() {
   const keyId = process.env.RAZORPAY_KEY_ID?.trim();
   const keySecret = process.env.RAZORPAY_KEY_SECRET?.trim();

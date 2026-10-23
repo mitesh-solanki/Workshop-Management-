@@ -35,8 +35,12 @@ export function RecordPaymentForm({
   }
 
   return (
-    <form action={formAction} className="space-y-3">
-      <p className="text-sm font-medium text-slate-800">{t("recordPayment")}</p>
+    <form
+      action={formAction}
+      className="space-y-3 rounded-lg border border-slate-200 bg-white p-4"
+    >
+      <p className="text-sm font-medium text-slate-800">{t("manualPayTitle")}</p>
+      <p className="text-caption text-slate-500">{t("manualPayHint")}</p>
       <p className="text-caption text-slate-500">
         {t("pendingBalance")}: {formatRupees(pendingPaise)}
       </p>
@@ -45,7 +49,7 @@ export function RecordPaymentForm({
           id="method"
           name="method"
           className="flex h-11 w-full rounded-md border border-input bg-background px-3 text-sm"
-          defaultValue="UPI"
+          defaultValue="CASH"
         >
           {PAYMENT_METHODS.map((method) => (
             <option key={method} value={method}>

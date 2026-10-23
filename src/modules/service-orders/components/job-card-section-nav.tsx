@@ -4,6 +4,7 @@ import {
   ClipboardList,
   FileText,
   History,
+  Link2,
   NotebookPen,
   Receipt,
   Search,
@@ -27,6 +28,7 @@ const SECTION_ICONS: Record<JobCardSection, LucideIcon> = {
   inspection: Search,
   estimate: FileText,
   billing: Receipt,
+  liveLink: Link2,
   timeline: History,
 };
 
@@ -35,6 +37,7 @@ export function JobCardSectionNav({ section, onSectionChange }: Props) {
   const ti = useTranslations("inspections");
   const te = useTranslations("estimates");
   const tb = useTranslations("billing");
+  const tl = useTranslations("liveLink");
 
   const labels: Record<JobCardSection, string> = {
     details: t("details"),
@@ -42,6 +45,7 @@ export function JobCardSectionNav({ section, onSectionChange }: Props) {
     inspection: ti("title"),
     estimate: te("title"),
     billing: tb("title"),
+    liveLink: tl("title"),
     timeline: t("timeline"),
   };
 

@@ -80,6 +80,7 @@ type Props = {
   inspectionContent: ReactNode;
   estimateContent: ReactNode;
   billingContent: ReactNode;
+  liveLinkContent: ReactNode;
 };
 
 function asDate(value: Date | string | null): Date | null {
@@ -140,12 +141,14 @@ export function JobCardDetailPanel({
   inspectionContent,
   estimateContent,
   billingContent,
+  liveLinkContent,
 }: Props) {
   const t = useTranslations("orders");
   const tc = useTranslations("customers");
   const ti = useTranslations("inspections");
   const te = useTranslations("estimates");
   const tb = useTranslations("billing");
+  const tl = useTranslations("liveLink");
   usePageDetailLabel(order.vehicle.registrationNumber);
   const { activeSection, scrollToSection, setSectionRef } = useJobCardSections({
     initialSection,
@@ -291,6 +294,15 @@ export function JobCardDetailPanel({
             sectionRef={setSectionRef("billing")}
           >
             {billingContent}
+          </SectionBlock>
+
+          <SectionBlock
+            id="liveLink"
+            title={tl("title")}
+            subtitle={tl("subtitle")}
+            sectionRef={setSectionRef("liveLink")}
+          >
+            {liveLinkContent}
           </SectionBlock>
 
           <SectionBlock

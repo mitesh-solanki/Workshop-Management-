@@ -1039,6 +1039,11 @@
       "CARD": "Card",
       "MIXED": "Mixed"
     },
+    "paymentStatuses": {
+      "PENDING": "Awaiting UPI",
+      "PAID": "Paid",
+      "FAILED": "Failed"
+    },
     "reasons": {
       "CORRECTION": "Correction",
       "REFUND": "Refund",
@@ -1061,6 +1066,98 @@
       "creditNoteRequiresFinalized": "Credit notes are only for finalized invoices.",
       "creditNoteExceedsInvoice": "Credit note total cannot exceed the invoice total.",
       "creditNoteFailed": "Could not create the credit note."
+    },
+    "upiPayTitle": "UPI payment (Razorpay)",
+    "upiPayHint": "Create a QR and payment link for the balance due. Webhook marks the payment paid once.",
+    "generateUpi": "Generate UPI QR / link",
+    "upiReady": "UPI payment ready",
+    "upiAmount": "Amount: {amount}",
+    "upiQrAlt": "UPI payment QR code",
+    "openUpiLink": "Open payment link",
+    "manualPayTitle": "Record cash, UPI or card",
+    "manualPayHint": "Use when the customer already paid at the counter. Online UPI QR is above."
+  },
+  "liveLink": {
+    "title": "Customer live link",
+    "subtitle": "Share a link so the customer can see status, approve the estimate and pay.",
+    "staffHint": "The link expires automatically. Creating a new link revokes the old one. Only the token hash is stored.",
+    "createLink": "Create live link",
+    "renewLink": "Create new link",
+    "revokeLink": "Revoke link",
+    "linkCreated": "Live link created — copy it now",
+    "linkRevoked": "Live link revoked",
+    "linkActive": "A live link is active",
+    "linkReady": "Copy this link (shown once)",
+    "urlHiddenHint": "The full URL is only shown when you create or renew the link.",
+    "expiresAt": "Expires {when}",
+    "copyLink": "Copy link",
+    "copied": "Link copied",
+    "copyFailed": "Could not copy. Select the link and copy manually.",
+    "saving": "Saving…",
+    "readOnly": "Only {owner}, {manager} or {accountant} can manage the live link.",
+    "inspectionTitle": "Inspection photos and videos",
+    "mediaEmpty": "No inspection media yet.",
+    "estimateTitle": "Estimate",
+    "estimateEmpty": "Estimate is not ready yet.",
+    "invoiceTitle": "Invoice",
+    "invoiceEmpty": "Invoice is not ready yet.",
+    "invoiceDraft": "Invoice",
+    "invoiceTotal": "Total",
+    "paidBadge": "Paid",
+    "alreadyPaid": "This invoice is fully paid.",
+    "balanceDue": "Balance due",
+    "payNow": "Pay now",
+    "payReady": "Payment ready — scan QR or open the link",
+    "payAmount": "Pay {amount}",
+    "qrAlt": "UPI QR code",
+    "scanQr": "Scan with any UPI app",
+    "openPaymentLink": "Open payment link",
+    "approve": "Approve",
+    "reject": "Reject",
+    "lineApproved": "Line approved",
+    "lineRejected": "Line rejected",
+    "expectedCompletion": "Expected by {when}",
+    "paymentReturnHint": "If you just paid, status updates in a moment after confirmation.",
+    "approval": {
+      "PENDING": "Pending",
+      "APPROVED": "Approved",
+      "REJECTED": "Rejected"
+    },
+    "unavailable": {
+      "wrong_token": {
+        "title": "Invalid link",
+        "body": "This link is invalid. Ask the garage for a new live link."
+      },
+      "expired": {
+        "title": "Link expired",
+        "body": "This link has expired. Ask the garage for a new live link."
+      },
+      "revoked": {
+        "title": "Link revoked",
+        "body": "This link is no longer active. Ask the garage for a new live link."
+      },
+      "rate_limited": {
+        "title": "Too many requests",
+        "body": "Wait a few minutes and try again."
+      }
+    },
+    "errors": {
+      "wrong_token": "This link is invalid.",
+      "expired": "This link has expired.",
+      "revoked": "This link is no longer active.",
+      "rate_limited": "Too many requests. Wait a few minutes and try again."
+    }
+  },
+  "payments": {
+    "linkDescription": "Invoice {number}",
+    "linkDescriptionFallback": "Invoice payment",
+    "providerNote": "Razorpay UPI",
+    "errors": {
+      "razorpayNotConfigured": "Razorpay is not configured. Add keys in environment settings.",
+      "providerFailed": "Could not create the UPI payment. Try again.",
+      "nothingDue": "Nothing is due on this invoice.",
+      "invalidWebhookSignature": "Invalid payment webhook signature.",
+      "invalidWebhookBody": "Invalid payment webhook body."
     }
   }
 }

@@ -1,4 +1,5 @@
 import { getLocale, getTranslations } from "next-intl/server";
+import { Badge } from "@/components/ui/badge";
 import { formatRupees } from "@/lib/money";
 import { CreateInvoiceForm } from "@/modules/billing/components/create-invoice-form";
 import { CreditNoteForm } from "@/modules/billing/components/credit-note-form";
@@ -6,6 +7,8 @@ import { DownloadInvoicePdfButton } from "@/modules/billing/components/download-
 import { FinalizeInvoiceForm } from "@/modules/billing/components/finalize-invoice-form";
 import { RecordPaymentForm } from "@/modules/billing/components/record-payment-form";
 import { RecordRefundForm } from "@/modules/billing/components/record-refund-form";
+import { StartUpiPaymentForm } from "@/modules/payments/components/start-upi-payment-form";
+import { paymentStatusBadgeVariant } from "@/modules/payments/status";
 import type { getInvoicesForOrder } from "@/modules/billing/service";
 
 type InvoiceList = Awaited<ReturnType<typeof getInvoicesForOrder>>;
@@ -157,6 +160,11 @@ export async function JobCardBillingContent({
 
               {canEdit && invoice.status === "FINALIZED" ? (
                 <div className="space-y-4 border-t border-slate-100 pt-3">
+                  <StartUpiPaymentForm
+                    invoiceId={invoice.id}
+                    orderId={orderId}
+                    pendingPaise={invoice.pendingBalancePaise}
+                  />
                   <RecordPaymentForm
                     invoiceId={invoice.id}
                     orderId={orderId}
@@ -178,13 +186,25 @@ export async function JobCardBillingContent({
                   </p>
                   <ul className="space-y-1 text-sm text-slate-700">
                     {invoice.payments.map((payment) => (
-                      <li key={payment.id}>
-                        {payment.isRefund ? t("refundPaymentLabel") : t(`methods.${payment.method}`)}
-                        {" · "}
-                        {formatRupees(payment.amountPaise)}
-                        {payment.isRefund
-                          ? ` · ${t(`methods.${payment.method}`)}`
-                          : null}
+                      <li
+                        key={payment.id}
+                        className="flex flex-wrap items-center gap-2"
+                      >
+                        <span>
+                          {payment.isRefund
+                            ? t("refundPaymentLabel")
+                            : t(`methods.${payment.method}`)}
+                          {" · "}
+                          {formatRupees(payment.amountPaise)}
+                          {payment.isRefund
+                            ? ` · ${t(`methods.${payment.method}`)}`
+                            : null}
+                        </span>
+                        <Badge
+                          variant={paymentStatusBadgeVariant(payment.status)}
+                        >
+                          {t(`paymentStatuses.${payment.status}`)}
+                        </Badge>
                       </li>
                     ))}
                   </ul>

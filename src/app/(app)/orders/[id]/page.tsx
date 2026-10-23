@@ -10,6 +10,8 @@ import { JobCardEstimateContent } from "@/modules/estimates/components/job-card-
 import { getEstimateForOrder } from "@/modules/estimates/service";
 import { JobCardInspectionContent } from "@/modules/inspections/components/job-card-inspection-content";
 import { getOrCreateInspection } from "@/modules/inspections/service";
+import { LiveLinkStaffPanel } from "@/modules/live-link/components/live-link-staff-panel";
+import { getLiveLinkStatusForOrder } from "@/modules/live-link/service";
 import { JobCardDetailPanel } from "@/modules/service-orders/components/job-card-detail-panel";
 import { isJobCardSection } from "@/modules/service-orders/job-card-sections";
 import { listParts } from "@/modules/inventory/service";
@@ -40,6 +42,9 @@ export default async function OrderEditPage({ params, searchParams }: Props) {
   let invoices: Awaited<ReturnType<typeof getInvoicesForOrder>>;
   let technicians: Awaited<ReturnType<typeof listAssignableTechnicians>>;
   let parts: Awaited<ReturnType<typeof listParts>> = [];
+  let liveLinkStatus: Awaited<ReturnType<typeof getLiveLinkStatusForOrder>> = {
+    active: null,
+  };
 
   try {
     order = await getOrder(session, id);
@@ -70,6 +75,14 @@ export default async function OrderEditPage({ params, searchParams }: Props) {
     session.role === "OWNER" ||
     session.role === "MANAGER" ||
     session.role === "ACCOUNTANT";
+
+  if (canBill) {
+    try {
+      liveLinkStatus = await getLiveLinkStatusForOrder(session, id);
+    } catch {
+      liveLinkStatus = { active: null };
+    }
+  }
 
   const hasApprovedEstimateLines = Boolean(
     estimate.current?.lines.some((line) => line.approvalState === "APPROVED"),
@@ -162,6 +175,13 @@ export default async function OrderEditPage({ params, searchParams }: Props) {
             invoices={invoices}
             hasApprovedEstimateLines={hasApprovedEstimateLines}
             defaultPlaceOfSupplyStateCode={order.vehicle.stateCode}
+          />
+        }
+        liveLinkContent={
+          <LiveLinkStaffPanel
+            orderId={order.id}
+            active={liveLinkStatus.active}
+            canEdit={canBill}
           />
         }
       />

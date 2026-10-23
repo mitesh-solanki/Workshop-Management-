@@ -1039,6 +1039,11 @@
       "CARD": "कार्ड",
       "MIXED": "मिश्रित"
     },
+    "paymentStatuses": {
+      "PENDING": "UPI प्रतीक्षारत",
+      "PAID": "चुकाया",
+      "FAILED": "विफल"
+    },
     "reasons": {
       "CORRECTION": "सुधार",
       "REFUND": "रिफंड",
@@ -1061,6 +1066,98 @@
       "creditNoteRequiresFinalized": "क्रेडिट नोट केवल अंतिम चालान के लिए।",
       "creditNoteExceedsInvoice": "क्रेडिट नोट कुल चालान कुल से अधिक नहीं हो सकता।",
       "creditNoteFailed": "क्रेडिट नोट नहीं बन सका।"
+    },
+    "upiPayTitle": "UPI भुगतान (Razorpay)",
+    "upiPayHint": "बकाया के लिए QR और भुगतान लिंक बनाएँ। वेबहुक भुगतान को एक बार ही चुकाया चिह्नित करता है।",
+    "generateUpi": "UPI QR / लिंक बनाएँ",
+    "upiReady": "UPI भुगतान तैयार",
+    "upiAmount": "राशि: {amount}",
+    "upiQrAlt": "UPI भुगतान QR कोड",
+    "openUpiLink": "भुगतान लिंक खोलें",
+    "manualPayTitle": "नकद, UPI या कार्ड दर्ज करें",
+    "manualPayHint": "जब ग्राहक काउंटर पर पहले ही चुका चुका हो। ऑनलाइन UPI QR ऊपर है।"
+  },
+  "liveLink": {
+    "title": "ग्राहक लाइव लिंक",
+    "subtitle": "लिंक साझा करें ताकि ग्राहक स्थिति देखे, एस्टिमेट अनुमोदित करे और भुगतान करे।",
+    "staffHint": "लिंक अपने आप समाप्त होता है। नया लिंक पुराने को रद्द करता है। केवल टोकन हैश संग्रहीत होता है।",
+    "createLink": "लाइव लिंक बनाएँ",
+    "renewLink": "नया लिंक बनाएँ",
+    "revokeLink": "लिंक रद्द करें",
+    "linkCreated": "लाइव लिंक बना — अभी कॉपी करें",
+    "linkRevoked": "लाइव लिंक रद्द",
+    "linkActive": "एक लाइव लिंक सक्रिय है",
+    "linkReady": "यह लिंक कॉपी करें (एक बार दिखता है)",
+    "urlHiddenHint": "पूरा URL केवल लिंक बनाते या नवीनीकृत करते समय दिखता है।",
+    "expiresAt": "समाप्ति {when}",
+    "copyLink": "लिंक कॉपी करें",
+    "copied": "लिंक कॉपी हो गया",
+    "copyFailed": "कॉपी नहीं हो सका। लिंक चुनकर स्वयं कॉपी करें।",
+    "saving": "सेव हो रहा है…",
+    "readOnly": "केवल {owner}, {manager} या {accountant} लाइव लिंक प्रबंधित कर सकते हैं।",
+    "inspectionTitle": "निरीक्षण फ़ोटो और वीडियो",
+    "mediaEmpty": "अभी कोई निरीक्षण मीडिया नहीं।",
+    "estimateTitle": "एस्टिमेट",
+    "estimateEmpty": "एस्टिमेट अभी तैयार नहीं।",
+    "invoiceTitle": "चालान",
+    "invoiceEmpty": "चालान अभी तैयार नहीं।",
+    "invoiceDraft": "चालान",
+    "invoiceTotal": "कुल",
+    "paidBadge": "चुकाया",
+    "alreadyPaid": "यह चालान पूरी तरह चुकाया गया है।",
+    "balanceDue": "बकाया",
+    "payNow": "अभी भुगतान करें",
+    "payReady": "भुगतान तैयार — QR स्कैन करें या लिंक खोलें",
+    "payAmount": "{amount} भुगतान करें",
+    "qrAlt": "UPI QR कोड",
+    "scanQr": "किसी भी UPI ऐप से स्कैन करें",
+    "openPaymentLink": "भुगतान लिंक खोलें",
+    "approve": "अनुमोदित",
+    "reject": "अस्वीकृत",
+    "lineApproved": "लाइन अनुमोदित",
+    "lineRejected": "लाइन अस्वीकृत",
+    "expectedCompletion": "अपेक्षित {when}",
+    "paymentReturnHint": "यदि आपने अभी भुगतान किया है, पुष्टि के बाद स्थिति अपडेट होगी।",
+    "approval": {
+      "PENDING": "लंबित",
+      "APPROVED": "अनुमोदित",
+      "REJECTED": "अस्वीकृत"
+    },
+    "unavailable": {
+      "wrong_token": {
+        "title": "अमान्य लिंक",
+        "body": "यह लिंक अमान्य है। गैराज से नया लाइव लिंक माँगें।"
+      },
+      "expired": {
+        "title": "लिंक समाप्त",
+        "body": "यह लिंक समाप्त हो गया है। गैराज से नया लाइव लिंक माँगें।"
+      },
+      "revoked": {
+        "title": "लिंक रद्द",
+        "body": "यह लिंक अब सक्रिय नहीं है। गैराज से नया लाइव लिंक माँगें।"
+      },
+      "rate_limited": {
+        "title": "बहुत अधिक अनुरोध",
+        "body": "कुछ मिनट प्रतीक्षा करें और फिर कोशिश करें।"
+      }
+    },
+    "errors": {
+      "wrong_token": "यह लिंक अमान्य है।",
+      "expired": "यह लिंक समाप्त हो गया है।",
+      "revoked": "यह लिंक अब सक्रिय नहीं है।",
+      "rate_limited": "बहुत अधिक अनुरोध। कुछ मिनट बाद फिर कोशिश करें।"
+    }
+  },
+  "payments": {
+    "linkDescription": "चालान {number}",
+    "linkDescriptionFallback": "चालान भुगतान",
+    "providerNote": "Razorpay UPI",
+    "errors": {
+      "razorpayNotConfigured": "Razorpay कॉन्फ़िगर नहीं है। पर्यावरण में कुंजियाँ जोड़ें।",
+      "providerFailed": "UPI भुगतान नहीं बन सका। फिर कोशिश करें।",
+      "nothingDue": "इस चालान पर कुछ बकाया नहीं।",
+      "invalidWebhookSignature": "अमान्य भुगतान वेबहुक हस्ताक्षर।",
+      "invalidWebhookBody": "अमान्य भुगतान वेबहुक बॉडी।"
     }
   }
 }

@@ -10,6 +10,7 @@ const vehicleSelect = {
   registrationNumber: true,
   make: true,
   model: true,
+  stateCode: true,
   year: true,
   odometer: true,
   insuranceExpiry: true,
@@ -64,6 +65,7 @@ export async function createVehicle(
     registrationNumber: string;
     make: string;
     model: string;
+    stateCode: string;
     year: number | null;
     odometer: number | null;
     insuranceExpiry: Date | null;
@@ -78,6 +80,7 @@ export async function createVehicle(
       registrationNumber: data.registrationNumber,
       make: data.make,
       model: data.model,
+      stateCode: data.stateCode,
       year: data.year,
       odometer: data.odometer,
       insuranceExpiry: data.insuranceExpiry,
@@ -95,6 +98,7 @@ export async function updateVehicleById(
     registrationNumber: string;
     make: string;
     model: string;
+    stateCode: string;
     year: number | null;
     odometer: number | null;
     insuranceExpiry: Date | null;
@@ -109,6 +113,7 @@ export async function updateVehicleById(
         registrationNumber: data.registrationNumber,
         make: data.make,
         model: data.model,
+        stateCode: data.stateCode,
         year: data.year,
         odometer: data.odometer,
         insuranceExpiry: data.insuranceExpiry,

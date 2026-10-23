@@ -22,6 +22,7 @@ function vehicleFields(formData: FormData) {
     registrationNumber: String(formData.get("registrationNumber") ?? ""),
     make: String(formData.get("make") ?? ""),
     model: String(formData.get("model") ?? ""),
+    stateCode: String(formData.get("stateCode") ?? ""),
     year: String(formData.get("year") ?? ""),
     odometer: String(formData.get("odometer") ?? ""),
     insuranceExpiry: String(formData.get("insuranceExpiry") ?? ""),

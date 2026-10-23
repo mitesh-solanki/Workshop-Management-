@@ -5,6 +5,7 @@ import {
   FileText,
   History,
   NotebookPen,
+  Receipt,
   Search,
   type LucideIcon,
 } from "lucide-react";
@@ -25,6 +26,7 @@ const SECTION_ICONS: Record<JobCardSection, LucideIcon> = {
   lines: ClipboardList,
   inspection: Search,
   estimate: FileText,
+  billing: Receipt,
   timeline: History,
 };
 
@@ -32,12 +34,14 @@ export function JobCardSectionNav({ section, onSectionChange }: Props) {
   const t = useTranslations("orders");
   const ti = useTranslations("inspections");
   const te = useTranslations("estimates");
+  const tb = useTranslations("billing");
 
   const labels: Record<JobCardSection, string> = {
     details: t("details"),
     lines: t("lines"),
     inspection: ti("title"),
     estimate: te("title"),
+    billing: tb("title"),
     timeline: t("timeline"),
   };
 

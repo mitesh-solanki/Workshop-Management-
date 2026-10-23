@@ -56,6 +56,7 @@ type VehicleRow = {
   registrationNumber: string;
   make: string;
   model: string;
+  stateCode: string;
   year: number | null;
   odometer: number | null;
   insuranceExpiry: Date | string | null;
@@ -486,6 +487,7 @@ function VehicleDetailView({
   const t = useTranslations("customers");
   const tv = useTranslations("vehicles");
   const to = useTranslations("orders");
+  const tGst = useTranslations("gst");
   const { activeSection, scrollToSection, setSectionRef } =
     useSectionScrollSpy({
       sections: VEHICLE_SECTIONS,
@@ -537,6 +539,7 @@ function VehicleDetailView({
             registrationNumber: vehicle.registrationNumber,
             make: vehicle.make,
             model: vehicle.model,
+            stateCode: vehicle.stateCode,
             year: vehicle.year,
             odometer: vehicle.odometer,
             insuranceExpiry: vehicle.insuranceExpiry,
@@ -607,6 +610,12 @@ function VehicleDetailView({
               <DescriptionItem>
                 <DescriptionTerm>{tv("model")}</DescriptionTerm>
                 <DescriptionDetails>{vehicle.model}</DescriptionDetails>
+              </DescriptionItem>
+              <DescriptionItem>
+                <DescriptionTerm>{tv("state")}</DescriptionTerm>
+                <DescriptionDetails>
+                  {tGst(`states.${vehicle.stateCode}`)} ({vehicle.stateCode})
+                </DescriptionDetails>
               </DescriptionItem>
               <DescriptionItem>
                 <DescriptionTerm>{tv("year")}</DescriptionTerm>

@@ -4,6 +4,8 @@ import { ChevronLeft } from "lucide-react";
 import { getLocale, getTranslations } from "next-intl/server";
 import { ForbiddenError, NotFoundError } from "@/lib/errors";
 import { requireSession } from "@/lib/session";
+import { JobCardBillingContent } from "@/modules/billing/components/job-card-billing-content";
+import { getInvoicesForOrder } from "@/modules/billing/service";
 import { JobCardEstimateContent } from "@/modules/estimates/components/job-card-estimate-content";
 import { getEstimateForOrder } from "@/modules/estimates/service";
 import { JobCardInspectionContent } from "@/modules/inspections/components/job-card-inspection-content";
@@ -35,18 +37,21 @@ export default async function OrderEditPage({ params, searchParams }: Props) {
   let timeline: Awaited<ReturnType<typeof getOrderTimeline>>;
   let inspection: Awaited<ReturnType<typeof getOrCreateInspection>>;
   let estimate: Awaited<ReturnType<typeof getEstimateForOrder>>;
+  let invoices: Awaited<ReturnType<typeof getInvoicesForOrder>>;
   let technicians: Awaited<ReturnType<typeof listAssignableTechnicians>>;
   let parts: Awaited<ReturnType<typeof listParts>> = [];
 
   try {
     order = await getOrder(session, id);
-    [timeline, inspection, estimate, technicians, parts] = await Promise.all([
-      getOrderTimeline(session, id),
-      getOrCreateInspection(session, id),
-      getEstimateForOrder(session, id),
-      listAssignableTechnicians(session),
-      listParts(session),
-    ]);
+    [timeline, inspection, estimate, invoices, technicians, parts] =
+      await Promise.all([
+        getOrderTimeline(session, id),
+        getOrCreateInspection(session, id),
+        getEstimateForOrder(session, id),
+        getInvoicesForOrder(session, id),
+        listAssignableTechnicians(session),
+        listParts(session),
+      ]);
   } catch (error) {
     if (error instanceof NotFoundError || error instanceof ForbiddenError) {
       notFound();
@@ -60,6 +65,15 @@ export default async function OrderEditPage({ params, searchParams }: Props) {
       (session.role === "TECHNICIAN" &&
         order.technicianId === session.userId)) &&
     order.status !== "COMPLETED";
+
+  const canBill =
+    session.role === "OWNER" ||
+    session.role === "MANAGER" ||
+    session.role === "ACCOUNTANT";
+
+  const hasApprovedEstimateLines = Boolean(
+    estimate.current?.lines.some((line) => line.approvalState === "APPROVED"),
+  );
 
   const initialSection = isJobCardSection(sectionParam)
     ? sectionParam
@@ -139,6 +153,15 @@ export default async function OrderEditPage({ params, searchParams }: Props) {
             orderId={order.id}
             canEdit={canMutate}
             data={estimate}
+          />
+        }
+        billingContent={
+          <JobCardBillingContent
+            orderId={order.id}
+            canEdit={canBill}
+            invoices={invoices}
+            hasApprovedEstimateLines={hasApprovedEstimateLines}
+            defaultPlaceOfSupplyStateCode={order.vehicle.stateCode}
           />
         }
       />

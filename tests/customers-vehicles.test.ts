@@ -101,6 +101,7 @@ const sampleVehicle = {
   registrationNumber: "GJ01AB1234",
   make: "Maruti",
   model: "Swift",
+  stateCode: "24",
   year: 2020,
   odometer: 10000,
   insuranceExpiry: null,
@@ -119,6 +120,7 @@ const vehicleForm = {
   registrationNumber: "gj 01 ab 1234",
   make: "Honda",
   model: "City",
+  stateCode: "24",
   year: 2019,
   odometer: 5000,
   insuranceExpiry: null,
@@ -147,6 +149,7 @@ describe("duplicate registration", () => {
       registrationNumber: "GJ01AB1234",
       make: "Maruti",
       model: "Swift",
+      stateCode: "24",
       year: 2020,
       odometer: 10000,
       insuranceExpiry: null,
@@ -193,6 +196,7 @@ describe("duplicate registration", () => {
       registrationNumber: "GJ01AB1234",
       make: "Honda",
       model: "City",
+      stateCode: "24",
       year: 2019,
       odometer: 5000,
       insuranceExpiry: null,
@@ -223,6 +227,7 @@ describe("duplicate registration", () => {
       expect.objectContaining({
         registrationNumber: "GJ01AB1234",
         customerId: "cust-b",
+        stateCode: "24",
       }),
     );
     expect(vehicle.garageId).toBe(garageB);
@@ -498,6 +503,7 @@ describe("delete customer and vehicle", () => {
     registrationNumber: "GJ01AB1234",
     make: "Maruti",
     model: "Swift",
+    stateCode: "24",
     year: 2020,
     odometer: 10000,
     insuranceExpiry: null,

@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useMemo, useState } from "react";
+import { useActionState, useMemo, useState } from "react";
 import {
   Battery,
   CircleDot,
@@ -73,10 +73,12 @@ export function ChecklistItemCard({ orderId, item, canEdit }: Props) {
   const [selected, setSelected] = useState<InspectionItemResultValue | "">(
     item.result ?? "",
   );
+  const [prevResult, setPrevResult] = useState(item.result);
 
-  useEffect(() => {
+  if (item.result !== prevResult) {
+    setPrevResult(item.result);
     setSelected(item.result ?? "");
-  }, [item.result]);
+  }
 
   const isDefault = DEFAULT_KEYS.has(item.key);
   const title = isDefault ? t(`defaults.${item.key}`) : item.label;

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useMemo, useRef, useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
 import { ClipboardList } from "lucide-react";
 import { moveServiceOrderStatusAction } from "@/app/actions/service-orders";
@@ -125,10 +125,12 @@ export function WorkshopBoard({
   );
   /** Local copy so status moves show immediately and stay draggable. */
   const [orders, setOrders] = useState(ordersProp);
+  const [prevOrdersProp, setPrevOrdersProp] = useState(ordersProp);
 
-  useEffect(() => {
+  if (ordersProp !== prevOrdersProp) {
+    setPrevOrdersProp(ordersProp);
     setOrders(ordersProp);
-  }, [ordersProp]);
+  }
 
   const byStatus = useMemo(() => {
     const map = Object.fromEntries(

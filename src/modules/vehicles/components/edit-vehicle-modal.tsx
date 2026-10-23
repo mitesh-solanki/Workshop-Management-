@@ -53,6 +53,7 @@ export function EditVehicleModal({ vehicle, trigger }: Props) {
     vehicle.registrationNumber,
     vehicle.make,
     vehicle.model,
+    vehicle.stateCode,
     vehicle.year ?? "",
     vehicle.odometer ?? "",
   ].join("|");

@@ -1,0 +1,163 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { AppError } from "@/lib/errors";
+import { requireSession } from "@/lib/session";
+import { translateError } from "@/lib/translate-error";
+import {
+  createCreditNote,
+  createInvoiceFromApprovedEstimate,
+  finalizeInvoice,
+  recordInvoicePayment,
+  recordInvoiceRefund,
+} from "@/modules/billing/service";
+import type {
+  CreditNoteReasonValue,
+  PaymentMethodValue,
+} from "@/modules/billing/schema";
+
+export type BillingActionState = {
+  ok: boolean;
+  message?: string;
+};
+
+function revalidateBilling(orderId: string) {
+  revalidatePath(`/orders/${orderId}`);
+}
+
+export async function createInvoiceAction(
+  orderId: string,
+  _prev: BillingActionState,
+  formData: FormData,
+): Promise<BillingActionState> {
+  try {
+    const session = await requireSession();
+    const placeRaw = String(formData.get("placeOfSupplyStateCode") ?? "").trim();
+    await createInvoiceFromApprovedEstimate(session, orderId, {
+      ...(placeRaw.length === 2
+        ? { placeOfSupplyStateCode: placeRaw }
+        : {}),
+      notes: String(formData.get("notes") ?? ""),
+      finalize: formData.get("finalize") != null,
+    });
+    revalidateBilling(orderId);
+    return { ok: true, message: "invoiceCreated" };
+  } catch (error) {
+    return {
+      ok: false,
+      message:
+        error instanceof AppError
+          ? await translateError(error)
+          : await translateError(error),
+    };
+  }
+}
+
+export async function finalizeInvoiceAction(
+  orderId: string,
+  invoiceId: string,
+  _prev: BillingActionState,
+  _formData: FormData,
+): Promise<BillingActionState> {
+  try {
+    const session = await requireSession();
+    await finalizeInvoice(session, { invoiceId });
+    revalidateBilling(orderId);
+    return { ok: true, message: "invoiceFinalized" };
+  } catch (error) {
+    return {
+      ok: false,
+      message: await translateError(error),
+    };
+  }
+}
+
+export async function recordPaymentAction(
+  orderId: string,
+  invoiceId: string,
+  _prev: BillingActionState,
+  formData: FormData,
+): Promise<BillingActionState> {
+  try {
+    const session = await requireSession();
+    await recordInvoicePayment(session, {
+      invoiceId,
+      method: String(formData.get("method") ?? "CASH") as PaymentMethodValue,
+      amountPaise: String(formData.get("amountRupees") ?? "0"),
+      cashPaise: String(formData.get("cashRupees") ?? ""),
+      upiPaise: String(formData.get("upiRupees") ?? ""),
+      cardPaise: String(formData.get("cardRupees") ?? ""),
+      note: String(formData.get("note") ?? ""),
+    });
+    revalidateBilling(orderId);
+    return { ok: true, message: "paymentRecorded" };
+  } catch (error) {
+    return {
+      ok: false,
+      message: await translateError(error),
+    };
+  }
+}
+
+export async function createCreditNoteAction(
+  orderId: string,
+  invoiceId: string,
+  _prev: BillingActionState,
+  formData: FormData,
+): Promise<BillingActionState> {
+  try {
+    const session = await requireSession();
+    const descriptions = formData.getAll("description").map(String);
+    const quantities = formData.getAll("quantity").map(String);
+    const unitPrices = formData.getAll("unitPriceRupees").map(String);
+    const gstRates = formData.getAll("gstRatePercent").map(String);
+    const hsnCodes = formData.getAll("hsnOrSac").map(String);
+    const lines = descriptions.map((description, index) => ({
+      description,
+      quantity: quantities[index] ?? "1",
+      unitPricePaise: unitPrices[index] ?? "0",
+      gstRatePercent: gstRates[index] ?? "18",
+      hsnOrSac: hsnCodes[index] ?? "",
+    }));
+    await createCreditNote(session, {
+      invoiceId,
+      reason: String(formData.get("reason") ?? "CORRECTION") as CreditNoteReasonValue,
+      notes: String(formData.get("notes") ?? ""),
+      lines,
+    });
+    revalidateBilling(orderId);
+    return { ok: true, message: "creditNoteCreated" };
+  } catch (error) {
+    return {
+      ok: false,
+      message: await translateError(error),
+    };
+  }
+}
+
+export async function recordRefundAction(
+  orderId: string,
+  invoiceId: string,
+  _prev: BillingActionState,
+  formData: FormData,
+): Promise<BillingActionState> {
+  try {
+    const session = await requireSession();
+    await recordInvoiceRefund(session, {
+      invoiceId,
+      method: String(formData.get("method") ?? "CASH") as PaymentMethodValue,
+      amountPaise: String(formData.get("amountRupees") ?? "0"),
+      cashPaise: String(formData.get("cashRupees") ?? ""),
+      upiPaise: String(formData.get("upiRupees") ?? ""),
+      cardPaise: String(formData.get("cardRupees") ?? ""),
+      note: String(formData.get("note") ?? ""),
+    });
+    revalidateBilling(orderId);
+    return { ok: true, message: "refundRecorded" };
+  } catch (error) {
+    return {
+      ok: false,
+      message: await translateError(error),
+    };
+  }
+}

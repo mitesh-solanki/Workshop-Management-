@@ -19,6 +19,7 @@ const vehicleSummarySelect = {
   registrationNumber: true,
   make: true,
   model: true,
+  stateCode: true,
   year: true,
   odometer: true,
 } as const;

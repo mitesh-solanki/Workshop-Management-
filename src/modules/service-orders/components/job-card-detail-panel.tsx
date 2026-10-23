@@ -3,13 +3,11 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
-import { ClipboardList } from "lucide-react";
+import { usePageDetailLabel } from "@/components/page-chrome";
 import {
   Card,
   CardDescription,
 } from "@/components/ui/card";
-import { EmptyState } from "@/components/ui/empty-state";
-import { ListCard, ListCardGroup } from "@/components/ui/list-card";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { formatRupees, multiplyByQuantity } from "@/lib/money";
 import type { ServiceOrderStatus } from "@/lib/service-order-status";
@@ -81,6 +79,7 @@ type Props = {
   parts: OrderLinePartOption[];
   inspectionContent: ReactNode;
   estimateContent: ReactNode;
+  billingContent: ReactNode;
 };
 
 function asDate(value: Date | string | null): Date | null {
@@ -140,11 +139,14 @@ export function JobCardDetailPanel({
   parts,
   inspectionContent,
   estimateContent,
+  billingContent,
 }: Props) {
   const t = useTranslations("orders");
   const tc = useTranslations("customers");
   const ti = useTranslations("inspections");
   const te = useTranslations("estimates");
+  const tb = useTranslations("billing");
+  usePageDetailLabel(order.vehicle.registrationNumber);
   const { activeSection, scrollToSection, setSectionRef } = useJobCardSections({
     initialSection,
     syncUrl: true,
@@ -223,34 +225,43 @@ export function JobCardDetailPanel({
           >
             <div className="space-y-5 px-5 py-5 sm:px-6">
               {order.lines.length === 0 ? (
-                <EmptyState
-                  compact
-                  icon={ClipboardList}
-                  title={t("linesEmptyTitle")}
-                  description={t("linesEmpty")}
-                />
+                <p className="text-sm text-slate-600">{t("linesEmpty")}</p>
               ) : (
-                <ListCardGroup className="rounded-none border-0 shadow-none">
+                <ul className="divide-y overflow-hidden rounded-lg border border-slate-200">
                   {order.lines.map((line) => {
                     const total = multiplyByQuantity(
                       line.unitPricePaise,
                       line.quantity,
                     );
+                    const typeKey =
+                      line.type === "PART" || line.type === "LABOUR"
+                        ? line.type
+                        : "LABOUR";
                     return (
-                      <li key={line.id}>
-                        <ListCard
-                          title={line.description}
-                          subtitle={`${line.quantity} × ${formatRupees(line.unitPricePaise)} = ${formatRupees(total)}`}
-                          meta={t(`lineTypes.${line.type}`)}
-                          className="px-0"
-                        />
+                      <li key={line.id} className="space-y-0.5 px-3 py-3">
+                        <div className="flex flex-wrap items-start justify-between gap-2">
+                          <p className="min-w-0 text-sm font-medium text-slate-900">
+                            {line.description}
+                          </p>
+                          <span className="shrink-0 rounded-md border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs font-medium text-slate-700">
+                            {t(`lineTypes.${typeKey}`)}
+                          </span>
+                        </div>
+                        <p className="text-caption text-slate-500">
+                          {`${line.quantity} × ${formatRupees(line.unitPricePaise)} = ${formatRupees(total)}`}
+                        </p>
                       </li>
                     );
                   })}
-                </ListCardGroup>
+                </ul>
               )}
               {canMutate ? (
-                <OrderLineForm orderId={order.id} parts={parts} />
+                <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50/60 p-4">
+                  <p className="mb-3 text-sm font-medium text-slate-800">
+                    {t("addLine")}
+                  </p>
+                  <OrderLineForm orderId={order.id} parts={parts} />
+                </div>
               ) : null}
             </div>
           </SectionBlock>
@@ -271,6 +282,15 @@ export function JobCardDetailPanel({
             sectionRef={setSectionRef("estimate")}
           >
             {estimateContent}
+          </SectionBlock>
+
+          <SectionBlock
+            id="billing"
+            title={tb("title")}
+            subtitle={t("billingHint")}
+            sectionRef={setSectionRef("billing")}
+          >
+            {billingContent}
           </SectionBlock>
 
           <SectionBlock

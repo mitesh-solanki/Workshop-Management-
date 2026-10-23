@@ -106,6 +106,7 @@ const sampleOrder = {
     registrationNumber: "GJ01AB1234",
     make: "Maruti",
     model: "Swift",
+    stateCode: "24",
   },
   customer: { id: "cust-1", name: "Ravi", phone: "9876543210" },
   technician: { id: "tech-a", name: "Tech", email: "t@example.com" },

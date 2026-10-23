@@ -3,11 +3,13 @@ import { computeLineGst } from "@/lib/gst";
 import { formatRupees } from "@/lib/money";
 import { CreateEstimateForm } from "@/modules/estimates/components/create-estimate-form";
 import { EstimateLineForm } from "@/modules/estimates/components/estimate-line-form";
-import { LineApprovalForm } from "@/modules/estimates/components/line-approval-form";
+import {
+  EstimatePermissionLine,
+  SmoothHistoryPanel,
+} from "@/modules/estimates/components/estimate-permission-line";
 import type {
   EstimateApprovalMethodValue,
   EstimateApprovalStateValue,
-  EstimateLineTypeValue,
 } from "@/modules/estimates/schema";
 import type { getEstimateForOrder } from "@/modules/estimates/service";
 
@@ -27,8 +29,15 @@ export async function JobCardEstimateContent({
   const t = await getTranslations("estimates");
   const { current, revisions } = data;
 
+  const approvedCount =
+    current?.lines.filter((line) => line.approvalState === "APPROVED").length ??
+    0;
+  const pendingCount =
+    current?.lines.filter((line) => line.approvalState === "PENDING").length ??
+    0;
+
   return (
-    <div className="space-y-5 px-5 py-4 sm:px-6">
+    <div className="space-y-5 px-4 py-5 sm:px-5">
       {!current ? (
         <section className="space-y-3">
           <p className="text-sm text-slate-600">
@@ -40,100 +49,135 @@ export async function JobCardEstimateContent({
         </section>
       ) : (
         <>
-          <section className="space-y-3">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <p className="text-sm font-semibold text-slate-900">
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <div className="rounded-[11px] border border-slate-300 bg-blue-50/70 px-4 py-3.5">
+              <strong className="text-[13px] font-semibold text-slate-900">
+                {t("permissionHowTitle")}
+              </strong>
+              <p className="mt-1 text-[12px] leading-relaxed text-slate-600">
+                {t("permissionHowBody")}
+              </p>
+            </div>
+            <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-[12px] font-extrabold whitespace-nowrap text-emerald-800">
+              {t("permissionCount", {
+                agreed: approvedCount,
+                waiting: pendingCount,
+              })}
+            </span>
+          </div>
+
+          <div className="flex flex-wrap gap-4 text-[13px] text-slate-600">
+            <span>
+              <i className="mr-1.5 inline-block size-2 rounded-full bg-emerald-600" />
+              {t("permissionLegendAgreed")}
+            </span>
+            <span>
+              <i className="mr-1.5 inline-block size-2 rounded-full bg-amber-500" />
+              {t("permissionLegendWaiting")}
+            </span>
+            <span>
+              <i className="mr-1.5 inline-block size-2 rounded-full bg-red-500" />
+              {t("permissionLegendRejected")}
+            </span>
+          </div>
+
+          <div>
+            <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
+              <h3 className="text-[15px] font-semibold text-slate-900">
+                {t("permissionListTitle")}
+              </h3>
+              <p className="text-[12px] text-slate-500">
                 {t("revisionLabel", { number: current.revisionNumber })}
-                <span className="ml-2 text-caption font-normal text-slate-500">
-                  {t("currentRevision")}
+                <span className="ml-1 text-slate-400">
+                  · {t("currentRevision")}
                 </span>
               </p>
             </div>
-            {current.notes ? (
-              <p className="whitespace-pre-wrap text-sm text-slate-600">
-                {current.notes}
-              </p>
-            ) : null}
 
             {current.lines.length === 0 ? (
               <p className="text-sm text-slate-600">{t("linesEmpty")}</p>
             ) : (
-              <ul className="divide-y overflow-hidden rounded-lg border border-slate-200">
-                {current.lines.map((line) => {
+              <ul className="grid gap-3">
+                {current.lines.map((line, index) => {
                   const amounts = computeLineGst(line);
                   return (
-                    <li key={line.id} className="space-y-2.5 px-3 py-3">
-                      <div className="flex flex-wrap items-start justify-between gap-2">
-                        <div className="min-w-0 space-y-0.5">
-                          <p className="text-sm font-medium text-slate-900">
-                            {line.description}
-                          </p>
-                          <p className="text-caption text-slate-500">
-                            {`${t(`lineTypes.${line.type as EstimateLineTypeValue}`)} · ${line.quantity} × ${formatRupees(line.unitPricePaise)} · ${formatRupees(amounts.totalPaise)}`}
-                          </p>
-                        </div>
-                        <span className="shrink-0 rounded-md border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs font-medium text-slate-700">
-                          {t(
-                            `approvalStates.${line.approvalState as EstimateApprovalStateValue}`,
-                          )}
-                        </span>
-                      </div>
-                      {canEdit ? (
-                        <LineApprovalForm
-                          orderId={orderId}
-                          lineId={line.id}
-                          currentState={line.approvalState}
-                        />
-                      ) : null}
-                    </li>
+                    <EstimatePermissionLine
+                      key={line.id}
+                      orderId={orderId}
+                      canEdit={canEdit}
+                      index={index}
+                      line={{
+                        id: line.id,
+                        description: line.description,
+                        type: line.type,
+                        quantity: line.quantity,
+                        unitPricePaise: line.unitPricePaise,
+                        hsnOrSac: line.hsnOrSac,
+                        gstRatePercent: line.gstRatePercent,
+                        approvalState: line.approvalState,
+                        totalPaise: amounts.totalPaise,
+                      }}
+                    />
                   );
                 })}
               </ul>
             )}
+          </div>
+
+          <section className="overflow-hidden rounded-[11px] border border-slate-300">
+            <div className="grid gap-0 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="border-b border-slate-300 bg-slate-50/80 px-4 py-3.5 sm:border-r lg:border-b-0">
+                <p className="text-[13px] text-slate-500">{t("totalsAll")}</p>
+                <p className="mt-1 text-[15px] font-semibold text-slate-900">
+                  {formatRupees(current.totals.all.totalPaise)}
+                </p>
+              </div>
+              <div className="border-b border-slate-300 bg-slate-50/80 px-4 py-3.5 sm:border-r-0 lg:border-r lg:border-b-0">
+                <p className="text-[13px] text-slate-500">
+                  {t("totalsApproved")}
+                </p>
+                <p className="mt-1 text-[15px] font-semibold text-emerald-700">
+                  {formatRupees(current.totals.approved.totalPaise)}
+                </p>
+              </div>
+              <div className="border-b border-slate-300 bg-slate-50/80 px-4 py-3.5 sm:border-r sm:border-b-0 lg:border-b-0">
+                <p className="text-[13px] text-slate-500">
+                  {t("totalsPending")}
+                </p>
+                <p className="mt-1 text-[15px] font-semibold text-amber-700">
+                  {formatRupees(current.totals.pending.totalPaise)}
+                </p>
+              </div>
+              <div className="bg-blue-50 px-4 py-3.5">
+                <p className="text-[13px] text-slate-500">
+                  {t("totalsRejected")}
+                </p>
+                <p className="mt-1 text-[15px] font-semibold text-slate-800">
+                  {formatRupees(current.totals.rejected.totalPaise)}
+                </p>
+              </div>
+            </div>
           </section>
 
-          <section className="grid gap-2 rounded-lg border border-slate-200 bg-slate-50/80 px-3 py-3 sm:grid-cols-2 lg:grid-cols-4">
-            <div>
-              <p className="text-caption text-slate-500">{t("totalsAll")}</p>
-              <p className="text-sm font-semibold text-slate-900">
-                {formatRupees(current.totals.all.totalPaise)}
-              </p>
-            </div>
-            <div>
-              <p className="text-caption text-slate-500">{t("totalsApproved")}</p>
-              <p className="text-sm font-semibold text-emerald-700">
-                {formatRupees(current.totals.approved.totalPaise)}
-              </p>
-            </div>
-            <div>
-              <p className="text-caption text-slate-500">{t("totalsPending")}</p>
-              <p className="text-sm font-semibold text-amber-700">
-                {formatRupees(current.totals.pending.totalPaise)}
-              </p>
-            </div>
-            <div>
-              <p className="text-caption text-slate-500">{t("totalsRejected")}</p>
-              <p className="text-sm font-semibold text-slate-700">
-                {formatRupees(current.totals.rejected.totalPaise)}
-              </p>
-            </div>
-          </section>
-
-          {canEdit ? (
-            <section className="space-y-2">
-              <p className="text-sm font-medium text-slate-800">
-                {t("addLineTitle")}
-              </p>
-              <EstimateLineForm orderId={orderId} />
-            </section>
+          {current.totals.pending.totalPaise > 0 ||
+          current.totals.rejected.totalPaise > 0 ? (
+            <p className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2.5 text-[13px] text-amber-900">
+              {t("excludedFromBillNote")}
+            </p>
           ) : null}
 
           {canEdit ? (
-            <section className="space-y-2 rounded-lg border border-dashed border-slate-200 p-3">
+            <div className="border-t border-slate-300 pt-5">
+              <EstimateLineForm orderId={orderId} />
+            </div>
+          ) : null}
+
+          {canEdit ? (
+            <section className="space-y-2 rounded-[10px] border border-dashed border-slate-300 p-4">
               <p className="text-sm font-medium text-slate-800">
                 {t("reviseTitle")}
               </p>
-              <p className="text-caption text-slate-600">{t("reviseHint")}</p>
+              <p className="text-[12px] text-slate-600">{t("reviseHint")}</p>
               <CreateEstimateForm
                 orderId={orderId}
                 mode="revision"
@@ -142,16 +186,13 @@ export async function JobCardEstimateContent({
             </section>
           ) : null}
 
-          <section className="space-y-2">
-            <p className="text-sm font-medium text-slate-800">
-              {t("approvalHistory")}
-            </p>
+          <SmoothHistoryPanel title={t("approvalHistory")} hint={t("seeEarlier")}>
             {current.approvals.length === 0 ? (
-              <p className="text-sm text-slate-600">
+              <p className="px-4 py-3 text-sm text-slate-600">
                 {t("approvalHistoryEmpty")}
               </p>
             ) : (
-              <ul className="divide-y overflow-hidden rounded-lg border border-slate-200">
+              <ul>
                 {current.approvals.map((entry) => {
                   const line = current.lines.find(
                     (candidate) => candidate.id === entry.estimateLineId,
@@ -161,11 +202,19 @@ export async function JobCardEstimateContent({
                     entry.recordedBy?.email ||
                     t("unknownActor");
                   return (
-                    <li key={entry.id} className="space-y-0.5 px-3 py-2.5 text-sm">
-                      <p className="font-medium text-slate-900">
-                        {line?.description ?? t("lineDescription")}
-                      </p>
-                      <p className="text-caption text-slate-600">
+                    <li
+                      key={entry.id}
+                      className="border-b border-slate-300 px-4 py-3.5 text-[12px] last:border-b-0"
+                    >
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <b className="font-semibold text-slate-900">
+                          {line?.description ?? t("lineDescription")}
+                        </b>
+                        <span className="text-slate-400">
+                          {entry.createdAt.toLocaleString()}
+                        </span>
+                      </div>
+                      <p className="mt-1.5 text-slate-600">
                         {`${
                           entry.fromState
                             ? t("historyChange", {
@@ -184,30 +233,24 @@ export async function JobCardEstimateContent({
                         )} · ${actor}`}
                       </p>
                       {entry.note ? (
-                        <p className="text-caption text-slate-600">{entry.note}</p>
+                        <p className="mt-1 text-slate-500">{entry.note}</p>
                       ) : null}
-                      <p className="text-[11px] text-slate-400">
-                        {entry.createdAt.toLocaleString()}
-                      </p>
                     </li>
                   );
                 })}
               </ul>
             )}
-          </section>
+          </SmoothHistoryPanel>
         </>
       )}
 
       {revisions.length > 0 ? (
-        <section className="space-y-2">
-          <p className="text-sm font-medium text-slate-800">
-            {t("revisionHistory")}
-          </p>
-          <ul className="divide-y overflow-hidden rounded-lg border border-slate-200">
+        <SmoothHistoryPanel title={t("revisionHistory")} hint={t("seeEarlier")}>
+          <ul>
             {revisions.map((rev) => (
               <li
                 key={rev.id}
-                className="flex flex-wrap items-center justify-between gap-2 px-3 py-2.5 text-sm"
+                className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-300 px-4 py-3 text-sm last:border-b-0"
               >
                 <div>
                   <p className="font-medium text-slate-900">
@@ -216,14 +259,14 @@ export async function JobCardEstimateContent({
                       ? ` · ${t("currentRevision")}`
                       : ` · ${t("superseded")}`}
                   </p>
-                  <p className="text-caption text-slate-500">
+                  <p className="text-[13px] text-slate-500">
                     {`${t("lineCount", { count: rev._count.lines })} · ${rev.createdAt.toLocaleString()}`}
                   </p>
                 </div>
               </li>
             ))}
           </ul>
-        </section>
+        </SmoothHistoryPanel>
       ) : null}
     </div>
   );

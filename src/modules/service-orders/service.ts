@@ -8,18 +8,21 @@ import {
   canTransitionStatus,
   computeBayOccupancy,
   createServiceOrderSchema,
+  updateServiceOrderLineSchema,
   updateServiceOrderSchema,
   updateServiceOrderStatusSchema,
   type AddServiceOrderLineInput,
   type CreateServiceOrderInput,
   type ServiceOrderStatusValue,
   type UpdateServiceOrderInput,
+  type UpdateServiceOrderLineInput,
   type UpdateServiceOrderStatusInput,
 } from "@/modules/service-orders/schema";
 import {
   createServiceOrder,
   createServiceOrderLine,
   deleteServiceOrderById,
+  deleteServiceOrderLine,
   findServiceOrderById,
   findTechnicianInGarage,
   listServiceOrderAuditLogs,
@@ -27,6 +30,7 @@ import {
   listServiceOrdersByCustomer,
   listTechniciansInGarage,
   updateServiceOrderDetails,
+  updateServiceOrderLine,
   updateServiceOrderStatus,
 } from "@/modules/service-orders/repo";
 
@@ -321,6 +325,67 @@ export async function addOrderLine(
   }
 
   return result.line;
+}
+
+export async function updateOrderLine(
+  session: RoleSession,
+  orderId: string,
+  lineId: string,
+  raw: UpdateServiceOrderLineInput,
+) {
+  requireRole(session, LINE_ROLES);
+  const input = updateServiceOrderLineSchema.parse(raw);
+
+  const order = await findServiceOrderById(session.garageId, orderId);
+  if (!order) {
+    throw new NotFoundError();
+  }
+  assertCanMutateOrder(session, order);
+
+  const result = await updateServiceOrderLine(session.garageId, {
+    lineId,
+    serviceOrderId: order.id,
+    description: input.description,
+    quantity: input.quantity,
+    unitPricePaise: input.unitPricePaise,
+    actorId: session.userId,
+  });
+
+  if (!result.ok) {
+    if (result.reason === "NOT_FOUND" || result.reason === "PART_NOT_FOUND") {
+      throw new NotFoundError();
+    }
+    throw new AppError("inventory.insufficient_stock", 409);
+  }
+
+  return result.line;
+}
+
+export async function removeOrderLine(
+  session: RoleSession,
+  orderId: string,
+  lineId: string,
+) {
+  requireRole(session, LINE_ROLES);
+
+  const order = await findServiceOrderById(session.garageId, orderId);
+  if (!order) {
+    throw new NotFoundError();
+  }
+  assertCanMutateOrder(session, order);
+
+  const result = await deleteServiceOrderLine(session.garageId, {
+    lineId,
+    serviceOrderId: order.id,
+    actorId: session.userId,
+  });
+
+  if (!result.ok) {
+    if (result.reason === "NOT_FOUND" || result.reason === "PART_NOT_FOUND") {
+      throw new NotFoundError();
+    }
+    throw new AppError("inventory.insufficient_stock", 409);
+  }
 }
 
 export async function deleteOrder(session: RoleSession, orderId: string) {

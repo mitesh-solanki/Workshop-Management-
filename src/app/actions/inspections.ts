@@ -49,6 +49,21 @@ export async function updateInspectionItemAction(
   }
 }
 
+/** Saves condition without revalidating the job page (avoids a full refresh). */
+export async function updateInspectionConditionAction(
+  itemId: string,
+  result: "OK" | "NEEDS_ATTENTION" | "URGENT" | "",
+  notes: string,
+): Promise<InspectionActionState> {
+  try {
+    const session = await requireSession();
+    await updateInspectionItem(session, itemId, { result, notes });
+    return { ok: true, message: "itemSaved" };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
 export async function addChecklistItemAction(
   orderId: string,
   _prev: InspectionActionState,

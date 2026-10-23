@@ -333,6 +333,43 @@ export async function finalizeInvoiceInTransaction(
   });
 }
 
+/** Soft-delete is not used — draft invoices (no number yet) can be removed. */
+export async function deleteDraftInvoiceRow(
+  garageId: string,
+  invoiceId: string,
+  actorId: string,
+) {
+  return prisma.$transaction(async (tx) => {
+    const existing = await tx.invoice.findFirst({
+      where: { id: invoiceId, garageId, status: "DRAFT" },
+      select: { id: true, serviceOrderId: true, totalPaise: true },
+    });
+    if (!existing) {
+      return null;
+    }
+
+    await tx.invoice.deleteMany({
+      where: { id: invoiceId, garageId, status: "DRAFT" },
+    });
+
+    await tx.auditLog.create({
+      data: {
+        garageId,
+        actorId,
+        action: "billing.invoice_draft_deleted",
+        entity: "Invoice",
+        entityId: invoiceId,
+        meta: {
+          serviceOrderId: existing.serviceOrderId,
+          totalPaise: existing.totalPaise,
+        },
+      },
+    });
+
+    return existing;
+  });
+}
+
 /** Create draft and finalize in one transaction (single number allocation). */
 export async function createAndFinalizeInvoice(
   garageId: string,

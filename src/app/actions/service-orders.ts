@@ -10,7 +10,9 @@ import {
   changeOrderStatus,
   createOrder,
   deleteOrder,
+  removeOrderLine,
   updateOrder,
+  updateOrderLine,
 } from "@/modules/service-orders/service";
 
 export type ServiceOrderActionState = {
@@ -97,9 +99,10 @@ export async function updateServiceOrderAction(
   try {
     const session = await requireSession();
     await updateOrder(session, orderId, parseUpdateOrderForm(formData));
+    // Do not revalidate `/orders/[id]` — that remounts the open job card and
+    // feels like a full page refresh. Lists still update.
     revalidatePath("/orders");
     revalidatePath("/workshop");
-    revalidatePath(`/orders/${orderId}`);
     return { ok: true, message: t("saved") };
   } catch (error) {
     return {
@@ -181,6 +184,48 @@ export async function addServiceOrderLineAction(
     });
     revalidatePath(`/orders/${orderId}`);
     return { ok: true, message: "lineAdded" };
+  } catch (error) {
+    return {
+      ok: false,
+      message: await translateError(error),
+    };
+  }
+}
+
+export async function updateServiceOrderLineAction(
+  orderId: string,
+  lineId: string,
+  _prev: ServiceOrderActionState,
+  formData: FormData,
+): Promise<ServiceOrderActionState> {
+  const t = await getTranslations("orders");
+  try {
+    const session = await requireSession();
+    await updateOrderLine(session, orderId, lineId, {
+      description: String(formData.get("description") ?? ""),
+      quantity: String(formData.get("quantity") ?? "1"),
+      unitPricePaise: String(formData.get("unitPriceRupees") ?? "0"),
+    });
+    revalidatePath(`/orders/${orderId}`);
+    return { ok: true, message: t("lineUpdated") };
+  } catch (error) {
+    return {
+      ok: false,
+      message: await translateError(error),
+    };
+  }
+}
+
+export async function deleteServiceOrderLineAction(
+  orderId: string,
+  lineId: string,
+): Promise<ServiceOrderActionState> {
+  const t = await getTranslations("orders");
+  try {
+    const session = await requireSession();
+    await removeOrderLine(session, orderId, lineId);
+    revalidatePath(`/orders/${orderId}`);
+    return { ok: true, message: t("lineRemoved") };
   } catch (error) {
     return {
       ok: false,

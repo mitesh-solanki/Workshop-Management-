@@ -3,7 +3,6 @@
 import { useId, useState } from "react";
 import { Minus, Plus } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -17,10 +16,16 @@ type Props = {
   allowNegative?: boolean;
   className?: string;
   hint?: string;
+  /** Hide the visible label (still used for aria). */
+  hideLabel?: boolean;
+  /** Compact single border-box for table / tight rows. */
+  compact?: boolean;
+  /** Called whenever the quantity changes (stepper or typed). */
+  onValueChange?: (value: number) => void;
 };
 
 /**
- * Quantity field with − / + steppers and a large typed input (phone-friendly).
+ * Quantity as one border box: − | value | +
  */
 export function QuantityStepper({
   id: idProp,
@@ -32,6 +37,9 @@ export function QuantityStepper({
   allowNegative = false,
   className,
   hint,
+  hideLabel = false,
+  compact = false,
+  onValueChange,
 }: Props) {
   const t = useTranslations("inventory");
   const autoId = useId();
@@ -45,53 +53,71 @@ export function QuantityStepper({
     return n;
   }
 
+  function commit(next: number) {
+    setValue(next);
+    if (Number.isFinite(next)) onValueChange?.(next);
+  }
+
   function bump(delta: number) {
-    setValue((prev) => clamp(prev + delta));
+    setValue((prev) => {
+      const next = clamp(prev + delta);
+      if (Number.isFinite(next)) onValueChange?.(next);
+      return next;
+    });
   }
 
   function onInputChange(raw: string) {
     if (raw === "" || raw === "-") {
-      // Keep empty while typing; form still needs a value on submit via hidden.
       setValue(Number.NaN);
       return;
     }
     const n = Number(raw);
     if (!Number.isFinite(n)) return;
-    setValue(n);
+    commit(n);
   }
 
   function onBlur() {
     if (!Number.isFinite(value)) {
-      setValue(clamp(defaultValue));
+      commit(clamp(defaultValue));
       return;
     }
-    setValue(clamp(value));
+    commit(clamp(value));
   }
 
   const display = Number.isFinite(value) ? String(value) : "";
   const submitValue = Number.isFinite(value) ? value : defaultValue;
 
+  const height = compact ? "h-9" : "h-11";
+  const sideW = compact ? "w-8" : "w-10";
+  const iconSize = compact ? "size-3.5" : "size-4";
+  const sideBtnClass = cn(
+    "inline-flex shrink-0 items-center justify-center bg-slate-100 text-slate-600 transition-colors hover:bg-blue-50 hover:text-blue-700 active:bg-blue-100",
+    sideW,
+    height,
+  );
+
   return (
     <div className={cn("flex flex-col gap-1.5", className)}>
-      <label htmlFor={id} className="text-sm font-medium text-foreground">
-        {label}
-      </label>
-      <div className="flex items-stretch gap-2">
-        <Button
+      {hideLabel ? null : (
+        <label htmlFor={id} className="text-[13px] font-semibold text-slate-700">
+          {label}
+        </label>
+      )}
+      <div
+        className={cn(
+          "inline-flex max-w-full items-stretch overflow-hidden rounded-lg border border-slate-300 bg-white shadow-xs",
+          compact ? "w-[7.5rem]" : "w-[9.5rem]",
+          height,
+        )}
+      >
+        <button
           type="button"
-          variant="outline"
-          size="icon"
-          className="size-11 shrink-0"
+          className={sideBtnClass}
           aria-label={t("decreaseQty")}
           onClick={() => bump(-step)}
-          disabled={
-            resolvedMin !== undefined &&
-            Number.isFinite(value) &&
-            value <= resolvedMin
-          }
         >
-          <Minus className="size-4" aria-hidden />
-        </Button>
+          <Minus className={iconSize} aria-hidden strokeWidth={2.5} />
+        </button>
         <input
           id={id}
           type="number"
@@ -102,23 +128,21 @@ export function QuantityStepper({
           onChange={(e) => onInputChange(e.target.value)}
           onBlur={onBlur}
           className={cn(
-            "h-11 min-h-11 w-full min-w-0 rounded-md border border-input bg-background px-3 text-center text-lg font-semibold tabular-nums outline-none",
-            "focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/30",
+            "min-w-0 flex-1 border-0 bg-white px-1 text-center text-[14px] font-semibold tabular-nums text-slate-800 outline-none focus-visible:bg-slate-50",
+            "[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none",
+            height,
           )}
           aria-label={label}
         />
-        <Button
+        <button
           type="button"
-          variant="outline"
-          size="icon"
-          className="size-11 shrink-0"
+          className={sideBtnClass}
           aria-label={t("increaseQty")}
           onClick={() => bump(step)}
         >
-          <Plus className="size-4" aria-hidden />
-        </Button>
+          <Plus className={iconSize} aria-hidden strokeWidth={2.5} />
+        </button>
       </div>
-      {/* Controlled input is not named — submit via hidden so FormData is correct. */}
       <input type="hidden" name={name} value={submitValue} />
       {hint ? (
         <p className="text-xs text-muted-foreground">{hint}</p>

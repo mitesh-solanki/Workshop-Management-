@@ -3,10 +3,13 @@
 import { revalidatePath } from "next/cache";
 import { AppError } from "@/lib/errors";
 import { requireSession } from "@/lib/session";
+import { translateError } from "@/lib/translate-error";
 import {
   addManualEstimateLine,
   createEstimateFromSources,
   createEstimateRevision,
+  removeEstimateLine,
+  savePermissionLine,
   setEstimateLineApproval,
 } from "@/modules/estimates/service";
 import type {
@@ -73,9 +76,11 @@ export async function addEstimateLineAction(
 ): Promise<EstimateActionState> {
   try {
     const session = await requireSession();
+    const description = String(formData.get("description") ?? "").trim();
+    const reason = String(formData.get("reason") ?? "").trim();
     await addManualEstimateLine(session, orderId, {
       type: String(formData.get("type") ?? "") as EstimateLineTypeValue,
-      description: String(formData.get("description") ?? ""),
+      description: reason ? `${description} — ${reason}` : description,
       quantity: String(formData.get("quantity") ?? "1"),
       unitPricePaise: String(formData.get("unitPriceRupees") ?? "0"),
       gstRatePercent: String(formData.get("gstRatePercent") ?? "18"),
@@ -100,6 +105,53 @@ export async function setLineApprovalAction(
   try {
     const session = await requireSession();
     await setEstimateLineApproval(session, lineId, {
+      approvalState: String(
+        formData.get("approvalState") ?? "",
+      ) as EstimateApprovalStateValue,
+      method: String(
+        formData.get("method") ?? "",
+      ) as EstimateApprovalMethodValue,
+      note: String(formData.get("note") ?? ""),
+    });
+    revalidateEstimate(orderId);
+    return { ok: true, message: "approvalSaved" };
+  } catch (error) {
+    return {
+      ok: false,
+      message: error instanceof AppError ? error.message : "Something went wrong",
+    };
+  }
+}
+
+export async function deleteEstimateLineAction(
+  orderId: string,
+  lineId: string,
+): Promise<EstimateActionState> {
+  try {
+    const session = await requireSession();
+    await removeEstimateLine(session, lineId);
+    revalidateEstimate(orderId);
+    return { ok: true, message: "lineRemoved" };
+  } catch (error) {
+    return {
+      ok: false,
+      message: await translateError(error),
+    };
+  }
+}
+
+export async function savePermissionLineAction(
+  orderId: string,
+  lineId: string,
+  _prev: EstimateActionState,
+  formData: FormData,
+): Promise<EstimateActionState> {
+  try {
+    const session = await requireSession();
+    await savePermissionLine(session, lineId, {
+      description: String(formData.get("description") ?? ""),
+      quantity: String(formData.get("quantity") ?? "1"),
+      unitPricePaise: String(formData.get("unitPriceRupees") ?? "0"),
       approvalState: String(
         formData.get("approvalState") ?? "",
       ) as EstimateApprovalStateValue,

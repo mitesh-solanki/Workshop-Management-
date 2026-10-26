@@ -4,6 +4,7 @@ import type { Role } from "@prisma/client";
 import { z } from "zod";
 import {
   completeOtpSignIn,
+  completeProdPasswordSignIn,
   getAuthAdapter,
   getUserForSessionRefresh,
 } from "@/modules/auth/service";
@@ -11,6 +12,12 @@ import {
 const credentialsSchema = z.object({
   email: z.string().email(),
   code: z.string().min(4).max(12),
+});
+
+const prodPasswordSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(1).max(128),
+  ip: z.string().optional(),
 });
 
 /** How long a normal signed-in session lasts (sliding refresh within this window). */
@@ -41,6 +48,39 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
         try {
           const user = await completeOtpSignIn(parsed.data);
+          return {
+            id: user.id,
+            email: user.email,
+            name: user.name,
+            garageId: user.garageId,
+            role: user.role,
+          };
+        } catch {
+          return null;
+        }
+      },
+    }),
+    Credentials({
+      id: "prod-password",
+      name: "Production password",
+      credentials: {
+        email: { label: "Email", type: "email" },
+        password: { label: "Password", type: "password" },
+      },
+      authorize: async (raw) => {
+        const parsed = prodPasswordSchema.safeParse(raw);
+        if (!parsed.success) {
+          return null;
+        }
+
+        try {
+          const user = await completeProdPasswordSignIn(
+            {
+              email: parsed.data.email,
+              password: parsed.data.password,
+            },
+            { ip: parsed.data.ip },
+          );
           return {
             id: user.id,
             email: user.email,

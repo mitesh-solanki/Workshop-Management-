@@ -12,6 +12,7 @@ import { AppError } from "@/lib/errors";
 const AUTH_ERROR_KEYS: Record<string, string> = {
   "auth.email_in_use": "errors.emailInUse",
   "auth.invalid_otp": "errors.invalidOtp",
+  "auth.invalid_credentials": "errors.invalidCredentials",
   "auth.signup_incomplete": "errors.signupIncomplete",
   "auth.invalid_invite": "errors.invalidInvite",
   "auth.user_not_found": "errors.userNotFound",

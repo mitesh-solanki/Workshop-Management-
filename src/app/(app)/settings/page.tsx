@@ -17,7 +17,7 @@ export default async function SettingsPage() {
   return (
     <main className="space-y-6">
       <PageHeader title={t("title")} description={t("subtitle")} />
-      {canEdit ? (
+      {/* {canEdit ? (
         <section className="rounded-xl border border-border bg-card p-4 sm:p-5">
           <h2 className="text-base font-semibold text-slate-900">
             {tImport("settingsCardTitle")}
@@ -32,7 +32,7 @@ export default async function SettingsPage() {
             {tImport("openImport")}
           </Link>
         </section>
-      ) : null}
+      ) : null} */}
       <GarageSettingsForm
         key={`${garage.name}|${garage.address ?? ""}|${garage.gstin ?? ""}`}
         garage={garage}

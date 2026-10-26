@@ -15,7 +15,7 @@ import {
 export type AuthActionState = {
   ok: boolean;
   message?: string;
-  step?: "email" | "otp";
+  step?: "email" | "otp" | "password";
   email?: string;
 };
 
@@ -113,6 +113,41 @@ export async function verifyOtpAction(
     return {
       ok: false,
       step: "otp",
+      email,
+      message: translateAuthError(error),
+    };
+  }
+
+  redirect("/dashboard");
+}
+
+export async function loginWithPasswordAction(
+  _prev: AuthActionState,
+  formData: FormData,
+): Promise<AuthActionState> {
+  const email = String(formData.get("email") ?? "");
+  const password = String(formData.get("password") ?? "");
+  const ip = await getClientIp();
+
+  try {
+    await signIn("prod-password", {
+      email,
+      password,
+      ip,
+      redirect: false,
+    });
+  } catch (error) {
+    if (error instanceof AuthError) {
+      return {
+        ok: false,
+        step: "password",
+        email,
+        message: authCopy("errors.invalidCredentials"),
+      };
+    }
+    return {
+      ok: false,
+      step: "password",
       email,
       message: translateAuthError(error),
     };

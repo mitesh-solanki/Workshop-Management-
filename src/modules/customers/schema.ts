@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isValidPhone } from "@/lib/contact";
 
 const optionalText = (max: number) =>
   z
@@ -23,8 +24,10 @@ export const createCustomerSchema = z.object({
   phone: z
     .string()
     .trim()
-    .min(7, { error: "validation.tooShort" })
-    .max(20, { error: "validation.tooLong" }),
+    .min(1, { error: "validation.required" })
+    .refine((value) => isValidPhone(value), {
+      error: "validation.invalidPhone",
+    }),
   address: optionalText(500),
   notes: optionalText(2000),
 });

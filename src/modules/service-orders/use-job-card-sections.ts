@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import {
   sectionDomId,
@@ -52,11 +52,11 @@ export function useJobCardSections({
   );
 
   const [tabSection, setTabSection] = useState<JobCardSection>(initialSection);
-
-  useEffect(() => {
-    if (mode !== "tabs") return;
+  const [syncedInitial, setSyncedInitial] = useState(initialSection);
+  if (mode === "tabs" && syncedInitial !== initialSection) {
+    setSyncedInitial(initialSection);
     setTabSection(initialSection);
-  }, [initialSection, mode]);
+  }
 
   const scrollSpy = useSectionScrollSpy({
     sections: JOB_CARD_SECTIONS,
@@ -81,9 +81,7 @@ export function useJobCardSections({
     return {
       activeSection: tabSection,
       scrollToSection,
-      setSectionRef: (_section: JobCardSection) => (_node: HTMLElement | null) => {
-        /* refs unused in tabs mode */
-      },
+      setSectionRef: () => () => {},
       sections: JOB_CARD_SECTIONS,
     };
   }

@@ -1,9 +1,11 @@
 import { Suspense } from "react";
-import { Package } from "lucide-react";
+import Link from "next/link";
+import { Package, ShoppingBag } from "lucide-react";
 import { getTranslations } from "next-intl/server";
+import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
-import { Skeleton } from "@/components/ui/skeleton";
+import { TableSpinner } from "@/components/shared/page-spinner";
 import { requireSession } from "@/lib/session";
 import { ImportModal } from "@/modules/data-import/components/import-modal";
 import { CreatePartModal } from "@/modules/inventory/components/create-part-modal";
@@ -36,16 +38,23 @@ export default async function InventoryPage({ searchParams }: Props) {
         actions={
           <>
             {canWrite ? <ImportModal entity="parts" /> : null}
+            {canSale ? (
+              <Button asChild variant="secondary" size="md">
+                <Link href="/inventory/sales">
+                  <ShoppingBag className="size-4" aria-hidden />
+                  {t("counterSales")}
+                </Link>
+              </Button>
+            ) : null}
             {canWrite ? <CreatePartModal /> : null}
           </>
         }
       />
 
-      <Suspense fallback={<Skeleton className="h-64 w-full" />}>
+      <Suspense fallback={<TableSpinner />}>
         <InventoryTable
           items={parts}
           canWrite={canWrite}
-          canSale={canSale}
           empty={
             <EmptyState
               icon={Package}

@@ -1,4 +1,4 @@
-# Audit protocol (docs/audit/AUDIT_PROTOCOL.md)
+# Audit protocol
 
 Use this file for every branch. It replaces the older three-prompt block. The change: audits now check **surfaces** (can a real user find and use the feature) and **proof quality** (is it really working), not only whether code exists.
 
@@ -18,7 +18,7 @@ Status words (use only these):
 ```markdown
 Do not change any code. Read docs/PRODUCT_SPEC.md, docs/ARCHITECTURE.md,
 docs/ROADMAP.md, the prompt(s) for this branch in docs/PROMPTS.md, the contract
-at the top of the Prompt 11+ section, .cursor/rules/garage.mdc and
+at the top of the "Prompts 11 onward" section, .cursor/rules/garage.mdc and
 .cursor/rules/ui-flows.mdc.
 
 Audit this branch and write docs/audit/<branch-name>.md. Use only the status
@@ -44,13 +44,20 @@ AND a test name that proves it. If you are not sure, write Partial.
    example "find all unpaid invoices this month") and list the clicks. Mark any
    task that needs more than 3 clicks, needs a direct URL, or is impossible.
 
-4. UI problems: pages with no loading, empty (no data), empty (no search match)
-   or error state; hard-coded English (including placeholders, PDF labels,
-   audit notes, export headers, provider-facing text); missing hi/gu keys; key
-   parity between en/hi/gu; layouts that break at 360px or look empty or
-   narrow-column at 1440px; status shown as plain text instead of the shared
-   Badge; more than one primary button; missing breadcrumb; no toast on
-   success or failure.
+4. UI problems, checked against ui-flows.mdc and garage.mdc: pages with no
+   loading Skeleton, empty (no data) or error state; empty (no search match)
+   missing; hard-coded English (including placeholders, PDF labels, audit
+   notes, export headers, provider-facing text); missing hi/gu keys; key parity
+   between en/hi/gu; layouts that break at 360px or look empty or
+   narrow-column at 1440px; pages missing title, description, breadcrumb or
+   having more than one primary button; status shown as plain text instead of
+   Badge; status change done with a dropdown of every status instead of one
+   "next step" button; list rows without a DropdownMenu of row actions; tables
+   that do not become cards on phones; tap targets under 44px; forms not using
+   react-hook-form + zod with inline errors; native input/select instead of
+   shadcn; destructive actions without a confirm dialog; async actions without
+   a loading button and success/error toast; database terms in labels instead
+   of garage language; code comments added; missing flow map for the feature.
 
 5. Rule violations: queries without garageId; garageId taken from request
    input; Prisma outside repo.ts (include src/lib); floats used for money;
@@ -62,7 +69,8 @@ AND a test name that proves it. If you are not sure, write Partial.
    only work with a mocked provider, TODO or console.log left in code.
 
 7. Proof quality. For each Done row, classify its proof:
-   - unit (pure logic), mocked-service, live-Postgres, Playwright-from-nav.
+   - unit (pure logic), mocked-service, local-Postgres (same DATABASE_URL /
+     docker as the app — not a separate DB), Playwright-from-nav.
    Flag every row whose only proof is mocked and whose rule is about money,
    stock, numbering, concurrency, permissions or isolation.
 
@@ -106,7 +114,7 @@ Update audit rows. Finish with a checklist.
 ```markdown
 Read docs/audit/<branch-file>.md. Build these missing items: [paste rows].
 Before coding, list tables, routes and files you will change. Follow the
-Prompt 11+ contract (Surface Map, real behaviour, proof). Update audit rows.
+Prompts 11 onward contract (Surface Map, real behaviour, proof). Update audit rows.
 Finish with a checklist.
 ```
 
@@ -159,32 +167,10 @@ Update the audit file only to correct statuses. Do not fix code.
 - [ ] Surface Map in the PR matches real routes
 - [ ] Every new entity has nav entry, list, detail, empty states
 - [ ] No hard-coded English; en, hi, gu keys identical
-- [ ] One live-Postgres test for money, stock, numbering or concurrency rules
+- [ ] One local-Postgres test (same DATABASE_URL) for money, stock, numbering or concurrency rules
 - [ ] One Playwright test starting from the nav click
 - [ ] Role matrix test passes
 - [ ] Garage isolation test for every new table
 - [ ] Audit file re-checked after the last code change
 - [ ] ROADMAP row updated to the real status (not ahead of the tree)
 - [ ] Everything committed (no important files untracked)
-
----
-
-## E. Surface debt from Prompts 1 to 10 (found in the existing audits)
-
-Fixed by **Prompt 11** unless noted.
-
-| Entity | Today | Problem | Fix |
-| --- | --- | --- | --- |
-| Invoice | Only inside job card `?section=billing` | Embedded-only, no list, no filters, no totals | Prompt 11 `/invoices` |
-| Payment and receipt | Only inside job card billing | No list, no pending-payments view, no receipts | Prompt 11 `/payments` |
-| Credit note | Only inside job card billing | No list or PDF | Prompt 11 tab in `/invoices` |
-| Estimate | Only inside order `/orders/[id]/estimate` | No pending-approval queue, no superseded revision view | Prompt 11 `/estimates` |
-| Live Link | Staff panel inside job card | No list, no last-viewed, no expiry overview | Prompt 11 `/live-links` |
-| Inspection | Only inside order | Acceptable as order-scoped; add an "inspections today" filter on the board later | Prompt 19 dashboard |
-| Import | Modal on list pages, `/…/import` pages are redirects | No entry from Settings, no import history | Prompt 12 Settings sub-page with history |
-| Team | Invite list only | No attendance, shifts, leave | Prompt 18 |
-| Communication history | Placeholder text | No real messages | Prompt 15 |
-| Settings | One form | Missing rates, packages, hours, invoice design | Prompt 12 |
-| Dashboard | Welcome plus low stock | No money, orders or approvals widgets | Prompts 11 and 19 |
-| Hard-coded English in action errors | Several branches | Violates i18n rule | Run B5 per branch |
-| Live-DB proof for isolation | Mocked in auth, customers, orders, import | Not proven against Postgres | One shared isolation test file in Prompt 11 |

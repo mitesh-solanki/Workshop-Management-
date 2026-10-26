@@ -3,6 +3,7 @@
 import { useId, useState } from "react";
 import { Minus, Plus } from "lucide-react";
 import { useTranslations } from "next-intl";
+import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -87,25 +88,21 @@ export function QuantityStepper({
   const display = Number.isFinite(value) ? String(value) : "";
   const submitValue = Number.isFinite(value) ? value : defaultValue;
 
-  const height = compact ? "h-9" : "h-11";
+  const height = compact ? "h-9 min-h-9" : "h-11 min-h-11";
   const sideW = compact ? "w-8" : "w-10";
   const iconSize = compact ? "size-3.5" : "size-4";
   const sideBtnClass = cn(
-    "inline-flex shrink-0 items-center justify-center bg-slate-100 text-slate-600 transition-colors hover:bg-blue-50 hover:text-blue-700 active:bg-blue-100",
+    "inline-flex shrink-0 items-center justify-center bg-muted text-muted-foreground transition-colors hover:bg-blue-50 hover:text-blue-700 active:bg-blue-100",
     sideW,
     height,
   );
 
   return (
     <div className={cn("flex flex-col gap-1.5", className)}>
-      {hideLabel ? null : (
-        <label htmlFor={id} className="text-[13px] font-semibold text-slate-700">
-          {label}
-        </label>
-      )}
+      {hideLabel ? null : <Label htmlFor={id}>{label}</Label>}
       <div
         className={cn(
-          "inline-flex max-w-full items-stretch overflow-hidden rounded-lg border border-slate-300 bg-white shadow-xs",
+          "inline-flex max-w-full items-stretch overflow-hidden rounded-md border border-input bg-card shadow-xs",
           compact ? "w-[7.5rem]" : "w-[9.5rem]",
           height,
         )}
@@ -128,7 +125,7 @@ export function QuantityStepper({
           onChange={(e) => onInputChange(e.target.value)}
           onBlur={onBlur}
           className={cn(
-            "min-w-0 flex-1 border-0 bg-white px-1 text-center text-[14px] font-semibold tabular-nums text-slate-800 outline-none focus-visible:bg-slate-50",
+            "min-w-0 flex-1 border-0 bg-card px-1 text-center text-sm font-medium tabular-nums text-foreground outline-none focus-visible:bg-muted/40",
             "[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none",
             height,
           )}

@@ -8,13 +8,16 @@ import {
   type InventoryActionState,
 } from "@/app/actions/inventory";
 import { RupeePriceInput } from "@/components/rupee-price-input";
+import { FormField } from "@/components/ui/form-field";
 import { FormSelect } from "@/components/ui/form-select";
+import { Input } from "@/components/ui/input";
 import {
   DEFAULT_GST_RATE_PERCENT,
   DEFAULT_PART_HSN,
   GST_RATE_OPTIONS,
   PART_UNIT_OPTIONS,
 } from "@/modules/inventory/schema";
+import { NameSkuFields } from "@/modules/inventory/components/name-sku-fields";
 
 const initial: InventoryActionState = { ok: false };
 
@@ -64,51 +67,59 @@ export function PartForm(props: Props) {
           lowStockLevel: 0,
         };
 
+  const unitField = (
+    <FormField id="unit" label={t("unit")}>
+      <FormSelect
+        id="unit"
+        name="unit"
+        defaultValue={defaults.unit}
+        required
+        options={PART_UNIT_OPTIONS.map((unit) => ({
+          value: unit,
+          label: t(`units.${unit}`),
+        }))}
+      />
+    </FormField>
+  );
+
   return (
     <form action={formAction} className="flex max-w-xl flex-col gap-4">
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor="name" className="text-sm font-medium">
-          {t("name")}
-        </label>
-        <input
-          id="name"
-          name="name"
-          defaultValue={defaults.name}
-          required
-          maxLength={200}
-          className={inputClass}
+      {props.mode === "create" ? (
+        <NameSkuFields
+          idPrefix="part"
+          autoSku
+          autoFocusName
+          nameClassName={inputClass}
+          skuClassName={`${inputClass} font-mono uppercase`}
+          afterSku={unitField}
         />
-      </div>
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor="sku" className="text-sm font-medium">
-            {t("sku")}
-          </label>
-          <input
-            id="sku"
-            name="sku"
-            defaultValue={defaults.sku}
-            required
-            maxLength={64}
-            className={`${inputClass} font-mono uppercase`}
-          />
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor="unit" className="text-sm font-medium">
-            {t("unit")}
-          </label>
-          <FormSelect
-            id="unit"
-            name="unit"
-            defaultValue={defaults.unit}
-            required
-            options={PART_UNIT_OPTIONS.map((unit) => ({
-              value: unit,
-              label: t(`units.${unit}`),
-            }))}
-          />
-        </div>
-      </div>
+      ) : (
+        <>
+          <FormField id="name" label={t("name")}>
+            <Input
+              id="name"
+              name="name"
+              defaultValue={defaults.name}
+              required
+              maxLength={200}
+              className={inputClass}
+            />
+          </FormField>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <FormField id="sku" label={t("sku")}>
+              <Input
+                id="sku"
+                name="sku"
+                defaultValue={defaults.sku}
+                required
+                maxLength={64}
+                className={`${inputClass} font-mono uppercase`}
+              />
+            </FormField>
+            {unitField}
+          </div>
+        </>
+      )}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <RupeePriceInput
           id="purchasePriceRupees"

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isValidEmail } from "@/lib/contact";
 
 export const inviteRoleSchema = z.enum(["MANAGER", "TECHNICIAN", "ACCOUNTANT"]);
 
@@ -6,8 +7,11 @@ export const createInviteSchema = z.object({
   email: z
     .string()
     .trim()
-    .email({ error: "validation.invalidEmail" })
-    .max(160, { error: "validation.tooLong" }),
+    .min(1, { error: "validation.required" })
+    .max(160, { error: "validation.tooLong" })
+    .refine((value) => isValidEmail(value), {
+      error: "validation.invalidEmail",
+    }),
   role: inviteRoleSchema,
 });
 

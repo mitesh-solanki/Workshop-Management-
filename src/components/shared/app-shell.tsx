@@ -43,8 +43,11 @@ export function AppShell({
           <AppHeader appName={appName} garageName={garageName} />
           {/* Only this pane scrolls — header stays put; section navs sticky inside. */}
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-            <div className="w-full max-w-[1600px] px-4 py-5 sm:px-6 sm:py-6 lg:px-[34px] lg:py-8">
-              {children}
+            {/* Outer min-h-full fills the pane; padding is inner so loaders do not overflow. */}
+            <div className="flex min-h-full w-full flex-col">
+              <div className="mx-auto flex w-full max-w-[1600px] flex-1 flex-col px-4 py-5 sm:px-6 sm:py-6 lg:px-[34px] lg:py-8">
+                {children}
+              </div>
             </div>
           </div>
         </PageChromeProvider>

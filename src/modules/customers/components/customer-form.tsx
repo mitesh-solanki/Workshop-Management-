@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useMemo, useRef } from "react";
+import { useActionState, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import {
   createCustomerAction,
@@ -12,6 +12,7 @@ import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/toast";
+import { sanitizePhoneTyping } from "@/lib/contact";
 import { cn } from "@/lib/utils";
 
 const initial: CustomerActionState = { ok: false };
@@ -61,6 +62,7 @@ export function CustomerForm(props: Props) {
     props.mode === "edit"
       ? props.customer
       : { name: "", phone: "", address: null, notes: null };
+  const [phone, setPhone] = useState(defaults.phone);
 
   return (
     <form
@@ -83,7 +85,8 @@ export function CustomerForm(props: Props) {
             id="phone"
             name="phone"
             type="tel"
-            defaultValue={defaults.phone}
+            value={phone}
+            onChange={(e) => setPhone(sanitizePhoneTyping(e.target.value))}
             required
             autoComplete="tel"
             inputMode="tel"

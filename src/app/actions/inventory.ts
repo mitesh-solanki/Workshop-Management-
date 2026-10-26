@@ -9,9 +9,11 @@ import { parseDirectSaleFormData } from "@/modules/inventory/direct-sale-form-da
 import {
   createDirectSaleRecord,
   createPartRecord,
+  deleteDirectSaleRecord,
   recordStockAdjustment,
   recordStockIn,
   recordStockOut,
+  updateDirectSaleRecord,
   updatePartRecord,
 } from "@/modules/inventory/service";
 
@@ -19,6 +21,10 @@ export type InventoryActionState = {
   ok: boolean;
   message?: string;
   partId?: string;
+  partName?: string;
+  partSku?: string;
+  partUnit?: string;
+  saleId?: string;
 };
 
 function parsePartForm(formData: FormData) {
@@ -64,7 +70,15 @@ export async function createPartModalAction(
     const part = await createPartRecord(session, parsePartForm(formData));
     revalidatePath("/inventory");
     revalidatePath("/dashboard");
-    return { ok: true, message: t("created"), partId: part.id };
+    revalidatePath("/vendors");
+    return {
+      ok: true,
+      message: t("created"),
+      partId: part.id,
+      partName: part.name,
+      partSku: part.sku,
+      partUnit: part.unit,
+    };
   } catch (error) {
     return { ok: false, message: await translateError(error) };
   }
@@ -165,12 +179,10 @@ export async function createDirectSaleAction(
   _prev: InventoryActionState,
   formData: FormData,
 ): Promise<InventoryActionState> {
-  let saleId: string;
   try {
     const session = await requireSession();
     const payload = parseDirectSaleFormData(formData);
-    const result = await createDirectSaleRecord(session, payload);
-    saleId = result.saleId;
+    await createDirectSaleRecord(session, payload);
   } catch (error) {
     return { ok: false, message: await translateError(error) };
   }
@@ -178,5 +190,60 @@ export async function createDirectSaleAction(
   revalidatePath("/inventory");
   revalidatePath("/inventory/sales");
   revalidatePath("/dashboard");
-  redirect(`/inventory/sales/${saleId}`);
+  redirect("/inventory/sales");
+}
+
+export async function createDirectSaleModalAction(
+  _prev: InventoryActionState,
+  formData: FormData,
+): Promise<InventoryActionState> {
+  const t = await getTranslations("inventory");
+  try {
+    const session = await requireSession();
+    const payload = parseDirectSaleFormData(formData);
+    const result = await createDirectSaleRecord(session, payload);
+    revalidatePath("/inventory");
+    revalidatePath("/inventory/sales");
+    revalidatePath("/dashboard");
+    return { ok: true, message: t("saleCreated"), saleId: result.saleId };
+  } catch (error) {
+    return { ok: false, message: await translateError(error) };
+  }
+}
+
+export async function updateDirectSaleModalAction(
+  _prev: InventoryActionState,
+  formData: FormData,
+): Promise<InventoryActionState> {
+  const t = await getTranslations("inventory");
+  try {
+    const session = await requireSession();
+    const payload = parseDirectSaleFormData(formData);
+    const result = await updateDirectSaleRecord(session, {
+      saleId: String(formData.get("saleId") ?? ""),
+      ...payload,
+    });
+    revalidatePath("/inventory");
+    revalidatePath("/inventory/sales");
+    revalidatePath("/dashboard");
+    return { ok: true, message: t("saleUpdated"), saleId: result.saleId };
+  } catch (error) {
+    return { ok: false, message: await translateError(error) };
+  }
+}
+
+export async function deleteDirectSaleAction(
+  saleId: string,
+): Promise<InventoryActionState> {
+  const t = await getTranslations("inventory");
+  try {
+    const session = await requireSession();
+    await deleteDirectSaleRecord(session, saleId);
+    revalidatePath("/inventory");
+    revalidatePath("/inventory/sales");
+    revalidatePath("/dashboard");
+    return { ok: true, message: t("saleDeleted") };
+  } catch (error) {
+    return { ok: false, message: await translateError(error) };
+  }
 }

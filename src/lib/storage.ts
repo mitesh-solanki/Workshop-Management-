@@ -78,6 +78,9 @@ function extensionForContentType(contentType: string): string {
   if (lower.includes("webp")) {
     return "webp";
   }
+  if (lower.includes("pdf")) {
+    return "pdf";
+  }
   if (lower.includes("webm")) {
     return "webm";
   }
@@ -97,6 +100,17 @@ export function buildInspectionMediaKey(input: {
   const ext = extensionForContentType(input.contentType);
   const id = randomBytes(12).toString("hex");
   return `garages/${input.garageId}/inspections/${input.inspectionId}/items/${input.itemId}/${id}.${ext}`;
+}
+
+/** Build a garage-scoped object key for a vendor bill attachment. */
+export function buildVendorBillAttachmentKey(input: {
+  garageId: string;
+  vendorBillId: string;
+  contentType: string;
+}) {
+  const ext = extensionForContentType(input.contentType);
+  const id = randomBytes(12).toString("hex");
+  return `garages/${input.garageId}/vendor-bills/${input.vendorBillId}/${id}.${ext}`;
 }
 
 /** Presigned PUT URL for browser upload to S3-compatible storage. */

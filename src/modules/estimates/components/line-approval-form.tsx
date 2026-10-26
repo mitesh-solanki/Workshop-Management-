@@ -74,10 +74,11 @@ export function LineApprovalForm({
   const [selectedState, setSelectedState] = useState<EstimateApprovalStateValue>(
     () => defaultSelectedState(currentState),
   );
-
-  useEffect(() => {
+  const [syncedApproval, setSyncedApproval] = useState(currentState);
+  if (syncedApproval !== currentState) {
+    setSyncedApproval(currentState);
     setSelectedState(defaultSelectedState(currentState));
-  }, [currentState]);
+  }
 
   useEffect(() => {
     if (!state.message || state.message === handledMessage.current) return;

@@ -5,10 +5,13 @@ import { useTranslations } from "next-intl";
 import { Car, ClipboardList, User } from "lucide-react";
 import { DataTable, type ColumnDef } from "@/components/ui/data-table";
 import { EmptyState } from "@/components/ui/empty-state";
+import { ListSortMenu } from "@/components/ui/list-sort-menu";
 import { SearchInput } from "@/components/ui/search-input";
 import { StatusBadge } from "@/components/ui/status-badge";
 import type { ServiceOrderStatus } from "@/lib/service-order-status";
 import { JobCardRowActions } from "@/modules/service-orders/components/job-card-row-actions";
+
+type OrderSort = "newest" | "oldest" | "reg_asc" | "reg_desc";
 
 export type OrderTableRow = {
   id: string;
@@ -16,6 +19,7 @@ export type OrderTableRow = {
   status: ServiceOrderStatus;
   complaint: string;
   bay: string | null;
+  createdAt: string | Date;
   vehicle: { registrationNumber: string; make: string; model: string };
   customer: { name: string };
   technician: { name: string | null; email: string } | null;
@@ -34,32 +38,58 @@ export function OrdersTable({
 }: OrdersTableProps) {
   const t = useTranslations("orders");
   const [query, setQuery] = useState("");
+  const [sort, setSort] = useState<OrderSort>("newest");
+
+  const sortOptions = useMemo(
+    () => [
+      { value: "newest" as const, label: t("sort.newest") },
+      { value: "oldest" as const, label: t("sort.oldest") },
+      { value: "reg_asc" as const, label: t("sort.regAsc") },
+      { value: "reg_desc" as const, label: t("sort.regDesc") },
+    ],
+    [t],
+  );
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return orders;
-    return orders.filter((order) => {
-      const registration = order.vehicle.registrationNumber.toLowerCase();
-      const customer = order.customer.name.toLowerCase();
-      const complaint = order.complaint.toLowerCase();
-      const makeModel =
-        `${order.vehicle.make} ${order.vehicle.model}`.toLowerCase();
-      const tech = (
-        order.technician?.name?.trim() ||
-        order.technician?.email ||
-        ""
-      ).toLowerCase();
-      const statusLabel = t(`statuses.${order.status}`).toLowerCase();
-      return (
-        registration.includes(q) ||
-        customer.includes(q) ||
-        complaint.includes(q) ||
-        makeModel.includes(q) ||
-        tech.includes(q) ||
-        statusLabel.includes(q)
-      );
+    const matched = !q
+      ? [...orders]
+      : orders.filter((order) => {
+          const registration = order.vehicle.registrationNumber.toLowerCase();
+          const customer = order.customer.name.toLowerCase();
+          const complaint = order.complaint.toLowerCase();
+          const makeModel =
+            `${order.vehicle.make} ${order.vehicle.model}`.toLowerCase();
+          const tech = (
+            order.technician?.name?.trim() ||
+            order.technician?.email ||
+            ""
+          ).toLowerCase();
+          const statusLabel = t(`statuses.${order.status}`).toLowerCase();
+          return (
+            registration.includes(q) ||
+            customer.includes(q) ||
+            complaint.includes(q) ||
+            makeModel.includes(q) ||
+            tech.includes(q) ||
+            statusLabel.includes(q)
+          );
+        });
+
+    matched.sort((a, b) => {
+      if (sort === "reg_asc" || sort === "reg_desc") {
+        const cmp = a.vehicle.registrationNumber.localeCompare(
+          b.vehicle.registrationNumber,
+        );
+        return sort === "reg_asc" ? cmp : -cmp;
+      }
+      const aTime = new Date(a.createdAt).getTime();
+      const bTime = new Date(b.createdAt).getTime();
+      return sort === "oldest" ? aTime - bTime : bTime - aTime;
     });
-  }, [orders, query, t]);
+
+    return matched;
+  }, [orders, query, sort, t]);
 
   const columns = useMemo<ColumnDef<OrderTableRow>[]>(
     () => [
@@ -158,13 +188,21 @@ export function OrdersTable({
       defaultPageSize={10}
       getRowHref={(row) => `/orders/${row.id}`}
       toolbar={
-        <SearchInput
-          value={query}
-          onValueChange={setQuery}
-          label={t("searchLabel")}
-          placeholder={t("searchPlaceholder")}
-          className="w-full md:max-w-md"
-        />
+        <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+          <SearchInput
+            value={query}
+            onValueChange={setQuery}
+            label={t("searchLabel")}
+            placeholder={t("searchPlaceholder")}
+            className="w-full md:max-w-md"
+          />
+          <ListSortMenu
+            value={sort}
+            options={sortOptions}
+            onChange={setSort}
+            ariaLabel={t("sortLabel")}
+          />
+        </div>
       }
       renderMobileCard={(row) => {
         const order = row.original;

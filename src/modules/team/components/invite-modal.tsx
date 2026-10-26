@@ -21,6 +21,7 @@ import {
 import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/toast";
+import { isValidEmail, sanitizeEmailTyping } from "@/lib/contact";
 import { cn } from "@/lib/utils";
 
 const initial: TeamActionState = { ok: false };
@@ -31,8 +32,11 @@ type InviteRole = (typeof INVITE_ROLES)[number];
 
 export function InviteModal() {
   const t = useTranslations("team");
+  const te = useTranslations("errors");
   const [open, setOpen] = useState(false);
   const [role, setRole] = useState<InviteRole>("MANAGER");
+  const [email, setEmail] = useState("");
+  const [emailError, setEmailError] = useState<string | undefined>();
   const [state, formAction, pending] = useActionState(
     inviteTeamMemberAction,
     initial,
@@ -43,16 +47,31 @@ export function InviteModal() {
     if (!state.message || state.message === handledMessage.current) return;
     handledMessage.current = state.message;
 
-    // Always close after submit — success and errors use bottom-right toasts.
-    // Email failures still create a pending invite; Resend is on that list.
     if (state.ok) {
       toast.success(state.message);
-    } else {
-      toast.error(state.message);
+      const id = window.setTimeout(() => {
+        setOpen(false);
+        setRole("MANAGER");
+        setEmail("");
+        setEmailError(undefined);
+      }, 0);
+      return () => window.clearTimeout(id);
     }
-    setOpen(false);
-    setRole("MANAGER");
+
+    toast.error(state.message);
   }, [state]);
+
+  function validateClient(): boolean {
+    if (!email.trim() || !isValidEmail(email)) {
+      setEmailError(te("validation.invalidEmail"));
+      window.setTimeout(() => {
+        document.getElementById("invite-email")?.focus();
+      }, 50);
+      return false;
+    }
+    setEmailError(undefined);
+    return true;
+  }
 
   return (
     <Dialog
@@ -61,6 +80,11 @@ export function InviteModal() {
         setOpen(next);
         if (next) {
           handledMessage.current = null;
+          setEmailError(undefined);
+        } else {
+          setEmail("");
+          setEmailError(undefined);
+          setRole("MANAGER");
         }
       }}
     >
@@ -76,8 +100,18 @@ export function InviteModal() {
           <DialogDescription>{t("inviteDescription")}</DialogDescription>
         </DialogHeader>
 
-        <form action={formAction} className="flex flex-col gap-5">
-          <FormField id="invite-email" label={t("email")}>
+        <form
+          action={(formData) => {
+            if (!validateClient()) return;
+            formAction(formData);
+          }}
+          className="flex flex-col gap-5"
+        >
+          <FormField
+            id="invite-email"
+            label={t("email")}
+            error={emailError}
+          >
             <Input
               id="invite-email"
               name="email"
@@ -85,6 +119,13 @@ export function InviteModal() {
               required
               autoComplete="email"
               placeholder={t("emailPlaceholder")}
+              value={email}
+              onChange={(e) => {
+                setEmail(sanitizeEmailTyping(e.target.value));
+                if (emailError) setEmailError(undefined);
+              }}
+              aria-invalid={Boolean(emailError)}
+              className="h-11 min-h-11"
             />
           </FormField>
 

@@ -126,25 +126,24 @@ export default async function DashboardPage() {
           ) : (
             <ul className="divide-y rounded-xl border border-amber-200 bg-amber-50/60">
               {lowStock.slice(0, 8).map((part) => (
-                <li key={part.id}>
+                <li
+                  key={part.id}
+                  className="flex min-h-12 items-center justify-between gap-2 px-3 py-2.5"
+                >
                   <Link
                     href={`/inventory/${part.id}`}
-                    className="flex min-h-12 items-center justify-between gap-3 px-3 py-2.5 hover:bg-amber-100/80"
+                    className="min-w-0 flex-1 hover:underline"
                   >
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-medium text-slate-900">
-                        {part.name}
-                      </p>
-                      <p className="truncate text-caption text-slate-600">
-                        {part.sku} · {formatRupees(part.sellingPricePaise)}
-                      </p>
-                    </div>
-                    <span className="shrink-0 text-sm font-semibold text-amber-900">
+                    <p className="truncate text-sm font-medium text-slate-900">
+                      {part.name}
+                    </p>
+                    <p className="truncate text-caption text-slate-600">
+                      {part.sku} · {formatRupees(part.sellingPricePaise)} ·{" "}
                       {ti("stockCount", {
                         count: part.quantityOnHand,
                         unit: part.unit,
                       })}
-                    </span>
+                    </p>
                   </Link>
                 </li>
               ))}
@@ -276,26 +275,32 @@ export default async function DashboardPage() {
           ) : (
             <ul className="divide-y rounded-xl border border-amber-200 bg-amber-50/60">
               {lowStock.slice(0, 8).map((part) => (
-                <li key={part.id}>
+                <li
+                  key={part.id}
+                  className="flex min-h-12 items-center justify-between gap-2 px-3 py-2.5"
+                >
                   <Link
                     href={`/inventory/${part.id}`}
-                    className="flex min-h-12 items-center justify-between gap-3 px-3 py-2.5 hover:bg-amber-100/80"
+                    className="min-w-0 flex-1 hover:underline"
                   >
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-medium text-slate-900">
-                        {part.name}
-                      </p>
-                      <p className="truncate text-caption text-slate-600">
-                        {part.sku} · {formatRupees(part.sellingPricePaise)}
-                      </p>
-                    </div>
-                    <span className="shrink-0 text-sm font-semibold text-amber-900">
+                    <p className="truncate text-sm font-medium text-slate-900">
+                      {part.name}
+                    </p>
+                    <p className="truncate text-caption text-slate-600">
+                      {part.sku} · {formatRupees(part.sellingPricePaise)} ·{" "}
                       {ti("stockCount", {
                         count: part.quantityOnHand,
                         unit: part.unit,
                       })}
-                    </span>
+                    </p>
                   </Link>
+                  {canManageStock ? (
+                    <Button asChild variant="secondary" size="sm">
+                      <Link href={`/parts-requests?partId=${part.id}`}>
+                        {t("requestPart")}
+                      </Link>
+                    </Button>
+                  ) : null}
                 </li>
               ))}
             </ul>

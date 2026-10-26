@@ -8,6 +8,7 @@ import {
   signedAdjustmentQuantity,
   sumStock,
 } from "@/modules/inventory/stock";
+import { skuFromPartName } from "@/modules/inventory/sku-from-name";
 
 vi.mock("@/modules/inventory/repo", () => ({
   searchParts: vi.fn(),
@@ -257,11 +258,29 @@ describe("direct sale form and multi-line create", () => {
 
     expect(parseDirectSaleFormData(formData)).toEqual({
       customerId: "cust-1",
+      walkInName: "",
       notes: "Counter sale",
       lines: [
         { partId: "part-a", quantity: "2", unitPricePaise: "100" },
         { partId: "part-b", quantity: "1", unitPricePaise: "50.50" },
       ],
+    });
+  });
+
+  it("parses optional walk-in name from FormData", () => {
+    const formData = new FormData();
+    formData.set("customerId", "");
+    formData.set("walkInName", "Ravi");
+    formData.set("notes", "");
+    formData.append("partId", "part-a");
+    formData.append("quantity", "1");
+    formData.append("unitPriceRupees", "10");
+
+    expect(parseDirectSaleFormData(formData)).toEqual({
+      customerId: "",
+      walkInName: "Ravi",
+      notes: "",
+      lines: [{ partId: "part-a", quantity: "1", unitPricePaise: "10" }],
     });
   });
 
@@ -313,6 +332,7 @@ describe("direct sale form and multi-line create", () => {
       garageA,
       expect.objectContaining({
         customerId: "cust-1",
+        walkInName: null,
         notes: "Walk-up",
         actorId: accountantA.userId,
         lines: [
@@ -417,5 +437,19 @@ describe("concurrent stock does not oversell", () => {
     const [a, b] = await Promise.all([lockedOut(4), lockedOut(5)]);
     expect(a.ok && b.ok).toBe(true);
     expect(onHand).toBe(1);
+  });
+});
+
+describe("skuFromPartName", () => {
+  it("builds an uppercase hyphenated SKU from the part name", () => {
+    expect(skuFromPartName("Air filter dsd")).toBe("AIR-FILTER-DSD");
+    expect(skuFromPartName("  oil filter  ")).toBe("OIL-FILTER");
+    expect(skuFromPartName("Brake Pad (Front)")).toBe("BRAKE-PAD-FRONT");
+  });
+
+  it("returns empty for blank names and truncates long names", () => {
+    expect(skuFromPartName("   ")).toBe("");
+    const long = "a".repeat(80);
+    expect(skuFromPartName(long).length).toBe(64);
   });
 });

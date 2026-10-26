@@ -20,7 +20,13 @@ const TITLE_BY_PREFIX: { prefix: string; key: NavKey }[] = [
   { prefix: "/dashboard", key: "dashboard" },
   { prefix: "/customers", key: "customers" },
   { prefix: "/vehicles", key: "vehicles" },
+  { prefix: "/inventory/sales", key: "counterSales" },
   { prefix: "/inventory", key: "inventory" },
+  { prefix: "/vendors", key: "vendors" },
+  { prefix: "/parts-requests", key: "partsRequests" },
+  { prefix: "/purchase-orders", key: "purchaseOrders" },
+  { prefix: "/vendor-bills", key: "vendorBills" },
+  { prefix: "/purchase-returns", key: "purchaseReturns" },
   { prefix: "/invoices", key: "invoices" },
   { prefix: "/orders", key: "orders" },
   { prefix: "/workshop", key: "workshop" },
@@ -46,7 +52,7 @@ export function AppHeader({ appName, garageName }: AppHeaderProps) {
       pathname === item.prefix || pathname.startsWith(`${item.prefix}/`),
   );
   const sectionTitle = match ? tNav(match.key) : appName;
-  const pageTitle = detailLabel ?? sectionTitle;
+  const pageTitle = sectionTitle;
   const isHome = pathname === "/dashboard" || pathname.startsWith("/dashboard/");
   const sectionHref = match?.prefix ?? "/dashboard";
   const triggerLabel = isMobile
@@ -69,7 +75,11 @@ export function AppHeader({ appName, garageName }: AppHeaderProps) {
           </p>
           <nav
             aria-label={tShell("breadcrumb")}
-            className="hidden min-w-0 items-center gap-1 text-caption text-slate-500 md:flex"
+            className={
+              detailLabel
+                ? "flex min-w-0 items-center gap-1 text-caption text-slate-500"
+                : "hidden min-w-0 items-center gap-1 text-caption text-slate-500 md:flex"
+            }
           >
             <Link
               href="/dashboard"

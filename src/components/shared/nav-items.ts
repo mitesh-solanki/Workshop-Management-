@@ -6,8 +6,13 @@ import {
   Kanban,
   LayoutDashboard,
   Package,
+  PackageMinus,
+  PackagePlus,
   Settings,
+  ShoppingCart,
+  Truck,
   Users,
+  Wallet,
   type LucideIcon,
 } from "lucide-react";
 
@@ -20,11 +25,24 @@ export type NavKey =
   | "vehicles"
   | "invoices"
   | "inventory"
+  | "counterSales"
+  | "vendors"
+  | "partsRequests"
+  | "purchaseOrders"
+  | "vendorBills"
+  | "purchaseReturns"
   | "team"
   | "orders"
   | "settings";
 
 export type NavGroupKey = "workshop" | "business" | "admin";
+
+export type NavChildItem = {
+  href: string;
+  key: NavKey;
+  /** Roles that may see this child. Omit = inherit parent / all roles. */
+  roles?: readonly AppRole[];
+};
 
 export type NavItem = {
   href: string;
@@ -33,6 +51,7 @@ export type NavItem = {
   group: NavGroupKey;
   /** Roles that may see this item. Omit = all roles. */
   roles?: readonly AppRole[];
+  children?: readonly NavChildItem[];
 };
 
 /**
@@ -82,6 +101,48 @@ export const APP_NAV_ITEMS: readonly NavItem[] = [
     key: "inventory",
     icon: Package,
     group: "business",
+    children: [
+      {
+        href: "/inventory/sales",
+        key: "counterSales",
+        roles: ["OWNER", "MANAGER", "ACCOUNTANT"],
+      },
+    ],
+  },
+  {
+    href: "/vendors",
+    key: "vendors",
+    icon: Truck,
+    group: "business",
+    roles: ["OWNER", "MANAGER", "ACCOUNTANT"],
+  },
+  {
+    href: "/parts-requests",
+    key: "partsRequests",
+    icon: PackagePlus,
+    group: "business",
+    roles: ["OWNER", "MANAGER"],
+  },
+  {
+    href: "/purchase-orders",
+    key: "purchaseOrders",
+    icon: ShoppingCart,
+    group: "business",
+    roles: ["OWNER", "MANAGER"],
+  },
+  {
+    href: "/vendor-bills",
+    key: "vendorBills",
+    icon: Wallet,
+    group: "business",
+    roles: ["OWNER", "MANAGER", "ACCOUNTANT"],
+  },
+  {
+    href: "/purchase-returns",
+    key: "purchaseReturns",
+    icon: PackageMinus,
+    group: "business",
+    roles: ["OWNER", "MANAGER", "ACCOUNTANT"],
   },
   {
     href: "/team",
@@ -108,6 +169,25 @@ export const NAV_GROUP_ORDER: readonly NavGroupKey[] = [
 export function navItemsForRole(role: AppRole): NavItem[] {
   return APP_NAV_ITEMS.filter(
     (item) => !item.roles || item.roles.includes(role),
+  ).map((item) => {
+    if (!item.children?.length) return item;
+    const children = item.children.filter(
+      (child) => !child.roles || child.roles.includes(role),
+    );
+    return children.length > 0 ? { ...item, children } : { ...item, children: undefined };
+  });
+}
+
+/** True when pathname is under Inventory parts (not counter sales). */
+export function isInventoryPartsPath(pathname: string): boolean {
+  if (pathname === "/inventory") return true;
+  if (!pathname.startsWith("/inventory/")) return false;
+  return !pathname.startsWith("/inventory/sales");
+}
+
+export function isCounterSalesPath(pathname: string): boolean {
+  return (
+    pathname === "/inventory/sales" || pathname.startsWith("/inventory/sales/")
   );
 }
 

@@ -3,7 +3,7 @@ import { Users } from "lucide-react";
 import { getTranslations } from "next-intl/server";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
-import { Skeleton } from "@/components/ui/skeleton";
+import { TableSpinner } from "@/components/shared/page-spinner";
 import { requireSession } from "@/lib/session";
 import { CreateCustomerModal } from "@/modules/customers/components/create-customer-modal";
 import { CustomersTable } from "@/modules/customers/components/customers-table";
@@ -51,7 +51,7 @@ export default async function CustomersPage({ searchParams }: Props) {
         }
       />
 
-      <Suspense fallback={<Skeleton className="h-64 w-full" />}>
+      <Suspense fallback={<TableSpinner />}>
         <CustomersTable
           customers={result.items}
           page={result.page}

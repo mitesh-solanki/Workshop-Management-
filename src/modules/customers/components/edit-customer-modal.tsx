@@ -23,6 +23,7 @@ import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/toast";
+import { sanitizePhoneTyping } from "@/lib/contact";
 
 const initial: CustomerActionState = { ok: false };
 
@@ -44,6 +45,7 @@ export function EditCustomerModal({ customer, trigger }: Props) {
   const t = useTranslations("customers");
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  const [phone, setPhone] = useState(customer.phone);
   const boundUpdate = useMemo(
     () => updateCustomerAction.bind(null, customer.id),
     [customer.id],
@@ -81,6 +83,7 @@ export function EditCustomerModal({ customer, trigger }: Props) {
         setOpen(next);
         if (next) {
           handled.current = null;
+          setPhone(customer.phone);
         }
       }}
     >
@@ -96,7 +99,7 @@ export function EditCustomerModal({ customer, trigger }: Props) {
           </Button>
         )}
       </DialogTrigger>
-      <DialogContent className="gap-0 p-0 sm:max-w-lg">
+      <DialogContent className="gap-0 p-0 sm:max-w-xl">
         <DialogHeader className="border-b border-border px-5 py-4 text-left">
           <DialogTitle>{t("editTitle")}</DialogTitle>
           <DialogDescription>{customer.name}</DialogDescription>
@@ -124,7 +127,8 @@ export function EditCustomerModal({ customer, trigger }: Props) {
                 id={`edit-phone-${customer.id}`}
                 name="phone"
                 type="tel"
-                defaultValue={customer.phone}
+                value={phone}
+                onChange={(e) => setPhone(sanitizePhoneTyping(e.target.value))}
                 required
                 autoComplete="tel"
                 inputMode="tel"

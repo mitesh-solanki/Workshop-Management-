@@ -8,6 +8,7 @@ export type DirectSaleFormLine = {
 
 export type DirectSaleFormPayload = {
   customerId: string;
+  walkInName: string;
   notes: string;
   lines: DirectSaleFormLine[];
 };
@@ -40,6 +41,7 @@ export function parseDirectSaleFormData(formData: FormData): DirectSaleFormPaylo
 
   return {
     customerId: String(formData.get("customerId") ?? ""),
+    walkInName: String(formData.get("walkInName") ?? ""),
     notes: String(formData.get("notes") ?? ""),
     lines,
   };

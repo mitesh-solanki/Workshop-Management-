@@ -21,7 +21,9 @@ import {
   applyStockMovement,
   createDirectSale as createDirectSaleRepo,
   createPart,
+  deleteDirectSale as deleteDirectSaleRepo,
   DirectSaleTxError,
+  updateDirectSale as updateDirectSaleRepo,
   findDirectSaleById,
   findPartById,
   findPartBySku,
@@ -220,6 +222,7 @@ export async function createDirectSaleRecord(
   try {
     return await createDirectSaleRepo(session.garageId, {
       customerId: input.customerId,
+      walkInName: input.walkInName,
       notes: input.notes,
       actorId: session.userId,
       lines,
@@ -229,7 +232,12 @@ export async function createDirectSaleRecord(
       if (error.reason === "CUSTOMER_NOT_FOUND") {
         throw new NotFoundError();
       }
-      mapStockFailure(error.reason);
+      if (
+        error.reason === "PART_NOT_FOUND" ||
+        error.reason === "INSUFFICIENT_STOCK"
+      ) {
+        mapStockFailure(error.reason);
+      }
     }
     throw error;
   }
@@ -247,6 +255,87 @@ export async function getSale(session: RoleSession, saleId: string) {
     throw new NotFoundError();
   }
   return sale;
+}
+
+export async function updateDirectSaleRecord(
+  session: RoleSession,
+  raw: CreateDirectSaleInput & { saleId: string },
+) {
+  requireRole(session, SALE_ROLES);
+  const saleId = String(raw.saleId ?? "").trim();
+  if (!saleId) {
+    throw new NotFoundError();
+  }
+  const input = createDirectSaleSchema.parse(raw);
+
+  const lines = [];
+  for (const line of input.lines) {
+    const part = await findPartById(session.garageId, line.partId);
+    if (!part) {
+      throw new NotFoundError();
+    }
+    lines.push({
+      partId: part.id,
+      quantity: line.quantity,
+      unitPricePaise: line.unitPricePaise,
+      gstRatePercent: part.gstRatePercent,
+      hsn: part.hsn,
+    });
+  }
+
+  try {
+    return await updateDirectSaleRepo(session.garageId, {
+      saleId,
+      customerId: input.customerId,
+      walkInName: input.walkInName,
+      notes: input.notes,
+      actorId: session.userId,
+      lines,
+    });
+  } catch (error) {
+    if (error instanceof DirectSaleTxError) {
+      if (
+        error.reason === "SALE_NOT_FOUND" ||
+        error.reason === "CUSTOMER_NOT_FOUND"
+      ) {
+        throw new NotFoundError();
+      }
+      if (
+        error.reason === "PART_NOT_FOUND" ||
+        error.reason === "INSUFFICIENT_STOCK"
+      ) {
+        mapStockFailure(error.reason);
+      }
+    }
+    throw error;
+  }
+}
+
+export async function deleteDirectSaleRecord(
+  session: RoleSession,
+  saleId: string,
+) {
+  requireRole(session, SALE_ROLES);
+  try {
+    return await deleteDirectSaleRepo(
+      session.garageId,
+      saleId,
+      session.userId,
+    );
+  } catch (error) {
+    if (error instanceof DirectSaleTxError) {
+      if (error.reason === "SALE_NOT_FOUND") {
+        throw new NotFoundError();
+      }
+      if (
+        error.reason === "PART_NOT_FOUND" ||
+        error.reason === "INSUFFICIENT_STOCK"
+      ) {
+        mapStockFailure(error.reason);
+      }
+    }
+    throw error;
+  }
 }
 
 /** Test helper: attempt cross-garage part read. */

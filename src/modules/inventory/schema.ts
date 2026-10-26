@@ -108,6 +108,16 @@ const optionalCustomerId = z
     return value.trim();
   });
 
+const optionalWalkInName = z
+  .union([z.string(), z.null(), z.undefined()])
+  .transform((value) => {
+    if (value == null) {
+      return null;
+    }
+    const trimmed = value.trim();
+    return trimmed === "" ? null : trimmed.slice(0, 120);
+  });
+
 /** Optional search text; missing/empty becomes "". */
 const searchQuery = z
   .string()
@@ -184,11 +194,17 @@ export const directSaleLineSchema = z.object({
   unitPricePaise: rupeesToPaiseSchema,
 });
 
-export const createDirectSaleSchema = z.object({
-  customerId: optionalCustomerId,
-  notes: optionalNote,
-  lines: z.array(directSaleLineSchema).min(1).max(50),
-});
+export const createDirectSaleSchema = z
+  .object({
+    customerId: optionalCustomerId,
+    walkInName: optionalWalkInName.optional().default(null),
+    notes: optionalNote,
+    lines: z.array(directSaleLineSchema).min(1).max(50),
+  })
+  .transform((value) => ({
+    ...value,
+    walkInName: value.customerId ? null : value.walkInName,
+  }));
 
 export type PartSearchInput = z.input<typeof partSearchSchema>;
 export type CreatePartInput = z.input<typeof createPartSchema>;
@@ -197,3 +213,4 @@ export type StockInInput = z.input<typeof stockInSchema>;
 export type StockOutInput = z.input<typeof stockOutSchema>;
 export type StockAdjustInput = z.input<typeof stockAdjustSchema>;
 export type CreateDirectSaleInput = z.input<typeof createDirectSaleSchema>;
+export type UpdateDirectSaleInput = CreateDirectSaleInput & { saleId: string };

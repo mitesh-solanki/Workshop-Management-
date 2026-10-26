@@ -1,17 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState, useTransition } from "react";
-import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { ChevronDown } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { ListSortMenu } from "@/components/ui/list-sort-menu";
 import { SearchInput } from "@/components/ui/search-input";
 import { cn } from "@/lib/utils";
@@ -35,10 +26,9 @@ function isPartSort(value: string): value is PartSort {
 
 type Props = {
   className?: string;
-  canSale?: boolean;
 };
 
-export function InventorySearch({ className, canSale = false }: Props) {
+export function InventorySearch({ className }: Props) {
   const t = useTranslations("inventory");
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -117,57 +107,6 @@ export function InventorySearch({ className, canSale = false }: Props) {
         />
       </div>
       <div className="flex shrink-0 items-center gap-2 self-end sm:self-auto">
-        {canSale ? (
-          <>
-            <div className="hidden items-center gap-2 sm:flex">
-              <Button asChild variant="secondary" size="md">
-                <Link href="/inventory/sales">{t("viewSales")}</Link>
-              </Button>
-              <Button asChild variant="secondary" size="md">
-                <Link href="/inventory/sales/new">{t("directSale")}</Link>
-              </Button>
-            </div>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="md"
-                  disabled={pending}
-                  className="min-h-11 sm:hidden"
-                  aria-label={t("salesActionsLabel")}
-                >
-                  {t("salesActionsLabel")}
-                  <ChevronDown className="size-4 opacity-50" aria-hidden />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="min-w-[12rem]">
-                <DropdownMenuItem
-                  className="min-h-10"
-                  disabled={pending}
-                  onSelect={() => {
-                    startTransition(() => {
-                      router.push("/inventory/sales");
-                    });
-                  }}
-                >
-                  {t("viewSales")}
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  className="min-h-10"
-                  disabled={pending}
-                  onSelect={() => {
-                    startTransition(() => {
-                      router.push("/inventory/sales/new");
-                    });
-                  }}
-                >
-                  {t("directSale")}
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </>
-        ) : null}
         <ListSortMenu
           value={urlSort}
           options={sortOptions}

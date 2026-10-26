@@ -5,7 +5,7 @@ import { getTranslations } from "next-intl/server";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
-import { Skeleton } from "@/components/ui/skeleton";
+import { TableSpinner } from "@/components/shared/page-spinner";
 import { requireSession } from "@/lib/session";
 import { listCustomers } from "@/modules/customers/service";
 import { ImportModal } from "@/modules/data-import/components/import-modal";
@@ -64,7 +64,7 @@ export default async function VehiclesPage({ searchParams }: Props) {
         }
       />
 
-      <Suspense fallback={<Skeleton className="h-64 w-full" />}>
+      <Suspense fallback={<TableSpinner />}>
         <VehiclesTable
           vehicles={result.items}
           page={result.page}

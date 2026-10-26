@@ -32,6 +32,7 @@ type OrderLine = {
   description: string;
   quantity: number;
   unitPricePaise: number;
+  partId?: string | null;
 };
 
 type TimelineEvent = {
@@ -70,6 +71,7 @@ type Props = {
   timeline: TimelineEvent[];
   technicians: TechnicianOption[];
   canMutate: boolean;
+  canRequestParts?: boolean;
   locale: string;
   initialSection?: JobCardSection;
   parts: OrderLinePartOption[];
@@ -151,6 +153,7 @@ export function JobCardDetailPanel({
   timeline,
   technicians,
   canMutate,
+  canRequestParts = false,
   locale,
   initialSection = "details",
   parts,
@@ -304,6 +307,7 @@ export function JobCardDetailPanel({
                 <OrderLinesTable
                   orderId={order.id}
                   canMutate={canMutate}
+                  canRequestParts={canRequestParts}
                   lines={order.lines}
                 />
               )}

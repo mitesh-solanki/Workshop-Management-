@@ -8,6 +8,7 @@ import {
   useState,
   useTransition,
 } from "react";
+import Link from "next/link";
 import { Check, Pencil, Trash2, X } from "lucide-react";
 import { useTranslations } from "next-intl";
 import {
@@ -36,12 +37,14 @@ type Line = {
   description: string;
   quantity: number;
   unitPricePaise: number;
+  partId?: string | null;
 };
 
 type Props = {
   orderId: string;
   canMutate: boolean;
   lines: Line[];
+  canRequestParts?: boolean;
 };
 
 const initial: ServiceOrderActionState = { ok: false };
@@ -103,13 +106,16 @@ function LineStat({
 function OrderLineCard({
   orderId,
   canMutate,
+  canRequestParts,
   line,
 }: {
   orderId: string;
   canMutate: boolean;
+  canRequestParts: boolean;
   line: Line;
 }) {
   const t = useTranslations("orders");
+  const ti = useTranslations("inventory");
   const [editing, setEditing] = useState(false);
   const [removing, startRemove] = useTransition();
   const bound = useMemo(
@@ -189,6 +195,15 @@ function OrderLineCard({
         </>
       ) : (
         <>
+          {canRequestParts && line.type === "PART" && line.partId ? (
+            <Button asChild variant="secondary" size="sm" className="min-h-11">
+              <Link
+                href={`/parts-requests?partId=${line.partId}&serviceOrderLineId=${line.id}`}
+              >
+                {ti("requestPart")}
+              </Link>
+            </Button>
+          ) : null}
           <Button
             type="button"
             variant="outline"
@@ -358,7 +373,12 @@ function OrderLineCard({
   );
 }
 
-export function OrderLinesTable({ orderId, canMutate, lines }: Props) {
+export function OrderLinesTable({
+  orderId,
+  canMutate,
+  lines,
+  canRequestParts = false,
+}: Props) {
   return (
     <div className="grid gap-2.5">
       {lines.map((line) => (
@@ -366,6 +386,7 @@ export function OrderLinesTable({ orderId, canMutate, lines }: Props) {
           key={line.id}
           orderId={orderId}
           canMutate={canMutate}
+          canRequestParts={canRequestParts}
           line={line}
         />
       ))}

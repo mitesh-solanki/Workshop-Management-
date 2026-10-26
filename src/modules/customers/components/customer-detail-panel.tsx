@@ -16,6 +16,7 @@ import {
   Wrench,
   type LucideIcon,
 } from "lucide-react";
+import { usePageDetailLabel } from "@/components/page-chrome";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription } from "@/components/ui/card";
@@ -261,6 +262,7 @@ function CustomerSectionsView({
   const t = useTranslations("customers");
   const tv = useTranslations("vehicles");
   const to = useTranslations("orders");
+  usePageDetailLabel(customer.name);
   const { activeSection, scrollToSection, setSectionRef } =
     useSectionScrollSpy({
       sections: CUSTOMER_SECTIONS,
@@ -284,12 +286,58 @@ function CustomerSectionsView({
     items: navItems,
     active: activeSection,
     onChange: scrollToSection,
-    backHref: "/customers",
-    backLabel: t("back"),
   } as const;
+
+  const metaParts = [
+    customer.phone?.trim() || null,
+    t("vehicleCount", { count: vehicles.length }),
+  ].filter(Boolean) as string[];
 
   return (
     <div className="space-y-4">
+      <header
+        className={cn(
+          "flex flex-wrap items-center justify-between gap-3",
+          activeSection !== "details" && "hidden lg:flex",
+        )}
+      >
+        <div className="min-w-0">
+          <h1 className="truncate text-[clamp(24px,3.5vw,30px)] leading-tight font-semibold tracking-[0.02em] text-[#152238]">
+            {customer.name}
+          </h1>
+          <p className="mt-1 truncate text-[14px] text-[#5c6b7e]">
+            {metaParts.map((part, index) => (
+              <span key={`${part}-${index}`}>
+                {index > 0 ? (
+                  <span className="text-slate-300"> · </span>
+                ) : null}
+                {index === 0 && customer.phone ? (
+                  <a
+                    href={`tel:${customer.phone}`}
+                    className="font-medium text-[#1f5eff] underline-offset-4 hover:underline"
+                  >
+                    {part}
+                  </a>
+                ) : (
+                  part
+                )}
+              </span>
+            ))}
+          </p>
+        </div>
+        {canWrite ? (
+          <EditCustomerModal
+            customer={customer}
+            trigger={
+              <Button type="button" variant="outline" size="md">
+                <Pencil className="size-4" aria-hidden />
+                {t("edit")}
+              </Button>
+            }
+          />
+        ) : null}
+      </header>
+
       <SectionMobileNavBar {...navProps} />
 
       <div className="grid items-start gap-4 lg:grid-cols-[minmax(220px,260px)_minmax(0,1fr)] lg:gap-6">
@@ -298,22 +346,9 @@ function CustomerSectionsView({
         <div className="flex min-w-0 flex-col gap-4">
         <SectionBlock
           id={sectionDomId(CUSTOMER_SECTION_ID_PREFIX, "details")}
-          title={t("namedDetails", { name: customer.name })}
+          title={t("details")}
           subtitle={t("detailsDescription")}
           sectionRef={setSectionRef("details")}
-          action={
-            canWrite ? (
-              <EditCustomerModal
-                customer={customer}
-                trigger={
-                  <Button type="button" variant="outline" size="md">
-                    <Pencil className="size-4" aria-hidden />
-                    {t("edit")}
-                  </Button>
-                }
-              />
-            ) : null
-          }
         >
           <dl className="grid gap-4 px-5 py-5 sm:grid-cols-2 sm:gap-x-8 sm:px-6">
             <Fact
@@ -428,23 +463,6 @@ function CustomerSectionsView({
             }
             showRegistration
             statusLabel={(status) => to(`statuses.${status}`)}
-            emptyAction={
-              canCreateOrder && vehicles.length === 1 ? (
-                <Button asChild size="sm">
-                  <Link href={`/orders/new?vehicleId=${vehicles[0]!.id}`}>
-                    <Plus className="size-4" aria-hidden />
-                    {to("createShort")}
-                  </Link>
-                </Button>
-              ) : canCreateOrder && vehicles.length > 1 ? (
-                <Button asChild size="sm">
-                  <Link href="/orders/new">
-                    <Plus className="size-4" aria-hidden />
-                    {to("createPickVehicle")}
-                  </Link>
-                </Button>
-              ) : undefined
-            }
           />
         </SectionBlock>
 
@@ -490,6 +508,7 @@ function VehicleDetailView({
   const tv = useTranslations("vehicles");
   const to = useTranslations("orders");
   const tGst = useTranslations("gst");
+  usePageDetailLabel(vehicle.registrationNumber);
   const { activeSection, scrollToSection, setSectionRef } =
     useSectionScrollSpy({
       sections: VEHICLE_SECTIONS,
@@ -528,7 +547,7 @@ function VehicleDetailView({
     },
   ] as const;
 
-  const subtitle = `${vehicle.make} ${vehicle.model}`.trim();
+  const vehicleLabel = `${vehicle.make} ${vehicle.model}`.trim();
 
   const headerActions = (
     <div className="flex flex-wrap items-center gap-2">
@@ -580,6 +599,34 @@ function VehicleDetailView({
 
   return (
     <div className="space-y-4">
+      <header
+        className={cn(
+          "flex flex-wrap items-center justify-between gap-3",
+          activeSection !== "overview" && "hidden lg:flex",
+        )}
+      >
+        <div className="min-w-0">
+          <h1 className="truncate text-[clamp(24px,3.5vw,30px)] leading-tight font-semibold tracking-[0.02em] text-[#152238]">
+            {vehicle.registrationNumber}
+          </h1>
+          <p className="mt-1 truncate text-[14px] text-[#5c6b7e]">
+            <Link
+              href={`/customers/${customerId}`}
+              className="font-medium text-[#1f5eff] underline-offset-4 hover:underline"
+            >
+              {customerName}
+            </Link>
+            {vehicleLabel ? (
+              <>
+                <span className="text-slate-300"> · </span>
+                {vehicleLabel}
+              </>
+            ) : null}
+          </p>
+        </div>
+        {headerActions}
+      </header>
+
       <SectionMobileNavBar {...vehicleNavProps} />
 
       <div className="grid items-start gap-4 lg:grid-cols-[minmax(220px,260px)_minmax(0,1fr)] lg:gap-6">
@@ -588,13 +635,9 @@ function VehicleDetailView({
         <div className="flex min-w-0 flex-col gap-4">
         <SectionBlock
           id={sectionDomId(VEHICLE_SECTION_ID_PREFIX, "overview")}
-          title={t("customerVehicleTitle", {
-            customer: customerName,
-            registration: vehicle.registrationNumber,
-          })}
-          subtitle={subtitle}
+          title={tv("overview")}
+          subtitle={vehicleLabel || undefined}
           sectionRef={setSectionRef("overview")}
-          action={headerActions}
         >
           <div className="px-5 py-5 sm:px-6">
             <DescriptionList>
@@ -663,7 +706,6 @@ function VehicleDetailView({
             emptyBody={tv("serviceHistoryPlaceholder")}
             showRegistration={false}
             statusLabel={(status) => to(`statuses.${status}`)}
-            emptyAction={createJobCard("sm")}
           />
         </SectionBlock>
         </div>

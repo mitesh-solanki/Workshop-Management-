@@ -56,9 +56,9 @@ export const metadata: Metadata = {
 
 function LocaleFallback() {
   return (
-    <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col px-4 py-10 lg:px-8">
+    <main className="flex h-svh w-full flex-1 flex-col items-center justify-center overflow-hidden">
       {/* Outside NextIntlClientProvider — no hard-coded label */}
-      <Spinner />
+      <Spinner className="min-h-0 flex-none" />
     </main>
   );
 }

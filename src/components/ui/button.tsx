@@ -15,22 +15,24 @@ const buttonVariants = cva(
     variants: {
       variant: {
         primary:
-          "bg-blue-600 text-white shadow-sm hover:bg-blue-700 hover:text-white active:bg-blue-800 active:text-white",
+          "bg-blue-600 text-white shadow-sm hover:bg-blue-700 hover:text-white active:bg-blue-800 active:text-white [&_svg]:text-white",
         default:
-          "bg-blue-600 text-white shadow-sm hover:bg-blue-700 hover:text-white active:bg-blue-800 active:text-white",
+          "bg-blue-600 text-white shadow-sm hover:bg-blue-700 hover:text-white active:bg-blue-800 active:text-white [&_svg]:text-white",
         secondary:
           "border border-border bg-card text-foreground shadow-sm hover:bg-slate-50",
         ghost: "text-foreground hover:bg-slate-100",
         danger:
-          "bg-danger text-danger-foreground shadow-sm hover:bg-danger/90",
+          "bg-danger text-danger-foreground shadow-sm hover:bg-danger/90 [&_svg]:text-danger-foreground",
         destructive:
-          "bg-danger text-danger-foreground shadow-sm hover:bg-danger/90",
+          "bg-danger text-danger-foreground shadow-sm hover:bg-danger/90 [&_svg]:text-danger-foreground",
         outline:
-          "border border-border bg-card shadow-sm hover:bg-slate-50",
+          "border border-border bg-card text-foreground shadow-sm hover:bg-slate-50",
         link: "text-blue-600 underline-offset-4 hover:underline",
       },
       size: {
-        sm: "h-9 min-h-9 gap-1.5 rounded-md px-3 text-caption has-[>svg]:px-2.5",
+        // Use text-xs (font-size only). Avoid text-caption here — it shares the
+        // text-* namespace and can override text-white on primary buttons.
+        sm: "h-9 min-h-9 gap-1.5 rounded-md px-3 text-xs has-[>svg]:px-2.5",
         md: "h-11 min-h-11 px-4 py-2 has-[>svg]:px-3",
         default: "h-11 min-h-11 px-4 py-2 has-[>svg]:px-3",
         lg: "h-12 min-h-12 rounded-xl px-6 text-base has-[>svg]:px-4",

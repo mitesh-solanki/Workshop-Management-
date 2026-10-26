@@ -2,12 +2,12 @@
  * Demo seed for local content review across implemented modules.
  *
  * Targets your real garage by default (name "prime", or SEED_GARAGE_ID).
- * Re-runnable: deletes prior rows whose ids start with "seed_" then recreates them.
+ * Core demo (customers / job cards): wipe seed_* then recreate.
+ * Newer modules: seed once when empty for that garage (see MODULE_SEEDS).
  *
  * Usage: npm run db:seed
  *
- * Not in schema yet (skipped): inventory, vendors, purchases, billing, payments,
- * reminders, appointments, AMC.
+ * Not seeded yet: reminders, appointments, AMC. Billing/payments when added.
  */
 import "dotenv/config";
 import { PrismaClient } from "@prisma/client";
@@ -74,7 +74,90 @@ async function resolveGarage() {
   });
 }
 
+async function clearDirectSalesSeed(garageId) {
+  const seedId = { garageId, id: { startsWith: "seed_" } };
+
+  await prisma.stockMovement.deleteMany({
+    where: {
+      garageId,
+      OR: [
+        { id: { startsWith: "seed_sm_sale_" } },
+        { directSaleId: { startsWith: "seed_" } },
+        { directSaleLineId: { startsWith: "seed_" } },
+      ],
+    },
+  });
+  await prisma.directSaleLine.deleteMany({ where: seedId });
+  await prisma.directSale.deleteMany({ where: seedId });
+}
+
+async function clearVendorsPurchasesSeed(garageId) {
+  const seedId = { garageId, id: { startsWith: "seed_" } };
+
+  await prisma.stockMovement.deleteMany({
+    where: {
+      garageId,
+      OR: [
+        { id: { startsWith: "seed_" } },
+        { purchaseReturnId: { startsWith: "seed_" } },
+        { goodsReceiptLineId: { startsWith: "seed_" } },
+        { directSaleId: { startsWith: "seed_" } },
+        { directSaleLineId: { startsWith: "seed_" } },
+      ],
+    },
+  });
+  await prisma.directSaleLine.deleteMany({ where: seedId });
+  await prisma.directSale.deleteMany({ where: seedId });
+  await prisma.purchaseReturn.deleteMany({ where: seedId });
+  await prisma.vendorBillPayment.deleteMany({ where: seedId });
+  await prisma.vendorBill.deleteMany({ where: seedId });
+  await prisma.goodsReceiptLine.deleteMany({ where: seedId });
+  await prisma.goodsReceipt.deleteMany({ where: seedId });
+  await prisma.purchaseOrderLine.deleteMany({ where: seedId });
+  await prisma.partsRequest.deleteMany({ where: seedId });
+  await prisma.purchaseOrder.deleteMany({ where: seedId });
+  await prisma.vendor.deleteMany({ where: seedId });
+  await prisma.part.deleteMany({ where: seedId });
+}
+
 async function clearPreviousSeed(garageId) {
+  await clearDirectSalesSeed(garageId);
+  await clearVendorsPurchasesSeed(garageId);
+
+  const seedLinkedInvoice = {
+    OR: [
+      { id: { startsWith: "seed_" } },
+      { estimateId: { startsWith: "seed_" } },
+      { serviceOrderId: { startsWith: "seed_" } },
+      { customerId: { startsWith: "seed_" } },
+      { serviceOrder: { is: { vehicleId: { startsWith: "seed_" } } } },
+      { serviceOrder: { is: { customerId: { startsWith: "seed_" } } } },
+    ],
+  };
+
+  // Billing blocks estimate/order deletes (Restrict FKs).
+  await prisma.payment.deleteMany({
+    where: { garageId, OR: [{ id: { startsWith: "seed_" } }, { invoice: { is: seedLinkedInvoice } }] },
+  });
+  await prisma.creditNoteLine.deleteMany({
+    where: {
+      garageId,
+      creditNote: { is: { OR: [{ id: { startsWith: "seed_" } }, { invoice: { is: seedLinkedInvoice } }] } },
+    },
+  });
+  await prisma.creditNote.deleteMany({
+    where: {
+      garageId,
+      OR: [{ id: { startsWith: "seed_" } }, { invoice: { is: seedLinkedInvoice } }],
+    },
+  });
+  await prisma.invoiceLine.deleteMany({
+    where: { garageId, invoice: { is: seedLinkedInvoice } },
+  });
+  await prisma.invoice.deleteMany({
+    where: { garageId, ...seedLinkedInvoice },
+  });
+
   // Children first — estimates / inspections cascade from orders, but fixed ids need order.
   await prisma.estimateApproval.deleteMany({
     where: { garageId, id: { startsWith: "seed_" } },
@@ -98,10 +181,26 @@ async function clearPreviousSeed(garageId) {
     where: { garageId, id: { startsWith: "seed_" } },
   });
   await prisma.serviceOrderLine.deleteMany({
-    where: { garageId, id: { startsWith: "seed_" } },
+    where: {
+      garageId,
+      OR: [
+        { id: { startsWith: "seed_" } },
+        { serviceOrderId: { startsWith: "seed_" } },
+        { serviceOrder: { is: { vehicleId: { startsWith: "seed_" } } } },
+        { serviceOrder: { is: { customerId: { startsWith: "seed_" } } } },
+      ],
+    },
   });
+  // Include non-seed orders that still point at seed customers/vehicles.
   await prisma.serviceOrder.deleteMany({
-    where: { garageId, id: { startsWith: "seed_" } },
+    where: {
+      garageId,
+      OR: [
+        { id: { startsWith: "seed_" } },
+        { vehicleId: { startsWith: "seed_" } },
+        { customerId: { startsWith: "seed_" } },
+      ],
+    },
   });
   await prisma.vehicle.deleteMany({
     where: { garageId, id: { startsWith: "seed_" } },
@@ -115,11 +214,1035 @@ async function clearPreviousSeed(garageId) {
   await prisma.invite.deleteMany({
     where: { garageId, id: { startsWith: "seed_" } },
   });
-  // Seed team users (email unique globally) — only our seed_* ids
+  // Seed team users (email unique globally) — keep OWNER if it is seed_user_owner.
   await prisma.user.deleteMany({
-    where: { garageId, id: { startsWith: "seed_" } },
+    where: {
+      garageId,
+      id: { startsWith: "seed_" },
+      NOT: { role: "OWNER" },
+    },
   });
 }
+
+function forcedModules() {
+  const raw = process.env.SEED_FORCE_MODULES?.trim();
+  if (!raw) return new Set();
+  if (raw === "1" || raw.toLowerCase() === "all") return null; // null = force all
+  return new Set(
+    raw
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean),
+  );
+}
+
+/**
+ * Run a module seed only when that garage has no real data for it yet.
+ * Force with SEED_FORCE_MODULES=1 or SEED_FORCE_MODULES=vendors-and-purchases
+ * (only refreshes seed_* rows for that module — never deletes staff-created rows).
+ * Add new modules to MODULE_SEEDS — same pattern tomorrow.
+ */
+async function seedModuleOnce(garageId, ownerId, module) {
+  const forced = forcedModules();
+  const force =
+    forced === null || (forced instanceof Set && forced.has(module.key));
+  const empty = await module.isEmpty(garageId);
+  if (!empty && !force) {
+    console.log(`Skip ${module.key}: already has data for this garage`);
+    return false;
+  }
+  if (module.clear) {
+    await module.clear(garageId);
+  }
+  await module.seed({ garageId, ownerId });
+  console.log(`Seeded ${module.key}${force && !empty ? " (forced)" : ""}`);
+  return true;
+}
+
+async function seedVendorsAndPurchases({ garageId, ownerId }) {
+  const partSpecs = [
+    {
+      id: "seed_part_oil",
+      name: "Engine oil 5W-30",
+      sku: "SEED-OIL-5W30",
+      unit: "L",
+      purchasePricePaise: 45000,
+      sellingPricePaise: 65000,
+      lowStockLevel: 4,
+      opening: 3,
+    },
+    {
+      id: "seed_part_pads",
+      name: "Brake pad set (front)",
+      sku: "SEED-BRK-PAD-F",
+      unit: "set",
+      purchasePricePaise: 120000,
+      sellingPricePaise: 180000,
+      lowStockLevel: 2,
+      opening: 2,
+    },
+    {
+      id: "seed_part_filter",
+      name: "Air filter",
+      sku: "SEED-AIR-FLT",
+      unit: "pcs",
+      purchasePricePaise: 25000,
+      sellingPricePaise: 40000,
+      lowStockLevel: 3,
+      opening: 1,
+    },
+    {
+      id: "seed_part_plugs",
+      name: "Spark plug IRIDIUM",
+      sku: "SEED-SPK-IRD",
+      unit: "pcs",
+      purchasePricePaise: 35000,
+      sellingPricePaise: 55000,
+      lowStockLevel: 4,
+      opening: 4,
+    },
+    {
+      id: "seed_part_wiper",
+      name: "Wiper blade 24in",
+      sku: "SEED-WIP-24",
+      unit: "pcs",
+      purchasePricePaise: 18000,
+      sellingPricePaise: 32000,
+      lowStockLevel: 5,
+      opening: 6,
+    },
+    {
+      id: "seed_part_coolant",
+      name: "Coolant concentrate 1L",
+      sku: "SEED-COOL-1L",
+      unit: "L",
+      purchasePricePaise: 22000,
+      sellingPricePaise: 38000,
+      lowStockLevel: 4,
+      opening: 2,
+    },
+    {
+      id: "seed_part_battery",
+      name: "Battery 35Ah",
+      sku: "SEED-BAT-35",
+      unit: "pcs",
+      purchasePricePaise: 320000,
+      sellingPricePaise: 450000,
+      lowStockLevel: 1,
+      opening: 1,
+    },
+    {
+      id: "seed_part_belt",
+      name: "Drive belt",
+      sku: "SEED-BELT-01",
+      unit: "pcs",
+      purchasePricePaise: 55000,
+      sellingPricePaise: 85000,
+      lowStockLevel: 2,
+      opening: 0,
+    },
+  ];
+
+  const parts = {};
+  for (const spec of partSpecs) {
+    parts[spec.id] = await prisma.part.create({
+      data: {
+        id: spec.id,
+        garageId,
+        name: spec.name,
+        sku: spec.sku,
+        unit: spec.unit,
+        purchasePricePaise: spec.purchasePricePaise,
+        sellingPricePaise: spec.sellingPricePaise,
+        gstRatePercent: 18,
+        hsn: PART_HSN,
+        lowStockLevel: spec.lowStockLevel,
+      },
+    });
+  }
+
+  await prisma.stockMovement.createMany({
+    data: partSpecs
+      .filter((spec) => spec.opening > 0)
+      .map((spec) => ({
+        id: `seed_sm_open_${spec.id.replace("seed_part_", "")}`,
+        garageId,
+        partId: spec.id,
+        type: "IN",
+        quantityChange: spec.opening,
+        note: "Seed opening stock",
+        createdById: ownerId,
+      })),
+  });
+
+  const vendors = [
+    {
+      id: "seed_vendor_01",
+      name: "Auto Parts Hub",
+      phone: "9876500101",
+      email: "sales@autopartshub.example",
+      address: "12 Industrial Estate, Surat",
+      gstin: "24AAAPA1234A1Z5",
+      notes: "Primary spare parts — brake, filters, belts",
+    },
+    {
+      id: "seed_vendor_02",
+      name: "Lubricants Plus",
+      phone: "9876500202",
+      email: "orders@lubeplus.example",
+      address: "45 Ring Road, Surat",
+      gstin: "24AAAPL5678B1Z2",
+      notes: "Oils, coolants and fluids",
+    },
+    {
+      id: "seed_vendor_03",
+      name: "Battery World",
+      phone: "9876500303",
+      email: "desk@batteryworld.example",
+      address: "88 Udhna Magdalla Road, Surat",
+      gstin: "24AAABW9012C1Z8",
+      notes: "Batteries and electrical",
+    },
+    {
+      id: "seed_vendor_04",
+      name: "City Tyres & More",
+      phone: "9876500404",
+      email: null,
+      address: "Near Katargam Fire Station, Surat",
+      gstin: null,
+      notes: "Walk-in vendor — wipers and small parts",
+    },
+  ];
+
+  for (const vendor of vendors) {
+    await prisma.vendor.create({
+      data: { ...vendor, garageId },
+    });
+  }
+
+  // —— Parts requests (open / ordered / cancelled) ——
+  await prisma.partsRequest.createMany({
+    data: [
+      {
+        id: "seed_pr_open_01",
+        garageId,
+        partId: parts.seed_part_filter.id,
+        quantity: 8,
+        status: "OPEN",
+        notes: "Low stock — air filters for service bay",
+        createdById: ownerId,
+      },
+      {
+        id: "seed_pr_open_02",
+        garageId,
+        partId: parts.seed_part_belt.id,
+        quantity: 3,
+        status: "OPEN",
+        notes: "Drive belts for Swift jobs this week",
+        createdById: ownerId,
+      },
+      {
+        id: "seed_pr_open_03",
+        garageId,
+        partId: parts.seed_part_wiper.id,
+        quantity: 10,
+        status: "OPEN",
+        notes: "Monsoon stock-up",
+        createdById: ownerId,
+      },
+      {
+        id: "seed_pr_cancelled",
+        garageId,
+        partId: parts.seed_part_plugs.id,
+        quantity: 4,
+        status: "CANCELLED",
+        notes: "Customer brought own plugs",
+        createdById: ownerId,
+      },
+    ],
+  });
+
+  // —— PO 1: Auto Parts Hub — 3 lines, 2 items partly/fully received ——
+  const po1 = await prisma.purchaseOrder.create({
+    data: {
+      id: "seed_po_01",
+      garageId,
+      vendorId: "seed_vendor_01",
+      number: "PO-SEED-0001",
+      status: "PARTIALLY_RECEIVED",
+      notes: "Mixed restock — oil still pending on line 3",
+      createdById: ownerId,
+      lines: {
+        create: [
+          {
+            id: "seed_pol_01a",
+            garageId,
+            partId: parts.seed_part_pads.id,
+            quantityOrdered: 6,
+            quantityReceived: 6,
+            unitCostPaise: parts.seed_part_pads.purchasePricePaise,
+            sortOrder: 0,
+          },
+          {
+            id: "seed_pol_01b",
+            garageId,
+            partId: parts.seed_part_filter.id,
+            quantityOrdered: 12,
+            quantityReceived: 12,
+            unitCostPaise: parts.seed_part_filter.purchasePricePaise,
+            sortOrder: 1,
+          },
+          {
+            id: "seed_pol_01c",
+            garageId,
+            partId: parts.seed_part_plugs.id,
+            quantityOrdered: 16,
+            quantityReceived: 8,
+            unitCostPaise: parts.seed_part_plugs.purchasePricePaise,
+            sortOrder: 2,
+          },
+        ],
+      },
+    },
+  });
+
+  await prisma.partsRequest.createMany({
+    data: [
+      {
+        id: "seed_pr_ord_01",
+        garageId,
+        partId: parts.seed_part_pads.id,
+        quantity: 6,
+        status: "ORDERED",
+        notes: "Front pads for City ZX",
+        purchaseOrderId: po1.id,
+        createdById: ownerId,
+      },
+      {
+        id: "seed_pr_ord_02",
+        garageId,
+        partId: parts.seed_part_filter.id,
+        quantity: 12,
+        status: "ORDERED",
+        notes: "Bulk air filters",
+        purchaseOrderId: po1.id,
+        createdById: ownerId,
+      },
+      {
+        id: "seed_pr_ord_03",
+        garageId,
+        partId: parts.seed_part_plugs.id,
+        quantity: 16,
+        status: "ORDERED",
+        notes: "Iridium plugs — half received",
+        purchaseOrderId: po1.id,
+        createdById: ownerId,
+      },
+    ],
+  });
+
+  await prisma.goodsReceipt.create({
+    data: {
+      id: "seed_gr_01",
+      garageId,
+      purchaseOrderId: po1.id,
+      notes: "First truck — pads + filters + half plugs",
+      createdById: ownerId,
+      lines: {
+        create: [
+          {
+            id: "seed_grl_01a",
+            garageId,
+            purchaseOrderLineId: "seed_pol_01a",
+            partId: parts.seed_part_pads.id,
+            quantity: 6,
+          },
+          {
+            id: "seed_grl_01b",
+            garageId,
+            purchaseOrderLineId: "seed_pol_01b",
+            partId: parts.seed_part_filter.id,
+            quantity: 12,
+          },
+          {
+            id: "seed_grl_01c",
+            garageId,
+            purchaseOrderLineId: "seed_pol_01c",
+            partId: parts.seed_part_plugs.id,
+            quantity: 8,
+          },
+        ],
+      },
+    },
+  });
+
+  await prisma.stockMovement.createMany({
+    data: [
+      {
+        id: "seed_sm_recv_01a",
+        garageId,
+        partId: parts.seed_part_pads.id,
+        type: "IN",
+        quantityChange: 6,
+        note: "Seed PO-SEED-0001 receipt",
+        goodsReceiptLineId: "seed_grl_01a",
+        createdById: ownerId,
+      },
+      {
+        id: "seed_sm_recv_01b",
+        garageId,
+        partId: parts.seed_part_filter.id,
+        type: "IN",
+        quantityChange: 12,
+        note: "Seed PO-SEED-0001 receipt",
+        goodsReceiptLineId: "seed_grl_01b",
+        createdById: ownerId,
+      },
+      {
+        id: "seed_sm_recv_01c",
+        garageId,
+        partId: parts.seed_part_plugs.id,
+        type: "IN",
+        quantityChange: 8,
+        note: "Seed PO-SEED-0001 receipt",
+        goodsReceiptLineId: "seed_grl_01c",
+        createdById: ownerId,
+      },
+    ],
+  });
+
+  const bill1Amount =
+    6 * parts.seed_part_pads.purchasePricePaise +
+    12 * parts.seed_part_filter.purchasePricePaise +
+    8 * parts.seed_part_plugs.purchasePricePaise;
+
+  const bill1 = await prisma.vendorBill.create({
+    data: {
+      id: "seed_vb_01",
+      garageId,
+      vendorId: "seed_vendor_01",
+      purchaseOrderId: po1.id,
+      billNumber: "APH-INV-2401",
+      billDate: daysFromNow(-5),
+      amountPaise: bill1Amount,
+      notes: "Bill for PO-SEED-0001 received lines (no attachment)",
+      createdById: ownerId,
+    },
+  });
+
+  await prisma.vendorBillPayment.createMany({
+    data: [
+      {
+        id: "seed_vbp_01a",
+        garageId,
+        vendorBillId: bill1.id,
+        amountPaise: 500000,
+        method: "UPI",
+        paidAt: daysFromNow(-3),
+        notes: "Partial UPI",
+        createdById: ownerId,
+      },
+      {
+        id: "seed_vbp_01b",
+        garageId,
+        vendorBillId: bill1.id,
+        amountPaise: 300000,
+        method: "BANK",
+        paidAt: daysFromNow(-1),
+        notes: "NEFT part payment",
+        createdById: ownerId,
+      },
+    ],
+  });
+
+  await prisma.purchaseReturn.create({
+    data: {
+      id: "seed_ret_01",
+      garageId,
+      vendorId: "seed_vendor_01",
+      vendorBillId: bill1.id,
+      partId: parts.seed_part_filter.id,
+      quantity: 2,
+      creditPaise: 2 * parts.seed_part_filter.purchasePricePaise,
+      notes: "Two filters crushed in transit",
+      createdById: ownerId,
+    },
+  });
+  await prisma.stockMovement.create({
+    data: {
+      id: "seed_sm_ret_01",
+      garageId,
+      partId: parts.seed_part_filter.id,
+      type: "OUT",
+      quantityChange: -2,
+      note: "Seed purchase return",
+      purchaseReturnId: "seed_ret_01",
+      createdById: ownerId,
+    },
+  });
+
+  // —— PO 2: Lubricants Plus — fully received, 2 oil/coolant lines ——
+  const po2 = await prisma.purchaseOrder.create({
+    data: {
+      id: "seed_po_02",
+      garageId,
+      vendorId: "seed_vendor_02",
+      number: "PO-SEED-0002",
+      status: "RECEIVED",
+      notes: "Monthly fluids order",
+      createdById: ownerId,
+      lines: {
+        create: [
+          {
+            id: "seed_pol_02a",
+            garageId,
+            partId: parts.seed_part_oil.id,
+            quantityOrdered: 20,
+            quantityReceived: 20,
+            unitCostPaise: parts.seed_part_oil.purchasePricePaise,
+            sortOrder: 0,
+          },
+          {
+            id: "seed_pol_02b",
+            garageId,
+            partId: parts.seed_part_coolant.id,
+            quantityOrdered: 10,
+            quantityReceived: 10,
+            unitCostPaise: parts.seed_part_coolant.purchasePricePaise,
+            sortOrder: 1,
+          },
+        ],
+      },
+    },
+  });
+
+  await prisma.partsRequest.createMany({
+    data: [
+      {
+        id: "seed_pr_ord_04",
+        garageId,
+        partId: parts.seed_part_oil.id,
+        quantity: 20,
+        status: "ORDERED",
+        notes: "Engine oil drum top-up",
+        purchaseOrderId: po2.id,
+        createdById: ownerId,
+      },
+      {
+        id: "seed_pr_ord_05",
+        garageId,
+        partId: parts.seed_part_coolant.id,
+        quantity: 10,
+        status: "ORDERED",
+        notes: "Coolant for summer",
+        purchaseOrderId: po2.id,
+        createdById: ownerId,
+      },
+    ],
+  });
+
+  await prisma.goodsReceipt.create({
+    data: {
+      id: "seed_gr_02",
+      garageId,
+      purchaseOrderId: po2.id,
+      notes: "Full delivery from Lubricants Plus",
+      createdById: ownerId,
+      lines: {
+        create: [
+          {
+            id: "seed_grl_02a",
+            garageId,
+            purchaseOrderLineId: "seed_pol_02a",
+            partId: parts.seed_part_oil.id,
+            quantity: 20,
+          },
+          {
+            id: "seed_grl_02b",
+            garageId,
+            purchaseOrderLineId: "seed_pol_02b",
+            partId: parts.seed_part_coolant.id,
+            quantity: 10,
+          },
+        ],
+      },
+    },
+  });
+
+  await prisma.stockMovement.createMany({
+    data: [
+      {
+        id: "seed_sm_recv_02a",
+        garageId,
+        partId: parts.seed_part_oil.id,
+        type: "IN",
+        quantityChange: 20,
+        note: "Seed PO-SEED-0002 receipt",
+        goodsReceiptLineId: "seed_grl_02a",
+        createdById: ownerId,
+      },
+      {
+        id: "seed_sm_recv_02b",
+        garageId,
+        partId: parts.seed_part_coolant.id,
+        type: "IN",
+        quantityChange: 10,
+        note: "Seed PO-SEED-0002 receipt",
+        goodsReceiptLineId: "seed_grl_02b",
+        createdById: ownerId,
+      },
+    ],
+  });
+
+  const bill2Amount =
+    20 * parts.seed_part_oil.purchasePricePaise +
+    10 * parts.seed_part_coolant.purchasePricePaise;
+
+  const bill2 = await prisma.vendorBill.create({
+    data: {
+      id: "seed_vb_02",
+      garageId,
+      vendorId: "seed_vendor_02",
+      purchaseOrderId: po2.id,
+      billNumber: "LP-8821",
+      billDate: daysFromNow(-8),
+      amountPaise: bill2Amount,
+      notes: "Fully paid fluids bill",
+      createdById: ownerId,
+    },
+  });
+
+  await prisma.vendorBillPayment.create({
+    data: {
+      id: "seed_vbp_02",
+      garageId,
+      vendorBillId: bill2.id,
+      amountPaise: bill2Amount,
+      method: "CASH",
+      paidAt: daysFromNow(-6),
+      notes: "Paid in full at counter",
+      createdById: ownerId,
+    },
+  });
+
+  await prisma.purchaseReturn.create({
+    data: {
+      id: "seed_ret_02",
+      garageId,
+      vendorId: "seed_vendor_02",
+      vendorBillId: bill2.id,
+      partId: parts.seed_part_oil.id,
+      quantity: 1,
+      creditPaise: parts.seed_part_oil.purchasePricePaise,
+      notes: "One litre seal leak — credit note with vendor",
+      createdById: ownerId,
+    },
+  });
+  await prisma.stockMovement.create({
+    data: {
+      id: "seed_sm_ret_02",
+      garageId,
+      partId: parts.seed_part_oil.id,
+      type: "OUT",
+      quantityChange: -1,
+      note: "Seed purchase return",
+      purchaseReturnId: "seed_ret_02",
+      createdById: ownerId,
+    },
+  });
+
+  // —— PO 3: Battery World — pending, not received ——
+  const po3 = await prisma.purchaseOrder.create({
+    data: {
+      id: "seed_po_03",
+      garageId,
+      vendorId: "seed_vendor_03",
+      number: "PO-SEED-0003",
+      status: "PENDING",
+      notes: "Awaiting delivery next week",
+      createdById: ownerId,
+      lines: {
+        create: [
+          {
+            id: "seed_pol_03a",
+            garageId,
+            partId: parts.seed_part_battery.id,
+            quantityOrdered: 2,
+            quantityReceived: 0,
+            unitCostPaise: parts.seed_part_battery.purchasePricePaise,
+            sortOrder: 0,
+          },
+        ],
+      },
+    },
+  });
+
+  await prisma.partsRequest.create({
+    data: {
+      id: "seed_pr_ord_06",
+      garageId,
+      partId: parts.seed_part_battery.id,
+      quantity: 2,
+      status: "ORDERED",
+      notes: "Two 35Ah for stock",
+      purchaseOrderId: po3.id,
+      createdById: ownerId,
+    },
+  });
+
+  // —— Extra unpaid bill (no PO) for Auto Parts Hub ——
+  await prisma.vendorBill.create({
+    data: {
+      id: "seed_vb_03",
+      garageId,
+      vendorId: "seed_vendor_01",
+      billNumber: "APH-INV-2388",
+      billDate: daysFromNow(-20),
+      amountPaise: 85000,
+      notes: "Walk-in small parts — outstanding",
+      createdById: ownerId,
+    },
+  });
+
+  // —— City Tyres: small paid bill + return without PO ——
+  const bill4 = await prisma.vendorBill.create({
+    data: {
+      id: "seed_vb_04",
+      garageId,
+      vendorId: "seed_vendor_04",
+      billNumber: "CT-119",
+      billDate: daysFromNow(-12),
+      amountPaise: 5 * parts.seed_part_wiper.purchasePricePaise,
+      notes: "Wiper blades cash purchase",
+      createdById: ownerId,
+    },
+  });
+  await prisma.vendorBillPayment.create({
+    data: {
+      id: "seed_vbp_04",
+      garageId,
+      vendorBillId: bill4.id,
+      amountPaise: 5 * parts.seed_part_wiper.purchasePricePaise,
+      method: "CASH",
+      paidAt: daysFromNow(-12),
+      createdById: ownerId,
+    },
+  });
+  await prisma.stockMovement.create({
+    data: {
+      id: "seed_sm_open_wiper_extra",
+      garageId,
+      partId: parts.seed_part_wiper.id,
+      type: "IN",
+      quantityChange: 5,
+      note: "Seed walk-in purchase stock",
+      createdById: ownerId,
+    },
+  });
+  await prisma.purchaseReturn.create({
+    data: {
+      id: "seed_ret_03",
+      garageId,
+      vendorId: "seed_vendor_04",
+      vendorBillId: bill4.id,
+      partId: parts.seed_part_wiper.id,
+      quantity: 1,
+      creditPaise: parts.seed_part_wiper.purchasePricePaise,
+      notes: "Wrong size returned same day",
+      createdById: ownerId,
+    },
+  });
+  await prisma.stockMovement.create({
+    data: {
+      id: "seed_sm_ret_03",
+      garageId,
+      partId: parts.seed_part_wiper.id,
+      type: "OUT",
+      quantityChange: -1,
+      note: "Seed purchase return",
+      purchaseReturnId: "seed_ret_03",
+      createdById: ownerId,
+    },
+  });
+
+  await prisma.purchaseOrderNumberCounter.upsert({
+    where: { garageId },
+    create: { garageId, lastNumber: 3 },
+    update: { lastNumber: 3 },
+  });
+}
+
+async function seedInventorySales({ garageId, ownerId }) {
+  const partIds = [
+    "seed_part_oil",
+    "seed_part_pads",
+    "seed_part_filter",
+    "seed_part_plugs",
+    "seed_part_wiper",
+    "seed_part_coolant",
+  ];
+  let catalog = await prisma.part.findMany({
+    where: { garageId, id: { in: partIds } },
+  });
+
+  if (catalog.length === 0) {
+    // Vendors module was skipped — still give sales something to sell.
+    const fallback = [
+      {
+        id: "seed_part_oil",
+        name: "Engine oil 5W-30",
+        sku: "SEED-OIL-5W30",
+        unit: "L",
+        purchasePricePaise: 45000,
+        sellingPricePaise: 65000,
+        opening: 30,
+      },
+      {
+        id: "seed_part_pads",
+        name: "Brake pad set (front)",
+        sku: "SEED-BRK-PAD-F",
+        unit: "set",
+        purchasePricePaise: 120000,
+        sellingPricePaise: 180000,
+        opening: 12,
+      },
+      {
+        id: "seed_part_filter",
+        name: "Air filter",
+        sku: "SEED-AIR-FLT",
+        unit: "pcs",
+        purchasePricePaise: 25000,
+        sellingPricePaise: 40000,
+        opening: 20,
+      },
+      {
+        id: "seed_part_wiper",
+        name: "Wiper blade 24in",
+        sku: "SEED-WIP-24",
+        unit: "pcs",
+        purchasePricePaise: 18000,
+        sellingPricePaise: 32000,
+        opening: 15,
+      },
+    ];
+    for (const spec of fallback) {
+      await prisma.part.create({
+        data: {
+          id: spec.id,
+          garageId,
+          name: spec.name,
+          sku: spec.sku,
+          unit: spec.unit,
+          purchasePricePaise: spec.purchasePricePaise,
+          sellingPricePaise: spec.sellingPricePaise,
+          gstRatePercent: 18,
+          hsn: PART_HSN,
+          lowStockLevel: 2,
+        },
+      });
+      await prisma.stockMovement.create({
+        data: {
+          id: `seed_sm_sale_open_${spec.id.replace("seed_part_", "")}`,
+          garageId,
+          partId: spec.id,
+          type: "IN",
+          quantityChange: spec.opening,
+          note: "Seed stock for counter sales",
+          createdById: ownerId,
+        },
+      });
+    }
+    catalog = await prisma.part.findMany({
+      where: { garageId, id: { in: fallback.map((p) => p.id) } },
+    });
+  }
+
+  const byId = Object.fromEntries(catalog.map((p) => [p.id, p]));
+  const oil = byId.seed_part_oil;
+  const pads = byId.seed_part_pads;
+  const filter = byId.seed_part_filter;
+  const plugs = byId.seed_part_plugs;
+  const wiper = byId.seed_part_wiper;
+  const coolant = byId.seed_part_coolant;
+
+  const sales = [
+    {
+      id: "seed_sale_01",
+      customerId: "seed_cust_01",
+      walkInName: null,
+      notes: "Counter sale — oil + filter for Swift",
+      createdAt: daysFromNow(-2),
+      lines: [
+        oil && {
+          id: "seed_sale_01_l1",
+          part: oil,
+          quantity: 4,
+        },
+        filter && {
+          id: "seed_sale_01_l2",
+          part: filter,
+          quantity: 1,
+        },
+      ].filter(Boolean),
+    },
+    {
+      id: "seed_sale_02",
+      customerId: "seed_cust_02",
+      walkInName: null,
+      notes: "Company car — brake pads",
+      createdAt: daysFromNow(-4),
+      lines: [
+        pads && {
+          id: "seed_sale_02_l1",
+          part: pads,
+          quantity: 1,
+        },
+        plugs && {
+          id: "seed_sale_02_l2",
+          part: plugs,
+          quantity: 4,
+        },
+      ].filter(Boolean),
+    },
+    {
+      id: "seed_sale_03",
+      customerId: null,
+      walkInName: "Walk-in — Rajesh",
+      notes: "Cash walk-in",
+      createdAt: daysFromNow(-1),
+      lines: [
+        wiper && {
+          id: "seed_sale_03_l1",
+          part: wiper,
+          quantity: 2,
+        },
+        oil && {
+          id: "seed_sale_03_l2",
+          part: oil,
+          quantity: 2,
+        },
+      ].filter(Boolean),
+    },
+    {
+      id: "seed_sale_04",
+      customerId: "seed_cust_03",
+      walkInName: null,
+      notes: "Coolant top-up kit",
+      createdAt: daysFromNow(-6),
+      lines: [
+        coolant && {
+          id: "seed_sale_04_l1",
+          part: coolant,
+          quantity: 2,
+        },
+        filter && {
+          id: "seed_sale_04_l2",
+          part: filter,
+          quantity: 2,
+        },
+      ].filter(Boolean),
+    },
+    {
+      id: "seed_sale_05",
+      customerId: null,
+      walkInName: "Walk-in — Anonymous",
+      notes: null,
+      createdAt: daysFromNow(-3),
+      lines: [
+        plugs && {
+          id: "seed_sale_05_l1",
+          part: plugs,
+          quantity: 2,
+        },
+      ].filter(Boolean),
+    },
+    {
+      id: "seed_sale_06",
+      customerId: "seed_cust_05",
+      walkInName: null,
+      notes: "Multi-part counter bill",
+      createdAt: daysFromNow(-7),
+      lines: [
+        oil && {
+          id: "seed_sale_06_l1",
+          part: oil,
+          quantity: 5,
+        },
+        pads && {
+          id: "seed_sale_06_l2",
+          part: pads,
+          quantity: 1,
+        },
+        wiper && {
+          id: "seed_sale_06_l3",
+          part: wiper,
+          quantity: 1,
+        },
+      ].filter(Boolean),
+    },
+  ].filter((sale) => sale.lines.length > 0);
+
+  for (const sale of sales) {
+    await prisma.directSale.create({
+      data: {
+        id: sale.id,
+        garageId,
+        customerId: sale.customerId,
+        walkInName: sale.walkInName,
+        notes: sale.notes,
+        createdById: ownerId,
+        createdAt: sale.createdAt,
+        lines: {
+          create: sale.lines.map((line, index) => ({
+            id: line.id,
+            garageId,
+            partId: line.part.id,
+            quantity: line.quantity,
+            unitPricePaise: line.part.sellingPricePaise,
+            gstRatePercent: line.part.gstRatePercent,
+            hsn: line.part.hsn,
+            sortOrder: index,
+          })),
+        },
+      },
+    });
+
+    for (const line of sale.lines) {
+      await prisma.stockMovement.create({
+        data: {
+          id: `seed_sm_sale_${line.id}`,
+          garageId,
+          partId: line.part.id,
+          type: "OUT",
+          quantityChange: -line.quantity,
+          note: "Seed direct sale",
+          directSaleId: sale.id,
+          directSaleLineId: line.id,
+          createdById: ownerId,
+          createdAt: sale.createdAt,
+        },
+      });
+    }
+  }
+}
+
+const MODULE_SEEDS = [
+  {
+    key: "vendors-and-purchases",
+    // Empty module = no vendors yet for this garage.
+    isEmpty: async (garageId) =>
+      (await prisma.vendor.count({ where: { garageId } })) === 0,
+    clear: clearVendorsPurchasesSeed,
+    seed: seedVendorsAndPurchases,
+  },
+  {
+    key: "inventory-sales",
+    isEmpty: async (garageId) =>
+      (await prisma.directSale.count({ where: { garageId } })) === 0,
+    clear: clearDirectSalesSeed,
+    seed: seedInventorySales,
+  },
+];
 
 async function ensureTeam(garageId, ownerId) {
   const tech1 = await prisma.user.upsert({
@@ -991,18 +2114,29 @@ async function main() {
     },
   });
 
-  const owner = await prisma.user.findFirst({
+  await clearPreviousSeed(garage.id);
+
+  let owner = await prisma.user.findFirst({
     where: { garageId: garage.id, role: "OWNER" },
     orderBy: { createdAt: "asc" },
   });
 
   if (!owner) {
-    throw new Error(
-      "No OWNER user on this garage. Sign up first, then re-run npm run db:seed.",
+    owner = await prisma.user.create({
+      data: {
+        id: "seed_user_owner",
+        email: "seed.owner@yopmail.com",
+        name: "Seed Owner",
+        role: "OWNER",
+        garageId: garage.id,
+        emailVerified: new Date(),
+      },
+    });
+    console.log(
+      `Created owner: ${owner.email} (sign in with OTP / your auth flow)`,
     );
   }
 
-  await clearPreviousSeed(garage.id);
   const team = await ensureTeam(garage.id, owner.id);
   await seedCustomersAndVehicles(garage.id);
   const orderCount = await seedOrders({
@@ -1013,13 +2147,22 @@ async function main() {
   });
   await seedAudit(garage.id, owner.id);
 
+  const moduleResults = [];
+  for (const seedDef of MODULE_SEEDS) {
+    const ran = await seedModuleOnce(garage.id, owner.id, seedDef);
+    moduleResults.push(`${seedDef.key}: ${ran ? "seeded" : "skipped"}`);
+  }
+
   console.log(`Done.
   Customers: 5 (+ vehicles)
   Service orders: ${orderCount} (all statuses)
   Team seed users: seed.tech1@yopmail.com, seed.tech2@yopmail.com, seed.accounts@yopmail.com
   Pending invite: seed.invitee@yopmail.com
+  Modules: ${moduleResults.join("; ") || "none"}
+  Vendors demo (when seeded): 4 vendors, 8 parts, requests, 3 POs, bills, payments, returns
+  Inventory sales (when seeded): 6 counter sales (customers + walk-ins)
   Log in as: ${owner.email}
-  Skipped (no tables yet): inventory, vendors, billing, payments, reminders, appointments`);
+  Not seeded yet: reminders, appointments, AMC`);
 }
 
 main()

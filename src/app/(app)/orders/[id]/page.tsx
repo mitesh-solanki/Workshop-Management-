@@ -89,6 +89,10 @@ export default async function OrderEditPage({ params, searchParams }: Props) {
         order.technicianId === session.userId)) &&
     order.status !== "COMPLETED";
 
+  const canRequestParts =
+    (session.role === "OWNER" || session.role === "MANAGER") &&
+    order.status !== "COMPLETED";
+
   const canBill =
     session.role === "OWNER" ||
     session.role === "MANAGER" ||
@@ -158,7 +162,7 @@ export default async function OrderEditPage({ params, searchParams }: Props) {
     <main className="w-full max-w-none space-y-4">
       <Link
         href="/orders"
-        className="inline-flex h-5 max-h-5 items-center gap-0.5 px-0.5 text-[13px] leading-5 text-muted-foreground hover:text-blue-700"
+        className="inline-flex h-5 max-h-5 items-center gap-0.5 px-0.5 text-[13px] leading-5 text-slate-700 hover:text-blue-700"
       >
         <ChevronLeft className="size-3.5 shrink-0" aria-hidden />
         {t("back")}
@@ -199,6 +203,7 @@ export default async function OrderEditPage({ params, searchParams }: Props) {
         timeline={timeline}
         technicians={technicians}
         canMutate={canMutate}
+        canRequestParts={canRequestParts}
         locale={locale}
         initialSection={initialSection}
         parts={parts.map((part) => ({

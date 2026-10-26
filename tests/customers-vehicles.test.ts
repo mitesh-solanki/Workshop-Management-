@@ -367,7 +367,7 @@ describe("schema validation messages are i18n keys", () => {
     } catch (error) {
       expect(error).toBeInstanceOf(ZodError);
       expect((error as ZodError).issues[0]?.message).toBe(
-        "validation.tooShort",
+        "validation.invalidPhone",
       );
     }
   });
@@ -399,7 +399,13 @@ describe("garageId filtering", () => {
 
     await listCustomers(ownerA, { q: "ravi" });
 
-    expect(searchCustomers).toHaveBeenCalledWith(garageA, "ravi", 1, 10);
+    expect(searchCustomers).toHaveBeenCalledWith(
+      garageA,
+      "ravi",
+      1,
+      10,
+      "newest",
+    );
     expect(searchCustomers).not.toHaveBeenCalledWith(
       garageB,
       expect.anything(),

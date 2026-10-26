@@ -43,6 +43,7 @@ export default async function OrdersPage() {
           status: order.status,
           complaint: order.complaint,
           bay: order.bay,
+          createdAt: order.createdAt,
           vehicle: {
             registrationNumber: order.vehicle.registrationNumber,
             make: order.vehicle.make,

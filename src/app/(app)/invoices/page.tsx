@@ -5,7 +5,7 @@ import { getTranslations } from "next-intl/server";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
-import { Skeleton } from "@/components/ui/skeleton";
+import { TableSpinner } from "@/components/shared/page-spinner";
 import { ForbiddenError } from "@/lib/errors";
 import { requireSession } from "@/lib/session";
 import { InvoicesTable } from "@/modules/invoices/components/invoices-table";
@@ -15,6 +15,7 @@ type Props = {
   searchParams: Promise<{
     q?: string;
     status?: string;
+    sort?: string;
     page?: string;
     pageSize?: string;
   }>;
@@ -34,6 +35,7 @@ export default async function InvoicesPage({ searchParams }: Props) {
     result = await listInvoices(session, {
       q: params.q,
       status: params.status,
+      sort: params.sort,
       page: params.page,
       pageSize: params.pageSize,
     });
@@ -65,7 +67,7 @@ export default async function InvoicesPage({ searchParams }: Props) {
     <main className="space-y-6 sm:space-y-8">
       <PageHeader title={t("title")} description={t("subtitle")} />
 
-      <Suspense fallback={<Skeleton className="h-64 w-full" />}>
+      <Suspense fallback={<TableSpinner />}>
         <InvoicesTable
           invoices={result.items}
           page={result.page}

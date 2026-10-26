@@ -25,14 +25,12 @@ type Props = {
   items: InventoryTableRow[];
   empty: React.ReactNode;
   canWrite?: boolean;
-  canSale?: boolean;
 };
 
 export function InventoryTable({
   items,
   empty,
   canWrite = false,
-  canSale = false,
 }: Props) {
   const t = useTranslations("inventory");
 
@@ -143,7 +141,7 @@ export function InventoryTable({
       empty={empty}
       defaultPageSize={10}
       getRowHref={(row) => `/inventory/${row.id}`}
-      toolbar={<InventorySearch canSale={canSale} />}
+      toolbar={<InventorySearch />}
       renderMobileCard={(row) => {
         const item = row.original;
         const unit = item.unit;

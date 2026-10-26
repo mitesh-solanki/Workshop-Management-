@@ -109,11 +109,14 @@ export async function searchInvoices(
   garageId: string,
   q: string | undefined,
   paymentStatus: InvoicePaymentStatus | undefined,
+  sort: string,
   page: number,
   pageSize: number,
 ) {
   const baseWhere = invoiceSearchWhere(garageId, q);
   const skip = (page - 1) * pageSize;
+  const createdDir = sort === "oldest" ? "asc" : "desc";
+  const orderBy = [{ createdAt: createdDir }] as const;
 
   if (!paymentStatus) {
     const where = baseWhere;
@@ -121,7 +124,7 @@ export async function searchInvoices(
       prisma.invoice.findMany({
         where,
         select: invoiceListSelect,
-        orderBy: [{ createdAt: "desc" }],
+        orderBy: [...orderBy],
         skip,
         take: pageSize,
       }),
@@ -139,7 +142,7 @@ export async function searchInvoices(
       prisma.invoice.findMany({
         where,
         select: invoiceListSelect,
-        orderBy: [{ createdAt: "desc" }],
+        orderBy: [...orderBy],
         skip,
         take: pageSize,
       }),
@@ -151,7 +154,7 @@ export async function searchInvoices(
   const candidates = await prisma.invoice.findMany({
     where: { ...baseWhere, status: "FINALIZED" },
     select: invoiceListSelect,
-    orderBy: [{ createdAt: "desc" }],
+    orderBy: [...orderBy],
     take: PAYMENT_FILTER_CAP,
   });
 

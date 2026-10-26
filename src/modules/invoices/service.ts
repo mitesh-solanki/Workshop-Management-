@@ -16,6 +16,7 @@ export async function listInvoices(
   raw: {
     q?: string;
     status?: string;
+    sort?: string;
     page?: number | string;
     pageSize?: number | string;
   } = {},
@@ -27,6 +28,7 @@ export async function listInvoices(
     session.garageId,
     input.q,
     input.status,
+    input.sort,
     input.page,
     input.pageSize,
   );

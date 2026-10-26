@@ -6,8 +6,8 @@ export const instant = false;
 
 function AuthFallback() {
   return (
-    <div className="flex min-h-svh items-center justify-center bg-muted p-6">
-      <PageSpinner />
+    <div className="flex h-svh w-full flex-1 flex-col items-center justify-center overflow-hidden bg-muted p-6">
+      <PageSpinner className="min-h-0 flex-none" />
     </div>
   );
 }

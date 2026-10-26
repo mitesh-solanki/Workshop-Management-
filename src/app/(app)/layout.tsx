@@ -32,8 +32,8 @@ async function AuthenticatedChrome({ children }: { children: React.ReactNode }) 
 
 function AppShellFallback() {
   return (
-    <main className="w-full max-w-[1600px] flex-1 px-[34px] py-10">
-      <PageSpinner />
+    <main className="flex h-svh w-full flex-1 flex-col items-center justify-center overflow-hidden">
+      <PageSpinner className="min-h-0 flex-none" />
     </main>
   );
 }

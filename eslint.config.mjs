@@ -9,6 +9,18 @@ const eslintConfig = defineConfig([
   prettier,
   globalIgnores([".next/**", "out/**", "build/**", "next-env.d.ts", "coverage/**"]),
   {
+    rules: {
+      "@typescript-eslint/no-unused-vars": [
+        "warn",
+        {
+          argsIgnorePattern: "^_",
+          varsIgnorePattern: "^_",
+          caughtErrorsIgnorePattern: "^_",
+        },
+      ],
+    },
+  },
+  {
     files: ["src/**/*.{js,jsx,ts,tsx}"],
     ignores: ["src/**/repo.ts", "src/lib/db.ts"],
     rules: {
@@ -53,10 +65,30 @@ const eslintConfig = defineConfig([
         "warn",
         {
           noStrings: true,
-          allowedStrings: ["", " ", ":", "|", "·", "—", "–", "…", "/", "-"],
+          allowedStrings: [
+            "",
+            " ",
+            ":",
+            "|",
+            "·",
+            "—",
+            "–",
+            "…",
+            "/",
+            "-",
+            "(",
+            ")",
+            "%",
+          ],
           ignoreProps: true,
         },
       ],
+    },
+  },
+  {
+    files: ["src/components/ui/data-table.tsx"],
+    rules: {
+      "react-hooks/incompatible-library": "off",
     },
   },
 ]);

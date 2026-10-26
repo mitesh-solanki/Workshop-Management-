@@ -387,6 +387,8 @@ export async function applyStockMovement(
     serviceOrderLineId?: string | null;
     directSaleId?: string | null;
     directSaleLineId?: string | null;
+    goodsReceiptLineId?: string | null;
+    purchaseReturnId?: string | null;
   },
   /** Optional outer transaction (e.g. service-order line + stock out). */
   outerTx?: Prisma.TransactionClient,
@@ -429,6 +431,8 @@ export async function applyStockMovement(
         serviceOrderLineId: data.serviceOrderLineId ?? null,
         directSaleId: data.directSaleId ?? null,
         directSaleLineId: data.directSaleLineId ?? null,
+        goodsReceiptLineId: data.goodsReceiptLineId ?? null,
+        purchaseReturnId: data.purchaseReturnId ?? null,
         createdById: data.actorId,
       },
       select: {
@@ -453,6 +457,8 @@ export async function applyStockMovement(
           resultingStock: check.resultingStock,
           serviceOrderId: data.serviceOrderId ?? null,
           directSaleId: data.directSaleId ?? null,
+          goodsReceiptLineId: data.goodsReceiptLineId ?? null,
+          purchaseReturnId: data.purchaseReturnId ?? null,
         } satisfies Prisma.InputJsonValue,
       },
     });
@@ -471,11 +477,19 @@ export async function applyStockMovement(
 }
 
 export class DirectSaleTxError extends Error {
-  readonly reason: "PART_NOT_FOUND" | "INSUFFICIENT_STOCK" | "CUSTOMER_NOT_FOUND";
+  readonly reason:
+    | "PART_NOT_FOUND"
+    | "INSUFFICIENT_STOCK"
+    | "CUSTOMER_NOT_FOUND"
+    | "SALE_NOT_FOUND";
   readonly partId?: string;
 
   constructor(
-    reason: "PART_NOT_FOUND" | "INSUFFICIENT_STOCK" | "CUSTOMER_NOT_FOUND",
+    reason:
+      | "PART_NOT_FOUND"
+      | "INSUFFICIENT_STOCK"
+      | "CUSTOMER_NOT_FOUND"
+      | "SALE_NOT_FOUND",
     partId?: string,
   ) {
     super(reason);
@@ -489,6 +503,7 @@ export async function createDirectSale(
   garageId: string,
   data: {
     customerId: string | null;
+    walkInName: string | null;
     notes: string | null;
     actorId: string;
     lines: Array<{
@@ -516,6 +531,7 @@ export async function createDirectSale(
         data: {
           garageId,
           customerId: data.customerId,
+          walkInName: data.customerId ? null : data.walkInName,
           notes: data.notes,
           createdById: data.actorId,
         },
@@ -580,6 +596,7 @@ export async function createDirectSale(
           meta: {
             lineCount: data.lines.length,
             customerId: data.customerId,
+            walkInName: data.walkInName,
           } satisfies Prisma.InputJsonValue,
         },
       });
@@ -594,6 +611,197 @@ export async function createDirectSale(
   }
 }
 
+export async function updateDirectSale(
+  garageId: string,
+  data: {
+    saleId: string;
+    customerId: string | null;
+    walkInName: string | null;
+    notes: string | null;
+    actorId: string;
+    lines: Array<{
+      partId: string;
+      quantity: number;
+      unitPricePaise: number;
+      gstRatePercent: number;
+      hsn: string;
+    }>;
+  },
+): Promise<{ saleId: string }> {
+  return prisma.$transaction(async (tx) => {
+    const sale = await tx.directSale.findFirst({
+      where: { id: data.saleId, garageId },
+      select: {
+        id: true,
+        lines: {
+          select: { id: true, partId: true, quantity: true },
+        },
+      },
+    });
+    if (!sale) {
+      throw new DirectSaleTxError("SALE_NOT_FOUND");
+    }
+
+    if (data.customerId) {
+      const customer = await tx.customer.findFirst({
+        where: { id: data.customerId, garageId },
+        select: { id: true },
+      });
+      if (!customer) {
+        throw new DirectSaleTxError("CUSTOMER_NOT_FOUND");
+      }
+    }
+
+    for (const line of sale.lines) {
+      const stock = await applyStockMovement(
+        garageId,
+        {
+          partId: line.partId,
+          type: "IN",
+          quantity: line.quantity,
+          note: "Edit counter sale (restore)",
+          actorId: data.actorId,
+          directSaleId: sale.id,
+          directSaleLineId: line.id,
+        },
+        tx,
+      );
+      if (!stock.ok) {
+        throw new DirectSaleTxError(stock.reason, line.partId);
+      }
+    }
+
+    await tx.directSaleLine.deleteMany({
+      where: { directSaleId: sale.id, garageId },
+    });
+
+    await tx.directSale.update({
+      where: { id: sale.id },
+      data: {
+        customerId: data.customerId,
+        walkInName: data.customerId ? null : data.walkInName,
+        notes: data.notes,
+      },
+    });
+
+    for (let i = 0; i < data.lines.length; i += 1) {
+      const lineInput = data.lines[i]!;
+      const part = await tx.part.findFirst({
+        where: { id: lineInput.partId, garageId },
+        select: { id: true },
+      });
+      if (!part) {
+        throw new DirectSaleTxError("PART_NOT_FOUND", lineInput.partId);
+      }
+
+      const line = await tx.directSaleLine.create({
+        data: {
+          garageId,
+          directSaleId: sale.id,
+          partId: part.id,
+          quantity: lineInput.quantity,
+          unitPricePaise: lineInput.unitPricePaise,
+          gstRatePercent: lineInput.gstRatePercent,
+          hsn: lineInput.hsn,
+          sortOrder: i,
+        },
+        select: { id: true },
+      });
+
+      const stock = await applyStockMovement(
+        garageId,
+        {
+          partId: part.id,
+          type: "OUT",
+          quantity: lineInput.quantity,
+          note: "Direct sale",
+          actorId: data.actorId,
+          directSaleId: sale.id,
+          directSaleLineId: line.id,
+        },
+        tx,
+      );
+      if (!stock.ok) {
+        throw new DirectSaleTxError(stock.reason, part.id);
+      }
+    }
+
+    await tx.auditLog.create({
+      data: {
+        garageId,
+        actorId: data.actorId,
+        action: "inventory.direct_sale_updated",
+        entity: "DirectSale",
+        entityId: sale.id,
+        meta: {
+          lineCount: data.lines.length,
+          customerId: data.customerId,
+          walkInName: data.walkInName,
+        } satisfies Prisma.InputJsonValue,
+      },
+    });
+
+    return { saleId: sale.id };
+  });
+}
+
+export async function deleteDirectSale(
+  garageId: string,
+  saleId: string,
+  actorId: string,
+) {
+  return prisma.$transaction(async (tx) => {
+    const sale = await tx.directSale.findFirst({
+      where: { id: saleId, garageId },
+      select: {
+        id: true,
+        lines: {
+          select: { id: true, partId: true, quantity: true },
+        },
+      },
+    });
+    if (!sale) {
+      throw new DirectSaleTxError("SALE_NOT_FOUND");
+    }
+
+    for (const line of sale.lines) {
+      const stock = await applyStockMovement(
+        garageId,
+        {
+          partId: line.partId,
+          type: "IN",
+          quantity: line.quantity,
+          note: "Void counter sale",
+          actorId,
+          directSaleId: sale.id,
+          directSaleLineId: line.id,
+        },
+        tx,
+      );
+      if (!stock.ok) {
+        throw new DirectSaleTxError(stock.reason, line.partId);
+      }
+    }
+
+    await tx.directSale.delete({ where: { id: sale.id } });
+
+    await tx.auditLog.create({
+      data: {
+        garageId,
+        actorId,
+        action: "inventory.direct_sale_deleted",
+        entity: "DirectSale",
+        entityId: sale.id,
+        meta: {
+          lineCount: sale.lines.length,
+        } satisfies Prisma.InputJsonValue,
+      },
+    });
+
+    return { saleId: sale.id };
+  });
+}
+
 export async function findDirectSaleById(garageId: string, saleId: string) {
   return prisma.directSale.findFirst({
     where: { id: saleId, garageId },
@@ -601,6 +809,7 @@ export async function findDirectSaleById(garageId: string, saleId: string) {
       id: true,
       garageId: true,
       customerId: true,
+      walkInName: true,
       notes: true,
       createdAt: true,
       customer: {
@@ -634,6 +843,7 @@ export async function listDirectSales(garageId: string) {
     select: {
       id: true,
       notes: true,
+      walkInName: true,
       createdAt: true,
       customer: {
         select: { id: true, name: true, phone: true },
@@ -643,8 +853,11 @@ export async function listDirectSales(garageId: string) {
           id: true,
           quantity: true,
           unitPricePaise: true,
-          part: { select: { name: true, sku: true } },
+          gstRatePercent: true,
+          hsn: true,
+          part: { select: { id: true, name: true, sku: true, unit: true } },
         },
+        orderBy: [{ sortOrder: "asc" }],
       },
     },
     orderBy: { createdAt: "desc" },

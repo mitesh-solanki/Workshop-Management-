@@ -1,5 +1,7 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getLocale } from "next-intl/server";
+import { ChevronLeft } from "lucide-react";
+import { getLocale, getTranslations } from "next-intl/server";
 import { NotFoundError } from "@/lib/errors";
 import { requireSession } from "@/lib/session";
 import { CustomerDetailPanel } from "@/modules/customers/components/customer-detail-panel";
@@ -21,6 +23,7 @@ export default async function CustomerDetailPage({
   const { id } = await params;
   const { vehicle: vehicleId } = await searchParams;
   const locale = await getLocale();
+  const t = await getTranslations("customers");
 
   let customer: Awaited<ReturnType<typeof getCustomer>>;
   try {
@@ -43,6 +46,14 @@ export default async function CustomerDetailPage({
 
   return (
     <main className="w-full space-y-4">
+      <Link
+        href="/customers"
+        className="inline-flex h-5 max-h-5 items-center gap-0.5 px-0.5 text-[13px] leading-5 text-slate-700 hover:text-blue-700"
+      >
+        <ChevronLeft className="size-3.5 shrink-0" aria-hidden />
+        {t("back")}
+      </Link>
+
       <CustomerDetailPanel
         customer={{
           id: customer.id,

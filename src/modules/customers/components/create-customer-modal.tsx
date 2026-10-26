@@ -23,6 +23,7 @@ import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/toast";
+import { sanitizePhoneTyping } from "@/lib/contact";
 
 const initial: CustomerActionState = { ok: false };
 
@@ -36,6 +37,7 @@ export function CreateCustomerModal({ trigger, size = "md" }: Props) {
   const t = useTranslations("customers");
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  const [phone, setPhone] = useState("");
   const [state, formAction, pending] = useActionState(
     createCustomerModalAction,
     initial,
@@ -63,6 +65,8 @@ export function CreateCustomerModal({ trigger, size = "md" }: Props) {
         setOpen(next);
         if (next) {
           handled.current = null;
+        } else {
+          setPhone("");
         }
       }}
     >
@@ -74,7 +78,7 @@ export function CreateCustomerModal({ trigger, size = "md" }: Props) {
           </Button>
         )}
       </DialogTrigger>
-      <DialogContent className="gap-0 p-0 sm:max-w-lg">
+      <DialogContent className="gap-0 p-0 sm:max-w-xl">
         <DialogHeader className="border-b border-border px-5 py-4 text-left">
           <DialogTitle>{t("newTitle")}</DialogTitle>
           <DialogDescription>{t("newSubtitle")}</DialogDescription>
@@ -100,6 +104,8 @@ export function CreateCustomerModal({ trigger, size = "md" }: Props) {
                 required
                 autoComplete="tel"
                 inputMode="tel"
+                value={phone}
+                onChange={(e) => setPhone(sanitizePhoneTyping(e.target.value))}
                 className="h-11 min-h-11"
               />
             </FormField>

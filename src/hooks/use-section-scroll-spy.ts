@@ -64,7 +64,7 @@ function sectionAtReadingLine<T extends string>(
  */
 export function useSectionScrollSpy<T extends string>({
   sections,
-  idPrefix,
+  idPrefix: _idPrefix,
   initialSection,
   onNavigate,
 }: Options<T>) {
@@ -72,6 +72,10 @@ export function useSectionScrollSpy<T extends string>({
   const [activeSection, setActiveSection] = useState<T>(start);
   const [mountedCount, setMountedCount] = useState(0);
   const nodesRef = useRef<Map<T, HTMLElement>>(new Map());
+  /** Stable per-section callbacks — new lambdas every render thrash refs and loop. */
+  const refCallbacksRef = useRef<Map<T, (node: HTMLElement | null) => void>>(
+    new Map(),
+  );
   const activeRef = useRef(activeSection);
   const onNavigateRef = useRef(onNavigate);
   const programmaticRef = useRef(false);
@@ -86,17 +90,22 @@ export function useSectionScrollSpy<T extends string>({
     onNavigateRef.current = onNavigate;
   }, [onNavigate]);
 
-  const setSectionRef = useCallback(
-    (section: T) => (node: HTMLElement | null) => {
-      if (node) {
-        nodesRef.current.set(section, node);
-      } else {
-        nodesRef.current.delete(section);
-      }
-      setMountedCount(nodesRef.current.size);
-    },
-    [],
-  );
+  const setSectionRef = useCallback((section: T) => {
+    let callback = refCallbacksRef.current.get(section);
+    if (!callback) {
+      callback = (node: HTMLElement | null) => {
+        if (node) {
+          nodesRef.current.set(section, node);
+        } else {
+          nodesRef.current.delete(section);
+        }
+        const next = nodesRef.current.size;
+        setMountedCount((prev) => (prev === next ? prev : next));
+      };
+      refCallbacksRef.current.set(section, callback);
+    }
+    return callback;
+  }, []);
 
   const scrollToSection = useCallback((section: T) => {
     const node = nodesRef.current.get(section);

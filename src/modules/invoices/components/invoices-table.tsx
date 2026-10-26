@@ -8,6 +8,7 @@ import { DataTable, type ColumnDef } from "@/components/ui/data-table";
 import { formatRupees } from "@/lib/money";
 import { InvoiceRowActions } from "@/modules/invoices/components/invoice-row-actions";
 import { InvoiceSearch } from "@/modules/invoices/components/invoice-search";
+import { InvoiceSortMenu } from "@/modules/invoices/components/invoice-sort-menu";
 import { InvoiceStatusFilter } from "@/modules/invoices/components/invoice-status-filter";
 import type { InvoicePaymentStatus } from "@/modules/invoices/payment-status";
 import type { InvoiceListItem } from "@/modules/invoices/types";
@@ -157,7 +158,10 @@ export function InvoicesTable({
       toolbar={
         <div className="flex w-full flex-col gap-3 md:flex-row md:items-end md:justify-between">
           <InvoiceSearch className="w-full md:max-w-md" />
-          <InvoiceStatusFilter />
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <InvoiceStatusFilter />
+            <InvoiceSortMenu />
+          </div>
         </div>
       }
       pagination={{

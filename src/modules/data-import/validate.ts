@@ -23,12 +23,22 @@ export type ValidatedCustomerRow = {
   phone: string;
   address: string | null;
   notes: string | null;
+  /** Set when this phone already belongs to a customer in the garage (update path). */
+  existingCustomerId: string | null;
 };
 
 export type ValidatedVehicleRow = {
   rowNumber: number;
   customerPhone: string;
-  customerId: string;
+  /** Existing customer in the garage, if the phone already matched. */
+  customerId: string | null;
+  /** Create this customer on import when phone is new. */
+  customerCreate: {
+    name: string;
+    phone: string;
+    address: string | null;
+    notes: string | null;
+  } | null;
   registrationNumber: string;
   make: string;
   model: string;
@@ -50,15 +60,29 @@ export type ValidatedPartRow = {
   hsn: string;
   lowStockLevel: number;
   openingStock: number;
+  /** Set when this SKU already belongs to a part in the garage (update path). */
+  existingPartId: string | null;
 };
 
 export type ValidateRowsContext = {
-  /** Normalised phone → customer id (vehicles). */
+  /** Normalised phone → customer id (customers + vehicles). */
   customerIdByPhone?: Map<string, string>;
   /** Existing registrations in garage (uppercase, no spaces). */
   existingRegistrations?: Set<string>;
-  /** Existing SKUs in garage (uppercase). */
-  existingSkus?: Set<string>;
+  /** Existing SKU (uppercase) → part id. */
+  partIdBySku?: Map<string, string>;
+  /**
+   * Customers: how to treat a phone that already exists in the garage.
+   * - `error` — validation error (default; preview + all-or-nothing / skip)
+   * - `update` — valid row with `existingCustomerId` set (update_existing mode)
+   */
+  existingCustomerPolicy?: "error" | "update";
+  /**
+   * Parts: how to treat a SKU that already exists in the garage.
+   * - `error` — validation error (default; preview + all-or-nothing / skip)
+   * - `update` — valid row with `existingPartId` set (update_existing mode)
+   */
+  existingPartPolicy?: "error" | "update";
 };
 
 export type ValidateRowsResult =
@@ -99,6 +123,8 @@ function mappedRecord(
   return record;
 }
 
+const VALIDATION_MESSAGE_KEY = /^validation\.[a-zA-Z0-9_.]+$/;
+
 function zodIssuesToErrors(
   rowNumber: number,
   issues: { path: PropertyKey[]; message: string }[],
@@ -106,10 +132,13 @@ function zodIssuesToErrors(
   return issues.map((issue) => {
     const field =
       issue.path.length > 0 ? String(issue.path[0]) : null;
+    const code = VALIDATION_MESSAGE_KEY.test(issue.message)
+      ? issue.message
+      : "import.row_invalid";
     return {
       rowNumber,
       field,
-      code: "import.row_invalid",
+      code,
       message: issue.message,
     };
   });
@@ -132,7 +161,7 @@ export function validateImportRows(
   context: ValidateRowsContext = {},
 ): ValidateRowsResult {
   if (entity === "customers") {
-    return validateCustomers(rows, mapping);
+    return validateCustomers(rows, mapping, context);
   }
   if (entity === "vehicles") {
     return validateVehicles(rows, mapping, context);
@@ -143,10 +172,13 @@ export function validateImportRows(
 function validateCustomers(
   rows: readonly string[][],
   mapping: ColumnMapping,
+  context: ValidateRowsContext,
 ): Extract<ValidateRowsResult, { entity: "customers" }> {
   const errors: RowValidationError[] = [];
   const valid: ValidatedCustomerRow[] = [];
   const phonesInFile = new Map<string, number>();
+  const phoneMap = context.customerIdByPhone ?? new Map();
+  const existingPolicy = context.existingCustomerPolicy ?? "error";
 
   rows.forEach((row, index) => {
     const rowNumber = index + 2; // 1-based file row including header
@@ -164,13 +196,38 @@ function validateCustomers(
         errors,
         rowNumber,
         "phone",
-        "import.duplicate_in_file",
-        `Duplicate phone (same as row ${prior})`,
+        "import.duplicate_phone_in_file",
+        "import.duplicate_phone_in_file",
       );
       return;
     }
     phonesInFile.set(phoneKey, rowNumber);
-    valid.push({ rowNumber, ...parsed.data });
+
+    const existingCustomerId = phoneMap.get(phoneKey) ?? null;
+    if (existingCustomerId) {
+      if (existingPolicy === "error") {
+        pushError(
+          errors,
+          rowNumber,
+          "phone",
+          "import.customer_exists",
+          "import.customer_exists",
+        );
+        return;
+      }
+      valid.push({
+        rowNumber,
+        ...parsed.data,
+        existingCustomerId,
+      });
+      return;
+    }
+
+    valid.push({
+      rowNumber,
+      ...parsed.data,
+      existingCustomerId: null,
+    });
   });
 
   return { entity: "customers", valid, errors };
@@ -184,6 +241,11 @@ function validateVehicles(
   const errors: RowValidationError[] = [];
   const valid: ValidatedVehicleRow[] = [];
   const regsInFile = new Map<string, number>();
+  /** New phones in this file → first row that defined name/address. */
+  const newCustomersInFile = new Map<
+    string,
+    { name: string; phone: string; address: string | null; notes: string | null }
+  >();
   const phoneMap = context.customerIdByPhone ?? new Map();
   const existingRegs = context.existingRegistrations ?? new Set();
 
@@ -191,31 +253,62 @@ function validateVehicles(
     const rowNumber = index + 2;
     const raw = mappedRecord("vehicles", row, mapping);
     const phoneKey = normalisePhoneKey(raw.customerPhone ?? "");
-    const customerId = phoneMap.get(phoneKey);
+    const existingCustomerId = phoneMap.get(phoneKey);
 
     if (!phoneKey) {
       pushError(
         errors,
         rowNumber,
         "customerPhone",
-        "import.row_invalid",
-        "Customer phone is required",
-      );
-      return;
-    }
-    if (!customerId) {
-      pushError(
-        errors,
-        rowNumber,
-        "customerPhone",
-        "import.customer_not_found",
-        "No customer with this phone in the garage",
+        "import.customer_phone_required",
+        "import.customer_phone_required",
       );
       return;
     }
 
+    const customerId: string | null = existingCustomerId ?? null;
+    let customerCreate: ValidatedVehicleRow["customerCreate"] = null;
+
+    if (!customerId) {
+      const alreadyQueued = newCustomersInFile.get(phoneKey);
+      if (alreadyQueued) {
+        customerCreate = alreadyQueued;
+      } else {
+        const customerParsed = createCustomerSchema.safeParse({
+          name: raw.customerName ?? "",
+          phone: raw.customerPhone ?? "",
+          address: raw.customerAddress || null,
+          notes: null,
+        });
+        if (!customerParsed.success) {
+          const missingName = !(raw.customerName ?? "").trim();
+          if (missingName) {
+            pushError(
+              errors,
+              rowNumber,
+              "customerName",
+              "import.customer_name_required",
+              "import.customer_name_required",
+            );
+          } else {
+            errors.push(
+              ...zodIssuesToErrors(rowNumber, customerParsed.error.issues),
+            );
+          }
+          return;
+        }
+        customerCreate = {
+          name: customerParsed.data.name,
+          phone: customerParsed.data.phone,
+          address: customerParsed.data.address,
+          notes: customerParsed.data.notes,
+        };
+        newCustomersInFile.set(phoneKey, customerCreate);
+      }
+    }
+
     const parsed = createVehicleSchema.safeParse({
-      customerId,
+      customerId: customerId ?? "pending-create",
       registrationNumber: raw.registrationNumber,
       make: raw.make,
       model: raw.model,
@@ -238,8 +331,8 @@ function validateVehicles(
         errors,
         rowNumber,
         "registrationNumber",
-        "import.duplicate_in_file",
-        `Duplicate registration (same as row ${prior})`,
+        "import.duplicate_registration_in_file",
+        "import.duplicate_registration_in_file",
       );
       return;
     }
@@ -249,7 +342,7 @@ function validateVehicles(
         rowNumber,
         "registrationNumber",
         "import.registration_exists",
-        "Registration already exists in this garage",
+        "import.registration_exists",
       );
       return;
     }
@@ -258,7 +351,8 @@ function validateVehicles(
     valid.push({
       rowNumber,
       customerPhone: phoneKey,
-      customerId: parsed.data.customerId,
+      customerId,
+      customerCreate,
       registrationNumber: reg,
       make: parsed.data.make,
       model: parsed.data.model,
@@ -281,7 +375,8 @@ function validateParts(
   const errors: RowValidationError[] = [];
   const valid: ValidatedPartRow[] = [];
   const skusInFile = new Map<string, number>();
-  const existingSkus = context.existingSkus ?? new Set();
+  const partIdBySku = context.partIdBySku ?? new Map();
+  const existingPolicy = context.existingPartPolicy ?? "error";
 
   rows.forEach((row, index) => {
     const rowNumber = index + 2;
@@ -311,23 +406,41 @@ function validateParts(
         errors,
         rowNumber,
         "sku",
-        "import.duplicate_in_file",
-        `Duplicate SKU (same as row ${prior})`,
+        "import.duplicate_sku_in_file",
+        "import.duplicate_sku_in_file",
       );
       return;
     }
-    if (existingSkus.has(sku)) {
-      pushError(
-        errors,
+    skusInFile.set(sku, rowNumber);
+
+    const existingPartId = partIdBySku.get(sku) ?? null;
+    if (existingPartId) {
+      if (existingPolicy === "error") {
+        pushError(
+          errors,
+          rowNumber,
+          "sku",
+          "import.sku_exists",
+          "import.sku_exists",
+        );
+        return;
+      }
+      valid.push({
         rowNumber,
-        "sku",
-        "import.sku_exists",
-        "SKU already exists in this garage",
-      );
+        name: parsed.data.name,
+        sku,
+        unit: parsed.data.unit,
+        purchasePricePaise: parsed.data.purchasePricePaise,
+        sellingPricePaise: parsed.data.sellingPricePaise,
+        gstRatePercent: parsed.data.gstRatePercent,
+        hsn: parsed.data.hsn,
+        lowStockLevel: parsed.data.lowStockLevel,
+        openingStock: 0,
+        existingPartId,
+      });
       return;
     }
 
-    skusInFile.set(sku, rowNumber);
     valid.push({
       rowNumber,
       name: parsed.data.name,
@@ -339,6 +452,7 @@ function validateParts(
       hsn: parsed.data.hsn,
       lowStockLevel: parsed.data.lowStockLevel,
       openingStock: parsed.data.openingStock,
+      existingPartId: null,
     });
   });
 

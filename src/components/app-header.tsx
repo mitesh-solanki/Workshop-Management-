@@ -19,8 +19,11 @@ import {
 const TITLE_BY_PREFIX: { prefix: string; key: NavKey }[] = [
   { prefix: "/dashboard", key: "dashboard" },
   { prefix: "/customers", key: "customers" },
+  { prefix: "/vehicles", key: "vehicles" },
+  { prefix: "/inventory", key: "inventory" },
   { prefix: "/invoices", key: "invoices" },
   { prefix: "/orders", key: "orders" },
+  { prefix: "/workshop", key: "workshop" },
   { prefix: "/team", key: "team" },
   { prefix: "/settings", key: "settings" },
 ];
@@ -66,7 +69,7 @@ export function AppHeader({ appName, garageName }: AppHeaderProps) {
           </p>
           <nav
             aria-label={tShell("breadcrumb")}
-            className="flex min-w-0 items-center gap-1 text-caption text-slate-500"
+            className="hidden min-w-0 items-center gap-1 text-caption text-slate-500 md:flex"
           >
             <Link
               href="/dashboard"

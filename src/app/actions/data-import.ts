@@ -89,6 +89,8 @@ export type CommitImportResult =
       importedCount: number;
       skippedCount: number;
       mode: ImportMode;
+      createdCount?: number;
+      updatedCount?: number;
     }
   | { ok: false; message: string };
 
@@ -104,8 +106,11 @@ export async function commitImportAction(payload: {
     const result = await commitImport(session, payload);
 
     revalidatePath("/customers");
+    revalidatePath("/vehicles");
     revalidatePath("/inventory");
-    revalidatePath("/settings/import");
+    revalidatePath("/customers/import");
+    revalidatePath("/vehicles/import");
+    revalidatePath("/inventory/import");
 
     return { ok: true, ...result };
   } catch (error) {

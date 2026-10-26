@@ -7,7 +7,6 @@ import { usePathname, useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import {
   Car,
-  ChevronLeft,
   MapPin,
   MessageSquare,
   NotebookPen,
@@ -27,7 +26,10 @@ import {
   DescriptionTerm,
 } from "@/components/ui/description-list";
 import { ListCard, ListCardGroup } from "@/components/ui/list-card";
-import { SectionSideNav } from "@/components/shared/section-side-nav";
+import {
+  SectionDesktopNav,
+  SectionMobileNavBar,
+} from "@/components/shared/section-side-nav";
 import {
   sectionDomId,
   useSectionScrollSpy,
@@ -46,7 +48,6 @@ import {
   VEHICLE_SECTIONS,
 } from "@/modules/customers/customer-sections";
 import { JobCardRowActions } from "@/modules/service-orders/components/job-card-row-actions";
-import { CsvExportButton } from "@/modules/data-export/components/csv-export-button";
 import { CreateVehicleModal } from "@/modules/vehicles/components/create-vehicle-modal";
 import { DeleteVehicleButton } from "@/modules/vehicles/components/delete-vehicle-button";
 import { EditVehicleModal } from "@/modules/vehicles/components/edit-vehicle-modal";
@@ -278,16 +279,23 @@ function CustomerSectionsView({
     },
   ];
 
-  return (
-    <div className="grid items-start gap-4 lg:grid-cols-[minmax(220px,260px)_minmax(0,1fr)] lg:gap-6">
-      <SectionSideNav
-        title={t("sectionsTitle")}
-        items={navItems}
-        active={activeSection}
-        onChange={scrollToSection}
-      />
+  const navProps = {
+    title: t("sectionsTitle"),
+    items: navItems,
+    active: activeSection,
+    onChange: scrollToSection,
+    backHref: "/customers",
+    backLabel: t("back"),
+  } as const;
 
-      <div className="flex min-w-0 flex-col gap-4">
+  return (
+    <div className="space-y-4">
+      <SectionMobileNavBar {...navProps} />
+
+      <div className="grid items-start gap-4 lg:grid-cols-[minmax(220px,260px)_minmax(0,1fr)] lg:gap-6">
+        <SectionDesktopNav {...navProps} />
+
+        <div className="flex min-w-0 flex-col gap-4">
         <SectionBlock
           id={sectionDomId(CUSTOMER_SECTION_ID_PREFIX, "details")}
           title={t("namedDetails", { name: customer.name })}
@@ -343,20 +351,13 @@ function CustomerSectionsView({
           subtitle={t("vehiclesDescription")}
           sectionRef={setSectionRef("vehicles")}
           action={
-            <div className="flex flex-wrap items-center gap-2">
-              <CsvExportButton
-                href={`/customers/${customer.id}/vehicles/export`}
-                label={tv("export")}
-                size="sm"
+            canWrite ? (
+              <CreateVehicleModal
+                customerId={customer.id}
+                customerName={customer.name}
+                onCreated={() => scrollToSection("vehicles")}
               />
-              {canWrite ? (
-                <CreateVehicleModal
-                  customerId={customer.id}
-                  customerName={customer.name}
-                  onCreated={() => scrollToSection("vehicles")}
-                />
-              ) : null}
-            </div>
+            ) : undefined
           }
         >
           {vehicles.length === 0 ? (
@@ -460,6 +461,7 @@ function CustomerSectionsView({
             centered
           />
         </SectionBlock>
+        </div>
       </div>
     </div>
   );
@@ -558,33 +560,32 @@ function VehicleDetailView({
     </div>
   );
 
-  return (
-    <div className="grid items-start gap-4 lg:grid-cols-[minmax(220px,260px)_minmax(0,1fr)] lg:gap-6">
-      <SectionSideNav
-        title={tv("sectionsTitle")}
-        active={activeSection}
-        onChange={scrollToSection}
-        leading={
-          <button
-            type="button"
-            onClick={onBack}
-            className="inline-flex min-h-11 w-full items-center gap-2 rounded-lg px-3 text-left text-body font-medium text-slate-700 transition-colors hover:bg-muted"
-          >
-            <ChevronLeft className="size-4 shrink-0" aria-hidden />
-            <span className="truncate">{t("backToVehicles")}</span>
-          </button>
-        }
-        items={[
-          { id: "overview" as const, label: tv("overview"), icon: Car },
-          {
-            id: "service" as const,
-            label: tv("serviceHistory"),
-            icon: Wrench,
-          },
-        ]}
-      />
+  const vehicleNavItems = [
+    { id: "overview" as const, label: tv("overview"), icon: Car },
+    {
+      id: "service" as const,
+      label: tv("serviceHistory"),
+      icon: Wrench,
+    },
+  ];
 
-      <div className="flex min-w-0 flex-col gap-4">
+  const vehicleNavProps = {
+    title: tv("sectionsTitle"),
+    items: vehicleNavItems,
+    active: activeSection,
+    onChange: scrollToSection,
+    onBack,
+    backLabel: t("backToVehicles"),
+  } as const;
+
+  return (
+    <div className="space-y-4">
+      <SectionMobileNavBar {...vehicleNavProps} />
+
+      <div className="grid items-start gap-4 lg:grid-cols-[minmax(220px,260px)_minmax(0,1fr)] lg:gap-6">
+        <SectionDesktopNav {...vehicleNavProps} />
+
+        <div className="flex min-w-0 flex-col gap-4">
         <SectionBlock
           id={sectionDomId(VEHICLE_SECTION_ID_PREFIX, "overview")}
           title={t("customerVehicleTitle", {
@@ -665,6 +666,7 @@ function VehicleDetailView({
             emptyAction={createJobCard("sm")}
           />
         </SectionBlock>
+        </div>
       </div>
     </div>
   );
@@ -724,16 +726,23 @@ function ServiceHistoryList({
               href={`/orders/${order.id}`}
               className="min-w-0 flex-1 space-y-0.5 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-teal-600"
             >
-              <div className="flex items-baseline justify-between gap-2">
-                <p className="truncate text-body font-medium text-slate-900">
+              <div className="flex items-start justify-between gap-2">
+                <p
+                  className={cn(
+                    "min-w-0 text-body font-medium text-slate-900",
+                    showRegistration
+                      ? "truncate"
+                      : "whitespace-normal break-words",
+                  )}
+                >
                   {title}
                 </p>
-                <span className="shrink-0 text-caption text-slate-500">
+                <span className="shrink-0 pt-0.5 text-caption text-slate-500">
                   {statusLabel(order.status)}
                 </span>
               </div>
               {subtitle ? (
-                <p className="truncate text-caption text-slate-600">
+                <p className="whitespace-normal break-words text-caption text-slate-600">
                   {subtitle}
                 </p>
               ) : null}

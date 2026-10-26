@@ -17,14 +17,46 @@ export const CUSTOMER_IMPORT_FIELDS: readonly ImportFieldDef[] = [
 
 export const VEHICLE_IMPORT_FIELDS: readonly ImportFieldDef[] = [
   {
+    key: "customerName",
+    required: false,
+    aliases: [
+      "customername",
+      "customer",
+      "owner",
+      "ownername",
+      "name",
+      "fullname",
+    ],
+  },
+  {
     key: "customerPhone",
     required: true,
-    aliases: ["customerphone", "phone", "mobile", "ownerphone", "customer mobile"],
+    aliases: [
+      "customerphone",
+      "phone",
+      "mobile",
+      "phonenumber",
+      "ownerphone",
+      "customer mobile",
+      "contact",
+    ],
+  },
+  {
+    key: "customerAddress",
+    required: false,
+    aliases: ["customeraddress", "address", "addr", "owneraddress"],
   },
   {
     key: "registrationNumber",
     required: true,
-    aliases: ["registration", "registrationnumber", "reg", "regno", "vehiclenumber", "numberplate"],
+    aliases: [
+      "registration",
+      "registrationnumber",
+      "reg",
+      "regno",
+      "vehiclenumber",
+      "numberplate",
+    ],
   },
   { key: "make", required: true, aliases: ["make", "brand", "manufacturer"] },
   { key: "model", required: true, aliases: ["model"] },

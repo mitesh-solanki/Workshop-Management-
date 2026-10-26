@@ -15,12 +15,12 @@ Statuses: **Done** / **Partial** / **Missing**. If unsure, marked Partial.
 | 7 | 1.7 Inventory basics | `feat/inventory-management` | [feat-inventory-management.md](./feat-inventory-management.md) |
 | 8 | 1.8 GST billing and payments | `feat/gst-billing-payments` (mostly uncommitted) | [feat-gst-billing-payments.md](./feat-gst-billing-payments.md) |
 | 9 | 1.9 UPI link and Customer Live Link | `feat/upi-customer-live-link` (mostly uncommitted) | [feat-upi-customer-live-link.md](./feat-upi-customer-live-link.md) |
-| 10 | 1.10 CSV import | `feat/csv-export` | [feat-csv-export.md](./feat-csv-export.md) |
+| 10 | 1.10 CSV import | `feat/csv-export` (earlier) → **`feat/csv-import`** (current) | [feat-csv-import.md](./feat-csv-import.md) (supersedes [feat-csv-export.md](./feat-csv-export.md)) |
 
 Also present but not a product prompt: `feat/playwright-e2e-smoke-tests` (Playwright smoke coverage on top of merged service-orders work).
 
 **Note:** Prompts 3–6 were developed on one long-lived `feat/service-orders` branch (later merged to `main`). Prompt 0’s *named* branch never received the Next.js app; setup artifacts landed with later feature work.
 
-Date of this pass: 2026-10-22.
+Date of this pass: 2026-10-22 (Prompt 10 re-audited 2026-10-26 on `feat/csv-import`).
 
 Extra findings from follow-up branch audits ([customers-vehicles](ecc06e95-b578-4c3a-831b-e5fe8241a158), [service-orders prompts 3–6](f5d91330-71c3-4dc7-b5c6-c5e08059ddcb)) were merged into the per-prompt files above (empty-copy wording, vehicle detail gap, inspection notes UI, estimate revision history UX, mobile board drag quirks). No separate combined `prompts-3-6-*.md` was added — use the split files instead.

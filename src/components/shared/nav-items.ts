@@ -1,4 +1,5 @@
 import {
+  Car,
   ClipboardList,
   Contact,
   FileText,
@@ -16,6 +17,7 @@ export type NavKey =
   | "dashboard"
   | "workshop"
   | "customers"
+  | "vehicles"
   | "invoices"
   | "inventory"
   | "team"
@@ -60,6 +62,12 @@ export const APP_NAV_ITEMS: readonly NavItem[] = [
     href: "/customers",
     key: "customers",
     icon: Contact,
+    group: "business",
+  },
+  {
+    href: "/vehicles",
+    key: "vehicles",
+    icon: Car,
     group: "business",
   },
   {

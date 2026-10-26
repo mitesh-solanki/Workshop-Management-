@@ -34,17 +34,20 @@ export async function listRegistrationSet(
   return new Set(vehicles.map((v) => v.registrationNumber));
 }
 
-export async function listSkuSet(garageId: string): Promise<Set<string>> {
+/** Uppercase SKU → part id (SKU stored normalised on write). */
+export async function listSkuIndex(garageId: string) {
   const parts = await prisma.part.findMany({
     where: { garageId },
-    select: { sku: true },
+    select: { id: true, sku: true },
     take: 20_000,
   });
-  return new Set(
-    parts
-      .map((p) => p.sku)
-      .filter((sku): sku is string => sku != null && sku.length > 0),
-  );
+  const map = new Map<string, string>();
+  for (const part of parts) {
+    if (part.sku) {
+      map.set(part.sku, part.id);
+    }
+  }
+  return map;
 }
 
 export async function importCustomersBatch(
@@ -53,8 +56,43 @@ export async function importCustomersBatch(
   rows: ValidatedCustomerRow[],
 ) {
   return prisma.$transaction(async (tx) => {
-    const created: string[] = [];
+    const ids: string[] = [];
+    let createdCount = 0;
+    let updatedCount = 0;
+
     for (const row of rows) {
+      if (row.existingCustomerId) {
+        const updated = await tx.customer.updateMany({
+          where: { id: row.existingCustomerId, garageId },
+          data: {
+            name: row.name,
+            phone: row.phone,
+            address: row.address,
+            notes: row.notes,
+          },
+        });
+        if (updated.count === 0) {
+          throw new Error("import.customer_update_failed");
+        }
+        await tx.auditLog.create({
+          data: {
+            garageId,
+            actorId,
+            action: "customer.updated",
+            entity: "Customer",
+            entityId: row.existingCustomerId,
+            meta: {
+              name: row.name,
+              phone: row.phone,
+              source: "import",
+            } satisfies Prisma.InputJsonValue,
+          },
+        });
+        ids.push(row.existingCustomerId);
+        updatedCount += 1;
+        continue;
+      }
+
       const customer = await tx.customer.create({
         data: {
           garageId,
@@ -65,7 +103,8 @@ export async function importCustomersBatch(
         },
         select: { id: true },
       });
-      created.push(customer.id);
+      ids.push(customer.id);
+      createdCount += 1;
     }
 
     await tx.auditLog.create({
@@ -76,12 +115,19 @@ export async function importCustomersBatch(
         entity: "Import",
         meta: {
           entity: "customers",
-          importedCount: created.length,
+          importedCount: ids.length,
+          createdCount,
+          updatedCount,
         } satisfies Prisma.InputJsonValue,
       },
     });
 
-    return { importedCount: created.length, ids: created };
+    return {
+      importedCount: ids.length,
+      createdCount,
+      updatedCount,
+      ids,
+    };
   });
 }
 
@@ -92,11 +138,55 @@ export async function importVehiclesBatch(
 ) {
   return prisma.$transaction(async (tx) => {
     const created: string[] = [];
+    const customersCreatedByPhone = new Map<string, string>();
+    let customersCreated = 0;
+
     for (const row of rows) {
+      let customerId = row.customerId;
+      if (!customerId && row.customerCreate) {
+        const phoneKey = normalisePhoneKey(row.customerCreate.phone);
+        const already = customersCreatedByPhone.get(phoneKey);
+        if (already) {
+          customerId = already;
+        } else {
+          const customer = await tx.customer.create({
+            data: {
+              garageId,
+              name: row.customerCreate.name,
+              phone: row.customerCreate.phone,
+              address: row.customerCreate.address,
+              notes: row.customerCreate.notes,
+            },
+            select: { id: true },
+          });
+          customerId = customer.id;
+          customersCreatedByPhone.set(phoneKey, customer.id);
+          customersCreated += 1;
+          await tx.auditLog.create({
+            data: {
+              garageId,
+              actorId,
+              action: "customer.created",
+              entity: "Customer",
+              entityId: customer.id,
+              meta: {
+                name: row.customerCreate.name,
+                phone: row.customerCreate.phone,
+                source: "vehicle_import",
+              } satisfies Prisma.InputJsonValue,
+            },
+          });
+        }
+      }
+
+      if (!customerId) {
+        throw new Error("import.vehicle_missing_customer");
+      }
+
       const vehicle = await tx.vehicle.create({
         data: {
           garageId,
-          customerId: row.customerId,
+          customerId,
           registrationNumber: row.registrationNumber,
           make: row.make,
           model: row.model,
@@ -120,11 +210,12 @@ export async function importVehiclesBatch(
         meta: {
           entity: "vehicles",
           importedCount: created.length,
+          customersCreated,
         } satisfies Prisma.InputJsonValue,
       },
     });
 
-    return { importedCount: created.length, ids: created };
+    return { importedCount: created.length, ids: created, customersCreated };
   });
 }
 
@@ -134,8 +225,47 @@ export async function importPartsBatch(
   rows: ValidatedPartRow[],
 ) {
   return prisma.$transaction(async (tx) => {
-    const created: string[] = [];
+    const ids: string[] = [];
+    let createdCount = 0;
+    let updatedCount = 0;
+
     for (const row of rows) {
+      if (row.existingPartId) {
+        const updated = await tx.part.updateMany({
+          where: { id: row.existingPartId, garageId },
+          data: {
+            name: row.name,
+            sku: row.sku,
+            unit: row.unit,
+            purchasePricePaise: row.purchasePricePaise,
+            sellingPricePaise: row.sellingPricePaise,
+            gstRatePercent: row.gstRatePercent,
+            hsn: row.hsn,
+            lowStockLevel: row.lowStockLevel,
+          },
+        });
+        if (updated.count === 0) {
+          throw new Error("import.part_update_failed");
+        }
+        await tx.auditLog.create({
+          data: {
+            garageId,
+            actorId,
+            action: "inventory.part_updated",
+            entity: "Part",
+            entityId: row.existingPartId,
+            meta: {
+              name: row.name,
+              sku: row.sku,
+              source: "import",
+            } satisfies Prisma.InputJsonValue,
+          },
+        });
+        ids.push(row.existingPartId);
+        updatedCount += 1;
+        continue;
+      }
+
       const part = await tx.part.create({
         data: {
           garageId,
@@ -180,7 +310,8 @@ export async function importPartsBatch(
         },
       });
 
-      created.push(part.id);
+      ids.push(part.id);
+      createdCount += 1;
     }
 
     await tx.auditLog.create({
@@ -191,11 +322,18 @@ export async function importPartsBatch(
         entity: "Import",
         meta: {
           entity: "parts",
-          importedCount: created.length,
+          importedCount: ids.length,
+          createdCount,
+          updatedCount,
         } satisfies Prisma.InputJsonValue,
       },
     });
 
-    return { importedCount: created.length, ids: created };
+    return {
+      importedCount: ids.length,
+      createdCount,
+      updatedCount,
+      ids,
+    };
   });
 }

@@ -4,6 +4,7 @@ import { useActionState, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { FormField } from "@/components/ui/form-field";
+import { FormSelect } from "@/components/ui/form-select";
 import { formatRupees, paiseToRupeesInput } from "@/lib/money";
 import {
   recordRefundAction,
@@ -68,21 +69,18 @@ export function RecordRefundForm({
       <p className="text-caption text-slate-500">{t("refundHint")}</p>
       <div className="grid gap-3 sm:grid-cols-3">
         <FormField id="refund-method" label={t("paymentMethod")}>
-          <select
+          <FormSelect
             id="refund-method"
             name="method"
-            className="flex h-11 w-full rounded-md border border-input bg-background px-3 text-sm"
             value={method}
-            onChange={(event) =>
-              setMethod(event.target.value as PaymentMethodValue)
+            onValueChange={(value) =>
+              setMethod(value as PaymentMethodValue)
             }
-          >
-            {PAYMENT_METHODS.map((value) => (
-              <option key={value} value={value}>
-                {t(`methods.${value}`)}
-              </option>
-            ))}
-          </select>
+            options={PAYMENT_METHODS.map((value) => ({
+              value,
+              label: t(`methods.${value}`),
+            }))}
+          />
         </FormField>
         <FormField
           id="refund-amountRupees"

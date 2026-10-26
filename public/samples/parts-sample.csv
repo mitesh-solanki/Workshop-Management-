@@ -1,0 +1,4 @@
+name,sku,unit,purchasePrice,sellingPrice,gstRatePercent,hsn,lowStockLevel,openingStock
+Engine Oil 5W-30 (sample),SAMPLE-OIL-5W30,litre,320.00,450.00,18,271019,5,10
+Brake Pad Set Front (sample),SAMPLE-BP-FRONT,set,850.00,1200.00,28,870830,2,4
+Air Filter (sample),SAMPLE-AF-001,piece,180.00,280.00,18,842131,3,8

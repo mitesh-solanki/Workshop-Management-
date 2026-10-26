@@ -13,6 +13,7 @@ import {
   parseRupeesToPaise,
   sanitizeRupeesTyping,
 } from "@/lib/money";
+import { FormSelect } from "@/components/ui/form-select";
 
 const initial: InventoryActionState = { ok: false };
 
@@ -135,19 +136,18 @@ export function DirectSaleForm({ parts, customers }: Props) {
         <label htmlFor="customerId" className="text-sm font-medium">
           {t("customer")}
         </label>
-        <select
+        <FormSelect
           id="customerId"
           name="customerId"
-          className={inputClass}
           defaultValue=""
-        >
-          <option value="">{t("walkIn")}</option>
-          {customers.map((customer) => (
-            <option key={customer.id} value={customer.id}>
-              {customer.name} · {customer.phone}
-            </option>
-          ))}
-        </select>
+          options={[
+            { value: "", label: t("walkIn") },
+            ...customers.map((customer) => ({
+              value: customer.id,
+              label: `${customer.name} · ${customer.phone}`,
+            })),
+          ]}
+        />
       </div>
 
       <div className="space-y-3">
@@ -209,21 +209,19 @@ export function DirectSaleForm({ parts, customers }: Props) {
                     >
                       {t("part")}
                     </label>
-                    <select
+                    <FormSelect
                       id={`partId-${line.key}`}
                       name="partId"
                       required
                       value={line.partId}
-                      onChange={(e) => setPartOnLine(line.key, e.target.value)}
-                      className={inputClass}
-                    >
-                      {parts.map((part) => (
-                        <option key={part.id} value={part.id}>
-                          {part.name} ({part.sku}) · {part.quantityOnHand}{" "}
-                          {part.unit}
-                        </option>
-                      ))}
-                    </select>
+                      onValueChange={(partId) =>
+                        setPartOnLine(line.key, partId)
+                      }
+                      options={parts.map((part) => ({
+                        value: part.id,
+                        label: `${part.name} (${part.sku}) · ${part.quantityOnHand} ${part.unit}`,
+                      }))}
+                    />
                     {selected ? (
                       <p className="text-xs text-muted-foreground">
                         {t("onHand", { count: selected.quantityOnHand })} ·{" "}

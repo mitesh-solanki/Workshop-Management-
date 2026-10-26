@@ -1,6 +1,6 @@
 /**
- * Shared CSV export helpers. Use from any module to turn typed rows into a
- * downloadable CSV (Excel-friendly UTF-8 with BOM).
+ * Shared CSV helpers (import error reports and any CSV download).
+ * Excel-friendly UTF-8 with optional BOM.
  */
 
 /** UTF-8 BOM so Excel opens non-ASCII (Hindi/Gujarati) correctly. */

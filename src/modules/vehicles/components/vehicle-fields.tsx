@@ -2,6 +2,7 @@
 
 import { useTranslations } from "next-intl";
 import { FormField } from "@/components/ui/form-field";
+import { FormSelect } from "@/components/ui/form-select";
 import { Input } from "@/components/ui/input";
 import { GST_STATE_CODES } from "@/lib/gstin";
 import { DEFAULT_VEHICLE_STATE_CODE } from "@/modules/vehicles/schema";
@@ -64,18 +65,15 @@ export function VehicleFields({ idPrefix, defaults = {}, customerId }: Props) {
         label={t("state")}
         hint={t("stateHint")}
       >
-        <select
+        <FormSelect
           id={`${idPrefix}-state`}
           name="stateCode"
           defaultValue={stateDefault}
-          className="flex h-11 min-h-11 w-full rounded-md border border-input bg-background px-3 text-sm"
-        >
-          {GST_STATE_CODES.map((code) => (
-            <option key={code} value={code}>
-              {tGst(`states.${code}`)} ({code})
-            </option>
-          ))}
-        </select>
+          options={GST_STATE_CODES.map((code) => ({
+            value: code,
+            label: `${tGst(`states.${code}`)} (${code})`,
+          }))}
+        />
       </FormField>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">

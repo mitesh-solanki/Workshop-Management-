@@ -7,6 +7,7 @@ import {
   type EstimateActionState,
 } from "@/app/actions/estimates";
 import { Button } from "@/components/ui/button";
+import { FormSelect } from "@/components/ui/form-select";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/toast";
 import {
@@ -191,19 +192,16 @@ export function LineApprovalForm({
           <label htmlFor={`method-${lineId}`} className={labelClass}>
             {t("speakHowTitle")}
           </label>
-          <select
+          <FormSelect
             id={`method-${lineId}`}
             name="method"
             required
-            className={controlClass}
             defaultValue="MANUAL"
-          >
-            {ESTIMATE_APPROVAL_METHODS.map((method) => (
-              <option key={method} value={method}>
-                {t(`approvalMethods.${method}`)}
-              </option>
-            ))}
-          </select>
+            options={ESTIMATE_APPROVAL_METHODS.map((method) => ({
+              value: method,
+              label: t(`approvalMethods.${method}`),
+            }))}
+          />
         </div>
         <div className="min-w-0 sm:col-span-8">
           <label htmlFor={`note-${lineId}`} className={labelClass}>

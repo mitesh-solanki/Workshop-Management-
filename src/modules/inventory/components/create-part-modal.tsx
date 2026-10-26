@@ -21,6 +21,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { FormField } from "@/components/ui/form-field";
+import { FormSelect } from "@/components/ui/form-select";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/toast";
 import {
@@ -32,9 +33,6 @@ import {
 import { QuantityStepper } from "@/modules/inventory/components/quantity-stepper";
 
 const initial: InventoryActionState = { ok: false };
-
-const selectClass =
-  "h-11 min-h-11 w-full rounded-md border border-input bg-background px-3 text-base outline-none focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/30";
 
 type Props = {
   trigger?: React.ReactNode;
@@ -114,19 +112,16 @@ export function CreatePartModal({ trigger, size = "md" }: Props) {
               />
             </FormField>
             <FormField id="modal-part-unit" label={t("unit")}>
-              <select
+              <FormSelect
                 id="modal-part-unit"
                 name="unit"
                 required
                 defaultValue="pcs"
-                className={selectClass}
-              >
-                {PART_UNIT_OPTIONS.map((unit) => (
-                  <option key={unit} value={unit}>
-                    {t(`units.${unit}`)}
-                  </option>
-                ))}
-              </select>
+                options={PART_UNIT_OPTIONS.map((unit) => ({
+                  value: unit,
+                  label: t(`units.${unit}`),
+                }))}
+              />
             </FormField>
           </div>
 
@@ -151,18 +146,15 @@ export function CreatePartModal({ trigger, size = "md" }: Props) {
 
           <div className="grid gap-4 sm:grid-cols-2">
             <FormField id="modal-gstRatePercent" label={t("gstRate")}>
-              <select
+              <FormSelect
                 id="modal-gstRatePercent"
                 name="gstRatePercent"
                 defaultValue={String(DEFAULT_GST_RATE_PERCENT)}
-                className={selectClass}
-              >
-                {GST_RATE_OPTIONS.map((rate) => (
-                  <option key={rate} value={rate}>
-                    {rate}%
-                  </option>
-                ))}
-              </select>
+                options={GST_RATE_OPTIONS.map((rate) => ({
+                  value: String(rate),
+                  label: `${rate}%`,
+                }))}
+              />
             </FormField>
             <FormField id="modal-hsn" label={t("hsn")}>
               <Input

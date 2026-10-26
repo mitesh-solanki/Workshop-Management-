@@ -4,6 +4,7 @@ import { useMemo, useState, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FormField } from "@/components/ui/form-field";
+import { FormSelect } from "@/components/ui/form-select";
 import { Input } from "@/components/ui/input";
 import { JobCardSectionNav } from "@/modules/service-orders/components/job-card-section-nav";
 import { ServiceOrderForm } from "@/modules/service-orders/components/service-order-form";
@@ -33,9 +34,6 @@ type Props = {
   technicians: TechnicianOption[];
   initialVehicleId?: string;
 };
-
-const selectClass =
-  "h-11 min-h-11 w-full rounded-md border border-input bg-transparent px-3 text-base shadow-xs outline-none focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/40 md:text-sm";
 
 const SECTION_NUMBERS: Record<JobCardSection, string> = {
   details: "01",
@@ -151,19 +149,16 @@ export function NewJobCardForm({
                 label={t("selectVehicle")}
                 hint={t("selectVehicleHint")}
               >
-                <select
+                <FormSelect
                   id="vehicleId-picker"
-                  className={selectClass}
                   value={vehicleId}
-                  onChange={(event) => setVehicleId(event.target.value)}
-                >
-                  <option value="">{t("selectVehiclePlaceholder")}</option>
-                  {vehicles.map((vehicle) => (
-                    <option key={vehicle.id} value={vehicle.id}>
-                      {`${vehicle.registrationNumber} — ${vehicle.make} ${vehicle.model}`}
-                    </option>
-                  ))}
-                </select>
+                  onValueChange={setVehicleId}
+                  placeholder={t("selectVehiclePlaceholder")}
+                  options={vehicles.map((vehicle) => ({
+                    value: vehicle.id,
+                    label: `${vehicle.registrationNumber} — ${vehicle.make} ${vehicle.model}`,
+                  }))}
+                />
               </FormField>
               <FormField id="locked-customer" label={t("customer")}>
                 <Input

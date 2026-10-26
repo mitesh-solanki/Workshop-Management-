@@ -58,6 +58,167 @@ export async function listVehiclesByCustomerId(
   });
 }
 
+function vehicleSearchWhere(garageId: string, q: string | undefined) {
+  const query = q?.trim();
+  const regQuery = query ? query.replace(/\s+/g, "").toUpperCase() : undefined;
+  return {
+    garageId,
+    ...(query
+      ? {
+          OR: [
+            {
+              registrationNumber: {
+                contains: regQuery,
+                mode: "insensitive" as const,
+              },
+            },
+            { make: { contains: query, mode: "insensitive" as const } },
+            { model: { contains: query, mode: "insensitive" as const } },
+            {
+              customer: {
+                OR: [
+                  { name: { contains: query, mode: "insensitive" as const } },
+                  { phone: { contains: query } },
+                ],
+              },
+            },
+          ],
+        }
+      : {}),
+  };
+}
+
+function vehicleOrderBy(sort: "newest" | "updated") {
+  if (sort === "updated") {
+    return [
+      { updatedAt: "desc" as const },
+      { registrationNumber: "asc" as const },
+    ];
+  }
+  return [
+    { createdAt: "desc" as const },
+    { registrationNumber: "asc" as const },
+  ];
+}
+
+function vehicleSearchSql(garageId: string, q: string | undefined) {
+  const query = q?.trim();
+  if (!query) {
+    return Prisma.sql`v."garageId" = ${garageId}`;
+  }
+  const regQuery = `%${query.replace(/\s+/g, "").toUpperCase()}%`;
+  const textNeedle = `%${query}%`;
+  return Prisma.sql`
+    v."garageId" = ${garageId}
+    AND (
+      UPPER(REPLACE(v."registrationNumber", ' ', '')) LIKE ${regQuery}
+      OR v.make ILIKE ${textNeedle}
+      OR v.model ILIKE ${textNeedle}
+      OR EXISTS (
+        SELECT 1 FROM "Customer" c
+        WHERE c.id = v."customerId"
+          AND c."garageId" = ${garageId}
+          AND (
+            c.name ILIKE ${textNeedle}
+            OR c.phone LIKE ${textNeedle}
+          )
+      )
+    )
+  `;
+}
+
+async function listVehicleIdsByRegistration(
+  garageId: string,
+  q: string | undefined,
+  direction: "asc" | "desc",
+  skip: number,
+  take: number,
+) {
+  const whereSql = vehicleSearchSql(garageId, q);
+  const orderSql =
+    direction === "desc"
+      ? Prisma.sql`LOWER(v."registrationNumber") DESC, v."createdAt" DESC`
+      : Prisma.sql`LOWER(v."registrationNumber") ASC, v."createdAt" DESC`;
+
+  return prisma.$queryRaw<{ id: string }[]>`
+    SELECT v.id
+    FROM "Vehicle" v
+    WHERE ${whereSql}
+    ORDER BY ${orderSql}
+    LIMIT ${take} OFFSET ${skip}
+  `;
+}
+
+export async function searchVehicles(
+  garageId: string,
+  q: string | undefined,
+  page: number,
+  pageSize: number,
+  sort: "newest" | "updated" | "name_asc" | "name_desc" = "name_asc",
+) {
+  const where = vehicleSearchWhere(garageId, q);
+  const skip = (page - 1) * pageSize;
+
+  if (sort === "name_asc" || sort === "name_desc") {
+    const [idRows, total] = await Promise.all([
+      listVehicleIdsByRegistration(
+        garageId,
+        q,
+        sort === "name_desc" ? "desc" : "asc",
+        skip,
+        pageSize,
+      ),
+      prisma.vehicle.count({ where }),
+    ]);
+    const ids = idRows.map((row) => row.id);
+    if (ids.length === 0) {
+      return { items: [], total, page, pageSize };
+    }
+
+    const unordered = await prisma.vehicle.findMany({
+      where: { garageId, id: { in: ids } },
+      select: {
+        ...vehicleSelect,
+        customer: {
+          select: {
+            id: true,
+            name: true,
+            phone: true,
+          },
+        },
+      },
+    });
+    const byId = new Map(unordered.map((item) => [item.id, item]));
+    const items = ids
+      .map((id) => byId.get(id))
+      .filter((item): item is NonNullable<typeof item> => item != null);
+
+    return { items, total, page, pageSize };
+  }
+
+  const [items, total] = await Promise.all([
+    prisma.vehicle.findMany({
+      where,
+      select: {
+        ...vehicleSelect,
+        customer: {
+          select: {
+            id: true,
+            name: true,
+            phone: true,
+          },
+        },
+      },
+      orderBy: vehicleOrderBy(sort),
+      skip,
+      take: pageSize,
+    }),
+    prisma.vehicle.count({ where }),
+  ]);
+
+  return { items, total, page, pageSize };
+}
+
 export async function createVehicle(
   garageId: string,
   data: {

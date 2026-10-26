@@ -15,6 +15,13 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 
+/** Short codes for the header trigger (full names stay in the menu). */
+const LOCALE_SHORT: Record<Locale, string> = {
+  en: "EN",
+  hi: "HI",
+  gu: "GU",
+};
+
 type LanguageSwitcherProps = {
   className?: string;
   compact?: boolean;
@@ -42,7 +49,14 @@ export function LanguageSwitcher({
         >
           <Languages className="size-4 shrink-0" aria-hidden />
           {!compact ? (
-            <span className="max-w-[7rem] truncate">{t(locale)}</span>
+            <>
+              <span className="font-medium tracking-wide md:hidden">
+                {LOCALE_SHORT[locale]}
+              </span>
+              <span className="hidden max-w-[7rem] truncate md:inline">
+                {t(locale)}
+              </span>
+            </>
           ) : null}
         </Button>
       </DropdownMenuTrigger>
@@ -53,7 +67,7 @@ export function LanguageSwitcher({
             <DropdownMenuItem
               key={code}
               disabled={pending || selected}
-              className="min-h-10 justify-between"
+              className="min-h-10 justify-between gap-3"
               onSelect={() => {
                 startTransition(async () => {
                   await setLocale(code);
@@ -61,7 +75,12 @@ export function LanguageSwitcher({
                 });
               }}
             >
-              <span>{t(code)}</span>
+              <span className="flex min-w-0 items-center gap-2">
+                <span className="w-7 shrink-0 text-xs font-medium tracking-wide text-muted-foreground">
+                  {LOCALE_SHORT[code]}
+                </span>
+                <span className="truncate">{t(code)}</span>
+              </span>
               {selected ? (
                 <Check className="size-4 shrink-0" aria-hidden />
               ) : null}

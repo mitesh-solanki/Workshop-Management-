@@ -62,6 +62,7 @@
     },
     "workshop": "Board",
     "customers": "Customers",
+    "vehicles": "Vehicles",
     "invoices": "Invoices",
     "inventory": "Inventory"
   },
@@ -518,6 +519,13 @@
     "searching": "Searching…",
     "searchLabel": "Search customers",
     "searchPlaceholder": "Name, phone or registration",
+    "sortLabel": "Sort",
+    "sort": {
+      "newest": "Last added",
+      "updated": "Last modified",
+      "nameAsc": "A to Z",
+      "nameDesc": "Z to A"
+    },
     "serviceHistory": "Service history",
     "serviceHistoryEmpty": "No job cards yet.",
     "communicationHistory": "Communication history",
@@ -555,10 +563,37 @@
     "serviceHistoryPlaceholder": "Jobs for this customer will show up here.",
     "communicationHistoryEmpty": "No messages yet",
     "communicationHistoryDescription": "Messages and calls will appear here later.",
-    "export": "Export CSV"
+    "import": "Import CSV"
   },
   "vehicles": {
+    "title": "Vehicles",
+    "subtitle": "All vehicles in this garage. Search by registration, make or customer.",
     "add": "Add vehicle",
+    "import": "Import CSV",
+    "view": "View",
+    "actions": "Actions",
+    "searchLabel": "Search vehicles",
+    "searchPlaceholder": "Registration, make, model, name or phone",
+    "sortLabel": "Sort",
+    "sort": {
+      "newest": "Last added",
+      "updated": "Last modified",
+      "nameAsc": "A to Z",
+      "nameDesc": "Z to A"
+    },
+    "emptyTitle": "No vehicles yet",
+    "emptyDescription": "Add a vehicle for a customer, or import a CSV.",
+    "emptySearchTitle": "No matches",
+    "emptySearchDescription": "Try a different registration, make or customer.",
+    "listNewSubtitle": "Pick the customer, then enter the vehicle details.",
+    "needCustomerFirst": "Add a customer first, then come back to add a vehicle.",
+    "goToCustomers": "Go to customers",
+    "columns": {
+      "registration": "Registration",
+      "makeModel": "Make / model",
+      "customer": "Customer",
+      "odometer": "Odometer"
+    },
     "newTitle": "New vehicle",
     "newSubtitle": "Add a vehicle for {customer}.",
     "edit": "Edit",
@@ -612,8 +647,7 @@
     "errors": {
       "duplicateRegistration": "A vehicle with this registration already exists in this garage."
     },
-    "deleted": "Vehicle deleted",
-    "export": "Export CSV"
+    "deleted": "Vehicle deleted"
   },
   "inspections": {
     "title": "Digital inspection",
@@ -839,7 +873,7 @@
     "title": "Inventory",
     "subtitle": "Stock catalogue, levels and direct sales.",
     "add": "Add item",
-    "export": "Export CSV",
+    "import": "Import CSV",
     "back": "Back to inventory",
     "backToSales": "Back to sales",
     "newTitle": "New inventory item",
@@ -870,6 +904,13 @@
     "search": "Search",
     "searchLabel": "Search inventory",
     "searchPlaceholder": "Name, SKU or HSN",
+    "sortLabel": "Sort",
+    "sort": {
+      "newest": "Last added",
+      "updated": "Last modified",
+      "nameAsc": "A to Z",
+      "nameDesc": "Z to A"
+    },
     "emptyTitle": "No inventory items yet",
     "emptyDescription": "Add items to track stock and use them on service orders.",
     "emptySearchTitle": "No matching items",
@@ -889,6 +930,7 @@
     "part": "Item",
     "directSale": "Direct sale",
     "viewSales": "Sales",
+    "salesActionsLabel": "Sales",
     "stockActions": "Stock movements",
     "stockIn": "Stock in",
     "stockOut": "Stock out",
@@ -961,7 +1003,19 @@
   "dataImport": {
     "title": "Import data",
     "subtitle": "Bring customers, vehicles or parts from a CSV file.",
+    "subtitleModule": "Upload a CSV or Excel file, map columns, validate rows, then confirm.",
+    "titles": {
+      "customers": "Import customers",
+      "vehicles": "Import vehicles",
+      "parts": "Import parts"
+    },
     "backToSettings": "Back to settings",
+    "backToCustomers": "Back to customers",
+    "backToVehicles": "Back to vehicles",
+    "backToInventory": "Back to inventory",
+    "backToList": "Back to list",
+    "doneClose": "Done",
+    "importButton": "Import CSV",
     "settingsCardTitle": "CSV import",
     "settingsCardDescription": "Upload a CSV to add many customers, vehicles or parts at once. From Excel: File → Save As → CSV.",
     "openImport": "Open import",
@@ -971,6 +1025,10 @@
       "preview": "Preview",
       "done": "Done"
     },
+    "stepProgress": "Step {current} of {total}",
+    "stepNeedsFile": "Upload a CSV file first.",
+    "stepNeedsValidate": "Map columns and validate rows first.",
+    "stepNeedsImport": "Finish an import to see results here.",
     "entityLabel": "What are you importing?",
     "entities": {
       "customers": "Customers",
@@ -979,13 +1037,16 @@
     },
     "entityHelp": {
       "customers": "Name and phone are required. Address and notes are optional.",
-      "vehicles": "Customer phone must already exist. Registration, make and model are required.",
+      "vehicles": "Each row needs a customer phone. If that phone already exists in this garage, the vehicle is linked to that customer. If the phone is new, also include a customer name — we create the customer, then add the vehicle. Registration, make and model are required.",
       "parts": "Prices are in rupees. Opening stock creates a stock-in movement."
     },
-    "downloadSample": "Download sample",
-    "chooseFile": "Choose CSV file",
+    "downloadSample": "Download sample ({filename})",
+    "chooseFile": "Choose CSV or Excel",
     "parsing": "Reading file…",
-    "fileHint": "CSV only (UTF-8). From Excel use Save As → CSV. Up to 1,000 data rows and 2 MB.",
+    "fileHint": "CSV or Excel (.xlsx / .xls). If Excel has several tabs, only the first tab is imported. Up to 1,000 data rows and 2 MB.",
+    "skipConfirmTitle": "Skip bad rows?",
+    "skipConfirmDescription": "Import {valid} valid row(s) and skip {invalid} with errors. This cannot be undone.",
+    "cancelSkip": "Cancel",
     "fileLoaded": "{filename} · {count} rows",
     "field": "Field",
     "column": "File column",
@@ -999,6 +1060,14 @@
       "invalid": "With errors"
     },
     "errorsFound": "Some rows have errors. Download the report, fix the file, or skip bad rows.",
+    "existingCustomersFound": "{count, plural, one {# customer already exists (same phone). Choose skip bad rows to import only new phones.} other {# customers already exist (same phone). Choose skip bad rows to import only new phones.}}",
+    "existingPartsFound": "{count, plural, one {# part already exists (same SKU). Choose skip bad rows to import only new SKUs.} other {# parts already exist (same SKU). Choose skip bad rows to import only new SKUs.}}",
+    "existingVehiclesFound": "{count, plural, one {# vehicle already exists (same registration). Choose skip bad rows to import only new vehicles.} other {# vehicles already exist (same registration). Choose skip bad rows to import only new vehicles.}}",
+    "nothingNewCustomers": "{count, plural, one {This customer is already in your garage (same phone). Nothing new to import.} other {These # customers are already in your garage (same phone). Nothing new to import.}}",
+    "nothingNewParts": "{count, plural, one {This part is already in your garage (same SKU). Nothing new to import.} other {These # parts are already in your garage (same SKU). Nothing new to import.}}",
+    "nothingNewVehicles": "{count, plural, one {This vehicle is already in your garage (same registration). Nothing new to import.} other {These # vehicles are already in your garage (same registration). Nothing new to import.}}",
+    "discardImport": "Close",
+    "updateExistingOptional": "Optional — only if you mean to overwrite what’s already saved.",
     "allValid": "All rows look valid.",
     "downloadErrors": "Download error report",
     "row": "Row",
@@ -1008,12 +1077,29 @@
       "valid": "Valid",
       "invalid": "Error"
     },
+    "rowErrors": {
+      "customer_exists": "A customer with this phone already exists in this garage",
+      "duplicate_phone_in_file": "Duplicate phone in this file",
+      "duplicate_registration_in_file": "Duplicate registration in this file",
+      "duplicate_sku_in_file": "Duplicate SKU in this file",
+      "registration_exists": "This registration is already in this garage",
+      "sku_exists": "This SKU is already in this garage",
+      "customer_name_required": "Customer name is required for a new phone",
+      "customer_phone_required": "Customer phone is required",
+      "row_invalid": "This value is invalid"
+    },
     "modeLabel": "How should we import?",
     "modes": {
       "all_or_nothing": "All or nothing",
       "all_or_nothingHelp": "Import only if every row is valid. Nothing is saved if any row fails.",
       "skip_invalid": "Skip bad rows",
-      "skip_invalidHelp": "Import valid rows only. Invalid rows are skipped after you confirm."
+      "skip_invalidHelp": "Import valid rows only. Invalid rows are skipped after you confirm.",
+      "skip_invalidHelpCustomers": "Import new customers only. Rows with a phone already in this garage are skipped.",
+      "skip_invalidHelpParts": "Import new SKUs only. Rows with a SKU already in this garage are skipped.",
+      "update_existing": "Update existing customers",
+      "update_existingHelp": "Create new phones. For phones already in this garage, update name, address and notes.",
+      "update_existingParts": "Update existing parts",
+      "update_existingPartsHelp": "Create new SKUs. For SKUs already in this garage, update name, prices, GST, HSN and low-stock (opening stock is not changed)."
     },
     "backToMap": "Back to mapping",
     "confirmImport": "Confirm import",
@@ -1031,7 +1117,9 @@
         "notes": "Notes"
       },
       "vehicles": {
+        "customerName": "Customer name",
         "customerPhone": "Customer phone",
+        "customerAddress": "Customer address",
         "registrationNumber": "Registration",
         "make": "Make",
         "model": "Model",
@@ -1057,11 +1145,12 @@
       "emptyFile": "The file is empty or has no data rows.",
       "tooManyRows": "Too many rows. Split the file to 1,000 data rows or fewer.",
       "fileTooLarge": "That file is too large (max 2 MB).",
-      "unsupportedType": "Use a .csv file. In Excel: File → Save As → CSV.",
+      "unsupportedType": "Use a .csv or Excel (.xlsx / .xls) file.",
       "mappingIncomplete": "Map every required field: {fields}",
       "hasInvalidRows": "Fix {errorCount} invalid row(s), or choose skip bad rows.",
       "noValidRows": "No valid rows to import.",
-      "invalidEntity": "Choose customers, vehicles or parts."
+      "invalidEntity": "Choose customers, vehicles or parts.",
+      "invalidMode": "That import option is not available for this list."
     }
   },
   "invoices": {

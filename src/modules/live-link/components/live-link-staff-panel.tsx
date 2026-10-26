@@ -4,6 +4,7 @@ import { useActionState, useEffect, useRef } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { FormSelect } from "@/components/ui/form-select";
 import {
   createLiveLinkAction,
   revokeLiveLinkAction,
@@ -132,18 +133,16 @@ export function LiveLinkStaffPanel({ orderId, active, canEdit }: Props) {
               >
                 {t("expiryLabel")}
               </label>
-              <select
+              <FormSelect
                 id="expiresInHours"
                 name="expiresInHours"
                 defaultValue="168"
-                className="flex h-11 w-full max-w-xs rounded-md border border-input bg-background px-3 text-sm"
-              >
-                {EXPIRY_OPTIONS.map((opt) => (
-                  <option key={opt.hours} value={opt.hours}>
-                    {t(opt.labelKey)}
-                  </option>
-                ))}
-              </select>
+                className="max-w-xs"
+                options={EXPIRY_OPTIONS.map((opt) => ({
+                  value: String(opt.hours),
+                  label: t(opt.labelKey),
+                }))}
+              />
             </div>
             <Button type="submit" disabled={createPending} className="min-h-11">
               {createPending

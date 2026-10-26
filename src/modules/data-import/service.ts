@@ -23,7 +23,7 @@ import {
   importVehiclesBatch,
   listCustomerPhoneIndex,
   listRegistrationSet,
-  listSkuSet,
+  listSkuIndex,
 } from "@/modules/data-import/repo";
 import {
   buildErrorReportRows,
@@ -78,7 +78,17 @@ export async function parseImportFile(
 async function loadValidationContext(
   garageId: string,
   entity: ImportEntity,
+  options?: {
+    existingCustomerPolicy?: "error" | "update";
+    existingPartPolicy?: "error" | "update";
+  },
 ) {
+  if (entity === "customers") {
+    return {
+      customerIdByPhone: await listCustomerPhoneIndex(garageId),
+      existingCustomerPolicy: options?.existingCustomerPolicy ?? "error",
+    };
+  }
   if (entity === "vehicles") {
     const [customerIdByPhone, existingRegistrations] = await Promise.all([
       listCustomerPhoneIndex(garageId),
@@ -87,7 +97,10 @@ async function loadValidationContext(
     return { customerIdByPhone, existingRegistrations };
   }
   if (entity === "parts") {
-    return { existingSkus: await listSkuSet(garageId) };
+    return {
+      partIdBySku: await listSkuIndex(garageId),
+      existingPartPolicy: options?.existingPartPolicy ?? "error",
+    };
   }
   return {};
 }
@@ -122,6 +135,17 @@ function toValidationView(
     }
   }
 
+  const existingRowNumbers = new Set(
+    result.errors
+      .filter(
+        (e) =>
+          e.code === "import.customer_exists" ||
+          e.code === "import.sku_exists" ||
+          e.code === "import.registration_exists",
+      )
+      .map((e) => e.rowNumber),
+  );
+
   return {
     entity: input.entity,
     headers: input.headers,
@@ -129,6 +153,7 @@ function toValidationView(
     mapping: input.mapping,
     validCount: result.valid.length,
     errorCount: errorByRow.size,
+    existingCount: existingRowNumbers.size,
     totalCount: input.rows.length,
     errors: result.errors,
     preview,
@@ -181,10 +206,24 @@ export async function commitImport(
     });
   }
 
-  const context = await loadValidationContext(
-    session.garageId,
-    input.entity,
-  );
+  if (
+    input.mode === "update_existing" &&
+    input.entity !== "customers" &&
+    input.entity !== "parts"
+  ) {
+    throw new AppError("import.invalid_mode", 400);
+  }
+
+  const context = await loadValidationContext(session.garageId, input.entity, {
+    existingCustomerPolicy:
+      input.mode === "update_existing" && input.entity === "customers"
+        ? "update"
+        : "error",
+    existingPartPolicy:
+      input.mode === "update_existing" && input.entity === "parts"
+        ? "update"
+        : "error",
+  });
   const result = validateImportRows(
     input.entity,
     input.rows,
@@ -212,6 +251,8 @@ export async function commitImport(
     return {
       entity: "customers" as const,
       importedCount: batch.importedCount,
+      createdCount: batch.createdCount,
+      updatedCount: batch.updatedCount,
       skippedCount: input.rows.length - batch.importedCount,
       mode: input.mode,
     };
@@ -239,6 +280,8 @@ export async function commitImport(
   return {
     entity: "parts" as const,
     importedCount: batch.importedCount,
+    createdCount: batch.createdCount,
+    updatedCount: batch.updatedCount,
     skippedCount: input.rows.length - batch.importedCount,
     mode: input.mode,
   };

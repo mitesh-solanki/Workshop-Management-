@@ -114,8 +114,19 @@ const searchQuery = z
   .optional()
   .transform((value) => (value ?? "").trim().slice(0, 100));
 
+export const PART_SORTS = [
+  "newest",
+  "updated",
+  "name_asc",
+  "name_desc",
+] as const;
+export type PartSort = (typeof PART_SORTS)[number];
+
+export const partSortSchema = z.enum(PART_SORTS).default("name_asc");
+
 export const partSearchSchema = z.object({
   q: searchQuery,
+  sort: partSortSchema,
 });
 
 export const createPartSchema = z.object({

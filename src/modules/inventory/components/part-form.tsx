@@ -8,6 +8,7 @@ import {
   type InventoryActionState,
 } from "@/app/actions/inventory";
 import { RupeePriceInput } from "@/components/rupee-price-input";
+import { FormSelect } from "@/components/ui/form-select";
 import {
   DEFAULT_GST_RATE_PERCENT,
   DEFAULT_PART_HSN,
@@ -96,19 +97,16 @@ export function PartForm(props: Props) {
           <label htmlFor="unit" className="text-sm font-medium">
             {t("unit")}
           </label>
-          <select
+          <FormSelect
             id="unit"
             name="unit"
             defaultValue={defaults.unit}
             required
-            className={inputClass}
-          >
-            {PART_UNIT_OPTIONS.map((unit) => (
-              <option key={unit} value={unit}>
-                {t(`units.${unit}`)}
-              </option>
-            ))}
-          </select>
+            options={PART_UNIT_OPTIONS.map((unit) => ({
+              value: unit,
+              label: t(`units.${unit}`),
+            }))}
+          />
         </div>
       </div>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -132,18 +130,15 @@ export function PartForm(props: Props) {
           <label htmlFor="gstRatePercent" className="text-sm font-medium">
             {t("gstRate")}
           </label>
-          <select
+          <FormSelect
             id="gstRatePercent"
             name="gstRatePercent"
             defaultValue={String(defaults.gstRatePercent)}
-            className={inputClass}
-          >
-            {GST_RATE_OPTIONS.map((rate) => (
-              <option key={rate} value={rate}>
-                {rate}%
-              </option>
-            ))}
-          </select>
+            options={GST_RATE_OPTIONS.map((rate) => ({
+              value: String(rate),
+              label: `${rate}%`,
+            }))}
+          />
         </div>
         <div className="flex flex-col gap-1.5">
           <label htmlFor="hsn" className="text-sm font-medium">

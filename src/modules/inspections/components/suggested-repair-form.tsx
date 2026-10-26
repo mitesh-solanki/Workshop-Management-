@@ -10,13 +10,11 @@ import {
 } from "@/app/actions/inspections";
 import { Button } from "@/components/ui/button";
 import { FormField } from "@/components/ui/form-field";
+import { FormSelect } from "@/components/ui/form-select";
 import { Input } from "@/components/ui/input";
 import { RupeePriceInput } from "@/components/rupee-price-input";
 
 const initial: InspectionActionState = { ok: false };
-
-const selectClass =
-  "h-8 min-h-8 w-full rounded-md border border-input bg-white px-2 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/40";
 
 type Repair = {
   id: string;
@@ -104,16 +102,17 @@ export function SuggestedRepairSection({ orderId, repairs, canEdit }: Props) {
           </p>
           <div className="grid gap-2 sm:grid-cols-3">
             <FormField id="repair-type" label={t("repairType")}>
-              <select
+              <FormSelect
                 id="repair-type"
                 name="type"
                 required
                 defaultValue="LABOUR"
-                className={selectClass}
-              >
-                <option value="LABOUR">{t("repairTypes.LABOUR")}</option>
-                <option value="PART">{t("repairTypes.PART")}</option>
-              </select>
+                triggerClassName="h-8 min-h-8"
+                options={[
+                  { value: "LABOUR", label: t("repairTypes.LABOUR") },
+                  { value: "PART", label: t("repairTypes.PART") },
+                ]}
+              />
             </FormField>
             <FormField id="repair-qty" label={t("quantity")}>
               <Input

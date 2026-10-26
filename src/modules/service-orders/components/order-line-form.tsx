@@ -10,6 +10,7 @@ import {
 import { RupeePriceInput } from "@/components/rupee-price-input";
 import { Button } from "@/components/ui/button";
 import { FormField } from "@/components/ui/form-field";
+import { FormSelect } from "@/components/ui/form-select";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/toast";
 import { QuantityStepper } from "@/modules/inventory/components/quantity-stepper";
@@ -63,19 +64,20 @@ export function OrderLineForm({ orderId, parts }: Props) {
     <form action={formAction}>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-12 sm:items-end sm:gap-3">
         <FormField id="type" label={t("lineType")} className="sm:col-span-2">
-          <select
+          <FormSelect
             id="type"
             name="type"
             required
-            className={fieldControlClass}
             value={lineType}
-            onChange={(e) =>
-              setLineType(e.target.value === "PART" ? "PART" : "LABOUR")
+            onValueChange={(value) =>
+              setLineType(value === "PART" ? "PART" : "LABOUR")
             }
-          >
-            <option value="LABOUR">{t("lineTypes.LABOUR")}</option>
-            <option value="PART">{t("lineTypes.PART")}</option>
-          </select>
+            options={[
+              { value: "LABOUR", label: t("lineTypes.LABOUR") },
+              { value: "PART", label: t("lineTypes.PART") },
+            ]}
+            triggerClassName={fieldControlClass}
+          />
         </FormField>
 
         {lineType === "PART" ? (
@@ -86,21 +88,18 @@ export function OrderLineForm({ orderId, parts }: Props) {
               </p>
             ) : (
               <>
-                <select
+                <FormSelect
                   id="partId"
                   name="partId"
                   required
                   value={partId}
-                  onChange={(e) => setPartId(e.target.value)}
-                  className={fieldControlClass}
-                >
-                  {parts.map((part) => (
-                    <option key={part.id} value={part.id}>
-                      {part.name} ({part.sku}) · {part.quantityOnHand}{" "}
-                      {part.unit}
-                    </option>
-                  ))}
-                </select>
+                  onValueChange={setPartId}
+                  options={parts.map((part) => ({
+                    value: part.id,
+                    label: `${part.name} (${part.sku}) · ${part.quantityOnHand} ${part.unit}`,
+                  }))}
+                  triggerClassName={fieldControlClass}
+                />
                 <input
                   type="hidden"
                   name="description"

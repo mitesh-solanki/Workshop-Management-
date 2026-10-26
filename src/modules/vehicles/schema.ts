@@ -104,6 +104,36 @@ export const createVehicleSchema = z.object({
 
 export const updateVehicleSchema = createVehicleSchema.omit({ customerId: true });
 
+export const VEHICLE_SORTS = [
+  "newest",
+  "updated",
+  "name_asc",
+  "name_desc",
+] as const;
+export type VehicleSort = (typeof VEHICLE_SORTS)[number];
+
+export const vehicleSortSchema = z.enum(VEHICLE_SORTS).default("name_asc");
+
+export const vehicleSearchSchema = z.object({
+  q: z
+    .string()
+    .trim()
+    .max(120, { error: "validation.tooLong" })
+    .optional()
+    .transform((value) => (value && value.length > 0 ? value : undefined)),
+  sort: vehicleSortSchema,
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce
+    .number()
+    .int()
+    .refine((n) => [10, 20, 30, 40, 50].includes(n), {
+      error: "validation.invalidInput",
+    })
+    .default(10),
+});
+
 /** Raw form/API values before transforms (strings allowed for numbers and dates). */
 export type CreateVehicleInput = z.input<typeof createVehicleSchema>;
 export type UpdateVehicleInput = z.input<typeof updateVehicleSchema>;
+export type VehicleSearchInput = z.input<typeof vehicleSearchSchema>;
+export type VehicleSearchParsed = z.output<typeof vehicleSearchSchema>;

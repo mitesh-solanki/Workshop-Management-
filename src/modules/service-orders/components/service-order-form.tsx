@@ -9,6 +9,7 @@ import {
 } from "@/app/actions/service-orders";
 import { Button } from "@/components/ui/button";
 import { FormField } from "@/components/ui/form-field";
+import { FormSelect } from "@/components/ui/form-select";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/toast";
@@ -20,9 +21,6 @@ import {
 } from "@/modules/service-orders/schema";
 
 const initial: ServiceOrderActionState = { ok: false };
-
-const selectClass =
-  "h-11 min-h-11 w-full rounded-md border border-input bg-transparent px-3 text-base shadow-xs outline-none focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/40 md:text-sm";
 
 type TechnicianOption = {
   id: string;
@@ -169,21 +167,19 @@ export function ServiceOrderForm(props: Props) {
                 />
               </FormField>
               <FormField id="status" label={t("statusField")}>
-                <select
+                <FormSelect
                   id="status"
                   name="status"
-                  className={selectClass}
                   defaultValue={currentStatus}
                   disabled={readOnly || nextStatuses.length === 0}
-                >
-                  {statusOptions.map((status) => (
-                    <option key={status} value={status}>
-                      {status === currentStatus
+                  options={statusOptions.map((status) => ({
+                    value: status,
+                    label:
+                      status === currentStatus
                         ? t(`statuses.${status}`)
-                        : `${t(`statuses.${currentStatus}`)} → ${t(`statuses.${status}`)}`}
-                    </option>
-                  ))}
-                </select>
+                        : `${t(`statuses.${currentStatus}`)} → ${t(`statuses.${status}`)}`,
+                  }))}
+                />
               </FormField>
             </div>
             <p className="text-caption text-slate-500">
@@ -260,35 +256,31 @@ export function ServiceOrderForm(props: Props) {
       </div>
       <div className="grid gap-4 sm:grid-cols-2">
         <FormField id="technicianId" label={t("technician")}>
-          <select
+          <FormSelect
             id="technicianId"
             name="technicianId"
-            className={selectClass}
             defaultValue={defaults.technicianId}
             disabled={readOnly}
-          >
-            <option value="">{t("technicianUnassigned")}</option>
-            {props.technicians.map((tech) => (
-              <option key={tech.id} value={tech.id}>
-                {tech.name?.trim() || tech.email}
-              </option>
-            ))}
-          </select>
+            options={[
+              { value: "", label: t("technicianUnassigned") },
+              ...props.technicians.map((tech) => ({
+                value: tech.id,
+                label: tech.name?.trim() || tech.email,
+              })),
+            ]}
+          />
         </FormField>
         <FormField id="priority" label={t("priority")}>
-          <select
+          <FormSelect
             id="priority"
             name="priority"
-            className={selectClass}
             defaultValue={defaults.priority || "NORMAL"}
             disabled={readOnly}
-          >
-            {SERVICE_ORDER_PRIORITIES.map((priority) => (
-              <option key={priority} value={priority}>
-                {t(`priorities.${priority}`)}
-              </option>
-            ))}
-          </select>
+            options={SERVICE_ORDER_PRIORITIES.map((priority) => ({
+              value: priority,
+              label: t(`priorities.${priority}`),
+            }))}
+          />
         </FormField>
       </div>
       {!readOnly ? (

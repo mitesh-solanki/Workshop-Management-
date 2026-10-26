@@ -25,6 +25,7 @@ type CustomersTableProps = {
   total: number;
   empty: React.ReactNode;
   canWrite?: boolean;
+  toolbarActions?: React.ReactNode;
 };
 
 function VehicleBadges({
@@ -58,6 +59,7 @@ export function CustomersTable({
   total,
   empty,
   canWrite = false,
+  toolbarActions,
 }: CustomersTableProps) {
   const t = useTranslations("customers");
 
@@ -118,7 +120,7 @@ export function CustomersTable({
       empty={empty}
       defaultPageSize={10}
       getRowHref={(row) => `/customers/${row.id}`}
-      toolbar={<CustomerSearch className="w-full md:max-w-md" />}
+      toolbar={<CustomerSearch actions={toolbarActions} />}
       pagination={{
         pageIndex: Math.max(0, page - 1),
         pageSize,

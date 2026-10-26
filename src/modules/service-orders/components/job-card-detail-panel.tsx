@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useCallback, type ReactNode } from "react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { usePageDetailLabel } from "@/components/page-chrome";
@@ -172,6 +172,21 @@ export function JobCardDetailPanel({
     mode: "tabs",
   });
 
+  /** Short sections (e.g. live link) shrink the page; keep the sticky nav at the top. */
+  const onSectionChange = useCallback(
+    (section: JobCardSection) => {
+      scrollToSection(section);
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          document
+            .getElementById("job-card-section-nav")
+            ?.scrollIntoView({ block: "start", behavior: "instant" });
+        });
+      });
+    },
+    [scrollToSection],
+  );
+
   const labourCount = order.lines.filter((line) => line.type === "LABOUR").length;
   const techLabel =
     order.technician?.name?.trim() ||
@@ -184,10 +199,15 @@ export function JobCardDetailPanel({
     order.bay || null,
     techLabel,
   ].filter(Boolean);
-
   return (
     <div className="w-full space-y-4">
-      <header className="flex flex-wrap items-center justify-between gap-3">
+      <header
+        className={cn(
+          "flex flex-wrap items-center justify-between gap-3",
+          // Mobile: only on Details — short tabs (live link) otherwise pull this into view.
+          activeSection !== "details" && "hidden lg:flex",
+        )}
+      >
         <div className="min-w-0">
           <h1 className="truncate text-[clamp(24px,3.5vw,30px)] leading-tight font-semibold tracking-[0.02em] text-[#152238]">
             {order.vehicle.registrationNumber}
@@ -213,10 +233,13 @@ export function JobCardDetailPanel({
       </header>
 
       <div className="flex w-full flex-col gap-4 lg:flex-row lg:items-start">
-        <aside className="sticky top-0 z-20 w-full shrink-0 bg-background pb-1 lg:top-4 lg:w-[220px] lg:bg-transparent lg:pb-0">
+        <aside
+          id="job-card-section-nav"
+          className="sticky top-0 z-20 w-full shrink-0 bg-background pb-1 lg:top-4 lg:w-[220px] lg:bg-transparent lg:pb-0"
+        >
           <JobCardSectionNav
             section={activeSection}
-            onSectionChange={scrollToSection}
+            onSectionChange={onSectionChange}
           />
         </aside>
 

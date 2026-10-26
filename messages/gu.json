@@ -62,6 +62,7 @@
     },
     "workshop": "બોર્ડ",
     "customers": "ગ્રાહકો",
+    "vehicles": "વાહનો",
     "invoices": "ઇનવૉઇસ",
     "inventory": "ઇન્વેન્ટરી"
   },
@@ -517,6 +518,13 @@
     "searching": "શોધી રહ્યા છીએ…",
     "searchLabel": "ગ્રાહકો શોધો",
     "searchPlaceholder": "નામ, ફોન અથવા રજિસ્ટ્રેશન",
+    "sortLabel": "ક્રમ",
+    "sort": {
+      "newest": "છેલ્લા ઉમેરાયેલા",
+      "updated": "છેલ્લા બદલાયેલા",
+      "nameAsc": "અ થી હ",
+      "nameDesc": "હ થી અ"
+    },
     "serviceHistory": "સર્વિસ ઇતિહાસ",
     "serviceHistoryEmpty": "હજુ કોઈ જોબ કાર્ડ નથી.",
     "communicationHistory": "સંદેશ ઇતિહાસ",
@@ -554,10 +562,37 @@
     "serviceHistoryPlaceholder": "આ ગ્રાહકના જોબ અહીં દેખાશે.",
     "communicationHistoryEmpty": "હજુ કોઈ સંદેશ નથી",
     "communicationHistoryDescription": "સંદેશ અને કૉલ પછીથી અહીં દેખાશે.",
-    "export": "CSV નિકાસ"
+    "import": "CSV આયાત"
   },
   "vehicles": {
+    "title": "વાહનો",
+    "subtitle": "આ ગેરેજના બધા વાહનો. રજિસ્ટ્રેશન, મેક અથવા ગ્રાહકથી શોધો.",
     "add": "વાહન ઉમેરો",
+    "import": "CSV આયાત",
+    "view": "જુઓ",
+    "actions": "ક્રિયાઓ",
+    "searchLabel": "વાહનો શોધો",
+    "searchPlaceholder": "રજિસ્ટ્રેશન, મેક, મોડલ, નામ અથવા ફોન",
+    "sortLabel": "ક્રમ",
+    "sort": {
+      "newest": "છેલ્લા ઉમેરાયેલા",
+      "updated": "છેલ્લા બદલાયેલા",
+      "nameAsc": "અ થી હ",
+      "nameDesc": "હ થી અ"
+    },
+    "emptyTitle": "હજુ કોઈ વાહન નથી",
+    "emptyDescription": "ગ્રાહક માટે વાહન ઉમેરો, અથવા CSV આયાત કરો.",
+    "emptySearchTitle": "કોઈ મેળ નથી",
+    "emptySearchDescription": "બીજું રજિસ્ટ્રેશન, મેક અથવા ગ્રાહક અજમાવો.",
+    "listNewSubtitle": "પહેલા ગ્રાહક પસંદ કરો, પછી વાહનની વિગતો ભરો.",
+    "needCustomerFirst": "પહેલા એક ગ્રાહક ઉમેરો, પછી વાહન ઉમેરવા આવો.",
+    "goToCustomers": "ગ્રાહકો પર જાઓ",
+    "columns": {
+      "registration": "રજિસ્ટ્રેશન",
+      "makeModel": "મેક / મોડલ",
+      "customer": "ગ્રાહક",
+      "odometer": "ઓડોમીટર"
+    },
     "newTitle": "નવું વાહન",
     "newSubtitle": "{customer} માટે વાહન ઉમેરો.",
     "edit": "સંપાદિત કરો",
@@ -611,8 +646,7 @@
     "errors": {
       "duplicateRegistration": "આ ગેરેજમાં આ રજિસ્ટ્રેશનવાળું વાહન પહેલેથી છે."
     },
-    "deleted": "વાહન કાઢી નાખ્યું",
-    "export": "CSV નિકાસ"
+    "deleted": "વાહન કાઢી નાખ્યું"
   },
   "inspections": {
     "title": "ડિજિટલ ઇન્સ્પેક્શન",
@@ -838,7 +872,7 @@
     "title": "ઇન્વેન્ટરી",
     "subtitle": "સ્ટોક કેટલોગ, સ્તર અને સીધું વેચાણ.",
     "add": "આઇટમ ઉમેરો",
-    "export": "CSV નિકાસ",
+    "import": "CSV આયાત",
     "back": "ઇન્વેન્ટરી પર પાછા",
     "backToSales": "વેચાણ પર પાછા",
     "newTitle": "નવી ઇન્વેન્ટરી આઇટમ",
@@ -869,6 +903,13 @@
     "search": "શોધો",
     "searchLabel": "ઇન્વેન્ટરી શોધો",
     "searchPlaceholder": "નામ, SKU અથવા HSN",
+    "sortLabel": "ક્રમ",
+    "sort": {
+      "newest": "છેલ્લા ઉમેરાયેલા",
+      "updated": "છેલ્લા બદલાયેલા",
+      "nameAsc": "અ થી હ",
+      "nameDesc": "હ થી અ"
+    },
     "emptyTitle": "હજુ કોઈ ઇન્વેન્ટરી આઇટમ નથી",
     "emptyDescription": "સ્ટોક ટ્રેક કરવા અને સર્વિસ ઓર્ડર પર વાપરવા આઇટમ ઉમેરો.",
     "emptySearchTitle": "કોઈ મેળ નથી",
@@ -888,6 +929,7 @@
     "part": "આઇટમ",
     "directSale": "સીધું વેચાણ",
     "viewSales": "વેચાણ",
+    "salesActionsLabel": "વેચાણ",
     "stockActions": "સ્ટોક મૂવમેન્ટ",
     "stockIn": "સ્ટોક ઇન",
     "stockOut": "સ્ટોક આઉટ",
@@ -960,7 +1002,19 @@
   "dataImport": {
     "title": "ડેટા આયાત",
     "subtitle": "CSV ફાઇલથી ગ્રાહકો, વાહનો અથવા પાર્ટ્સ ઉમેરો.",
+    "subtitleModule": "CSV અથવા Excel અપલોડ કરો, કૉલમ મેપ કરો, પંક્તિઓ તપાસો, પછી પુષ્ટિ કરો.",
+    "titles": {
+      "customers": "ગ્રાહકો આયાત કરો",
+      "vehicles": "વાહનો આયાત કરો",
+      "parts": "પાર્ટ્સ આયાત કરો"
+    },
     "backToSettings": "સેટિંગ્સ પર પાછા",
+    "backToCustomers": "ગ્રાહકો પર પાછા",
+    "backToVehicles": "વાહનો પર પાછા",
+    "backToInventory": "ઇન્વેન્ટરી પર પાછા",
+    "backToList": "યાદી પર પાછા",
+    "doneClose": "થઈ ગયું",
+    "importButton": "CSV આયાત",
     "settingsCardTitle": "CSV આયાત",
     "settingsCardDescription": "CSV અપલોડ કરીને ઘણા ગ્રાહકો, વાહનો અથવા પાર્ટ્સ એકસાથે ઉમેરો. Excelમાં: File → Save As → CSV.",
     "openImport": "આયાત ખોલો",
@@ -970,6 +1024,10 @@
       "preview": "પૂર્વાવલોકન",
       "done": "પૂર્ણ"
     },
+    "stepProgress": "પગલું {current} / {total}",
+    "stepNeedsFile": "પહેલા CSV ફાઇલ અપલોડ કરો.",
+    "stepNeedsValidate": "પહેલા કૉલમ મેપ કરો અને પંક્તિઓ તપાસો.",
+    "stepNeedsImport": "પરિણામ જોવા આયાત પૂરું કરો.",
     "entityLabel": "તમે શું આયાત કરી રહ્યા છો?",
     "entities": {
       "customers": "ગ્રાહકો",
@@ -978,13 +1036,16 @@
     },
     "entityHelp": {
       "customers": "નામ અને ફોન જરૂરી છે. સરનામું અને નોંધ વૈકલ્પિક છે.",
-      "vehicles": "ગ્રાહકનો ફોન પહેલેથી હોવો જોઈએ. રજિસ્ટ્રેશન, મેક અને મોડલ જરૂરી છે.",
+      "vehicles": "દરેક પંક્તિમાં ગ્રાહકનો ફોન જરૂરી છે. જો તે ફોન આ ગેરેજમાં પહેલેથી હોય તો વાહન તે જ ગ્રાહક સાથે જોડાય છે. નવો ફોન હોય તો ગ્રાહકનું નામ પણ આપો — અમે ગ્રાહક બનાવીને પછી વાહન ઉમેરીએ છીએ. રજિસ્ટ્રેશન, મેક અને મોડલ જરૂરી છે.",
       "parts": "કિંમતો રૂપિયામાં છે. ઓપનિંગ સ્ટોક સ્ટોક-ઇન મૂવમેન્ટ બનાવે છે."
     },
-    "downloadSample": "નમૂનો ડાઉનલોડ કરો",
-    "chooseFile": "CSV ફાઇલ પસંદ કરો",
+    "downloadSample": "નમૂનો ડાઉનલોડ કરો ({filename})",
+    "chooseFile": "CSV અથવા Excel પસંદ કરો",
     "parsing": "ફાઇલ વાંચાઈ રહી છે…",
-    "fileHint": "માત્ર CSV (UTF-8). Excelમાં Save As → CSV. વધુમાં વધુ 1,000 ડેટા પંક્તિઓ અને 2 MB.",
+    "fileHint": "CSV અથવા Excel (.xlsx / .xls). Excelમાં ઘણી ટૅબ હોય તો માત્ર પહેલી ટૅબ આયાત થાય છે. વધુમાં વધુ 1,000 ડેટા પંક્તિઓ અને 2 MB.",
+    "skipConfirmTitle": "ખરાબ પંક્તિઓ છોડીએ?",
+    "skipConfirmDescription": "{valid} માન્ય પંક્તિ(ઓ) આયાત કરો અને {invalid} ભૂલવાળી છોડો. આ પાછું નહીં થાય.",
+    "cancelSkip": "રદ કરો",
     "fileLoaded": "{filename} · {count} પંક્તિઓ",
     "field": "ફીલ્ડ",
     "column": "ફાઇલ કૉલમ",
@@ -998,6 +1059,14 @@
       "invalid": "ભૂલવાળી"
     },
     "errorsFound": "કેટલીક પંક્તિઓમાં ભૂલો છે. રિપોર્ટ ડાઉનલોડ કરો, ફાઇલ સુધારો, અથવા ખરાબ પંક્તિઓ છોડો.",
+    "existingCustomersFound": "{count, plural, one {# ગ્રાહક પહેલેથી અસ્તિત્વમાં છે (સમાન ફોન). માત્ર નવા ફોન આયાત કરવા ખરાબ પંક્તિઓ છોડો પસંદ કરો.} other {# ગ્રાહકો પહેલેથી અસ્તિત્વમાં છે (સમાન ફોન). માત્ર નવા ફોન આયાત કરવા ખરાબ પંક્તિઓ છોડો પસંદ કરો.}}",
+    "existingPartsFound": "{count, plural, one {# પાર્ટ પહેલેથી અસ્તિત્વમાં છે (સમાન SKU). માત્ર નવા SKU આયાત કરવા ખરાબ પંક્તિઓ છોડો પસંદ કરો.} other {# પાર્ટ પહેલેથી અસ્તિત્વમાં છે (સમાન SKU). માત્ર નવા SKU આયાત કરવા ખરાબ પંક્તિઓ છોડો પસંદ કરો.}}",
+    "existingVehiclesFound": "{count, plural, one {# વાહન પહેલેથી અસ્તિત્વમાં છે (સમાન રજિસ્ટ્રેશન). માત્ર નવા વાહન આયાત કરવા ખરાબ પંક્તિઓ છોડો પસંદ કરો.} other {# વાહનો પહેલેથી અસ્તિત્વમાં છે (સમાન રજિસ્ટ્રેશન). માત્ર નવા વાહન આયાત કરવા ખરાબ પંક્તિઓ છોડો પસંદ કરો.}}",
+    "nothingNewCustomers": "{count, plural, one {આ ગ્રાહક પહેલેથી ગેરેજમાં છે (સમાન ફોન). આયાત માટે નવું કંઈ નથી.} other {આ # ગ્રાહકો પહેલેથી ગેરેજમાં છે (સમાન ફોન). આયાત માટે નવું કંઈ નથી.}}",
+    "nothingNewParts": "{count, plural, one {આ પાર્ટ પહેલેથી ગેરેજમાં છે (સમાન SKU). આયાત માટે નવું કંઈ નથી.} other {આ # પાર્ટ પહેલેથી ગેરેજમાં છે (સમાન SKU). આયાત માટે નવું કંઈ નથી.}}",
+    "nothingNewVehicles": "{count, plural, one {આ વાહન પહેલેથી ગેરેજમાં છે (સમાન રજિસ્ટ્રેશન). આયાત માટે નવું કંઈ નથી.} other {આ # વાહનો પહેલેથી ગેરેજમાં છે (સમાન રજિસ્ટ્રેશન). આયાત માટે નવું કંઈ નથી.}}",
+    "discardImport": "બંધ કરો",
+    "updateExistingOptional": "વૈકલ્પિક — માત્ર જ્યારે તમે પહેલેથી સેવ ડેટા ઓવરરાઇટ કરવા માંગતા હો.",
     "allValid": "બધી પંક્તિઓ માન્ય લાગે છે.",
     "downloadErrors": "ભૂલ રિપોર્ટ ડાઉનલોડ કરો",
     "row": "પંક્તિ",
@@ -1007,12 +1076,29 @@
       "valid": "માન્ય",
       "invalid": "ભૂલ"
     },
+    "rowErrors": {
+      "customer_exists": "આ ગેરેજમાં આ ફોનવાળો ગ્રાહક પહેલેથી છે",
+      "duplicate_phone_in_file": "આ ફાઇલમાં ડુપ્લિકેટ ફોન",
+      "duplicate_registration_in_file": "આ ફાઇલમાં ડુપ્લિકેટ રજિસ્ટ્રેશન",
+      "duplicate_sku_in_file": "આ ફાઇલમાં ડુપ્લિકેટ SKU",
+      "registration_exists": "આ રજિસ્ટ્રેશન આ ગેરેજમાં પહેલેથી છે",
+      "sku_exists": "આ SKU આ ગેરેજમાં પહેલેથી છે",
+      "customer_name_required": "નવા ફોન માટે ગ્રાહક નામ જરૂરી છે",
+      "customer_phone_required": "ગ્રાહક ફોન જરૂરી છે",
+      "row_invalid": "આ મૂલ્ય અમાન્ય છે"
+    },
     "modeLabel": "આયાત કેવી રીતે કરીએ?",
     "modes": {
       "all_or_nothing": "બધું અથવા કંઈ નહીં",
       "all_or_nothingHelp": "દરેક પંક્તિ માન્ય હોય ત્યારે જ આયાત. કોઈપણ નિષ્ફળતા પર કંઈ સેવ થતું નથી.",
       "skip_invalid": "ખરાબ પંક્તિઓ છોડો",
-      "skip_invalidHelp": "માત્ર માન્ય પંક્તિઓ આયાત કરો. પુષ્ટિ પછી અમાન્ય પંક્તિઓ છોડાય છે."
+      "skip_invalidHelp": "માત્ર માન્ય પંક્તિઓ આયાત કરો. પુષ્ટિ પછી અમાન્ય પંક્તિઓ છોડાય છે.",
+      "skip_invalidHelpCustomers": "માત્ર નવા ગ્રાહકો આયાત કરો. આ ગેરેજમાં પહેલેથી રહેલા ફોનવાળી પંક્તિઓ છોડાય છે.",
+      "skip_invalidHelpParts": "માત્ર નવા SKU આયાત કરો. આ ગેરેજમાં પહેલેથી રહેલા SKUવાળી પંક્તિઓ છોડાય છે.",
+      "update_existing": "હાલના ગ્રાહકો અપડેટ કરો",
+      "update_existingHelp": "નવા ફોન બનાવો. પહેલેથી રહેલા ફોન માટે નામ, સરનામું અને નોંધ અપડેટ કરો.",
+      "update_existingParts": "હાલના પાર્ટ અપડેટ કરો",
+      "update_existingPartsHelp": "નવા SKU બનાવો. પહેલેથી રહેલા SKU માટે નામ, કિંમતો, GST, HSN અને લો-સ્ટોક અપડેટ કરો (ઓપનિંગ સ્ટોક બદલાતો નથી)."
     },
     "backToMap": "મેપિંગ પર પાછા",
     "confirmImport": "આયાતની પુષ્ટિ કરો",
@@ -1030,7 +1116,9 @@
         "notes": "નોંધ"
       },
       "vehicles": {
+        "customerName": "ગ્રાહક નામ",
         "customerPhone": "ગ્રાહક ફોન",
+        "customerAddress": "ગ્રાહક સરનામું",
         "registrationNumber": "રજિસ્ટ્રેશન",
         "make": "મેક",
         "model": "મોડલ",
@@ -1056,11 +1144,12 @@
       "emptyFile": "ફાઇલ ખાલી છે અથવા ડેટા પંક્તિ નથી.",
       "tooManyRows": "ખૂબ વધારે પંક્તિઓ. ફાઇલને 1,000 અથવા ઓછી ડેટા પંક્તિઓમાં વહેંચો.",
       "fileTooLarge": "ફાઇલ ખૂબ મોટી છે (મહત્તમ 2 MB).",
-      "unsupportedType": ".csv ફાઇલ વાપરો. Excelમાં: File → Save As → CSV.",
+      "unsupportedType": ".csv અથવા Excel (.xlsx / .xls) ફાઇલ વાપરો.",
       "mappingIncomplete": "દરેક જરૂરી ફીલ્ડ મેપ કરો: {fields}",
       "hasInvalidRows": "{errorCount} અમાન્ય પંક્તિ(ઓ) સુધારો, અથવા ખરાબ પંક્તિઓ છોડવાનું પસંદ કરો.",
       "noValidRows": "આયાત માટે કોઈ માન્ય પંક્તિ નથી.",
-      "invalidEntity": "ગ્રાહકો, વાહનો અથવા પાર્ટ્સ પસંદ કરો."
+      "invalidEntity": "ગ્રાહકો, વાહનો અથવા પાર્ટ્સ પસંદ કરો.",
+      "invalidMode": "આ આયાત વિકલ્પ આ યાદી માટે ઉપલબ્ધ નથી."
     }
   },
   "invoices": {

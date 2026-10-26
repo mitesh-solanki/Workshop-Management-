@@ -42,6 +42,7 @@ const APP_ERROR_MESSAGE_KEYS: Record<string, readonly [string, string]> = {
   "import.has_invalid_rows": ["dataImport", "errors.hasInvalidRows"],
   "import.no_valid_rows": ["dataImport", "errors.noValidRows"],
   "import.invalid_entity": ["dataImport", "errors.invalidEntity"],
+  "import.invalid_mode": ["dataImport", "errors.invalidMode"],
   ESTIMATE_SUPERSEDED: ["estimates", "errors.estimateSuperseded"],
   ESTIMATE_LINE_BILLED: ["estimates", "errors.lineBilled"],
   "billing.garage_gstin_required": ["billing", "errors.garageGstinRequired"],

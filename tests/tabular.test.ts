@@ -1,10 +1,18 @@
 import { describe, expect, it } from "vitest";
+import * as XLSX from "xlsx";
 import {
   parseCsvText,
   parseTabularBuffer,
   suggestColumnMapping,
   TabularParseError,
 } from "@/lib/tabular";
+
+function excelBytes(rows: string[][]): Uint8Array {
+  const sheet = XLSX.utils.aoa_to_sheet(rows);
+  const book = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(book, sheet, "Sheet1");
+  return XLSX.write(book, { type: "array", bookType: "xlsx" }) as Uint8Array;
+}
 
 describe("tabular", () => {
   describe("parseCsvText", () => {
@@ -50,18 +58,24 @@ describe("tabular", () => {
       ).toThrow(TabularParseError);
     });
 
-    it("rejects unsupported extensions including Excel", () => {
-      for (const name of ["notes.pdf", "parts.xlsx", "stock.xls"]) {
-        try {
-          parseTabularBuffer(new TextEncoder().encode("a,b\n1,2\n"), name);
-          expect.unreachable();
-        } catch (error) {
-          expect(error).toBeInstanceOf(TabularParseError);
-          expect((error as TabularParseError).code).toBe(
-            "import.unsupported_type",
-          );
-        }
-      }
+    it("parses Excel .xlsx into headers and rows", () => {
+      const bytes = excelBytes([
+        ["name", "phone"],
+        ["Ravi", "9876543210"],
+        ["Meera", "9123456780"],
+      ]);
+      const sheet = parseTabularBuffer(bytes, "customers.xlsx");
+      expect(sheet.headers).toEqual(["name", "phone"]);
+      expect(sheet.rows).toEqual([
+        ["Ravi", "9876543210"],
+        ["Meera", "9123456780"],
+      ]);
+    });
+
+    it("rejects unsupported extensions", () => {
+      expect(() =>
+        parseTabularBuffer(new TextEncoder().encode("a,b\n1,2\n"), "notes.pdf"),
+      ).toThrow(TabularParseError);
     });
   });
 

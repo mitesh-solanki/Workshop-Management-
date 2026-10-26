@@ -8,6 +8,7 @@ import {
 } from "@/app/actions/service-orders";
 import { Button } from "@/components/ui/button";
 import { FormField } from "@/components/ui/form-field";
+import { FormSelect } from "@/components/ui/form-select";
 import { toast } from "@/components/ui/toast";
 import {
   STATUS_TRANSITIONS,
@@ -15,9 +16,6 @@ import {
 } from "@/modules/service-orders/schema";
 
 const initial: ServiceOrderActionState = { ok: false };
-
-const selectClass =
-  "h-11 min-h-11 w-full rounded-md border border-input bg-transparent px-3 text-base shadow-xs outline-none focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/40 md:text-sm";
 
 type Props = {
   orderId: string;
@@ -53,16 +51,17 @@ export function StatusForm({
   if (nextStatuses.length === 0 || disabled) {
     return (
       <FormField id={`status-${orderId}`} label={t("statusField")}>
-        <select
+        <FormSelect
           id={`status-${orderId}`}
-          className={selectClass}
           value={currentStatus}
           disabled
-        >
-          <option value={currentStatus}>
-            {t(`statuses.${currentStatus}`)}
-          </option>
-        </select>
+          options={[
+            {
+              value: currentStatus,
+              label: t(`statuses.${currentStatus}`),
+            },
+          ]}
+        />
       </FormField>
     );
   }
@@ -77,20 +76,17 @@ export function StatusForm({
         label={t("statusField")}
         hint={t("changeStatus")}
       >
-        <select
+        <FormSelect
           id={`status-${orderId}`}
           name="status"
           required
-          className={selectClass}
           defaultValue={nextStatuses[0]}
           disabled={pending}
-        >
-          {nextStatuses.map((status) => (
-            <option key={status} value={status}>
-              {`${t(`statuses.${currentStatus}`)} → ${t(`statuses.${status}`)}`}
-            </option>
-          ))}
-        </select>
+          options={nextStatuses.map((status) => ({
+            value: status,
+            label: `${t(`statuses.${currentStatus}`)} → ${t(`statuses.${status}`)}`,
+          }))}
+        />
       </FormField>
       <Button type="submit" size="md" loading={pending} className="shrink-0">
         {pending ? t("saving") : t("updateStatus")}

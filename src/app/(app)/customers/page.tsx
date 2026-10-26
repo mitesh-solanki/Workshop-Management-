@@ -8,10 +8,15 @@ import { requireSession } from "@/lib/session";
 import { CreateCustomerModal } from "@/modules/customers/components/create-customer-modal";
 import { CustomersTable } from "@/modules/customers/components/customers-table";
 import { listCustomers } from "@/modules/customers/service";
-import { CsvExportButton } from "@/modules/data-export/components/csv-export-button";
+import { ImportModal } from "@/modules/data-import/components/import-modal";
 
 type Props = {
-  searchParams: Promise<{ q?: string; page?: string; pageSize?: string }>;
+  searchParams: Promise<{
+    q?: string;
+    sort?: string;
+    page?: string;
+    pageSize?: string;
+  }>;
 };
 
 export const instant = false;
@@ -22,6 +27,7 @@ export default async function CustomersPage({ searchParams }: Props) {
   const t = await getTranslations("customers");
   const result = await listCustomers(session, {
     q: params.q,
+    sort: params.sort,
     page: params.page,
     pageSize: params.pageSize,
   });
@@ -29,6 +35,7 @@ export default async function CustomersPage({ searchParams }: Props) {
     session.role === "OWNER" ||
     session.role === "MANAGER" ||
     session.role === "TECHNICIAN";
+  const canImport = session.role === "OWNER" || session.role === "MANAGER";
   const hasQuery = Boolean(params.q?.trim());
 
   return (
@@ -37,17 +44,10 @@ export default async function CustomersPage({ searchParams }: Props) {
         title={t("title")}
         description={t("subtitle")}
         actions={
-          <div className="flex flex-wrap gap-2">
-            <CsvExportButton
-              href={
-                params.q
-                  ? `/customers/export?q=${encodeURIComponent(params.q)}`
-                  : "/customers/export"
-              }
-              label={t("export")}
-            />
+          <>
+            {canImport ? <ImportModal entity="customers" /> : null}
             {canWrite ? <CreateCustomerModal /> : null}
-          </div>
+          </>
         }
       />
 
@@ -66,8 +66,13 @@ export default async function CustomersPage({ searchParams }: Props) {
                 hasQuery ? t("emptySearchDescription") : t("emptyDescription")
               }
               action={
-                canWrite && !hasQuery ? (
-                  <CreateCustomerModal size="sm" />
+                !hasQuery && (canImport || canWrite) ? (
+                  <div className="flex flex-col items-center gap-2 sm:flex-row sm:justify-center">
+                    {canImport ? (
+                      <ImportModal entity="customers" size="sm" />
+                    ) : null}
+                    {canWrite ? <CreateCustomerModal size="sm" /> : null}
+                  </div>
                 ) : undefined
               }
             />

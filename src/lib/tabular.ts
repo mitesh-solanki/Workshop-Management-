@@ -1,8 +1,9 @@
 /**
- * Parse CSV into a header row + string cell matrix.
- * Used by data import. No third-party CSV/Excel packages — keep this dependency-free.
+ * Parse CSV or Excel (.xlsx / .xls) into a header row + string cell matrix.
+ * Used by data import.
  */
 
+import * as XLSX from "xlsx";
 import { CSV_UTF8_BOM } from "@/lib/csv";
 
 export const MAX_IMPORT_ROWS = 1000;
@@ -27,6 +28,12 @@ export class TabularParseError extends Error {
 function cellToString(value: unknown): string {
   if (value == null) {
     return "";
+  }
+  if (value instanceof Date) {
+    if (Number.isNaN(value.getTime())) {
+      return "";
+    }
+    return value.toISOString().slice(0, 10);
   }
   return String(value).trim();
 }
@@ -150,8 +157,44 @@ function extensionOf(filename: string): string {
   return dot >= 0 ? base.slice(dot + 1).toLowerCase() : "";
 }
 
+function parseExcelBuffer(bytes: Uint8Array): string[][] {
+  let workbook: XLSX.WorkBook;
+  try {
+    workbook = XLSX.read(bytes, {
+      type: "array",
+      cellDates: true,
+    });
+  } catch {
+    throw new TabularParseError("import.unsupported_type");
+  }
+
+  const sheetName = workbook.SheetNames[0];
+  if (!sheetName) {
+    throw new TabularParseError("import.empty_file");
+  }
+  const sheet = workbook.Sheets[sheetName];
+  if (!sheet) {
+    throw new TabularParseError("import.empty_file");
+  }
+
+  const matrix = XLSX.utils.sheet_to_json<unknown[]>(sheet, {
+    header: 1,
+    defval: "",
+    raw: false,
+    blankrows: false,
+  });
+
+  return matrix.map((row) => {
+    if (!Array.isArray(row)) {
+      return [];
+    }
+    return row.map((cell) => cellToString(cell));
+  });
+}
+
 /**
- * Parse CSV bytes into headers + rows.
+ * Parse CSV or Excel bytes into headers + rows.
+ * Uses the first sheet of an Excel workbook.
  * @throws TabularParseError with stable `code` for i18n
  */
 export function parseTabularBuffer(
@@ -173,12 +216,15 @@ export function parseTabularBuffer(
   }
 
   const ext = extensionOf(filename);
-  if (ext !== "csv" && ext !== "txt") {
-    throw new TabularParseError("import.unsupported_type");
+  if (ext === "csv" || ext === "txt") {
+    const text = new TextDecoder("utf-8").decode(bytes);
+    return matrixToSheet(parseCsvText(text));
+  }
+  if (ext === "xlsx" || ext === "xls") {
+    return matrixToSheet(parseExcelBuffer(bytes));
   }
 
-  const text = new TextDecoder("utf-8").decode(bytes);
-  return matrixToSheet(parseCsvText(text));
+  throw new TabularParseError("import.unsupported_type");
 }
 
 /** Suggest which file header index maps to a field, using aliases. */

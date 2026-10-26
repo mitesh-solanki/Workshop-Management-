@@ -4,7 +4,12 @@ import { fieldsForEntity } from "@/modules/data-import/fields";
 export const IMPORT_ENTITIES = ["customers", "vehicles", "parts"] as const;
 export type ImportEntity = (typeof IMPORT_ENTITIES)[number];
 
-export const IMPORT_MODES = ["all_or_nothing", "skip_invalid"] as const;
+export const IMPORT_MODES = [
+  "all_or_nothing",
+  "skip_invalid",
+  /** Customers or parts: create new keys; update when phone/SKU already exists. */
+  "update_existing",
+] as const;
 export type ImportMode = (typeof IMPORT_MODES)[number];
 
 export const importEntitySchema = z.enum(IMPORT_ENTITIES);
@@ -44,6 +49,8 @@ export type ImportValidationView = {
   mapping: Record<string, number | null>;
   validCount: number;
   errorCount: number;
+  /** Rows whose phone/SKU already exists in this garage (soft conflict). */
+  existingCount: number;
   totalCount: number;
   errors: Array<{
     rowNumber: number;

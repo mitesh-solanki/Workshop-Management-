@@ -47,11 +47,11 @@ function mapStockFailure(
 
 export async function listParts(
   session: RoleSession,
-  raw: { q?: string } = {},
+  raw: { q?: string; sort?: string } = {},
 ) {
   requireRole(session, READ_ROLES);
   const input = partSearchSchema.parse(raw);
-  return searchParts(session.garageId, input.q);
+  return searchParts(session.garageId, input.q, input.sort);
 }
 
 export async function getPart(session: RoleSession, partId: string) {

@@ -10,16 +10,37 @@ import {
   findVehicleById,
   findVehicleByRegistration,
   isUniqueConstraintError,
+  searchVehicles,
   updateVehicleById,
 } from "@/modules/vehicles/repo";
 import {
   createVehicleSchema,
   updateVehicleSchema,
+  vehicleSearchSchema,
   type CreateVehicleInput,
   type UpdateVehicleInput,
 } from "@/modules/vehicles/schema";
 
 const WRITE_ROLES = ["OWNER", "MANAGER", "TECHNICIAN"] as const;
+
+export async function listVehicles(
+  session: RoleSession,
+  raw: {
+    q?: string;
+    sort?: string;
+    page?: number | string;
+    pageSize?: number | string;
+  } = {},
+) {
+  const input = vehicleSearchSchema.parse(raw);
+  return searchVehicles(
+    session.garageId,
+    input.q,
+    input.page,
+    input.pageSize,
+    input.sort,
+  );
+}
 
 async function assertCustomerInGarage(garageId: string, customerId: string) {
   const customer = await findCustomerById(garageId, customerId);

@@ -3,6 +3,7 @@
 import { useActionState, useEffect, useId, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
+import { FormSelect } from "@/components/ui/form-select";
 import { toast } from "@/components/ui/toast";
 import { formatRupees, paiseToRupeesInput } from "@/lib/money";
 import { cn } from "@/lib/utils";
@@ -98,21 +99,18 @@ export function RecordPaymentForm({
           <label htmlFor={`${idPrefix}-method`} className={labelClass}>
             {t("paymentMethod")}
           </label>
-          <select
+          <FormSelect
             id={`${idPrefix}-method`}
             name="method"
-            className={controlClass}
             value={method}
-            onChange={(event) =>
-              setMethod(event.target.value as PaymentMethodValue)
+            onValueChange={(value) =>
+              setMethod(value as PaymentMethodValue)
             }
-          >
-            {PAYMENT_METHODS.map((value) => (
-              <option key={value} value={value}>
-                {t(`methods.${value}`)}
-              </option>
-            ))}
-          </select>
+            options={PAYMENT_METHODS.map((value) => ({
+              value,
+              label: t(`methods.${value}`),
+            }))}
+          />
         </div>
         <div className="min-w-0">
           <label htmlFor={`${idPrefix}-amount`} className={labelClass}>

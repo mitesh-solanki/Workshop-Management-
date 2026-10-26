@@ -1,0 +1,49 @@
+---
+
+# Rules for Prompts 11 onward (read before every prompt)
+
+Prompts 0 to 10 built features that worked but were buried (for example invoices existed only inside a job card, with no invoice list). From Prompt 11 every prompt must follow this contract. Paste "Prompt 11 onward contract" at the top of each new Cursor chat, or keep it in `.cursor/rules/surfaces.mdc` with `alwaysApply: true`.
+
+## Prompt 11 onward contract
+
+**A. Decide the surface before writing code.**
+Before coding, follow `ui-flows.mdc` (User goal, Flow map, Entry and exit points) and add a **Surface Map** table to it. Show both, then **stop and wait for my confirmation before building**. After I confirm, build exactly what was confirmed. One row per entity the user will look for later (invoice, payment, vendor, purchase order, appointment, expense, and so on):
+
+| Entity | Top-level route | List (search, filters, status tabs, pagination) | Detail page | Create / edit | Nav item + roles | Also shown inside (secondary entry) | Dashboard widget |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+
+Rules for the table:
+1. **A noun an owner would search for next week gets its own top-level route and sidebar/bottom-nav entry.** It is not "a section inside the job card". Job card sections are allowed only as a secondary entry that links to the real page.
+2. Test: "Can the user find every invoice/payment/PO/appointment from today without opening an order?" If no, the module is missing.
+3. Every list has: search, at least one status filter, sort by newest, pagination or infinite scroll, empty state (no data) and a different empty state (no search match), loading skeleton, and error state.
+4. Every detail page has: breadcrumb, status badge, one primary action, activity/audit timeline, back to list.
+5. Reachable in at most 2 taps from the nav on a phone.
+
+**B. Build real things only.**
+No stubs, no placeholder data, no "will appear here later" pages, no buttons that only copy a link. Anything that sends email, SMS, WhatsApp or calls a payment provider must really send in development (use Mailpit or a provider test mode in Docker) and write a log row. If a provider key is missing, show a clear setup message in Settings, never a fake success.
+
+**C. UI standard.**
+Follow `.cursor/rules/ui-flows.mdc` and `.cursor/rules/garage.mdc` exactly. In short: shadcn components only (add missing ones with the CLI); every page has title, one-line description, breadcrumb and exactly one primary button; lists have search, filters, a table with status Badge, row actions in a DropdownMenu, pagination and an empty state with a create button; tables become cards on phones with 44px tap targets; create and edit use react-hook-form + zod with inline errors (full page for long forms, Sheet or Dialog for short ones); detail pages have a summary header plus Tabs for related data; status changes use a Badge and one "next step" button; destructive actions use a confirm dialog; every async action has a loading button, success toast and error toast; Skeleton for loading; garage language labels (Job Card, Estimate, Delivered). Full-width layout on desktop, never a narrow lone column. No code comments; give full file contents for changed files. No hard-coded English: every string, placeholder, error, PDF label, audit note and export header goes through `messages/en.json`, `hi.json`, `gu.json` with identical keys.
+
+**D. Rules from ARCHITECTURE.md still apply.**
+Pages and actions call `service.ts`, services call `repo.ts`, only repos touch Prisma. Every query filters by session `garageId`. Money is integer paise. Every money, stock or approval change writes an audit log. Zod on every input.
+
+**E. Proof, not claims.**
+- Unit tests for business rules.
+- At least one **live Postgres** test for any rule about concurrency, numbering, stock or money totals (no mocked repo as the only proof).
+- At least one **Playwright test that starts from the nav click**, not from a direct URL, covering the main flow.
+- A garage-isolation test for every new table (garage A cannot read or write garage B).
+- Roles: write a role matrix test (Owner, Manager, Technician, Accountant) for the new pages.
+
+**F. Finish with this report** (do not skip):
+1. The Surface Map as built (with real routes).
+2. The "Done when" checklist, each item Done / Partial / Missing with file path and test name.
+3. What remains and why.
+4. Output of `npm run lint`, `npm run typecheck`, `npm test`, `npm run test:e2e`.
+5. Run the app and list the exact clicks to see each new page.
+
+Do not start the next prompt. Do not refactor unrelated code.
+
+------
+alwaysApply: true
+---

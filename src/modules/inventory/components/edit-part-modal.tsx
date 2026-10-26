@@ -21,6 +21,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { FormField } from "@/components/ui/form-field";
+import { FormSelect } from "@/components/ui/form-select";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/toast";
 import {
@@ -30,9 +31,6 @@ import {
 import { QuantityStepper } from "@/modules/inventory/components/quantity-stepper";
 
 const initial: InventoryActionState = { ok: false };
-
-const selectClass =
-  "h-11 min-h-11 w-full rounded-md border border-input bg-background px-3 text-base outline-none focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/30";
 
 export type EditPartValues = {
   id: string;
@@ -144,19 +142,16 @@ export function EditPartModal({ part, trigger }: Props) {
               />
             </FormField>
             <FormField id={`edit-part-unit-${part.id}`} label={t("unit")}>
-              <select
+              <FormSelect
                 id={`edit-part-unit-${part.id}`}
                 name="unit"
                 required
                 defaultValue={part.unit}
-                className={selectClass}
-              >
-                {PART_UNIT_OPTIONS.map((unit) => (
-                  <option key={unit} value={unit}>
-                    {t(`units.${unit}`)}
-                  </option>
-                ))}
-              </select>
+                options={PART_UNIT_OPTIONS.map((unit) => ({
+                  value: unit,
+                  label: t(`units.${unit}`),
+                }))}
+              />
             </FormField>
           </div>
 
@@ -184,18 +179,15 @@ export function EditPartModal({ part, trigger }: Props) {
               id={`edit-gstRatePercent-${part.id}`}
               label={t("gstRate")}
             >
-              <select
+              <FormSelect
                 id={`edit-gstRatePercent-${part.id}`}
                 name="gstRatePercent"
                 defaultValue={String(part.gstRatePercent)}
-                className={selectClass}
-              >
-                {GST_RATE_OPTIONS.map((rate) => (
-                  <option key={rate} value={rate}>
-                    {rate}%
-                  </option>
-                ))}
-              </select>
+                options={GST_RATE_OPTIONS.map((rate) => ({
+                  value: String(rate),
+                  label: `${rate}%`,
+                }))}
+              />
             </FormField>
             <FormField id={`edit-hsn-${part.id}`} label={t("hsn")}>
               <Input

@@ -1,6 +1,6 @@
 import "server-only";
 
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 
 const customerSelect = {
@@ -157,14 +157,101 @@ function customerSearchWhere(garageId: string, q: string | undefined) {
   };
 }
 
+function customerOrderBy(sort: "newest" | "updated") {
+  if (sort === "updated") {
+    return [{ updatedAt: "desc" as const }, { name: "asc" as const }];
+  }
+  return [{ createdAt: "desc" as const }, { name: "asc" as const }];
+}
+
+/** Match search filter in SQL so name sorts can use LOWER(name) (case-insensitive). */
+function customerSearchSql(garageId: string, q: string | undefined) {
+  const query = q?.trim();
+  if (!query) {
+    return Prisma.sql`c."garageId" = ${garageId}`;
+  }
+  const registrationNeedle = `%${query.replace(/\s+/g, "").toUpperCase()}%`;
+  const textNeedle = `%${query}%`;
+  return Prisma.sql`
+    c."garageId" = ${garageId}
+    AND (
+      c.name ILIKE ${textNeedle}
+      OR c.phone LIKE ${textNeedle}
+      OR EXISTS (
+        SELECT 1 FROM "Vehicle" v
+        WHERE v."customerId" = c.id
+          AND v."garageId" = ${garageId}
+          AND UPPER(REPLACE(v."registrationNumber", ' ', '')) LIKE ${registrationNeedle}
+      )
+    )
+  `;
+}
+
+async function listCustomerIdsByName(
+  garageId: string,
+  q: string | undefined,
+  direction: "asc" | "desc",
+  skip: number,
+  take: number,
+) {
+  const whereSql = customerSearchSql(garageId, q);
+  const orderSql =
+    direction === "desc"
+      ? Prisma.sql`LOWER(c.name) DESC, c."createdAt" DESC`
+      : Prisma.sql`LOWER(c.name) ASC, c."createdAt" DESC`;
+
+  return prisma.$queryRaw<{ id: string }[]>`
+    SELECT c.id
+    FROM "Customer" c
+    WHERE ${whereSql}
+    ORDER BY ${orderSql}
+    LIMIT ${take} OFFSET ${skip}
+  `;
+}
+
 export async function searchCustomers(
   garageId: string,
   q: string | undefined,
   page: number,
   pageSize: number,
+  sort: "newest" | "updated" | "name_asc" | "name_desc" = "newest",
 ) {
   const where = customerSearchWhere(garageId, q);
   const skip = (page - 1) * pageSize;
+
+  if (sort === "name_asc" || sort === "name_desc") {
+    const [idRows, total] = await Promise.all([
+      listCustomerIdsByName(
+        garageId,
+        q,
+        sort === "name_desc" ? "desc" : "asc",
+        skip,
+        pageSize,
+      ),
+      prisma.customer.count({ where }),
+    ]);
+    const ids = idRows.map((row) => row.id);
+    if (ids.length === 0) {
+      return { items: [], total, page, pageSize };
+    }
+
+    const unordered = await prisma.customer.findMany({
+      where: { garageId, id: { in: ids } },
+      select: {
+        ...customerSelect,
+        vehicles: {
+          select: vehicleSummarySelect,
+          orderBy: { registrationNumber: "asc" },
+        },
+      },
+    });
+    const byId = new Map(unordered.map((item) => [item.id, item]));
+    const items = ids
+      .map((id) => byId.get(id))
+      .filter((item): item is NonNullable<typeof item> => item != null);
+
+    return { items, total, page, pageSize };
+  }
 
   const [items, total] = await Promise.all([
     prisma.customer.findMany({
@@ -176,7 +263,7 @@ export async function searchCustomers(
           orderBy: { registrationNumber: "asc" },
         },
       },
-      orderBy: [{ name: "asc" }, { createdAt: "desc" }],
+      orderBy: customerOrderBy(sort),
       skip,
       take: pageSize,
     }),
@@ -184,17 +271,4 @@ export async function searchCustomers(
   ]);
 
   return { items, total, page, pageSize };
-}
-
-/** Unpaginated customer rows for CSV export (capped). */
-export async function listCustomersForExport(
-  garageId: string,
-  q: string | undefined,
-) {
-  return prisma.customer.findMany({
-    where: customerSearchWhere(garageId, q),
-    select: customerSelect,
-    orderBy: [{ name: "asc" }, { createdAt: "desc" }],
-    take: 20_000,
-  });
 }

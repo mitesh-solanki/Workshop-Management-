@@ -68,6 +68,7 @@ export async function createVehicleModalAction(
     });
     revalidatePath("/customers");
     revalidatePath(`/customers/${customerId}`);
+    revalidatePath("/vehicles");
     return {
       ok: true,
       message: t("created"),
@@ -91,6 +92,7 @@ export async function updateVehicleAction(
     await updateVehicleRecord(session, vehicleId, vehicleFields(formData));
     revalidatePath("/customers");
     revalidatePath(`/customers/${customerId}`);
+    revalidatePath("/vehicles");
     revalidatePath(`/vehicles/${vehicleId}`);
     revalidatePath(`/vehicles/${vehicleId}/edit`);
     return { ok: true, message: t("saved") };
@@ -110,6 +112,7 @@ export async function deleteVehicleAction(
     await deleteVehicleRecord(session, vehicleId);
     revalidatePath("/customers");
     revalidatePath(`/customers/${customerId}`);
+    revalidatePath("/vehicles");
   } catch (error) {
     return { ok: false, message: await translateError(error) };
   }

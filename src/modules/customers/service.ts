@@ -22,7 +22,12 @@ const WRITE_ROLES = ["OWNER", "MANAGER", "TECHNICIAN"] as const;
 
 export async function listCustomers(
   session: RoleSession,
-  raw: { q?: string; page?: number | string; pageSize?: number | string } = {},
+  raw: {
+    q?: string;
+    sort?: string;
+    page?: number | string;
+    pageSize?: number | string;
+  } = {},
 ) {
   const input = customerSearchSchema.parse(raw);
   // garageId always comes from the session — never from the request.
@@ -31,6 +36,7 @@ export async function listCustomers(
     input.q,
     input.page,
     input.pageSize,
+    input.sort,
   );
 }
 

@@ -1,66 +1,129 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
+import { ListSortMenu } from "@/components/ui/list-sort-menu";
 import { SearchInput } from "@/components/ui/search-input";
+import { cn } from "@/lib/utils";
+import {
+  CUSTOMER_SORTS,
+  type CustomerSort,
+} from "@/modules/customers/schema";
 
 const DEBOUNCE_MS = 300;
 
-type CustomerSearchProps = {
-  className?: string;
+const SORT_LABEL_KEYS: Record<
+  CustomerSort,
+  "newest" | "updated" | "nameAsc" | "nameDesc"
+> = {
+  newest: "newest",
+  updated: "updated",
+  name_asc: "nameAsc",
+  name_desc: "nameDesc",
 };
 
-export function CustomerSearch({ className }: CustomerSearchProps) {
+function isCustomerSort(value: string): value is CustomerSort {
+  return (CUSTOMER_SORTS as readonly string[]).includes(value);
+}
+
+type CustomerSearchProps = {
+  className?: string;
+  /** Primary list actions shown to the right of search (import, add, …). */
+  actions?: React.ReactNode;
+};
+
+export function CustomerSearch({ className, actions }: CustomerSearchProps) {
   const t = useTranslations("customers");
   const router = useRouter();
   const searchParams = useSearchParams();
   const [pending, startTransition] = useTransition();
   const urlQuery = searchParams.get("q") ?? "";
+  const urlSortRaw = searchParams.get("sort") ?? "newest";
+  const urlSort: CustomerSort = isCustomerSort(urlSortRaw)
+    ? urlSortRaw
+    : "newest";
   const [value, setValue] = useState(urlQuery);
   const [syncedUrlQuery, setSyncedUrlQuery] = useState(urlQuery);
 
-  // Keep input in sync when the URL changes (back/forward, clear).
-  // Adjust during render — avoids setState-in-effect cascading renders.
   if (urlQuery !== syncedUrlQuery) {
     setSyncedUrlQuery(urlQuery);
     setValue(urlQuery);
   }
 
-  // Debounced search — no Enter required.
+  const sortOptions = useMemo(
+    () =>
+      CUSTOMER_SORTS.map((sort) => ({
+        value: sort,
+        label: t(`sort.${SORT_LABEL_KEYS[sort]}`),
+      })),
+    [t],
+  );
+
+  function replaceParams(next: { q?: string; sort?: CustomerSort }) {
+    const params = new URLSearchParams(searchParams.toString());
+    const q = next.q !== undefined ? next.q.trim() : urlQuery.trim();
+    const sort = next.sort ?? urlSort;
+
+    if (q) {
+      params.set("q", q);
+    } else {
+      params.delete("q");
+    }
+
+    if (sort === "newest") {
+      params.delete("sort");
+    } else {
+      params.set("sort", sort);
+    }
+
+    params.delete("page");
+    const query = params.toString();
+    startTransition(() => {
+      router.replace(query ? `/customers?${query}` : "/customers");
+    });
+  }
+
   useEffect(() => {
     const next = value.trim();
     const current = urlQuery.trim();
     if (next === current) return;
 
     const timer = window.setTimeout(() => {
-      const params = new URLSearchParams(searchParams.toString());
-      if (next) {
-        params.set("q", next);
-      } else {
-        params.delete("q");
-      }
-      // New query always starts at page 1.
-      params.delete("page");
-      const query = params.toString();
-      startTransition(() => {
-        router.replace(query ? `/customers?${query}` : "/customers");
-      });
+      replaceParams({ q: next });
     }, DEBOUNCE_MS);
 
     return () => window.clearTimeout(timer);
-  }, [value, urlQuery, router, searchParams]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- debounce only on typed value
+  }, [value, urlQuery]);
 
   return (
-    <div className={className ?? "w-full"}>
-      <SearchInput
-        id="customer-search"
-        value={value}
-        onValueChange={setValue}
-        label={t("searchLabel")}
-        placeholder={t("searchPlaceholder")}
-        aria-busy={pending || undefined}
-      />
+    <div
+      className={cn(
+        "flex w-full flex-col gap-2 sm:flex-row sm:items-end sm:justify-between",
+        className,
+      )}
+    >
+      <div className="min-w-0 w-full max-w-md">
+        <SearchInput
+          id="customer-search"
+          value={value}
+          onValueChange={setValue}
+          label={t("searchLabel")}
+          placeholder={t("searchPlaceholder")}
+          aria-busy={pending || undefined}
+        />
+      </div>
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        {actions}
+        <ListSortMenu
+          value={urlSort}
+          options={sortOptions}
+          onChange={(sort) => replaceParams({ sort })}
+          ariaLabel={t("sortLabel")}
+          disabled={pending}
+        />
+      </div>
     </div>
   );
 }

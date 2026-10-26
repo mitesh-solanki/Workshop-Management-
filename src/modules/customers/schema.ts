@@ -31,6 +31,16 @@ export const createCustomerSchema = z.object({
 
 export const updateCustomerSchema = createCustomerSchema;
 
+export const CUSTOMER_SORTS = [
+  "newest",
+  "updated",
+  "name_asc",
+  "name_desc",
+] as const;
+export type CustomerSort = (typeof CUSTOMER_SORTS)[number];
+
+export const customerSortSchema = z.enum(CUSTOMER_SORTS).default("newest");
+
 export const customerSearchSchema = z.object({
   q: z
     .string()
@@ -38,6 +48,7 @@ export const customerSearchSchema = z.object({
     .max(120, { error: "validation.tooLong" })
     .optional()
     .transform((value) => (value && value.length > 0 ? value : undefined)),
+  sort: customerSortSchema,
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce
     .number()

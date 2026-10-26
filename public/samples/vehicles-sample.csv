@@ -1,0 +1,4 @@
+customerName,customerPhone,customerAddress,registrationNumber,make,model,year,odometer,insuranceExpiry,pucExpiry,fitnessExpiry
+Ravi Patel (sample),9876500001,Ahmedabad CG Road,GJ01SA0001,Maruti,Swift,2019,45200,2027-03-31,2026-12-15,2028-01-20
+Meera Shah (sample),9876500002,Surat Ring Road,GJ05SA0002,Hyundai,i20,2021,28100,2026-11-30,2026-10-01,
+Amit Desai (sample),9876500003,Vadodara Alkapuri,GJ06SA0003,Honda,City,2018,62000,,,

@@ -25,9 +25,15 @@ type Props = {
   items: InventoryTableRow[];
   empty: React.ReactNode;
   canWrite?: boolean;
+  canSale?: boolean;
 };
 
-export function InventoryTable({ items, empty, canWrite = false }: Props) {
+export function InventoryTable({
+  items,
+  empty,
+  canWrite = false,
+  canSale = false,
+}: Props) {
   const t = useTranslations("inventory");
 
   const columns = useMemo<ColumnDef<InventoryTableRow>[]>(
@@ -137,7 +143,91 @@ export function InventoryTable({ items, empty, canWrite = false }: Props) {
       empty={empty}
       defaultPageSize={10}
       getRowHref={(row) => `/inventory/${row.id}`}
-      toolbar={<InventorySearch className="max-w-md" />}
+      toolbar={<InventorySearch canSale={canSale} />}
+      renderMobileCard={(row) => {
+        const item = row.original;
+        const unit = item.unit;
+        const unitLabel =
+          unit === "pcs" ||
+          unit === "set" ||
+          unit === "pair" ||
+          unit === "litre" ||
+          unit === "ml" ||
+          unit === "kg" ||
+          unit === "g" ||
+          unit === "metre"
+            ? t(`units.${unit}`)
+            : unit;
+        const low = item.quantityOnHand <= item.lowStockLevel;
+        return (
+          <div className="space-y-3">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0 space-y-1">
+                <p className="truncate text-base font-semibold text-foreground">
+                  {item.name}
+                </p>
+                <p className="truncate text-sm text-muted-foreground">
+                  {item.sku}
+                  {item.hsn ? ` · ${t("columns.hsn")} ${item.hsn}` : ""}
+                </p>
+              </div>
+              {low ? <Badge variant="warning">{t("lowBadge")}</Badge> : null}
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 rounded-lg bg-muted/50 px-3 py-2.5">
+              <div>
+                <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                  {t("columns.stock")}
+                </p>
+                <p
+                  className={
+                    low
+                      ? "mt-0.5 text-sm font-semibold text-amber-800"
+                      : "mt-0.5 text-sm font-semibold text-foreground"
+                  }
+                >
+                  {t("stockCount", {
+                    count: item.quantityOnHand,
+                    unit: item.unit,
+                  })}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                  {t("columns.price")}
+                </p>
+                <p className="mt-0.5 text-sm font-semibold tabular-nums text-foreground">
+                  {formatRupees(item.sellingPricePaise)}
+                </p>
+              </div>
+              <div className="col-span-2">
+                <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                  {t("columns.unit")}
+                </p>
+                <p className="mt-0.5 text-sm text-foreground">{unitLabel}</p>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between gap-2 border-t border-border pt-3">
+              <p className="text-xs text-muted-foreground">{t("actions")}</p>
+              <InventoryRowActions
+                canWrite={canWrite}
+                part={{
+                  id: item.id,
+                  name: item.name,
+                  sku: item.sku,
+                  unit: item.unit,
+                  purchasePricePaise: item.purchasePricePaise,
+                  sellingPricePaise: item.sellingPricePaise,
+                  gstRatePercent: item.gstRatePercent,
+                  hsn: item.hsn,
+                  lowStockLevel: item.lowStockLevel,
+                }}
+              />
+            </div>
+          </div>
+        );
+      }}
     />
   );
 }

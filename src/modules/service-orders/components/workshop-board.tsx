@@ -9,6 +9,7 @@ import { moveServiceOrderStatusAction } from "@/app/actions/service-orders";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FormField } from "@/components/ui/form-field";
+import { FormSelect } from "@/components/ui/form-select";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { cn } from "@/lib/utils";
 import {
@@ -53,8 +54,8 @@ type Props = {
   canMutate: boolean;
 };
 
-const selectClass =
-  "h-9 min-h-9 w-full rounded-md border border-input bg-transparent px-2.5 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/40 sm:w-auto sm:min-w-[11rem]";
+const boardSelectTriggerClass =
+  "h-9 min-h-9 sm:w-auto sm:min-w-[11rem]";
 
 function formatDue(value: Date | string | null, empty: string): string {
   if (!value) {
@@ -225,21 +226,21 @@ export function WorkshopBoard({
               >
                 {t("filterTechnician")}
               </label>
-              <select
+              <FormSelect
                 id="board-technician"
-                className={selectClass}
                 value={selectedTechnicianId}
-                onChange={(event) =>
-                  pushFilters({ technicianId: event.target.value })
+                onValueChange={(technicianId) =>
+                  pushFilters({ technicianId })
                 }
-              >
-                <option value="">{t("filterAllTechnicians")}</option>
-                {technicians.map((tech) => (
-                  <option key={tech.id} value={tech.id}>
-                    {techLabel(tech)}
-                  </option>
-                ))}
-              </select>
+                options={[
+                  { value: "", label: t("filterAllTechnicians") },
+                  ...technicians.map((tech) => ({
+                    value: tech.id,
+                    label: techLabel(tech),
+                  })),
+                ]}
+                triggerClassName={boardSelectTriggerClass}
+              />
             </div>
           ) : null}
 
@@ -330,22 +331,18 @@ export function WorkshopBoard({
         <>
           <div className="space-y-3 lg:hidden">
             <FormField id="board-column" label={t("columnSwitcher")}>
-              <select
+              <FormSelect
                 id="board-column"
-                className={selectClass}
                 value={mobileStatus}
-                onChange={(event) =>
-                  setMobileStatus(
-                    event.target.value as ServiceOrderStatusValue,
-                  )
+                onValueChange={(value) =>
+                  setMobileStatus(value as ServiceOrderStatusValue)
                 }
-              >
-                {BOARD_STATUSES.map((status) => (
-                  <option key={status} value={status}>
-                    {`${to(`statuses.${status}`)} (${byStatus[status].length})`}
-                  </option>
-                ))}
-              </select>
+                options={BOARD_STATUSES.map((status) => ({
+                  value: status,
+                  label: `${to(`statuses.${status}`)} (${byStatus[status].length})`,
+                }))}
+                triggerClassName={boardSelectTriggerClass}
+              />
             </FormField>
             <BoardColumn
               status={mobileStatus}

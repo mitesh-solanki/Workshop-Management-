@@ -3,6 +3,7 @@
 import { useActionState, useEffect, useId, useRef } from "react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
+import { FormSelect } from "@/components/ui/form-select";
 import { toast } from "@/components/ui/toast";
 import { GST_STATE_CODES } from "@/lib/gstin";
 import { cn } from "@/lib/utils";
@@ -60,18 +61,15 @@ export function CreateInvoiceForm({
           <label htmlFor={`${idPrefix}-pos`} className={labelClass}>
             {t("placeOfSupply")}
           </label>
-          <select
+          <FormSelect
             id={`${idPrefix}-pos`}
             name="placeOfSupplyStateCode"
             defaultValue={defaultCode}
-            className={controlClass}
-          >
-            {GST_STATE_CODES.map((code) => (
-              <option key={code} value={code}>
-                {tGst(`states.${code}`)} ({code})
-              </option>
-            ))}
-          </select>
+            options={GST_STATE_CODES.map((code) => ({
+              value: code,
+              label: `${tGst(`states.${code}`)} (${code})`,
+            }))}
+          />
           <p className="mt-1.5 text-[13px] leading-snug text-slate-500">
             {t("placeOfSupplyHint")}
           </p>

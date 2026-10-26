@@ -1,19 +1,17 @@
 import { Suspense } from "react";
-import Link from "next/link";
 import { Package } from "lucide-react";
 import { getTranslations } from "next-intl/server";
-import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
 import { Skeleton } from "@/components/ui/skeleton";
 import { requireSession } from "@/lib/session";
-import { CsvExportButton } from "@/modules/data-export/components/csv-export-button";
+import { ImportModal } from "@/modules/data-import/components/import-modal";
 import { CreatePartModal } from "@/modules/inventory/components/create-part-modal";
 import { InventoryTable } from "@/modules/inventory/components/inventory-table";
 import { listParts } from "@/modules/inventory/service";
 
 type Props = {
-  searchParams: Promise<{ q?: string }>;
+  searchParams: Promise<{ q?: string; sort?: string }>;
 };
 
 export const instant = false;
@@ -22,7 +20,7 @@ export default async function InventoryPage({ searchParams }: Props) {
   const session = await requireSession();
   const params = await searchParams;
   const t = await getTranslations("inventory");
-  const parts = await listParts(session, { q: params.q });
+  const parts = await listParts(session, { q: params.q, sort: params.sort });
   const canWrite = session.role === "OWNER" || session.role === "MANAGER";
   const canSale =
     session.role === "OWNER" ||
@@ -36,27 +34,10 @@ export default async function InventoryPage({ searchParams }: Props) {
         title={t("title")}
         description={t("subtitle")}
         actions={
-          <div className="flex flex-wrap gap-2">
-            <CsvExportButton
-              href={
-                params.q
-                  ? `/inventory/export?q=${encodeURIComponent(params.q)}`
-                  : "/inventory/export"
-              }
-              label={t("export")}
-            />
-            {canSale ? (
-              <Button asChild variant="secondary" size="md">
-                <Link href="/inventory/sales">{t("viewSales")}</Link>
-              </Button>
-            ) : null}
-            {canSale ? (
-              <Button asChild variant="secondary" size="md">
-                <Link href="/inventory/sales/new">{t("directSale")}</Link>
-              </Button>
-            ) : null}
+          <>
+            {canWrite ? <ImportModal entity="parts" /> : null}
             {canWrite ? <CreatePartModal /> : null}
-          </div>
+          </>
         }
       />
 
@@ -64,6 +45,7 @@ export default async function InventoryPage({ searchParams }: Props) {
         <InventoryTable
           items={parts}
           canWrite={canWrite}
+          canSale={canSale}
           empty={
             <EmptyState
               icon={Package}
@@ -73,7 +55,10 @@ export default async function InventoryPage({ searchParams }: Props) {
               }
               action={
                 canWrite && !hasQuery ? (
-                  <CreatePartModal size="sm" />
+                  <div className="flex flex-col items-center gap-2 sm:flex-row sm:justify-center">
+                    <ImportModal entity="parts" size="sm" />
+                    <CreatePartModal size="sm" />
+                  </div>
                 ) : undefined
               }
             />

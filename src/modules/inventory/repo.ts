@@ -49,7 +49,26 @@ export async function findGarageStockSettings(
   });
 }
 
-export async function searchParts(garageId: string, q: string) {
+function partOrderBy(
+  sort: "newest" | "updated" | "name_asc" | "name_desc",
+) {
+  if (sort === "newest") {
+    return [{ createdAt: "desc" as const }, { name: "asc" as const }];
+  }
+  if (sort === "updated") {
+    return [{ updatedAt: "desc" as const }, { name: "asc" as const }];
+  }
+  if (sort === "name_desc") {
+    return [{ name: "desc" as const }, { sku: "asc" as const }];
+  }
+  return [{ name: "asc" as const }, { sku: "asc" as const }];
+}
+
+export async function searchParts(
+  garageId: string,
+  q: string,
+  sort: "newest" | "updated" | "name_asc" | "name_desc" = "name_asc",
+) {
   const query = q.trim();
   const parts = await prisma.part.findMany({
     where: {
@@ -65,16 +84,32 @@ export async function searchParts(garageId: string, q: string) {
         : {}),
     },
     select: partSelect,
-    orderBy: [{ name: "asc" }, { sku: "asc" }],
+    orderBy: partOrderBy(sort),
     take: 200,
   });
 
+  // Case-insensitive A–Z / Z–A for display (Postgres name order is case-sensitive).
+  const ordered =
+    sort === "name_asc" || sort === "name_desc"
+      ? [...parts].sort((a, b) => {
+          const cmp = a.name.localeCompare(b.name, undefined, {
+            sensitivity: "base",
+          });
+          if (cmp !== 0) {
+            return sort === "name_desc" ? -cmp : cmp;
+          }
+          return (a.sku ?? "").localeCompare(b.sku ?? "", undefined, {
+            sensitivity: "base",
+          });
+        })
+      : parts;
+
   const stocks = await getStockLevelsForParts(
     garageId,
-    parts.map((p) => p.id),
+    ordered.map((p) => p.id),
   );
 
-  return parts.map((part) => ({
+  return ordered.map((part) => ({
     ...part,
     quantityOnHand: stocks.get(part.id) ?? 0,
   }));

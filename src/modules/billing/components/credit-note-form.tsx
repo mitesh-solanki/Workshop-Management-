@@ -4,6 +4,7 @@ import { useActionState, useEffect, useId, useRef, useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
+import { FormSelect } from "@/components/ui/form-select";
 import { toast } from "@/components/ui/toast";
 import { formatRupees, parseRupeesToPaise } from "@/lib/money";
 import { cn } from "@/lib/utils";
@@ -100,18 +101,15 @@ export function CreditNoteForm({ invoiceId, orderId }: Props) {
           <label htmlFor={`${idPrefix}-reason`} className={labelClass}>
             {t("creditNoteReason")}
           </label>
-          <select
+          <FormSelect
             id={`${idPrefix}-reason`}
             name="reason"
-            className={controlClass}
             defaultValue="CORRECTION"
-          >
-            {CREDIT_NOTE_REASONS.map((reason) => (
-              <option key={reason} value={reason}>
-                {t(`reasons.${reason}`)}
-              </option>
-            ))}
-          </select>
+            options={CREDIT_NOTE_REASONS.map((reason) => ({
+              value: reason,
+              label: t(`reasons.${reason}`),
+            }))}
+          />
         </div>
         <div className="min-w-0 sm:col-span-8">
           <label htmlFor={`${idPrefix}-notes`} className={labelClass}>
@@ -227,24 +225,21 @@ export function CreditNoteForm({ invoiceId, orderId }: Props) {
                     >
                       {t("gstRate")}
                     </label>
-                    <select
+                    <FormSelect
                       id={`gstRatePercent-${line.key}`}
                       name="gstRatePercent"
                       required
                       value={line.gstRatePercent}
-                      onChange={(e) =>
+                      onValueChange={(value) =>
                         updateLine(line.key, {
-                          gstRatePercent: e.target.value,
+                          gstRatePercent: value,
                         })
                       }
-                      className={controlClass}
-                    >
-                      {GST_RATE_OPTIONS.map((rate) => (
-                        <option key={rate} value={rate}>
-                          {rate}%
-                        </option>
-                      ))}
-                    </select>
+                      options={GST_RATE_OPTIONS.map((rate) => ({
+                        value: String(rate),
+                        label: `${rate}%`,
+                      }))}
+                    />
                   </div>
                   <div className="min-w-0 col-span-2 sm:col-span-3">
                     <label

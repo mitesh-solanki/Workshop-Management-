@@ -44,8 +44,8 @@ function sectionAtReadingLine<T extends string>(
   root: HTMLElement | null,
 ): T | null {
   const rootTop = root ? root.getBoundingClientRect().top : 0;
-  // Match sticky aside offset: mobile ~ top-0 + nav, desktop ~ top-4.
-  const readingLine = rootTop + 96;
+  // Match sticky section bar / aside: mobile sticky dropdown ~56px, desktop top-4.
+  const readingLine = rootTop + 112;
 
   let current: T | null = null;
   for (const section of sections) {

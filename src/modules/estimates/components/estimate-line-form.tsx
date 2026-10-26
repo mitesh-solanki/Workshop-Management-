@@ -8,6 +8,7 @@ import {
   type EstimateActionState,
 } from "@/app/actions/estimates";
 import { Button } from "@/components/ui/button";
+import { FormSelect } from "@/components/ui/form-select";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/toast";
 import {
@@ -80,17 +81,17 @@ export function EstimateLineForm({ orderId }: Props) {
             <label htmlFor="est-line-type" className={labelClass}>
               {t("lineType")}
             </label>
-            <select
+            <FormSelect
               id="est-line-type"
-              className={controlClass}
               value={lineType}
-              onChange={(e) =>
-                setLineType(e.target.value === "PART" ? "PART" : "LABOUR")
+              onValueChange={(value) =>
+                setLineType(value === "PART" ? "PART" : "LABOUR")
               }
-            >
-              <option value="LABOUR">{t("lineTypes.LABOUR")}</option>
-              <option value="PART">{t("lineTypes.PART")}</option>
-            </select>
+              options={[
+                { value: "LABOUR", label: t("lineTypes.LABOUR") },
+                { value: "PART", label: t("lineTypes.PART") },
+              ]}
+            />
           </div>
           <div className="min-w-0 sm:col-span-5">
             <label htmlFor="est-line-desc" className={labelClass}>
@@ -154,19 +155,16 @@ export function EstimateLineForm({ orderId }: Props) {
             <label htmlFor="est-line-gst" className={labelClass}>
               {t("gstRate")}
             </label>
-            <select
+            <FormSelect
               id="est-line-gst"
               name="gstRatePercent"
               required
-              className={controlClass}
               defaultValue={String(DEFAULT_GST_RATE_PERCENT)}
-            >
-              {GST_RATE_OPTIONS.map((rate) => (
-                <option key={rate} value={rate}>
-                  {rate}%
-                </option>
-              ))}
-            </select>
+              options={GST_RATE_OPTIONS.map((rate) => ({
+                value: String(rate),
+                label: `${rate}%`,
+              }))}
+            />
           </div>
         </div>
 

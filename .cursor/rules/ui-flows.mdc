@@ -1,0 +1,41 @@
+
+---
+description: UI AND FLOW RULES (apply to every feature in this project)
+alwaysApply: true
+---
+
+Before writing any code for a feature, do this first and show it to me:
+
+1. USER GOAL
+   Who is using this (owner, service advisor, mechanic, accountant) and what are they trying to finish, in one sentence.
+
+2. FLOW MAP
+   List the screens in order, for example: List -> Create -> Detail -> Edit -> Status change -> Done.
+   For each step, state:
+   - what the user sees
+   - the single primary action
+   - where that action takes them next
+   - what happens on success, on error, and when there is no data
+
+3. ENTRY AND EXIT POINTS
+   Where the user arrives from (sidebar, customer page, vehicle page) and where they land after finishing. No dead ends: every screen must have a clear next step or a way back.
+
+Wait for my confirmation of the flow map before building.
+
+UI RULES
+- Use shadcn/ui components only for UI primitives (Button, Card, Table, Dialog, Sheet, Form, Input, Select, Tabs, Badge, DropdownMenu, Toast, Skeleton, Alert, Breadcrumb). Add missing ones with the shadcn CLI instead of hand-writing them.
+- Every page has: a title, a one-line description, a breadcrumb, and exactly one primary button.
+- List pages: search, filters, a table with a status Badge, row actions in a DropdownMenu, pagination, and an empty state with a button to create the first record.
+- Create and edit use a full page for long forms and a Sheet or Dialog for short ones. Use react-hook-form + zod with inline field errors.
+- Detail pages show a summary header (key info + status + primary action), then Tabs for related data (e.g. vehicle -> service history, invoices).
+- Status changes (e.g. service order: Received -> In Progress -> Ready -> Delivered) use a visible status Badge and a single "next step" button, not a dropdown of every status. Destructive actions require a confirm dialog.
+- Every async action has: loading state on the button, success toast, error toast with a plain-language message.
+- Every list and detail page has a loading Skeleton and an empty state.
+- Labels use garage language (Job Card, Estimate, Delivered), not database terms. All text goes through next-intl (en, hi, gu).
+- Mobile first: mechanics use phones in the workshop. Tables become cards on small screens, tap targets at least 44px.
+- Consistent layout: same page header, same spacing, same card style on every page. Reuse existing components before creating new ones.
+
+AFTER BUILDING
+- Walk through the flow once as the user and list any step where the user would not know what to do next, then fix it.
+- Confirm every item in the prompt was implemented. List anything skipped.
+- No code comments. Give full file contents for changed files.

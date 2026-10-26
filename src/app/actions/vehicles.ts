@@ -2,7 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { AppError } from "@/lib/errors";
+import { getTranslations } from "next-intl/server";
+import { translateError } from "@/lib/translate-error";
 import { requireSession } from "@/lib/session";
 import {
   createVehicleRecord,
@@ -13,6 +14,7 @@ import {
 export type VehicleActionState = {
   ok: boolean;
   message?: string;
+  vehicleId?: string;
 };
 
 function vehicleFields(formData: FormData) {
@@ -20,6 +22,7 @@ function vehicleFields(formData: FormData) {
     registrationNumber: String(formData.get("registrationNumber") ?? ""),
     make: String(formData.get("make") ?? ""),
     model: String(formData.get("model") ?? ""),
+    stateCode: String(formData.get("stateCode") ?? ""),
     year: String(formData.get("year") ?? ""),
     odometer: String(formData.get("odometer") ?? ""),
     insuranceExpiry: String(formData.get("insuranceExpiry") ?? ""),
@@ -41,15 +44,38 @@ export async function createVehicleAction(
       ...vehicleFields(formData),
     });
   } catch (error) {
-    return {
-      ok: false,
-      message: error instanceof AppError ? error.message : "Something went wrong",
-    };
+    return { ok: false, message: await translateError(error) };
   }
 
   revalidatePath("/customers");
   revalidatePath(`/customers/${customerId}`);
   redirect(`/customers/${customerId}`);
+}
+
+/** Modal create — no redirect; client refreshes the customer/vehicle view. */
+export async function createVehicleModalAction(
+  _prev: VehicleActionState,
+  formData: FormData,
+): Promise<VehicleActionState> {
+  const t = await getTranslations("vehicles");
+
+  try {
+    const session = await requireSession();
+    const customerId = String(formData.get("customerId") ?? "");
+    const vehicle = await createVehicleRecord(session, {
+      customerId,
+      ...vehicleFields(formData),
+    });
+    revalidatePath("/customers");
+    revalidatePath(`/customers/${customerId}`);
+    return {
+      ok: true,
+      message: t("created"),
+      vehicleId: vehicle.id,
+    };
+  } catch (error) {
+    return { ok: false, message: await translateError(error) };
+  }
 }
 
 export async function updateVehicleAction(
@@ -58,41 +84,35 @@ export async function updateVehicleAction(
   _prev: VehicleActionState,
   formData: FormData,
 ): Promise<VehicleActionState> {
+  const t = await getTranslations("vehicles");
+
   try {
     const session = await requireSession();
     await updateVehicleRecord(session, vehicleId, vehicleFields(formData));
     revalidatePath("/customers");
     revalidatePath(`/customers/${customerId}`);
+    revalidatePath(`/vehicles/${vehicleId}`);
     revalidatePath(`/vehicles/${vehicleId}/edit`);
-    return { ok: true, message: "saved" };
+    return { ok: true, message: t("saved") };
   } catch (error) {
-    return {
-      ok: false,
-      message: error instanceof AppError ? error.message : "Something went wrong",
-    };
+    return { ok: false, message: await translateError(error) };
   }
 }
 
 export async function deleteVehicleAction(
   vehicleId: string,
   customerId: string,
-  _prev: VehicleActionState,
-  _formData: FormData,
+  _prev?: VehicleActionState,
+  _formData?: FormData,
 ): Promise<VehicleActionState> {
   try {
     const session = await requireSession();
     await deleteVehicleRecord(session, vehicleId);
+    revalidatePath("/customers");
+    revalidatePath(`/customers/${customerId}`);
   } catch (error) {
-    if (error instanceof AppError && error.code === "VEHICLE_HAS_ORDERS") {
-      return { ok: false, message: "cannotDeleteHasOrders" };
-    }
-    return {
-      ok: false,
-      message: error instanceof AppError ? error.message : "Something went wrong",
-    };
+    return { ok: false, message: await translateError(error) };
   }
 
-  revalidatePath("/customers");
-  revalidatePath(`/customers/${customerId}`);
   redirect(`/customers/${customerId}`);
 }

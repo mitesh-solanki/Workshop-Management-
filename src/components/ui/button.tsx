@@ -15,9 +15,9 @@ const buttonVariants = cva(
     variants: {
       variant: {
         primary:
-          "bg-teal-600 text-white shadow-sm hover:bg-teal-700 active:bg-teal-800",
+          "bg-blue-600 text-white shadow-sm hover:bg-blue-700 hover:text-white active:bg-blue-800 active:text-white",
         default:
-          "bg-teal-600 text-white shadow-sm hover:bg-teal-700 active:bg-teal-800",
+          "bg-blue-600 text-white shadow-sm hover:bg-blue-700 hover:text-white active:bg-blue-800 active:text-white",
         secondary:
           "border border-border bg-card text-foreground shadow-sm hover:bg-slate-50",
         ghost: "text-foreground hover:bg-slate-100",
@@ -27,7 +27,7 @@ const buttonVariants = cva(
           "bg-danger text-danger-foreground shadow-sm hover:bg-danger/90",
         outline:
           "border border-border bg-card shadow-sm hover:bg-slate-50",
-        link: "text-teal-600 underline-offset-4 hover:underline",
+        link: "text-blue-600 underline-offset-4 hover:underline",
       },
       size: {
         sm: "h-9 min-h-9 gap-1.5 rounded-md px-3 text-caption has-[>svg]:px-2.5",
@@ -64,18 +64,25 @@ function Button({
     loading?: boolean;
   }) {
   const Comp = asChild ? Slot.Root : "button";
+  const isIconSize =
+    size === "icon" ||
+    size === "icon-xs" ||
+    size === "icon-sm" ||
+    size === "icon-lg";
   // Slot requires exactly one React element child — never mix a loader with asChild.
-  const content =
-    asChild ? (
-      children
-    ) : (
-      <>
-        {loading ? (
-          <Loader2 className="size-4 animate-spin" aria-hidden />
-        ) : null}
-        {children}
-      </>
-    );
+  const content = asChild ? (
+    children
+  ) : loading ? (
+    <>
+      <Loader2
+        className={cn("animate-spin", isIconSize ? "size-5" : "size-4")}
+        aria-hidden
+      />
+      {isIconSize ? null : children}
+    </>
+  ) : (
+    children
+  );
 
   return (
     <Comp
@@ -84,7 +91,7 @@ function Button({
       data-size={size}
       disabled={disabled || loading}
       aria-busy={loading || undefined}
-      className={cn(buttonVariants({ variant, size, className }))}
+      className={cn(buttonVariants({ variant, size }), className)}
       {...props}
     >
       {content}

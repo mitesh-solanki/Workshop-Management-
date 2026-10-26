@@ -60,7 +60,7 @@ function assertCanMutateOrder(
     throw new ForbiddenError();
   }
   if (order.status === "COMPLETED") {
-    throw new AppError("ORDER_COMPLETED", 409);
+    throw new AppError("ORDER_COMPLETED");
   }
 }
 
@@ -119,7 +119,7 @@ export async function getOrCreateInspection(
     actorId: session.userId,
   });
   if (!created) {
-    throw new AppError("INSPECTION_CREATE_FAILED", 500);
+    throw new AppError("INSPECTION_CREATE_FAILED");
   }
   return await withMediaUrls(created);
 }
@@ -188,7 +188,7 @@ export async function addChecklistItem(
     });
   }
   if (!inspection) {
-    throw new AppError("INSPECTION_CREATE_FAILED", 500);
+    throw new AppError("INSPECTION_CREATE_FAILED");
   }
 
   return addCustomChecklistItem(session.garageId, {
@@ -208,7 +208,7 @@ export async function createMediaUploadUrl(
   try {
     assertMediaLimits(input.kind, input.contentType, input.byteSize);
   } catch {
-    throw new AppError("MEDIA_INVALID", 400);
+    throw new AppError("MEDIA_INVALID");
   }
 
   const item = await findInspectionItemById(
@@ -252,7 +252,7 @@ export async function confirmMediaUpload(
   try {
     assertMediaLimits(input.kind, input.contentType, input.byteSize);
   } catch {
-    throw new AppError("MEDIA_INVALID", 400);
+    throw new AppError("MEDIA_INVALID");
   }
 
   if (!storageKeyBelongsToGarage(input.storageKey, session.garageId)) {
@@ -344,7 +344,7 @@ export async function addSuggestedRepairLine(
     });
   }
   if (!inspection) {
-    throw new AppError("INSPECTION_CREATE_FAILED", 500);
+    throw new AppError("INSPECTION_CREATE_FAILED");
   }
 
   return createSuggestedRepair(session.garageId, {

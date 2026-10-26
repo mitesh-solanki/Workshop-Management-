@@ -216,6 +216,59 @@ export async function createEstimateWithLines(
   });
 }
 
+export async function updateEstimateLineDetails(
+  garageId: string,
+  data: {
+    lineId: string;
+    estimateId: string;
+    serviceOrderId: string;
+    description: string;
+    quantity: number;
+    unitPricePaise: number;
+    actorId: string;
+  },
+) {
+  return prisma.$transaction(async (tx) => {
+    const updated = await tx.estimateLine.updateMany({
+      where: {
+        id: data.lineId,
+        garageId,
+        estimateId: data.estimateId,
+      },
+      data: {
+        description: data.description,
+        quantity: data.quantity,
+        unitPricePaise: data.unitPricePaise,
+      },
+    });
+    if (updated.count === 0) {
+      return null;
+    }
+
+    await tx.auditLog.create({
+      data: {
+        garageId,
+        actorId: data.actorId,
+        action: "estimate.line_updated",
+        entity: "EstimateLine",
+        entityId: data.lineId,
+        meta: {
+          serviceOrderId: data.serviceOrderId,
+          estimateId: data.estimateId,
+          description: data.description,
+          quantity: data.quantity,
+          unitPricePaise: data.unitPricePaise,
+        } satisfies Prisma.InputJsonValue,
+      },
+    });
+
+    return tx.estimateLine.findFirst({
+      where: { id: data.lineId, garageId },
+      select: lineSelect,
+    });
+  });
+}
+
 export async function addEstimateLine(
   garageId: string,
   data: {
@@ -286,6 +339,54 @@ export async function addEstimateLine(
     });
 
     return line;
+  });
+}
+
+export async function deleteEstimateLine(
+  garageId: string,
+  data: {
+    lineId: string;
+    estimateId: string;
+    serviceOrderId: string;
+    description: string;
+    actorId: string;
+  },
+): Promise<"ok" | "not_found" | "billed"> {
+  return prisma.$transaction(async (tx) => {
+    const billed = await tx.invoiceLine.count({
+      where: { garageId, estimateLineId: data.lineId },
+    });
+    if (billed > 0) {
+      return "billed";
+    }
+
+    const removed = await tx.estimateLine.deleteMany({
+      where: {
+        id: data.lineId,
+        garageId,
+        estimateId: data.estimateId,
+      },
+    });
+    if (removed.count === 0) {
+      return "not_found";
+    }
+
+    await tx.auditLog.create({
+      data: {
+        garageId,
+        actorId: data.actorId,
+        action: "estimate.line_removed",
+        entity: "EstimateLine",
+        entityId: data.lineId,
+        meta: {
+          serviceOrderId: data.serviceOrderId,
+          estimateId: data.estimateId,
+          description: data.description,
+        } satisfies Prisma.InputJsonValue,
+      },
+    });
+
+    return "ok";
   });
 }
 

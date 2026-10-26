@@ -119,15 +119,28 @@ describe("OTP email delivery", () => {
   });
 
   it("surfaces send failure without exposing provider errors", async () => {
+    const previousDevOtp = process.env.AUTH_DEV_OTP;
+    delete process.env.AUTH_DEV_OTP;
+
     vi.mocked(sendLoggedEmail).mockResolvedValue({
       ok: false,
       provider: "fake",
       errorCode: "RESEND_ERROR",
     });
 
-    await expect(
-      createEmailOtp({ email: "a@b.com", purpose: "login" }),
-    ).rejects.toMatchObject({ code: "auth.email_send_failed" } satisfies Partial<AppError>);
+    try {
+      await expect(
+        createEmailOtp({ email: "a@b.com", purpose: "login" }),
+      ).rejects.toMatchObject({
+        code: "auth.email_send_failed",
+      } satisfies Partial<AppError>);
+    } finally {
+      if (previousDevOtp === undefined) {
+        delete process.env.AUTH_DEV_OTP;
+      } else {
+        process.env.AUTH_DEV_OTP = previousDevOtp;
+      }
+    }
   });
 
   it("rejects wrong, expired and reused codes", async () => {

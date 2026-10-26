@@ -139,3 +139,23 @@ export const OTP_IP_RATE = {
 } as const;
 
 export const MAX_OTP_ATTEMPTS = 5;
+
+export const PROD_PASSWORD_EMAIL_RATE = {
+  limit: 10,
+  windowMs: 15 * 60 * 1000,
+} as const;
+
+export const PROD_PASSWORD_IP_RATE = {
+  limit: 30,
+  windowMs: 15 * 60 * 1000,
+} as const;
+
+export const LIVE_LINK_VIEW_RATE = {
+  limit: 60,
+  windowMs: 15 * 60 * 1000,
+} as const;
+
+export const LIVE_LINK_ACTION_RATE = {
+  limit: 30,
+  windowMs: 15 * 60 * 1000,
+} as const;

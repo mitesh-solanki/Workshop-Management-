@@ -1,7 +1,15 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { getTranslations } from "next-intl/server";
+import { AuthCardBrand } from "@/components/brand/auth-card-brand";
 import { InviteAcceptForm } from "@/components/auth-forms";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { authCopy, authTeamRolesCopy } from "@/lib/auth-copy";
 import { hashToken } from "@/lib/otp";
 import { getOptionalSession } from "@/lib/session";
 import { findPendingInviteByTokenHash } from "@/modules/auth/repo";
@@ -24,26 +32,33 @@ export default async function InvitePage({ params }: Props) {
     notFound();
   }
 
-  const t = await getTranslations("auth");
-  const tRoles = await getTranslations("team.roles");
-
   return (
-    <main className="flex flex-1 flex-col gap-6">
-      <div className="space-y-2">
-        <h1 className="text-2xl font-semibold tracking-tight">{t("inviteTitle")}</h1>
-        <p className="text-base text-muted-foreground">
-          {t("inviteSubtitle", {
-            garage: invite.garage.name,
-            role: tRoles(invite.role),
-          })}
-        </p>
-      </div>
-      <InviteAcceptForm token={token} email={invite.email} />
-      <p className="text-sm text-muted-foreground">
-        <Link href="/login" className="font-medium text-foreground underline">
-          {t("loginLink")}
+    <div className="flex flex-col gap-6">
+      <Card>
+        <CardHeader className="text-center">
+          <AuthCardBrand />
+          <CardTitle className="text-2xl font-semibold tracking-tight text-slate-900">
+            {authCopy("inviteTitle")}
+          </CardTitle>
+          <CardDescription className="text-sm text-slate-500">
+            {authCopy("inviteSubtitle", {
+              garage: invite.garage.name,
+              role: authTeamRolesCopy(invite.role),
+            })}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <InviteAcceptForm token={token} email={invite.email} />
+        </CardContent>
+      </Card>
+      <p className="text-center text-sm text-muted-foreground">
+        <Link
+          href="/login"
+          className="font-medium text-foreground underline underline-offset-4"
+        >
+          {authCopy("loginLink")}
         </Link>
       </p>
-    </main>
+    </div>
   );
 }

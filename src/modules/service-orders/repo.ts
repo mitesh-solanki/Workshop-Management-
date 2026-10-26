@@ -44,6 +44,7 @@ const orderListSelect = {
       registrationNumber: true,
       make: true,
       model: true,
+      stateCode: true,
     },
   },
   customer: {
@@ -86,7 +87,7 @@ export async function findTechnicianInGarage(
 
 export async function listServiceOrders(
   garageId: string,
-  options: { technicianId?: string } = {},
+  options: { technicianId?: string; bay?: string } = {},
 ) {
   return prisma.serviceOrder.findMany({
     where: {
@@ -94,6 +95,7 @@ export async function listServiceOrders(
       ...(options.technicianId
         ? { technicianId: options.technicianId }
         : {}),
+      ...(options.bay ? { bay: options.bay } : {}),
     },
     select: orderListSelect,
     orderBy: [{ createdAt: "desc" }],
@@ -192,6 +194,71 @@ export async function createServiceOrder(
           from: null,
           to: "WAITING",
           created: true,
+        } satisfies Prisma.InputJsonValue,
+      },
+    });
+
+    return order;
+  });
+}
+
+export async function updateServiceOrderDetails(
+  garageId: string,
+  orderId: string,
+  data: {
+    complaint: string;
+    requestedServices: string | null;
+    odometerIn: number | null;
+    expectedCompletion: Date | null;
+    technicianId: string | null;
+    bay: string | null;
+    priority: ServiceOrderPriority;
+    vehicleId: string;
+    actorId: string;
+  },
+) {
+  return prisma.$transaction(async (tx) => {
+    const existing = await tx.serviceOrder.findFirst({
+      where: { id: orderId, garageId },
+      select: { id: true },
+    });
+    if (!existing) {
+      return null;
+    }
+
+    const order = await tx.serviceOrder.update({
+      where: { id: orderId },
+      data: {
+        complaint: data.complaint,
+        requestedServices: data.requestedServices,
+        odometerIn: data.odometerIn,
+        expectedCompletion: data.expectedCompletion,
+        technicianId: data.technicianId,
+        bay: data.bay,
+        priority: data.priority,
+      },
+      select: orderListSelect,
+    });
+
+    if (data.odometerIn != null) {
+      await tx.vehicle.updateMany({
+        where: { id: data.vehicleId, garageId },
+        data: { odometer: data.odometerIn },
+      });
+    }
+
+    await tx.auditLog.create({
+      data: {
+        garageId,
+        actorId: data.actorId,
+        action: "service_order.updated",
+        entity: "ServiceOrder",
+        entityId: orderId,
+        meta: {
+          complaint: data.complaint,
+          priority: data.priority,
+          bay: data.bay,
+          technicianId: data.technicianId,
         } satisfies Prisma.InputJsonValue,
       },
     });
@@ -347,6 +414,192 @@ export async function createServiceOrderLine(
     return { ok: true, line };
   } catch (error) {
     if (error instanceof StockLineTxError) {
+      if (error.reason === "NOT_FOUND") {
+        return { ok: false, reason: "PART_NOT_FOUND" };
+      }
+      return { ok: false, reason: error.reason };
+    }
+    throw error;
+  }
+}
+
+type ServiceOrderLineRow = {
+  id: string;
+  garageId: string;
+  serviceOrderId: string;
+  type: ServiceOrderLineType;
+  description: string;
+  quantity: number;
+  unitPricePaise: number;
+  partId: string | null;
+  sortOrder: number;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+export type UpdateServiceOrderLineResult =
+  | { ok: true; line: ServiceOrderLineRow }
+  | { ok: false; reason: "NOT_FOUND" | "PART_NOT_FOUND" | "INSUFFICIENT_STOCK" };
+
+export async function updateServiceOrderLine(
+  garageId: string,
+  data: {
+    lineId: string;
+    serviceOrderId: string;
+    description: string;
+    quantity: number;
+    unitPricePaise: number;
+    actorId: string;
+  },
+): Promise<UpdateServiceOrderLineResult> {
+  try {
+    const line = await prisma.$transaction(async (tx) => {
+      const existing = await tx.serviceOrderLine.findFirst({
+        where: {
+          id: data.lineId,
+          garageId,
+          serviceOrderId: data.serviceOrderId,
+        },
+        select: lineSelect,
+      });
+      if (!existing) {
+        throw new StockLineTxError("NOT_FOUND");
+      }
+
+      const quantityDelta = data.quantity - existing.quantity;
+      if (
+        existing.type === "PART" &&
+        existing.partId &&
+        quantityDelta !== 0
+      ) {
+        const stock = await applyStockMovement(
+          garageId,
+          {
+            partId: existing.partId,
+            type: quantityDelta > 0 ? "OUT" : "IN",
+            quantity: Math.abs(quantityDelta),
+            note: `Service order line update ${data.serviceOrderId}`,
+            actorId: data.actorId,
+            serviceOrderId: data.serviceOrderId,
+            serviceOrderLineId: existing.id,
+          },
+          tx,
+        );
+        if (!stock.ok) {
+          throw new StockLineTxError(stock.reason);
+        }
+      }
+
+      const updated = await tx.serviceOrderLine.update({
+        where: { id: existing.id },
+        data: {
+          description: data.description,
+          quantity: data.quantity,
+          unitPricePaise: data.unitPricePaise,
+        },
+        select: lineSelect,
+      });
+
+      await tx.auditLog.create({
+        data: {
+          garageId,
+          actorId: data.actorId,
+          action: "service_order.line_updated",
+          entity: "ServiceOrder",
+          entityId: data.serviceOrderId,
+          meta: {
+            lineId: updated.id,
+            type: updated.type,
+            description: updated.description,
+            quantity: updated.quantity,
+            unitPricePaise: updated.unitPricePaise,
+            previousQuantity: existing.quantity,
+            previousUnitPricePaise: existing.unitPricePaise,
+          } satisfies Prisma.InputJsonValue,
+        },
+      });
+
+      return updated;
+    });
+
+    return { ok: true, line };
+  } catch (error) {
+    if (error instanceof StockLineTxError) {
+      return { ok: false, reason: error.reason };
+    }
+    throw error;
+  }
+}
+
+export type DeleteServiceOrderLineResult =
+  | { ok: true }
+  | { ok: false; reason: "NOT_FOUND" | "PART_NOT_FOUND" | "INSUFFICIENT_STOCK" };
+
+export async function deleteServiceOrderLine(
+  garageId: string,
+  data: {
+    lineId: string;
+    serviceOrderId: string;
+    actorId: string;
+  },
+): Promise<DeleteServiceOrderLineResult> {
+  try {
+    await prisma.$transaction(async (tx) => {
+      const existing = await tx.serviceOrderLine.findFirst({
+        where: {
+          id: data.lineId,
+          garageId,
+          serviceOrderId: data.serviceOrderId,
+        },
+        select: lineSelect,
+      });
+      if (!existing) {
+        throw new StockLineTxError("NOT_FOUND");
+      }
+
+      if (existing.type === "PART" && existing.partId) {
+        const stock = await applyStockMovement(
+          garageId,
+          {
+            partId: existing.partId,
+            type: "IN",
+            quantity: existing.quantity,
+            note: `Service order line removed ${data.serviceOrderId}`,
+            actorId: data.actorId,
+            serviceOrderId: data.serviceOrderId,
+            serviceOrderLineId: existing.id,
+          },
+          tx,
+        );
+        if (!stock.ok) {
+          throw new StockLineTxError(stock.reason);
+        }
+      }
+
+      await tx.serviceOrderLine.delete({ where: { id: existing.id } });
+
+      await tx.auditLog.create({
+        data: {
+          garageId,
+          actorId: data.actorId,
+          action: "service_order.line_removed",
+          entity: "ServiceOrder",
+          entityId: data.serviceOrderId,
+          meta: {
+            lineId: existing.id,
+            type: existing.type,
+            description: existing.description,
+            quantity: existing.quantity,
+            unitPricePaise: existing.unitPricePaise,
+            partId: existing.partId,
+          } satisfies Prisma.InputJsonValue,
+        },
+      });
+    });
+
+    return { ok: true };
+  } catch (error) {
+    if (error instanceof StockLineTxError) {
       return { ok: false, reason: error.reason };
     }
     throw error;
@@ -354,9 +607,9 @@ export async function createServiceOrderLine(
 }
 
 class StockLineTxError extends Error {
-  readonly reason: "PART_NOT_FOUND" | "INSUFFICIENT_STOCK";
+  readonly reason: "NOT_FOUND" | "PART_NOT_FOUND" | "INSUFFICIENT_STOCK";
 
-  constructor(reason: "PART_NOT_FOUND" | "INSUFFICIENT_STOCK") {
+  constructor(reason: "NOT_FOUND" | "PART_NOT_FOUND" | "INSUFFICIENT_STOCK") {
     super(reason);
     this.name = "StockLineTxError";
     this.reason = reason;
@@ -387,5 +640,49 @@ export async function listServiceOrderAuditLogs(
       },
     },
     orderBy: { createdAt: "asc" },
+  });
+}
+
+export async function deleteServiceOrderById(
+  garageId: string,
+  orderId: string,
+  data: {
+    actorId: string;
+    vehicleId: string;
+    customerId: string;
+    registrationNumber: string;
+  },
+) {
+  return prisma.$transaction(async (tx) => {
+    const existing = await tx.serviceOrder.findFirst({
+      where: { id: orderId, garageId },
+      select: { id: true, status: true, complaint: true },
+    });
+    if (!existing) {
+      return null;
+    }
+
+    await tx.serviceOrder.delete({
+      where: { id: orderId },
+    });
+
+    await tx.auditLog.create({
+      data: {
+        garageId,
+        actorId: data.actorId,
+        action: "service_order.deleted",
+        entity: "ServiceOrder",
+        entityId: orderId,
+        meta: {
+          status: existing.status,
+          complaint: existing.complaint,
+          vehicleId: data.vehicleId,
+          customerId: data.customerId,
+          registrationNumber: data.registrationNumber,
+        } satisfies Prisma.InputJsonValue,
+      },
+    });
+
+    return existing;
   });
 }

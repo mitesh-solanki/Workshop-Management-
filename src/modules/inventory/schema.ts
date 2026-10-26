@@ -108,14 +108,11 @@ const optionalCustomerId = z
     return value.trim();
   });
 
+/** Optional search text; missing/empty becomes "". */
 const searchQuery = z
-  .union([z.string(), z.undefined()])
-  .transform((value) => {
-    if (value == null) {
-      return "";
-    }
-    return value.trim().slice(0, 100);
-  });
+  .string()
+  .optional()
+  .transform((value) => (value ?? "").trim().slice(0, 100));
 
 export const partSearchSchema = z.object({
   q: searchQuery,

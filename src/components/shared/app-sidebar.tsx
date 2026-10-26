@@ -4,7 +4,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect } from "react";
 import { useTranslations } from "next-intl";
-import { Wrench, X } from "lucide-react";
+import { X } from "lucide-react";
+import { AppLogoMark } from "@/components/brand/app-logo";
 import {
   navGroupsForRole,
   type AppRole,
@@ -65,12 +66,10 @@ export function AppSidebar({
             isMobile && "pr-1",
           )}
         >
-          <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-teal-600 text-white">
-            <Wrench className="size-5" aria-hidden />
-          </span>
+          <AppLogoMark size="lg" className="shrink-0" />
           {!collapsed ? (
             <div className="min-w-0 flex-1 group-data-[collapsible=icon]:hidden">
-              <p className="truncate text-sm font-semibold tracking-tight text-sidebar-foreground">
+              <p className="font-brand truncate text-sm font-semibold tracking-tight text-sidebar-foreground">
                 {appName}
               </p>
               <p className="truncate text-caption text-sidebar-muted">
@@ -110,9 +109,9 @@ export function AppSidebar({
                           isActive={active}
                           size="lg"
                           className={cn(
-                            "min-h-11 rounded-full group-data-[collapsible=icon]:min-h-10 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:rounded-lg",
+                            "min-h-11 rounded-lg group-data-[collapsible=icon]:min-h-10 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:rounded-lg",
                             active &&
-                              "data-[active=true]:bg-teal-600 data-[active=true]:text-white data-[active=true]:hover:bg-teal-700 data-[active=true]:hover:text-white",
+                            "data-[active=true]:bg-blue-600 data-[active=true]:text-white data-[active=true]:hover:bg-blue-700 data-[active=true]:hover:text-white",
                           )}
                         >
                           <Link

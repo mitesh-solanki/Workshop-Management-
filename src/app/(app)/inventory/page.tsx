@@ -1,16 +1,22 @@
+import { Suspense } from "react";
 import Link from "next/link";
 import { Package } from "lucide-react";
 import { getTranslations } from "next-intl/server";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
-import { formatRupees } from "@/lib/money";
+import { Skeleton } from "@/components/ui/skeleton";
 import { requireSession } from "@/lib/session";
+import { CsvExportButton } from "@/modules/data-export/components/csv-export-button";
+import { CreatePartModal } from "@/modules/inventory/components/create-part-modal";
+import { InventoryTable } from "@/modules/inventory/components/inventory-table";
 import { listParts } from "@/modules/inventory/service";
 
 type Props = {
   searchParams: Promise<{ q?: string }>;
 };
+
+export const instant = false;
 
 export default async function InventoryPage({ searchParams }: Props) {
   const session = await requireSession();
@@ -22,116 +28,58 @@ export default async function InventoryPage({ searchParams }: Props) {
     session.role === "OWNER" ||
     session.role === "MANAGER" ||
     session.role === "ACCOUNTANT";
+  const hasQuery = Boolean(params.q?.trim());
 
   return (
-    <main className="space-y-6">
+    <main className="space-y-6 sm:space-y-8">
       <PageHeader
         title={t("title")}
         description={t("subtitle")}
         actions={
           <div className="flex flex-wrap gap-2">
-            <Button asChild variant="secondary" size="md">
-              <Link
-                href={
-                  params.q
-                    ? `/inventory/export?q=${encodeURIComponent(params.q)}`
-                    : "/inventory/export"
-                }
-              >
-                {t("export")}
-              </Link>
-            </Button>
+            <CsvExportButton
+              href={
+                params.q
+                  ? `/inventory/export?q=${encodeURIComponent(params.q)}`
+                  : "/inventory/export"
+              }
+              label={t("export")}
+            />
+            {canSale ? (
+              <Button asChild variant="secondary" size="md">
+                <Link href="/inventory/sales">{t("viewSales")}</Link>
+              </Button>
+            ) : null}
             {canSale ? (
               <Button asChild variant="secondary" size="md">
                 <Link href="/inventory/sales/new">{t("directSale")}</Link>
               </Button>
             ) : null}
-            {canWrite ? (
-              <Button asChild size="md">
-                <Link href="/inventory/new">{t("add")}</Link>
-              </Button>
-            ) : null}
+            {canWrite ? <CreatePartModal /> : null}
           </div>
         }
       />
 
-      <form className="flex gap-2" method="get">
-        <label htmlFor="q" className="sr-only">
-          {t("searchLabel")}
-        </label>
-        <input
-          id="q"
-          name="q"
-          defaultValue={params.q ?? ""}
-          placeholder={t("searchPlaceholder")}
-          className="min-h-12 w-full max-w-md rounded-md border bg-background px-3 text-base outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        />
-        <Button type="submit" variant="secondary" size="md">
-          {t("search")}
-        </Button>
-      </form>
-
-      {parts.length === 0 ? (
-        <EmptyState
-          icon={Package}
-          title={t("emptyTitle")}
-          description={t("emptyDescription")}
-          action={
-            canWrite ? (
-              <Button asChild size="sm">
-                <Link href="/inventory/new">{t("add")}</Link>
-              </Button>
-            ) : null
+      <Suspense fallback={<Skeleton className="h-64 w-full" />}>
+        <InventoryTable
+          items={parts}
+          canWrite={canWrite}
+          empty={
+            <EmptyState
+              icon={Package}
+              title={hasQuery ? t("emptySearchTitle") : t("emptyTitle")}
+              description={
+                hasQuery ? t("emptySearchDescription") : t("emptyDescription")
+              }
+              action={
+                canWrite && !hasQuery ? (
+                  <CreatePartModal size="sm" />
+                ) : undefined
+              }
+            />
           }
         />
-      ) : (
-        <ul className="divide-y rounded-md border">
-          {parts.map((part) => {
-            const low = part.quantityOnHand <= part.lowStockLevel;
-            return (
-              <li key={part.id}>
-                <Link
-                  href={`/inventory/${part.id}`}
-                  className="flex min-h-14 flex-col gap-1 px-3 py-3 hover:bg-secondary/50 sm:flex-row sm:items-center sm:justify-between"
-                >
-                  <div className="min-w-0 space-y-0.5">
-                    <p className="truncate font-medium">{part.name}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {part.sku} · {part.unit} · {t("hsn")} {part.hsn}
-                    </p>
-                  </div>
-                  <div className="flex shrink-0 flex-wrap items-baseline gap-3 text-sm">
-                    <span
-                      className={
-                        low
-                          ? "font-semibold text-amber-800"
-                          : "text-muted-foreground"
-                      }
-                    >
-                      {t("stockCount", {
-                        count: part.quantityOnHand,
-                        unit: part.unit,
-                      })}
-                      {low ? ` · ${t("lowBadge")}` : ""}
-                    </span>
-                    <span className="font-medium">
-                      {formatRupees(part.sellingPricePaise)}
-                    </span>
-                  </div>
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
-      )}
-
-      {canSale ? (
-        <p className="text-sm text-muted-foreground">
-          <Link href="/inventory/sales" className="underline">
-            {t("viewSales")}
-          </Link>
-        </p>
-      ) : null}
+      </Suspense>
     </main>
   );
 }

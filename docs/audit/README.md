@@ -12,6 +12,10 @@ Statuses: **Done** / **Partial** / **Missing**. If unsure, marked Partial.
 | 4 | 1.4 Inspection | same (`feat/service-orders`) | [inspections.md](./inspections.md) |
 | 5 | 1.5 Estimates and approval | same | [estimates-approval.md](./estimates-approval.md) |
 | 6 | 1.6 Workshop board | same | [workshop-board.md](./workshop-board.md) |
+| 7 | 1.7 Inventory basics | `feat/inventory-management` | [feat-inventory-management.md](./feat-inventory-management.md) |
+| 8 | 1.8 GST billing and payments | `feat/gst-billing-payments` (mostly uncommitted) | [feat-gst-billing-payments.md](./feat-gst-billing-payments.md) |
+| 9 | 1.9 UPI link and Customer Live Link | `feat/upi-customer-live-link` (mostly uncommitted) | [feat-upi-customer-live-link.md](./feat-upi-customer-live-link.md) |
+| 10 | 1.10 CSV import | `feat/csv-export` | [feat-csv-export.md](./feat-csv-export.md) |
 
 Also present but not a product prompt: `feat/playwright-e2e-smoke-tests` (Playwright smoke coverage on top of merged service-orders work).
 

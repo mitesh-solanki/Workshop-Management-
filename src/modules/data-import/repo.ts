@@ -23,7 +23,9 @@ export async function listCustomerPhoneIndex(garageId: string) {
   return map;
 }
 
-export async function listRegistrationSet(garageId: string) {
+export async function listRegistrationSet(
+  garageId: string,
+): Promise<Set<string>> {
   const vehicles = await prisma.vehicle.findMany({
     where: { garageId },
     select: { registrationNumber: true },
@@ -32,13 +34,17 @@ export async function listRegistrationSet(garageId: string) {
   return new Set(vehicles.map((v) => v.registrationNumber));
 }
 
-export async function listSkuSet(garageId: string) {
+export async function listSkuSet(garageId: string): Promise<Set<string>> {
   const parts = await prisma.part.findMany({
     where: { garageId },
     select: { sku: true },
     take: 20_000,
   });
-  return new Set(parts.map((p) => p.sku));
+  return new Set(
+    parts
+      .map((p) => p.sku)
+      .filter((sku): sku is string => sku != null && sku.length > 0),
+  );
 }
 
 export async function importCustomersBatch(

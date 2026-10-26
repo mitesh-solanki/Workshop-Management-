@@ -1,55 +1,66 @@
 "use client";
 
+import { useEffect, useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { useTransition } from "react";
+import { SearchInput } from "@/components/ui/search-input";
 
-const inputClass =
-  "min-h-12 w-full rounded-md border bg-background px-3 text-base outline-none focus-visible:ring-2 focus-visible:ring-ring";
+const DEBOUNCE_MS = 300;
 
-export function CustomerSearch() {
+type CustomerSearchProps = {
+  className?: string;
+};
+
+export function CustomerSearch({ className }: CustomerSearchProps) {
   const t = useTranslations("customers");
   const router = useRouter();
   const searchParams = useSearchParams();
   const [pending, startTransition] = useTransition();
-  const current = searchParams.get("q") ?? "";
+  const urlQuery = searchParams.get("q") ?? "";
+  const [value, setValue] = useState(urlQuery);
+  const [syncedUrlQuery, setSyncedUrlQuery] = useState(urlQuery);
+
+  // Keep input in sync when the URL changes (back/forward, clear).
+  // Adjust during render — avoids setState-in-effect cascading renders.
+  if (urlQuery !== syncedUrlQuery) {
+    setSyncedUrlQuery(urlQuery);
+    setValue(urlQuery);
+  }
+
+  // Debounced search — no Enter required.
+  useEffect(() => {
+    const next = value.trim();
+    const current = urlQuery.trim();
+    if (next === current) return;
+
+    const timer = window.setTimeout(() => {
+      const params = new URLSearchParams(searchParams.toString());
+      if (next) {
+        params.set("q", next);
+      } else {
+        params.delete("q");
+      }
+      // New query always starts at page 1.
+      params.delete("page");
+      const query = params.toString();
+      startTransition(() => {
+        router.replace(query ? `/customers?${query}` : "/customers");
+      });
+    }, DEBOUNCE_MS);
+
+    return () => window.clearTimeout(timer);
+  }, [value, urlQuery, router, searchParams]);
 
   return (
-    <form
-      className="flex flex-col gap-2"
-      onSubmit={(event) => {
-        event.preventDefault();
-        const formData = new FormData(event.currentTarget);
-        const q = String(formData.get("q") ?? "").trim();
-        const params = new URLSearchParams();
-        if (q) {
-          params.set("q", q);
-        }
-        const href = params.size > 0 ? `/customers?${params}` : "/customers";
-        startTransition(() => {
-          router.push(href);
-        });
-      }}
-    >
-      <label htmlFor="q" className="sr-only">
-        {t("searchLabel")}
-      </label>
-      <input
-        id="q"
-        name="q"
-        type="search"
-        defaultValue={current}
+    <div className={className ?? "w-full"}>
+      <SearchInput
+        id="customer-search"
+        value={value}
+        onValueChange={setValue}
+        label={t("searchLabel")}
         placeholder={t("searchPlaceholder")}
-        className={inputClass}
-        enterKeyHint="search"
+        aria-busy={pending || undefined}
       />
-      <button
-        type="submit"
-        disabled={pending}
-        className="min-h-12 rounded-md border px-4 text-base font-medium disabled:opacity-60"
-      >
-        {pending ? t("searching") : t("search")}
-      </button>
-    </form>
+    </div>
   );
 }

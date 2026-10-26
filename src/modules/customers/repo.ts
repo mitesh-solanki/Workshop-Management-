@@ -19,6 +19,7 @@ const vehicleSummarySelect = {
   registrationNumber: true,
   make: true,
   model: true,
+  stateCode: true,
   year: true,
   odometer: true,
 } as const;
@@ -98,6 +99,7 @@ export async function countCustomerServiceOrders(
   });
 }
 
+/** Deletes a customer scoped to the garage. Vehicles cascade via Prisma. */
 export async function deleteCustomerById(
   garageId: string,
   customerId: string,
@@ -130,42 +132,69 @@ export async function deleteCustomerById(
   });
 }
 
-export async function searchCustomers(
-  garageId: string,
-  q: string | undefined,
-) {
+function customerSearchWhere(garageId: string, q: string | undefined) {
   const query = q?.trim();
-
-  return prisma.customer.findMany({
-    where: {
-      garageId,
-      ...(query
-        ? {
-            OR: [
-              { name: { contains: query, mode: "insensitive" } },
-              { phone: { contains: query } },
-              {
-                vehicles: {
-                  some: {
-                    registrationNumber: {
-                      contains: query.replace(/\s+/g, "").toUpperCase(),
-                      mode: "insensitive",
-                    },
+  return {
+    garageId,
+    ...(query
+      ? {
+          OR: [
+            { name: { contains: query, mode: "insensitive" as const } },
+            { phone: { contains: query } },
+            {
+              vehicles: {
+                some: {
+                  registrationNumber: {
+                    contains: query.replace(/\s+/g, "").toUpperCase(),
+                    mode: "insensitive" as const,
                   },
                 },
               },
-            ],
-          }
-        : {}),
-    },
-    select: {
-      ...customerSelect,
-      vehicles: {
-        select: vehicleSummarySelect,
-        orderBy: { registrationNumber: "asc" },
+            },
+          ],
+        }
+      : {}),
+  };
+}
+
+export async function searchCustomers(
+  garageId: string,
+  q: string | undefined,
+  page: number,
+  pageSize: number,
+) {
+  const where = customerSearchWhere(garageId, q);
+  const skip = (page - 1) * pageSize;
+
+  const [items, total] = await Promise.all([
+    prisma.customer.findMany({
+      where,
+      select: {
+        ...customerSelect,
+        vehicles: {
+          select: vehicleSummarySelect,
+          orderBy: { registrationNumber: "asc" },
+        },
       },
-    },
+      orderBy: [{ name: "asc" }, { createdAt: "desc" }],
+      skip,
+      take: pageSize,
+    }),
+    prisma.customer.count({ where }),
+  ]);
+
+  return { items, total, page, pageSize };
+}
+
+/** Unpaginated customer rows for CSV export (capped). */
+export async function listCustomersForExport(
+  garageId: string,
+  q: string | undefined,
+) {
+  return prisma.customer.findMany({
+    where: customerSearchWhere(garageId, q),
+    select: customerSelect,
     orderBy: [{ name: "asc" }, { createdAt: "desc" }],
-    take: 100,
+    take: 20_000,
   });
 }

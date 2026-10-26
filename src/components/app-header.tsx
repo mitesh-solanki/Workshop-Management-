@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Bell, ChevronRight, Search } from "lucide-react";
 import { LanguageSwitcher } from "@/components/language-switcher";
+import { usePageChrome } from "@/components/page-chrome";
 import type { NavKey } from "@/components/shared/nav-items";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -17,6 +18,8 @@ import {
 
 const TITLE_BY_PREFIX: { prefix: string; key: NavKey }[] = [
   { prefix: "/dashboard", key: "dashboard" },
+  { prefix: "/customers", key: "customers" },
+  { prefix: "/invoices", key: "invoices" },
   { prefix: "/orders", key: "orders" },
   { prefix: "/team", key: "team" },
   { prefix: "/settings", key: "settings" },
@@ -32,13 +35,17 @@ export function AppHeader({ appName, garageName }: AppHeaderProps) {
   const tNav = useTranslations("nav");
   const tShell = useTranslations("shell");
   const { isMobile, openMobile } = useSidebar();
+  const chrome = usePageChrome();
+  const detailLabel = chrome?.detailLabel ?? null;
 
   const match = TITLE_BY_PREFIX.find(
     (item) =>
       pathname === item.prefix || pathname.startsWith(`${item.prefix}/`),
   );
-  const pageTitle = match ? tNav(match.key) : appName;
+  const sectionTitle = match ? tNav(match.key) : appName;
+  const pageTitle = detailLabel ?? sectionTitle;
   const isHome = pathname === "/dashboard" || pathname.startsWith("/dashboard/");
+  const sectionHref = match?.prefix ?? "/dashboard";
   const triggerLabel = isMobile
     ? openMobile
       ? tNav("closeMenu")
@@ -46,8 +53,8 @@ export function AppHeader({ appName, garageName }: AppHeaderProps) {
     : tNav("toggleSidebar");
 
   return (
-    <header className="sticky top-0 z-30 border-b border-slate-200 bg-card/85 backdrop-blur-md supports-backdrop-filter:bg-card/70">
-      <div className="flex h-16 w-full items-center gap-2 px-[34px]">
+    <header className="sticky top-0 z-30 shrink-0 border-b border-slate-200 bg-card/95 backdrop-blur-md supports-backdrop-filter:bg-card/80">
+      <div className="flex h-16 w-full items-center gap-2 px-4 sm:px-6 lg:px-[34px]">
         <SidebarTrigger
           aria-label={triggerLabel}
           className="-ml-3 shrink-0 text-slate-500 hover:bg-slate-100 hover:text-slate-900"
@@ -63,16 +70,34 @@ export function AppHeader({ appName, garageName }: AppHeaderProps) {
           >
             <Link
               href="/dashboard"
-              className="truncate hover:text-slate-800 focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600"
+              className="truncate hover:text-slate-800 focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
             >
               {garageName}
             </Link>
             {!isHome && match ? (
               <>
                 <ChevronRight className="size-3 shrink-0 opacity-60" aria-hidden />
-                <span className="truncate text-slate-600" aria-current="page">
-                  {pageTitle}
-                </span>
+                {detailLabel ? (
+                  <>
+                    <Link
+                      href={sectionHref}
+                      className="truncate hover:text-slate-800 focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
+                    >
+                      {sectionTitle}
+                    </Link>
+                    <ChevronRight
+                      className="size-3 shrink-0 opacity-60"
+                      aria-hidden
+                    />
+                    <span className="truncate text-slate-600" aria-current="page">
+                      {detailLabel}
+                    </span>
+                  </>
+                ) : (
+                  <span className="truncate text-slate-600" aria-current="page">
+                    {sectionTitle}
+                  </span>
+                )}
               </>
             ) : null}
           </nav>

@@ -52,7 +52,7 @@ export default async function DashboardPage() {
   const locale = await getLocale();
   const t = await getTranslations("dashboard");
   const ti = await getTranslations("inventory");
-  const tStatus = await getTranslations("orders.status");
+  const tStatus = await getTranslations("orders.statuses");
 
   const displayName = session.name ?? session.email;
   const isTechnician = session.role === "TECHNICIAN";

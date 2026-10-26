@@ -75,6 +75,47 @@ enum StockMovementType {
   ADJUSTMENT
 }
 
+enum InvoiceStatus {
+  DRAFT
+  FINALIZED
+}
+
+enum InvoiceLineType {
+  LABOUR
+  PART
+}
+
+/// How GST on the invoice is split for place of supply.
+enum GstSplitKind {
+  CGST_SGST
+  IGST
+}
+
+enum PaymentMethod {
+  CASH
+  UPI
+  CARD
+  MIXED
+}
+
+enum PaymentProvider {
+  NONE
+  RAZORPAY
+}
+
+/// Manual cash/card rows are PAID immediately. UPI provider rows start PENDING.
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+}
+
+enum CreditNoteReason {
+  CORRECTION
+  REFUND
+  OTHER
+}
+
 model Garage {
   id                 String   @id @default(cuid())
   name               String
@@ -103,6 +144,14 @@ model Garage {
   stockMovements    StockMovement[]
   directSales       DirectSale[]
   directSaleLines   DirectSaleLine[]
+  invoices          Invoice[]
+  invoiceLines      InvoiceLine[]
+  invoiceNumberCounters InvoiceNumberCounter[]
+  creditNotes       CreditNote[]
+  creditNoteLines   CreditNoteLine[]
+  creditNoteNumberCounters CreditNoteNumberCounter[]
+  payments          Payment[]
+  liveLinks         LiveLink[]
 }
 
 model Customer {
@@ -119,6 +168,7 @@ model Customer {
   vehicles      Vehicle[]
   serviceOrders ServiceOrder[]
   directSales   DirectSale[]
+  invoices      Invoice[]
 
   @@index([garageId])
   @@index([garageId, phone])
@@ -134,6 +184,8 @@ model Vehicle {
   registrationNumber String
   make               String
   model              String
+  /// GST state / UT code for place of supply (e.g. "24" Gujarat). Default Gujarat.
+  stateCode          String    @default("24")
   year               Int?
   odometer           Int?
   insuranceExpiry    DateTime?
@@ -172,7 +224,9 @@ model ServiceOrder {
   lines          ServiceOrderLine[]
   inspection     Inspection?
   estimates      Estimate[]
+  invoices       Invoice[]
   stockMovements StockMovement[]
+  liveLinks      LiveLink[]
 
   @@index([garageId])
   @@index([garageId, status])
@@ -394,6 +448,7 @@ model Estimate {
 
   lines     EstimateLine[]
   approvals EstimateApproval[]
+  invoices  Invoice[]
 
   @@unique([serviceOrderId, revisionNumber])
   @@index([garageId])
@@ -422,7 +477,8 @@ model EstimateLine {
   createdAt               DateTime                   @default(now())
   updatedAt               DateTime                   @updatedAt
 
-  approvals EstimateApproval[]
+  approvals    EstimateApproval[]
+  invoiceLines InvoiceLine[]
 
   @@index([garageId])
   @@index([estimateId])
@@ -451,6 +507,215 @@ model EstimateApproval {
   @@index([estimateLineId, createdAt])
 }
 
+/// Per-garage sequential invoice numbers for one financial year (April–March).
+model InvoiceNumberCounter {
+  id                 String @id @default(cuid())
+  garageId           String
+  garage             Garage @relation(fields: [garageId], references: [id], onDelete: Cascade)
+  /// Calendar year of the FY start (e.g. 2025 for FY 2025-26).
+  financialYearStart Int
+  lastNumber         Int    @default(0)
+
+  @@unique([garageId, financialYearStart])
+  @@index([garageId])
+}
+
+/// Per-garage sequential credit-note numbers for one financial year.
+model CreditNoteNumberCounter {
+  id                 String @id @default(cuid())
+  garageId           String
+  garage             Garage @relation(fields: [garageId], references: [id], onDelete: Cascade)
+  financialYearStart Int
+  lastNumber         Int    @default(0)
+
+  @@unique([garageId, financialYearStart])
+  @@index([garageId])
+}
+
+/// Tax invoice built from approved estimate lines. Finalized rows are immutable.
+model Invoice {
+  id                     String        @id @default(cuid())
+  garageId               String
+  garage                 Garage        @relation(fields: [garageId], references: [id], onDelete: Cascade)
+  serviceOrderId         String
+  serviceOrder           ServiceOrder  @relation(fields: [serviceOrderId], references: [id], onDelete: Restrict)
+  estimateId             String
+  estimate               Estimate      @relation(fields: [estimateId], references: [id], onDelete: Restrict)
+  customerId             String
+  customer               Customer      @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  status                 InvoiceStatus @default(DRAFT)
+  /// Set on finalization, e.g. INV/2025-26/0001. Null while draft.
+  invoiceNumber          String?
+  financialYearStart     Int?
+  sequenceNumber         Int?
+  /// Seller (garage) GST state code, e.g. "24" for Gujarat.
+  sellerStateCode        String
+  /// Place of supply state code for GST split.
+  placeOfSupplyStateCode String
+  gstSplit               GstSplitKind
+  taxablePaise           Int           @default(0)
+  cgstPaise              Int           @default(0)
+  sgstPaise              Int           @default(0)
+  igstPaise              Int           @default(0)
+  totalPaise             Int           @default(0)
+  /// Sum of recorded payments (paise). Pending = total − credit notes − paid.
+  amountPaidPaise        Int           @default(0)
+  notes                  String?
+  finalizedAt            DateTime?
+  createdById            String?
+  createdBy              User?         @relation("InvoiceCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt              DateTime      @default(now())
+  updatedAt              DateTime      @updatedAt
+
+  lines       InvoiceLine[]
+  payments    Payment[]
+  creditNotes CreditNote[]
+
+  @@unique([garageId, invoiceNumber])
+  @@unique([garageId, financialYearStart, sequenceNumber])
+  @@index([garageId])
+  @@index([garageId, serviceOrderId])
+  @@index([garageId, status])
+  @@index([estimateId])
+  @@index([customerId])
+}
+
+model InvoiceLine {
+  id               String          @id @default(cuid())
+  garageId         String
+  garage           Garage          @relation(fields: [garageId], references: [id], onDelete: Cascade)
+  invoiceId        String
+  invoice          Invoice         @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  estimateLineId   String?
+  estimateLine     EstimateLine?   @relation(fields: [estimateLineId], references: [id], onDelete: SetNull)
+  type             InvoiceLineType
+  description      String
+  quantity         Int
+  unitPricePaise   Int
+  gstRatePercent   Int
+  hsnOrSac         String
+  taxablePaise     Int
+  cgstPaise        Int             @default(0)
+  sgstPaise        Int             @default(0)
+  igstPaise        Int             @default(0)
+  totalPaise       Int
+  sortOrder        Int             @default(0)
+  createdAt        DateTime        @default(now())
+
+  @@index([garageId])
+  @@index([invoiceId])
+  @@index([estimateLineId])
+}
+
+/// Correction or refund against a finalized invoice. Does not edit the invoice.
+model CreditNote {
+  id                 String           @id @default(cuid())
+  garageId           String
+  garage             Garage           @relation(fields: [garageId], references: [id], onDelete: Cascade)
+  invoiceId          String
+  invoice            Invoice          @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  creditNoteNumber   String
+  financialYearStart Int
+  sequenceNumber     Int
+  reason             CreditNoteReason
+  taxablePaise       Int              @default(0)
+  cgstPaise          Int              @default(0)
+  sgstPaise          Int              @default(0)
+  igstPaise          Int              @default(0)
+  totalPaise         Int              @default(0)
+  notes              String?
+  createdById        String?
+  createdBy          User?            @relation("CreditNoteCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt          DateTime         @default(now())
+
+  lines CreditNoteLine[]
+
+  @@unique([garageId, creditNoteNumber])
+  @@unique([garageId, financialYearStart, sequenceNumber])
+  @@index([garageId])
+  @@index([invoiceId])
+}
+
+model CreditNoteLine {
+  id             String     @id @default(cuid())
+  garageId       String
+  garage         Garage     @relation(fields: [garageId], references: [id], onDelete: Cascade)
+  creditNoteId   String
+  creditNote     CreditNote @relation(fields: [creditNoteId], references: [id], onDelete: Cascade)
+  description    String
+  quantity       Int        @default(1)
+  unitPricePaise Int
+  gstRatePercent Int
+  hsnOrSac       String
+  taxablePaise   Int
+  cgstPaise      Int        @default(0)
+  sgstPaise      Int        @default(0)
+  igstPaise      Int        @default(0)
+  totalPaise     Int
+  sortOrder      Int        @default(0)
+  createdAt      DateTime   @default(now())
+
+  @@index([garageId])
+  @@index([creditNoteId])
+}
+
+model Payment {
+  id          String        @id @default(cuid())
+  garageId    String
+  garage      Garage        @relation(fields: [garageId], references: [id], onDelete: Cascade)
+  invoiceId   String
+  invoice     Invoice       @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  method      PaymentMethod
+  amountPaise Int
+  /// When true, money returned to customer; reduces amountPaidPaise.
+  isRefund    Boolean       @default(false)
+  /// Breakdown for MIXED (and optional detail for single methods). Must sum to amountPaise.
+  cashPaise   Int           @default(0)
+  upiPaise    Int           @default(0)
+  cardPaise   Int           @default(0)
+  note        String?
+  /// Manual payments are PAID; Razorpay UPI starts PENDING until webhook.
+  status      PaymentStatus @default(PAID)
+  provider    PaymentProvider @default(NONE)
+  /// Razorpay payment id (pay_…). Unique when set — webhook marks paid once.
+  providerPaymentId     String?
+  providerOrderId       String?
+  providerPaymentLinkId String?
+  paymentLinkUrl        String?
+  qrImageDataUrl        String?  @db.Text
+  receivedAt  DateTime      @default(now())
+  createdById String?
+  createdBy   User?         @relation("PaymentCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@unique([provider, providerPaymentId])
+  @@index([garageId])
+  @@index([invoiceId, receivedAt])
+  @@index([providerPaymentLinkId])
+}
+
+/// Public customer live link for one service order. Store only the token hash.
+model LiveLink {
+  id             String    @id @default(cuid())
+  garageId       String
+  garage         Garage    @relation(fields: [garageId], references: [id], onDelete: Cascade)
+  serviceOrderId String
+  serviceOrder   ServiceOrder @relation(fields: [serviceOrderId], references: [id], onDelete: Cascade)
+  /// SHA-256 of the 32-byte raw token. Raw token is never stored.
+  tokenHash      String    @unique
+  expiresAt      DateTime
+  revokedAt      DateTime?
+  createdById    String?
+  createdBy      User?     @relation("LiveLinkCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([garageId])
+  @@index([serviceOrderId, revokedAt])
+  @@index([expiresAt])
+}
+
 model User {
   id            String    @id @default(cuid())
   name          String?
@@ -471,6 +736,10 @@ model User {
   approvalsRecorded   EstimateApproval[]    @relation("EstimateApprovalRecorder")
   stockMovementsCreated StockMovement[]     @relation("StockMovementCreatedBy")
   directSalesCreated  DirectSale[]          @relation("DirectSaleCreatedBy")
+  invoicesCreated     Invoice[]             @relation("InvoiceCreatedBy")
+  creditNotesCreated  CreditNote[]          @relation("CreditNoteCreatedBy")
+  paymentsCreated     Payment[]             @relation("PaymentCreatedBy")
+  liveLinksCreated    LiveLink[]            @relation("LiveLinkCreatedBy")
 
   @@index([garageId])
 }

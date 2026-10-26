@@ -5,36 +5,36 @@
 
 /*
   Design tokens — workshop admin (Linear / Stripe / Zoho Books style).
-  Primary teal-600 = our brand teal (unchanged). Surfaces: slate-50 app, white cards.
+  Primary blue-600 = #2563EB. Surfaces: slate-50 app, white cards.
 */
 
 :root {
-  /* Brand teal scale (600 = primary) */
-  --teal-50: 166 76% 97%;
-  --teal-100: 167 85% 89%;
-  --teal-200: 168 84% 78%;
-  --teal-300: 171 77% 64%;
-  --teal-400: 172 66% 50%;
-  --teal-500: 173 80% 36%;
-  --teal-600: 173 80% 26%;
-  --teal-700: 175 84% 22%;
-  --teal-800: 176 80% 18%;
-  --teal-900: 177 84% 14%;
-  --teal-950: 179 84% 9%;
+  /* Brand blue scale (600 = #2563EB primary) */
+  --blue-50: 214 100% 97%;
+  --blue-100: 214 95% 93%;
+  --blue-200: 213 97% 87%;
+  --blue-300: 212 96% 78%;
+  --blue-400: 213 94% 68%;
+  --blue-500: 217 91% 60%;
+  --blue-600: 221 83% 53%;
+  --blue-700: 224 76% 48%;
+  --blue-800: 226 71% 40%;
+  --blue-900: 224 64% 33%;
+  --blue-950: 226 55% 21%;
 
   /* Sidebar — light white (shadcn sidebar tokens) */
   --sidebar: 0 0% 100%;
   --sidebar-foreground: 222 47% 11%;
   --sidebar-muted: 215 16% 47%;
-  --sidebar-primary: var(--teal-600);
+  --sidebar-primary: var(--blue-600);
   --sidebar-primary-foreground: 0 0% 100%;
-  --sidebar-accent: 166 76% 97%;
-  --sidebar-accent-foreground: var(--teal-700);
+  --sidebar-accent: 214 100% 97%;
+  --sidebar-accent-foreground: var(--blue-700);
   --sidebar-border: 214 32% 91%;
-  --sidebar-ring: var(--teal-600);
+  --sidebar-ring: var(--blue-600);
 
-  /* Primary — teal-600 */
-  --primary: var(--teal-600);
+  /* Primary — blue-600 (#2563EB) */
+  --primary: var(--blue-600);
   --primary-foreground: 0 0% 100%;
 
   /* Surfaces — slate-50 / white / slate text */
@@ -48,11 +48,11 @@
   --secondary-foreground: 215 25% 27%;
   --muted: 210 40% 96%;
   --muted-foreground: 215 16% 47%;
-  --accent: 166 76% 97%;
-  --accent-foreground: var(--teal-700);
+  --accent: 214 100% 97%;
+  --accent-foreground: var(--blue-700);
   --border: 214 32% 91%;
   --input: 214 32% 91%;
-  --ring: var(--teal-600);
+  --ring: var(--blue-600);
 
   /* Semantic */
   --success: 152 60% 36%;
@@ -69,7 +69,7 @@
   /* Service order status — one distinct colour each */
   --status-waiting: 215 16% 46%;
   --status-inspection: 199 89% 40%;
-  --status-in-progress: var(--teal-600);
+  --status-in-progress: var(--blue-600);
   --status-waiting-parts: 38 92% 44%;
   --status-ready: 152 60% 36%;
   --status-completed: 222 47% 20%;
@@ -138,17 +138,17 @@
   );
   --color-sidebar-border: hsl(var(--sidebar-border));
   --color-sidebar-ring: hsl(var(--sidebar-ring));
-  --color-teal-50: hsl(var(--teal-50));
-  --color-teal-100: hsl(var(--teal-100));
-  --color-teal-200: hsl(var(--teal-200));
-  --color-teal-300: hsl(var(--teal-300));
-  --color-teal-400: hsl(var(--teal-400));
-  --color-teal-500: hsl(var(--teal-500));
-  --color-teal-600: hsl(var(--teal-600));
-  --color-teal-700: hsl(var(--teal-700));
-  --color-teal-800: hsl(var(--teal-800));
-  --color-teal-900: hsl(var(--teal-900));
-  --color-teal-950: hsl(var(--teal-950));
+  --color-blue-50: hsl(var(--blue-50));
+  --color-blue-100: hsl(var(--blue-100));
+  --color-blue-200: hsl(var(--blue-200));
+  --color-blue-300: hsl(var(--blue-300));
+  --color-blue-400: hsl(var(--blue-400));
+  --color-blue-500: hsl(var(--blue-500));
+  --color-blue-600: hsl(var(--blue-600));
+  --color-blue-700: hsl(var(--blue-700));
+  --color-blue-800: hsl(var(--blue-800));
+  --color-blue-900: hsl(var(--blue-900));
+  --color-blue-950: hsl(var(--blue-950));
   --color-status-waiting: hsl(var(--status-waiting));
   --color-status-inspection: hsl(var(--status-inspection));
   --color-status-in-progress: hsl(var(--status-in-progress));
@@ -173,11 +173,16 @@
 
   --font-sans: var(--font-inter), var(--font-noto-devanagari),
     var(--font-noto-gujarati), system-ui, sans-serif;
+  /* Brand wordmark (Outfit) — distinct from UI Inter */
+  --font-brand: var(--font-outfit), var(--font-inter), system-ui, sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, monospace;
 }
 
-* {
-  border-color: hsl(var(--border));
+/* Must stay in @layer base so Tailwind border-* utilities can override it. */
+@layer base {
+  * {
+    border-color: hsl(var(--border));
+  }
 }
 
 body {
@@ -186,12 +191,19 @@ body {
   font-family: var(--font-sans);
   font-size: var(--text-body);
   line-height: var(--leading-body);
+  /* Native controls (checkbox, radio, range, progress) follow brand blue */
+  accent-color: hsl(var(--primary));
+  caret-color: hsl(var(--primary));
 }
 
-/* Visible focus for keyboard users */
+/* Visible focus for keyboard users (form fields use their own ring) */
 :focus-visible {
-  outline: 2px solid hsl(var(--ring));
-  outline-offset: 2px;
+  outline: 1px solid hsl(var(--primary));
+  outline-offset: 1px;
+}
+
+:is(input, textarea, select, [data-slot="input"], [data-slot="textarea"]):focus-visible {
+  outline: none;
 }
 
 @media (prefers-reduced-motion: reduce) {

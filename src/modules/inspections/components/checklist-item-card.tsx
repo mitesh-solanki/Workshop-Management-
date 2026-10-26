@@ -1,18 +1,38 @@
 "use client";
 
-import { useActionState, useMemo } from "react";
+import {
+  useActionState,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useTransition,
+} from "react";
+import {
+  Battery,
+  CircleDot,
+  Disc3,
+  Droplets,
+  Lightbulb,
+  MoveVertical,
+  Wind,
+  Wrench,
+  type LucideIcon,
+} from "lucide-react";
 import { useTranslations } from "next-intl";
 import {
+  updateInspectionConditionAction,
   updateInspectionItemAction,
   type InspectionActionState,
 } from "@/app/actions/inspections";
+import { Button } from "@/components/ui/button";
+import { SmoothAccordion } from "@/components/ui/smooth-accordion";
+import { toast } from "@/components/ui/toast";
+import { cn } from "@/lib/utils";
 import { ItemMediaUploader } from "@/modules/inspections/components/item-media-uploader";
 import type { InspectionItemResultValue } from "@/modules/inspections/schema";
 
 const initial: InspectionActionState = { ok: false };
-
-const inputClass =
-  "min-h-12 w-full rounded-md border bg-background px-3 text-base outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
 type MediaRow = {
   id: string;
@@ -32,106 +52,268 @@ type Props = {
     media: MediaRow[];
   };
   canEdit: boolean;
+  onResultChange?: (result: InspectionItemResultValue | null) => void;
 };
 
-export function ChecklistItemCard({ orderId, item, canEdit }: Props) {
+const RESULTS = [
+  ["OK", "results.OK", "resultMarks.OK", "ok"],
+  ["NEEDS_ATTENTION", "results.NEEDS_ATTENTION", "resultMarks.NEEDS_ATTENTION", "attention"],
+  ["URGENT", "results.URGENT", "resultMarks.URGENT", "urgent"],
+] as const;
+
+const ITEM_ICONS: Record<string, LucideIcon> = {
+  brakes: Disc3,
+  tyres: CircleDot,
+  battery: Battery,
+  lights: Lightbulb,
+  fluids: Droplets,
+  suspension: MoveVertical,
+  ac: Wind,
+};
+
+const DEFAULT_KEYS = new Set(Object.keys(ITEM_ICONS));
+
+export function ChecklistItemCard({
+  orderId,
+  item,
+  canEdit,
+  onResultChange,
+}: Props) {
   const t = useTranslations("inspections");
   const bound = useMemo(
     () => updateInspectionItemAction.bind(null, item.id, orderId),
     [item.id, orderId],
   );
-  const [state, formAction, pending] = useActionState(bound, initial);
+  const [state, formAction, notesPending] = useActionState(bound, initial);
+  const [conditionPending, startConditionSave] = useTransition();
+  const [selected, setSelected] = useState<InspectionItemResultValue | "">(
+    item.result ?? "",
+  );
+  const hasExtras = Boolean(item.notes?.trim()) || item.media.length > 0;
+  const [notesOpen, setNotesOpen] = useState(hasExtras);
+  const handledMessage = useRef<string | null>(null);
+  const notesId = `notes-${item.id}`;
+  const pending = notesPending || conditionPending;
 
-  const title =
-    item.key === "brakes" ||
-    item.key === "tyres" ||
-    item.key === "battery" ||
-    item.key === "lights" ||
-    item.key === "fluids" ||
-    item.key === "suspension" ||
-    item.key === "ac"
-      ? t(`defaults.${item.key}`)
-      : item.label;
+  useEffect(() => {
+    if (!state.message || state.message === handledMessage.current) return;
+    handledMessage.current = state.message;
+    if (state.ok) {
+      toast.success(
+        state.message === "itemSaved" ? t("itemSaved") : state.message,
+      );
+      queueMicrotask(() => setNotesOpen(false));
+    } else {
+      toast.error(state.message);
+    }
+  }, [state, t]);
 
-  return (
-    <article className="space-y-4 rounded-md border p-3">
-      <h3 className="text-base font-semibold">{title}</h3>
+  const isDefault = DEFAULT_KEYS.has(item.key);
+  const title = isDefault ? t(`defaults.${item.key}`) : item.label;
+  const hint = isDefault ? t(`defaultHints.${item.key}`) : t("customItemHint");
+  const Icon = ITEM_ICONS[item.key] ?? Wrench;
 
-      {canEdit ? (
-        <form action={formAction} className="flex flex-col gap-3">
-          <fieldset className="space-y-2">
-            <legend className="text-sm font-medium">{t("result")}</legend>
-            <div className="grid grid-cols-1 gap-2">
-              {(
-                [
-                  ["OK", "results.OK"],
-                  ["NEEDS_ATTENTION", "results.NEEDS_ATTENTION"],
-                  ["URGENT", "results.URGENT"],
-                ] as const
-              ).map(([value, labelKey]) => (
-                <label
-                  key={value}
-                  className="flex min-h-12 items-center gap-3 rounded-md border px-3 text-base"
-                >
-                  <input
-                    type="radio"
-                    name="result"
-                    value={value}
-                    defaultChecked={item.result === value}
-                    className="size-5"
-                  />
-                  {t(labelKey)}
-                </label>
-              ))}
-            </div>
-          </fieldset>
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor={`notes-${item.id}`} className="text-sm font-medium">
-              {t("notes")}
-            </label>
-            <textarea
-              id={`notes-${item.id}`}
-              name="notes"
-              rows={2}
-              maxLength={2000}
-              defaultValue={item.notes ?? ""}
-              className={`${inputClass} py-2`}
+  function currentNotes(): string {
+    if (typeof document === "undefined") return item.notes ?? "";
+    const el = document.getElementById(notesId) as HTMLTextAreaElement | null;
+    return el?.value ?? item.notes ?? "";
+  }
+
+  function onPick(value: InspectionItemResultValue) {
+    if (pending) return;
+    const previous = selected;
+    const next = selected === value ? "" : value;
+    setSelected(next);
+    onResultChange?.(next === "" ? null : next);
+
+    startConditionSave(async () => {
+      const result = await updateInspectionConditionAction(
+        item.id,
+        next,
+        currentNotes(),
+      );
+      if (!result.ok) {
+        setSelected(previous);
+        onResultChange?.(previous === "" ? null : previous);
+        toast.error(result.message ?? "Something went wrong");
+      }
+    });
+  }
+
+  const statusChips = (
+    <div
+      role="group"
+      aria-label={t("condition")}
+      className="flex flex-wrap gap-1.5"
+    >
+      {RESULTS.map(([value, labelKey, markKey, tone]) => {
+        const active = selected === value;
+        return (
+          <button
+            key={value}
+            type="button"
+            disabled={!canEdit || pending}
+            title={t(`resultMeanings.${value}`)}
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              if (canEdit) onPick(value);
+            }}
+            aria-pressed={active}
+            className={cn(
+              "inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg border px-3 text-[13px] font-bold transition-colors disabled:opacity-60",
+              !canEdit && "pointer-events-none opacity-80",
+              !active &&
+                "border-slate-200 bg-white text-slate-600 hover:bg-slate-50",
+              active &&
+                tone === "ok" &&
+                "border-emerald-300 bg-emerald-50 text-emerald-800",
+              active &&
+                tone === "attention" &&
+                "border-amber-300 bg-amber-50 text-amber-800",
+              active &&
+                tone === "urgent" &&
+                "border-red-300 bg-red-50 text-red-700",
+            )}
+          >
+            <span aria-hidden>{t(markKey)}</span>
+            <span>{t(labelKey)}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+
+  const header = (
+    <div className="mb-2.5 flex items-center gap-2.5">
+      <div className="grid size-[30px] shrink-0 place-items-center rounded-lg bg-blue-50 text-blue-600">
+        <Icon className="size-4" aria-hidden />
+      </div>
+      <div className="min-w-0 flex-1">
+        <h4 className="text-[14px] font-semibold text-slate-900">{title}</h4>
+        <p className="mt-0.5 text-[13px] leading-snug text-slate-500">{hint}</p>
+      </div>
+    </div>
+  );
+
+  if (!canEdit) {
+    return (
+      <article className="min-w-0 rounded-[11px] border border-slate-300 bg-white p-3.5 shadow-sm">
+        {header}
+        {item.result ? (
+          <span
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[13px] font-bold",
+              item.result === "OK" &&
+                "border-emerald-300 bg-emerald-50 text-emerald-800",
+              item.result === "NEEDS_ATTENTION" &&
+                "border-amber-300 bg-amber-50 text-amber-800",
+              item.result === "URGENT" &&
+                "border-red-300 bg-red-50 text-red-700",
+            )}
+            title={t(`resultMeanings.${item.result}`)}
+          >
+            <span aria-hidden>{t(`resultMarks.${item.result}`)}</span>
+            {t(`results.${item.result}`)}
+          </span>
+        ) : (
+          <span className="text-xs text-slate-400">{t("resultUnset")}</span>
+        )}
+        {item.notes ? (
+          <p className="mt-3 text-sm leading-relaxed text-slate-600">
+            {item.notes}
+          </p>
+        ) : null}
+        {item.media.length > 0 ? (
+          <div className="mt-3">
+            <ItemMediaUploader
+              orderId={orderId}
+              itemId={item.id}
+              media={item.media}
+              canEdit={false}
             />
           </div>
-          {state.message && (
-            <p
-              className={
-                state.ok ? "text-sm text-foreground" : "text-sm text-destructive"
-              }
-              role="status"
-            >
-              {state.ok ? t("itemSaved") : state.message}
-            </p>
-          )}
-          <button
-            type="submit"
-            disabled={pending}
-            className="min-h-12 rounded-md bg-primary px-4 text-base font-medium text-primary-foreground disabled:opacity-60"
-          >
-            {pending ? t("saving") : t("saveItem")}
-          </button>
-        </form>
-      ) : (
-        <div className="space-y-1 text-sm">
-          <p>
-            <span className="text-muted-foreground">{t("result")}: </span>
-            {item.result ? t(`results.${item.result}`) : t("resultUnset")}
-          </p>
-          {item.notes && <p className="whitespace-pre-wrap">{item.notes}</p>}
-        </div>
-      )}
+        ) : null}
+      </article>
+    );
+  }
 
-      <ItemMediaUploader
-        orderId={orderId}
-        itemId={item.id}
-        media={item.media}
-        canEdit={canEdit}
-      />
-    </article>
+  return (
+    <form
+      action={formAction}
+      className="min-w-0 rounded-[11px] border border-slate-300 bg-white p-3.5 shadow-sm"
+    >
+      <input type="hidden" name="result" value={selected} />
+      {header}
+      <div className="mb-2.5 flex flex-wrap items-center gap-2">
+        {statusChips}
+        {conditionPending ? (
+          <span className="text-[12px] font-medium text-slate-500">
+            {t("saving")}
+          </span>
+        ) : null}
+        <div className="ml-auto shrink-0">
+          <ItemMediaUploader
+            orderId={orderId}
+            itemId={item.id}
+            media={item.media}
+            canEdit
+            proofButton
+            showGallery={false}
+          />
+        </div>
+      </div>
+
+      {item.media.length > 0 ? (
+        <div className="mb-2.5">
+          <ItemMediaUploader
+            orderId={orderId}
+            itemId={item.id}
+            media={item.media}
+            canEdit
+            showControls={false}
+          />
+        </div>
+      ) : null}
+
+      <div className="border-t border-slate-300 pt-2">
+        <button
+          type="button"
+          className="text-[13px] font-bold text-blue-700"
+          onClick={() => setNotesOpen((open) => !open)}
+          aria-expanded={notesOpen}
+        >
+          {notesOpen ? "− " : "+ "}
+          {hasExtras ? t("notesPhotosAdded") : t("notesOptional")}
+        </button>
+        <SmoothAccordion open={notesOpen}>
+          <div className="mt-2.5 space-y-2.5">
+            <textarea
+              id={notesId}
+              name="notes"
+              maxLength={2000}
+              rows={2}
+              defaultValue={item.notes ?? ""}
+              placeholder={
+                isDefault
+                  ? t(`notePlaceholders.${item.key}`)
+                  : t("notesPlaceholder")
+              }
+              className="min-h-[55px] w-full resize-y rounded-lg border border-slate-300 bg-white px-3 py-2 text-[13px] text-slate-900 outline-none placeholder:text-slate-400 focus-visible:border-blue-600 focus-visible:ring-[3px] focus-visible:ring-blue-600/10"
+            />
+            <div className="flex justify-end">
+              <Button
+                type="submit"
+                size="sm"
+                loading={notesPending}
+                className="h-9 shrink-0 bg-blue-600 px-3 text-white hover:bg-blue-700 hover:text-white"
+              >
+                {notesPending ? t("saving") : t("saveItem")}
+              </Button>
+            </div>
+          </div>
+        </SmoothAccordion>
+      </div>
+    </form>
   );
 }

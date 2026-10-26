@@ -6,11 +6,10 @@ import {
   addChecklistItemAction,
   type InspectionActionState,
 } from "@/app/actions/inspections";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 const initial: InspectionActionState = { ok: false };
-
-const inputClass =
-  "min-h-12 w-full rounded-md border bg-background px-3 text-base outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
 type Props = { orderId: string };
 
@@ -23,27 +22,44 @@ export function AddChecklistItemForm({ orderId }: Props) {
   const [state, formAction, pending] = useActionState(bound, initial);
 
   return (
-    <form action={formAction} className="flex flex-col gap-3 sm:flex-row">
-      <input
-        name="label"
-        required
-        maxLength={120}
-        placeholder={t("customItemPlaceholder")}
-        className={inputClass}
-        aria-label={t("addCustomItem")}
-      />
-      <button
-        type="submit"
-        disabled={pending}
-        className="min-h-12 shrink-0 rounded-md border px-4 text-base font-medium disabled:opacity-60"
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-end justify-between gap-2">
+        <div>
+          <strong className="text-[13px] font-semibold text-slate-900">
+            {t("addCustomItemTitle")}
+          </strong>
+          <p className="mt-0.5 text-[11px] text-slate-500">
+            {t("addCustomItemHint")}
+          </p>
+        </div>
+      </div>
+      <form
+        action={formAction}
+        className="flex flex-col gap-2 sm:flex-row sm:items-center"
       >
-        {pending ? t("saving") : t("addCustomItem")}
-      </button>
-      {state.message && !state.ok && (
-        <p className="text-sm text-destructive sm:basis-full" role="status">
-          {state.message}
-        </p>
-      )}
-    </form>
+        <Input
+          name="label"
+          required
+          maxLength={120}
+          placeholder={t("customItemPlaceholder")}
+          aria-label={t("addCustomItem")}
+          className="h-11 min-h-11 flex-1 rounded-lg border-slate-300"
+        />
+        <Button
+          type="submit"
+          size="sm"
+          loading={pending}
+          variant="secondary"
+          className="h-11 min-h-11 shrink-0 border-slate-300"
+        >
+          {pending ? t("saving") : t("addCustomItem")}
+        </Button>
+        {state.message && !state.ok ? (
+          <p className="text-xs text-danger sm:basis-full" role="status">
+            {state.message}
+          </p>
+        ) : null}
+      </form>
+    </div>
   );
 }

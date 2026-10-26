@@ -9,7 +9,7 @@ const badgeVariants = cva(
   {
     variants: {
       variant: {
-        default: "bg-teal-600 text-white",
+        default: "bg-blue-600 text-white",
         secondary: "bg-slate-100 text-slate-700",
         outline: "border-slate-200 text-slate-700",
         ghost: "text-slate-600",
@@ -18,7 +18,7 @@ const badgeVariants = cva(
         danger: "bg-danger/15 text-danger",
         info: "bg-info/15 text-info",
         destructive: "bg-danger/15 text-danger",
-        link: "text-teal-600 underline-offset-4",
+        link: "text-blue-600 underline-offset-4",
       },
     },
     defaultVariants: {

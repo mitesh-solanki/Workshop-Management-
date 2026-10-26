@@ -22,11 +22,16 @@ const WRITE_ROLES = ["OWNER", "MANAGER", "TECHNICIAN"] as const;
 
 export async function listCustomers(
   session: RoleSession,
-  raw: { q?: string } = {},
+  raw: { q?: string; page?: number | string; pageSize?: number | string } = {},
 ) {
   const input = customerSearchSchema.parse(raw);
   // garageId always comes from the session — never from the request.
-  return searchCustomers(session.garageId, input.q);
+  return searchCustomers(
+    session.garageId,
+    input.q,
+    input.page,
+    input.pageSize,
+  );
 }
 
 export async function getCustomer(session: RoleSession, customerId: string) {
@@ -90,7 +95,7 @@ export async function deleteCustomerRecord(
     customerId,
   );
   if (orderCount > 0) {
-    throw new AppError("CUSTOMER_HAS_ORDERS", 409);
+    throw new AppError("CUSTOMER_HAS_ORDERS");
   }
 
   const deleted = await deleteCustomerById(session.garageId, customerId, {

@@ -3,8 +3,10 @@ import "server-only";
 import { rowsToCsvDownloadResponse } from "@/lib/csv";
 import { NotFoundError } from "@/lib/errors";
 import type { RoleSession } from "@/lib/rbac";
-import { findCustomerById } from "@/modules/customers/repo";
-import { listCustomers } from "@/modules/customers/service";
+import {
+  findCustomerById,
+  listCustomersForExport,
+} from "@/modules/customers/repo";
 import {
   customerExportColumns,
   partExportColumns,
@@ -18,7 +20,10 @@ export async function exportCustomersCsv(
   session: RoleSession,
   options: { q?: string } = {},
 ) {
-  const customers = await listCustomers(session, { q: options.q });
+  const customers = await listCustomersForExport(
+    session.garageId,
+    options.q?.trim() || undefined,
+  );
   return rowsToCsvDownloadResponse(
     customerExportColumns,
     customers.map((c) => ({

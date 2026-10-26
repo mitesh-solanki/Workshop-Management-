@@ -44,7 +44,7 @@ export default function AppLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex min-h-full flex-1 flex-col">
+    <div className="flex h-svh min-h-0 flex-1 flex-col overflow-hidden">
       <Suspense fallback={<AppShellFallback />}>
         <AuthenticatedChrome>{children}</AuthenticatedChrome>
       </Suspense>

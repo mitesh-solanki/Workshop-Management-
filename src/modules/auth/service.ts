@@ -1,5 +1,6 @@
 import "server-only";
 
+import { timingSafeEqual } from "node:crypto";
 import {
   getAppUrl,
   renderOtpEmail,
@@ -10,6 +11,8 @@ import {
   MAX_OTP_ATTEMPTS,
   OTP_EMAIL_RATE,
   OTP_IP_RATE,
+  PROD_PASSWORD_EMAIL_RATE,
+  PROD_PASSWORD_IP_RATE,
   consumeRateLimit,
 } from "@/lib/rate-limit";
 import {
@@ -37,15 +40,53 @@ import {
   markEmailOtpConsumed,
 } from "@/modules/auth/repo";
 import {
+  prodPasswordLoginSchema,
   requestInviteOtpSchema,
   requestLoginOtpSchema,
   requestSignupOtpSchema,
   verifyOtpSchema,
+  type ProdPasswordLoginInput,
   type RequestInviteOtpInput,
   type RequestLoginOtpInput,
   type RequestSignupOtpInput,
   type VerifyOtpInput,
 } from "@/modules/auth/schema";
+
+function safeEqualString(a: string, b: string) {
+  const aBuf = Buffer.from(a);
+  const bBuf = Buffer.from(b);
+  if (aBuf.length !== bBuf.length) {
+    timingSafeEqual(aBuf, aBuf);
+    return false;
+  }
+  return timingSafeEqual(aBuf, bBuf);
+}
+
+function getProdPasswordConfig() {
+  const email = process.env.AUTH_PROD_EMAIL?.trim();
+  const password = process.env.AUTH_PROD_PASSWORD?.trim();
+  const name = process.env.AUTH_PROD_NAME?.trim() || "Prime Motors Owner";
+  const garageName =
+    process.env.AUTH_PROD_GARAGE_NAME?.trim() || "Prime Motors";
+
+  if (!email || !password) {
+    return null;
+  }
+
+  return {
+    email: normalizeEmail(email),
+    password,
+    name,
+    garageName,
+  };
+}
+
+/** True only in production when AUTH_PROD_EMAIL and AUTH_PROD_PASSWORD are set. */
+export function isProdPasswordLoginEnabled() {
+  return (
+    process.env.NODE_ENV === "production" && getProdPasswordConfig() !== null
+  );
+}
 
 export function getAuthAdapter() {
   return createPrismaAuthAdapter();
@@ -306,6 +347,61 @@ export async function completeOtpSignIn(raw: VerifyOtpInput) {
   if (!user) {
     throw new AppError("auth.user_not_found", 404);
   }
+  return user;
+}
+
+export async function completeProdPasswordSignIn(
+  raw: ProdPasswordLoginInput,
+  opts?: { ip?: string },
+) {
+  if (process.env.NODE_ENV !== "production") {
+    throw new AppError("auth.invalid_credentials", 401);
+  }
+
+  const config = getProdPasswordConfig();
+  if (!config) {
+    throw new AppError("auth.invalid_credentials", 401);
+  }
+
+  const input = prodPasswordLoginSchema.parse(raw);
+  const email = normalizeEmail(input.email);
+
+  const emailLimit = await consumeRateLimit({
+    key: `prod-password:email:${email}`,
+    limit: PROD_PASSWORD_EMAIL_RATE.limit,
+    windowMs: PROD_PASSWORD_EMAIL_RATE.windowMs,
+  });
+  if (!emailLimit.allowed) {
+    throw new AppError("auth.rate_limited", 429);
+  }
+
+  if (opts?.ip && opts.ip !== "unknown") {
+    const ipLimit = await consumeRateLimit({
+      key: `prod-password:ip:${opts.ip}`,
+      limit: PROD_PASSWORD_IP_RATE.limit,
+      windowMs: PROD_PASSWORD_IP_RATE.windowMs,
+    });
+    if (!ipLimit.allowed) {
+      throw new AppError("auth.rate_limited", 429);
+    }
+  }
+
+  const emailOk = safeEqualString(email, config.email);
+  const passwordOk = safeEqualString(input.password, config.password);
+  if (!emailOk || !passwordOk) {
+    throw new AppError("auth.invalid_credentials", 401);
+  }
+
+  const existing = await findUserByEmailForLogin(email);
+  if (existing) {
+    return existing;
+  }
+
+  const { user } = await createOwnerWithGarage({
+    email,
+    name: config.name,
+    garageName: config.garageName,
+  });
   return user;
 }
 

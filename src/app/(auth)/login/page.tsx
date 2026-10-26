@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/card";
 import { authCopy } from "@/lib/auth-copy";
 import { getOptionalSession } from "@/lib/session";
+import { isProdPasswordLoginEnabled } from "@/modules/auth/service";
 
 export const instant = false;
 
@@ -19,6 +20,8 @@ export default async function LoginPage() {
   if (session) {
     redirect("/dashboard");
   }
+
+  const passwordLoginEnabled = isProdPasswordLoginEnabled();
 
   return (
     <div className="flex flex-col gap-6">
@@ -29,11 +32,13 @@ export default async function LoginPage() {
             {authCopy("loginTitle")}
           </CardTitle>
           <CardDescription className="text-sm text-slate-500">
-            {authCopy("loginSubtitle")}
+            {passwordLoginEnabled
+              ? authCopy("loginSubtitlePassword")
+              : authCopy("loginSubtitle")}
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <LoginForm />
+          <LoginForm passwordLoginEnabled={passwordLoginEnabled} />
         </CardContent>
       </Card>
       <p className="text-center text-sm text-muted-foreground">

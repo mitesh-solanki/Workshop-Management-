@@ -50,7 +50,20 @@ export const requestInviteOtpSchema = z.object({
     .max(80, { error: "validation.tooLong" }),
 });
 
+export const prodPasswordLoginSchema = z.object({
+  email: z
+    .string()
+    .trim()
+    .email({ error: "validation.invalidEmail" })
+    .max(160, { error: "validation.tooLong" }),
+  password: z
+    .string()
+    .min(1, { error: "validation.required" })
+    .max(128, { error: "validation.tooLong" }),
+});
+
 export type RequestSignupOtpInput = z.infer<typeof requestSignupOtpSchema>;
 export type RequestLoginOtpInput = z.infer<typeof requestLoginOtpSchema>;
 export type VerifyOtpInput = z.infer<typeof verifyOtpSchema>;
 export type RequestInviteOtpInput = z.infer<typeof requestInviteOtpSchema>;
+export type ProdPasswordLoginInput = z.infer<typeof prodPasswordLoginSchema>;

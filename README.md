@@ -42,6 +42,7 @@ OTP codes and team invites are sent with **Resend** in both development and prod
    - `APP_URL=http://localhost:3000` (invite links are `APP_URL/invite/[token]`)
 4. Request a login OTP or send a team invite — the message should arrive in the inbox. The UI never shows OTP codes or raw invite tokens.
 5. For Playwright e2e only, you may set `AUTH_DEV_OTP=123456` when `NODE_ENV` is not `production`. That fixed code is never used in production and is never displayed in the UI.
+6. Production-only password login (optional): on the production host set `AUTH_PROD_EMAIL`, `AUTH_PROD_PASSWORD`, `AUTH_PROD_NAME`, and `AUTH_PROD_GARAGE_NAME` (see `.env.example`). The login page then offers email + password; this path is disabled outside production.
 
 ## Scripts
 

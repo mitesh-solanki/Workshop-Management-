@@ -1,9 +1,10 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import {
   inviteRequestOtpAction,
   loginRequestOtpAction,
+  loginWithPasswordAction,
   signupRequestOtpAction,
   verifyOtpAction,
   type AuthActionState,
@@ -116,7 +117,47 @@ export function SignupForm() {
   );
 }
 
-export function LoginForm() {
+function PasswordLoginForm() {
+  const [state, formAction, pending] = useActionState(
+    loginWithPasswordAction,
+    { ok: false, step: "password" as const },
+  );
+
+  return (
+    <form action={formAction} className="flex flex-col gap-4">
+      <Field id="email" label={authCopy("email")}>
+        <Input
+          id="email"
+          name="email"
+          type="email"
+          required
+          autoComplete="email"
+          defaultValue={state.email}
+          className="h-11 min-h-11"
+        />
+      </Field>
+      <Field
+        id="password"
+        label={authCopy("password")}
+        error={state.message}
+      >
+        <Input
+          id="password"
+          name="password"
+          type="password"
+          required
+          autoComplete="current-password"
+          className="h-11 min-h-11"
+        />
+      </Field>
+      <Button type="submit" disabled={pending} size="lg" className="w-full">
+        {pending ? authCopy("signingIn") : authCopy("signIn")}
+      </Button>
+    </form>
+  );
+}
+
+function OtpLoginForm() {
   const [state, formAction, pending] = useActionState(
     loginRequestOtpAction,
     initial,
@@ -142,6 +183,35 @@ export function LoginForm() {
         {pending ? authCopy("sendingCode") : authCopy("continue")}
       </Button>
     </form>
+  );
+}
+
+export function LoginForm({
+  passwordLoginEnabled = false,
+}: {
+  passwordLoginEnabled?: boolean;
+}) {
+  const [mode, setMode] = useState<"password" | "otp">(
+    passwordLoginEnabled ? "password" : "otp",
+  );
+
+  if (!passwordLoginEnabled) {
+    return <OtpLoginForm />;
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      {mode === "password" ? <PasswordLoginForm /> : <OtpLoginForm />}
+      <button
+        type="button"
+        className="min-h-11 text-sm font-medium text-foreground underline underline-offset-4"
+        onClick={() => setMode(mode === "password" ? "otp" : "password")}
+      >
+        {mode === "password"
+          ? authCopy("useOtpInstead")
+          : authCopy("usePasswordInstead")}
+      </button>
+    </div>
   );
 }
 

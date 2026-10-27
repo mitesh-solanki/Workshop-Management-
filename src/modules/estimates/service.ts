@@ -401,6 +401,9 @@ export async function savePermissionLine(
         unitPricePaise: input.unitPricePaise,
         actorId: session.userId,
       });
+      if (updated === "billed") {
+        throw new AppError("ESTIMATE_LINE_BILLED");
+      }
       if (!updated) {
         throw new NotFoundError();
       }

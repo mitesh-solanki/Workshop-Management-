@@ -358,6 +358,19 @@ export async function updateEstimateLineDetails(
       return null;
     }
 
+    // A finalized invoice is immutable, including the estimate details
+    // from which its lines were issued. Draft invoice lines do not lock edits.
+    const finalizedLineCount = await tx.invoiceLine.count({
+      where: {
+        garageId,
+        estimateLineId: data.lineId,
+        invoice: { status: "FINALIZED" },
+      },
+    });
+    if (finalizedLineCount > 0) {
+      return "billed" as const;
+    }
+
     const quantityDelta = data.quantity - existing.quantity;
     if (existing.approvalState === "APPROVED" && quantityDelta !== 0) {
       const linked = await findLinkedPartLine(tx, garageId, existing);
@@ -499,8 +512,14 @@ export async function deleteEstimateLine(
 ): Promise<"ok" | "not_found" | "billed" | "insufficient_stock"> {
   try {
     return await prisma.$transaction(async (tx) => {
+      // Draft invoices are editable snapshots. Only finalized invoice lines
+      // lock their source estimate lines against deletion.
       const billed = await tx.invoiceLine.count({
-        where: { garageId, estimateLineId: data.lineId },
+        where: {
+          garageId,
+          estimateLineId: data.lineId,
+          invoice: { status: "FINALIZED" },
+        },
       });
       if (billed > 0) {
         return "billed";

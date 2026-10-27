@@ -106,7 +106,7 @@ export function SectionMobileNavBar<T extends string>({
   const showHeadingRow = Boolean(heading || headingActions);
 
   return (
-    <div className="sticky top-0 z-30 -mx-4 border-b border-border bg-card/95 px-4 py-2 shadow-[0_8px_28px_-14px_rgba(15,23,42,0.18)] backdrop-blur-md supports-backdrop-filter:bg-card/90 lg:hidden">
+    <div className="sticky top-0 z-30 -mx-4 -mt-5! border-b border-border bg-card/95 px-4 py-2 shadow-[0_8px_28px_-14px_rgba(15,23,42,0.18)] backdrop-blur-md supports-backdrop-filter:bg-card/90 lg:hidden">
       {showHeadingRow ? (
         <div className="flex min-w-0 items-center gap-2 py-1.5">
           {showBack ? (
@@ -129,10 +129,6 @@ export function SectionMobileNavBar<T extends string>({
             </div>
           ) : null}
         </div>
-      ) : null}
-
-      {ctaRow ? (
-        <div className="flex gap-2 pb-2">{ctaRow}</div>
       ) : null}
 
       <div className="flex items-center gap-2">

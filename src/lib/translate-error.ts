@@ -64,6 +64,7 @@ const APP_ERROR_MESSAGE_KEYS: Record<string, readonly [string, string]> = {
   "billing.invoice_already_finalized": ["billing", "errors.invoiceAlreadyFinalized"],
   "billing.invoice_finalize_failed": ["billing", "errors.invoiceFinalizeFailed"],
   "billing.invoice_immutable": ["billing", "errors.invoiceImmutable"],
+  "billing.invoice_draft_outdated": ["billing", "errors.invoiceDraftOutdated"],
   "billing.payment_requires_finalized": ["billing", "errors.paymentRequiresFinalized"],
   "billing.payment_exceeds_balance": ["billing", "errors.paymentExceedsBalance"],
   "billing.payment_failed": ["billing", "errors.paymentFailed"],

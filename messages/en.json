@@ -1503,7 +1503,8 @@
       "creditNoteRequiresFinalized": "Credit notes are only for finalized invoices.",
       "creditNoteExceedsInvoice": "Credit note total cannot exceed the invoice total.",
       "creditNoteFailed": "Could not create the credit note.",
-      "creditNoteNeedItem": "Add at least one item with a description and amount."
+      "creditNoteNeedItem": "Add at least one item with a description and amount.",
+      "invoiceDraftOutdated": "The estimate changed. Click Remake draft from Agreed items before finalizing."
     },
     "upiPayTitle": "UPI payment (Razorpay)",
     "upiPayHint": "Create a QR and payment link for the balance due. Webhook marks the payment paid once.",

@@ -1,4 +1,4 @@
-import "server-only";
+﻿import "server-only";
 
 import type {
   Prisma,
@@ -472,16 +472,17 @@ export async function updateServiceOrderLine(
         existing.partId &&
         quantityDelta !== 0
       ) {
+        // Do not set serviceOrderLineId - the original OUT already owns that
+        // unique FK. Later qty adjustments are extra movements on the order.
         const stock = await applyStockMovement(
           garageId,
           {
             partId: existing.partId,
             type: quantityDelta > 0 ? "OUT" : "IN",
             quantity: Math.abs(quantityDelta),
-            note: `Service order line update ${data.serviceOrderId}`,
+            note: `Service order line update ${data.serviceOrderId} (line ${existing.id})`,
             actorId: data.actorId,
             serviceOrderId: data.serviceOrderId,
-            serviceOrderLineId: existing.id,
           },
           tx,
         );
@@ -558,16 +559,17 @@ export async function deleteServiceOrderLine(
       }
 
       if (existing.type === "PART" && existing.partId) {
+        // Return stock without serviceOrderLineId - that unique slot is already
+        // used by the OUT created when the part line was added.
         const stock = await applyStockMovement(
           garageId,
           {
             partId: existing.partId,
             type: "IN",
             quantity: existing.quantity,
-            note: `Service order line removed ${data.serviceOrderId}`,
+            note: `Service order line removed ${data.serviceOrderId} (line ${existing.id})`,
             actorId: data.actorId,
             serviceOrderId: data.serviceOrderId,
-            serviceOrderLineId: existing.id,
           },
           tx,
         );

@@ -17,6 +17,15 @@ import {
   type ServiceOrderActionState,
 } from "@/app/actions/service-orders";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/toast";
 import {
@@ -115,8 +124,10 @@ function OrderLineCard({
   line: Line;
 }) {
   const t = useTranslations("orders");
+  const tc = useTranslations("common");
   const ti = useTranslations("inventory");
   const [editing, setEditing] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const [removing, startRemove] = useTransition();
   const bound = useMemo(
     () => updateServiceOrderLineAction.bind(null, orderId, line.id),
@@ -149,15 +160,15 @@ function OrderLineCard({
     }
   }, [state]);
 
-  function confirmDelete() {
-    if (!window.confirm(t("deleteLineConfirm"))) return;
+  function onConfirmDelete() {
     startRemove(async () => {
       const result = await deleteServiceOrderLineAction(orderId, line.id);
       if (result.ok) {
+        setDeleteOpen(false);
         toast.success(result.message ?? t("lineRemoved"));
-      } else {
-        toast.error(result.message ?? t("errors.deleteFailed"));
+        return;
       }
+      toast.error(result.message ?? t("errors.deleteFailed"));
     });
   }
 
@@ -229,7 +240,7 @@ function OrderLineCard({
             aria-label={t("removeLine")}
             title={t("removeLine")}
             disabled={removing || pending}
-            onClick={confirmDelete}
+            onClick={() => setDeleteOpen(true)}
           >
             <Trash2 className="size-5" />
           </Button>
@@ -238,8 +249,48 @@ function OrderLineCard({
     </div>
   ) : null;
 
+  const deleteDialog = (
+    <Dialog
+      open={deleteOpen}
+      onOpenChange={(next) => {
+        if (removing) return;
+        setDeleteOpen(next);
+      }}
+    >
+      <DialogContent className="gap-0 p-0 sm:max-w-md">
+        <DialogHeader className="border-b border-border px-5 py-4 text-left">
+          <DialogTitle>{t("deleteLineTitle")}</DialogTitle>
+          <DialogDescription>{t("deleteLineConfirm")}</DialogDescription>
+        </DialogHeader>
+        <DialogFooter className="gap-2 px-5 py-4 sm:justify-end">
+          <DialogClose asChild>
+            <Button
+              type="button"
+              variant="secondary"
+              size="md"
+              disabled={removing}
+            >
+              {tc("cancel")}
+            </Button>
+          </DialogClose>
+          <Button
+            type="button"
+            variant="danger"
+            size="md"
+            loading={removing}
+            onClick={onConfirmDelete}
+          >
+            {t("removeLine")}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+
   if (editing && canMutate) {
     return (
+      <>
+      {deleteDialog}
       <div className="rounded-[10px] border border-blue-200 bg-blue-50/40 p-3.5 sm:p-4">
         <form
           id={`line-edit-${line.id}`}
@@ -334,42 +385,46 @@ function OrderLineCard({
           ) : null}
         </form>
       </div>
+      </>
     );
   }
 
   return (
-    <div className="rounded-[10px] border border-[#e8edf5] bg-[#fafcff] p-3.5 sm:p-4">
-      <div className="grid grid-cols-1 items-start gap-4 sm:grid-cols-2 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1.2fr)_auto] lg:gap-5">
-        <div className="min-w-0 sm:col-span-2 lg:col-span-1">
-          <div className="mb-1 flex flex-wrap items-center gap-2">
-            <p className="text-[13px] font-semibold text-slate-600">
-              {t("lineDescription")}
-            </p>
-            <TypeBadge type={line.type} />
+    <>
+      {deleteDialog}
+      <div className="rounded-[10px] border border-[#e8edf5] bg-[#fafcff] p-3.5 sm:p-4">
+        <div className="grid grid-cols-1 items-start gap-4 sm:grid-cols-2 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1.2fr)_auto] lg:gap-5">
+          <div className="min-w-0 sm:col-span-2 lg:col-span-1">
+            <div className="mb-1 flex flex-wrap items-center gap-2">
+              <p className="text-[13px] font-semibold text-slate-600">
+                {t("lineDescription")}
+              </p>
+              <TypeBadge type={line.type} />
+            </div>
+            <h4 className="text-[15px] font-semibold leading-snug text-slate-900">
+              {line.description}
+            </h4>
           </div>
-          <h4 className="text-[15px] font-semibold leading-snug text-slate-900">
-            {line.description}
-          </h4>
+
+          <LineStat value={String(line.quantity)} label={t("quantity")} />
+          <LineStat
+            value={formatRupees(line.unitPricePaise)}
+            label={t("unitPrice")}
+          />
+          <LineStat
+            value={formatRupees(savedTotal)}
+            label={t("lineSubtotal")}
+            emphasize
+          />
+
+          {actions ? (
+            <div className="flex justify-start border-t border-slate-200 pt-3 sm:col-span-2 lg:col-span-1 lg:justify-end lg:border-0 lg:pt-0">
+              {actions}
+            </div>
+          ) : null}
         </div>
-
-        <LineStat value={String(line.quantity)} label={t("quantity")} />
-        <LineStat
-          value={formatRupees(line.unitPricePaise)}
-          label={t("unitPrice")}
-        />
-        <LineStat
-          value={formatRupees(savedTotal)}
-          label={t("lineSubtotal")}
-          emphasize
-        />
-
-        {actions ? (
-          <div className="flex justify-start border-t border-slate-200 pt-3 sm:col-span-2 lg:col-span-1 lg:justify-end lg:border-0 lg:pt-0">
-            {actions}
-          </div>
-        ) : null}
       </div>
-    </div>
+    </>
   );
 }
 

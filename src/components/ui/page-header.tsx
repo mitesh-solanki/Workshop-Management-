@@ -24,7 +24,7 @@ function PageHeader({
 }: PageHeaderProps) {
   return (
     <header className={cn("space-y-4", className)}>
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+      <div className="flex gap-3 flex-wrap items-center justify-between">
         <div className="min-w-0 space-y-1">
           <h1 className="text-page-title text-slate-900">{title}</h1>
           {description ? (

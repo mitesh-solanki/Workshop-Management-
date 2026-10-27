@@ -23,6 +23,7 @@ Before writing any code for a feature, do this first and show it to me:
 Wait for my confirmation of the flow map before building.
 
 UI RULES
+- English action buttons, nav labels, page titles and modal titles use Title Case (`Add Bay`, `Add Vendor`) — see `ui-labels.mdc`. Never `Add bay`.
 - Use shadcn/ui components only for UI primitives (Button, Card, Table, Dialog, Sheet, Form, Input, Select, Tabs, Badge, DropdownMenu, Toast, Skeleton, Alert, Breadcrumb). Add missing ones with the shadcn CLI instead of hand-writing them.
 - Every page has: a title, a one-line description, a breadcrumb, and exactly one primary button.
 - List pages: search, filters, a table with a status Badge, row actions in a DropdownMenu, pagination, and an empty state with a button to create the first record.

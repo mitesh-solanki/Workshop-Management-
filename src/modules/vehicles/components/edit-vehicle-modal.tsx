@@ -82,9 +82,13 @@ export function EditVehicleModal({ vehicle, trigger }: Props) {
     >
       <DialogTrigger asChild>
         {trigger ?? (
-          <Button type="button" variant="outline" size="md">
+          <Button
+            type="button"
+            variant="outline"
+            size="icon-sm"
+            aria-label={t("edit")}
+          >
             <Pencil className="size-4" aria-hidden />
-            {t("edit")}
           </Button>
         )}
       </DialogTrigger>

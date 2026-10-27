@@ -4,8 +4,8 @@ import { useMemo, useState, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FormField } from "@/components/ui/form-field";
-import { FormSelect } from "@/components/ui/form-select";
 import { Input } from "@/components/ui/input";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { JobCardSectionNav } from "@/modules/service-orders/components/job-card-section-nav";
 import { ServiceOrderForm } from "@/modules/service-orders/components/service-order-form";
 import type { JobCardSection } from "@/modules/service-orders/job-card-sections";
@@ -29,20 +29,25 @@ type TechnicianOption = {
   email: string;
 };
 
+type BayOption = {
+  id: string;
+  name: string;
+};
+
 type Props = {
   vehicles: VehicleOption[];
   technicians: TechnicianOption[];
+  bays: BayOption[];
   initialVehicleId?: string;
 };
 
 const SECTION_NUMBERS: Record<JobCardSection, string> = {
   details: "01",
-  lines: "02",
-  inspection: "03",
+  inspection: "02",
+  lines: "03",
   estimate: "04",
   billing: "05",
-  liveLink: "06",
-  timeline: "07",
+  timeline: "06",
 };
 
 function SectionBlock({
@@ -107,13 +112,13 @@ function LockedBody({ onGoDetails }: { onGoDetails: () => void }) {
 export function NewJobCardForm({
   vehicles,
   technicians,
+  bays,
   initialVehicleId = "",
 }: Props) {
   const t = useTranslations("orders");
   const ti = useTranslations("inspections");
   const te = useTranslations("estimates");
   const tb = useTranslations("billing");
-  const tl = useTranslations("liveLink");
   const [vehicleId, setVehicleId] = useState(initialVehicleId);
   const { activeSection, scrollToSection, setSectionRef } = useJobCardSections();
 
@@ -121,6 +126,18 @@ export function NewJobCardForm({
     () => vehicles.find((item) => item.id === vehicleId) ?? null,
     [vehicles, vehicleId],
   );
+
+  const vehicleOptions = useMemo(() => {
+    const options = vehicles.map((vehicle) => ({
+      value: vehicle.id,
+      label: `${vehicle.registrationNumber} — ${vehicle.make} ${vehicle.model}`,
+      keywords: `${vehicle.registrationNumber} ${vehicle.make} ${vehicle.model} ${vehicle.customerName}`,
+    }));
+    if (!vehicleId) return options;
+    const current = options.find((option) => option.value === vehicleId);
+    if (!current) return options;
+    return [current, ...options.filter((option) => option.value !== vehicleId)];
+  }, [vehicles, vehicleId]);
 
   function goToDetails() {
     scrollToSection("details");
@@ -149,15 +166,15 @@ export function NewJobCardForm({
                 label={t("selectVehicle")}
                 hint={t("selectVehicleHint")}
               >
-                <FormSelect
+                <SearchableSelect
                   id="vehicleId-picker"
                   value={vehicleId}
-                  onValueChange={setVehicleId}
+                  onChange={setVehicleId}
+                  options={vehicleOptions}
+                  clearable={false}
                   placeholder={t("selectVehiclePlaceholder")}
-                  options={vehicles.map((vehicle) => ({
-                    value: vehicle.id,
-                    label: `${vehicle.registrationNumber} — ${vehicle.make} ${vehicle.model}`,
-                  }))}
+                  searchPlaceholder={t("selectVehicleSearchPlaceholder")}
+                  emptyLabel={t("selectVehicleEmpty")}
                 />
               </FormField>
               <FormField id="locked-customer" label={t("customer")}>
@@ -179,6 +196,7 @@ export function NewJobCardForm({
                 vehicleId={selected.id}
                 defaultOdometer={selected.odometer}
                 technicians={technicians}
+                bays={bays}
               />
             ) : (
               <p className="rounded-lg border border-dashed border-slate-200 bg-slate-50/80 px-4 py-8 text-center text-body text-slate-600">
@@ -189,19 +207,19 @@ export function NewJobCardForm({
         </SectionBlock>
 
         <SectionBlock
-          id="lines"
-          title={t("lines")}
-          subtitle={t("linesDescription")}
-          sectionRef={setSectionRef("lines")}
+          id="inspection"
+          title={ti("title")}
+          subtitle={t("inspectionHint")}
+          sectionRef={setSectionRef("inspection")}
         >
           <LockedBody onGoDetails={goToDetails} />
         </SectionBlock>
 
         <SectionBlock
-          id="inspection"
-          title={ti("title")}
-          subtitle={t("inspectionHint")}
-          sectionRef={setSectionRef("inspection")}
+          id="lines"
+          title={t("lines")}
+          subtitle={t("linesDescription")}
+          sectionRef={setSectionRef("lines")}
         >
           <LockedBody onGoDetails={goToDetails} />
         </SectionBlock>
@@ -220,15 +238,6 @@ export function NewJobCardForm({
           title={tb("title")}
           subtitle={t("billingHint")}
           sectionRef={setSectionRef("billing")}
-        >
-          <LockedBody onGoDetails={goToDetails} />
-        </SectionBlock>
-
-        <SectionBlock
-          id="liveLink"
-          title={tl("title")}
-          subtitle={tl("subtitle")}
-          sectionRef={setSectionRef("liveLink")}
         >
           <LockedBody onGoDetails={goToDetails} />
         </SectionBlock>

@@ -10,18 +10,13 @@ import { listCustomerServiceHistory } from "@/modules/service-orders/service";
 
 type Props = {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ vehicle?: string }>;
 };
 
 export const instant = false;
 
-export default async function CustomerDetailPage({
-  params,
-  searchParams,
-}: Props) {
+export default async function CustomerDetailPage({ params }: Props) {
   const session = await requireSession();
   const { id } = await params;
-  const { vehicle: vehicleId } = await searchParams;
   const locale = await getLocale();
   const t = await getTranslations("customers");
 
@@ -48,7 +43,7 @@ export default async function CustomerDetailPage({
     <main className="w-full space-y-4">
       <Link
         href="/customers"
-        className="inline-flex h-5 max-h-5 items-center gap-0.5 px-0.5 text-[13px] leading-5 text-slate-700 hover:text-blue-700"
+        className="hidden h-5 max-h-5 items-center gap-0.5 px-0.5 text-[13px] leading-5 text-slate-700 hover:text-blue-700 lg:inline-flex"
       >
         <ChevronLeft className="size-3.5 shrink-0" aria-hidden />
         {t("back")}
@@ -78,7 +73,6 @@ export default async function CustomerDetailPage({
         canWrite={canWrite}
         canCreateOrder={canCreateOrder}
         locale={locale}
-        initialVehicleId={vehicleId ?? null}
       />
     </main>
   );

@@ -16,7 +16,7 @@ type Props = {
   label: string;
   canWrite: boolean;
   /** On the job-card hub, only show delete (view/edit are redundant). */
-  mode?: "row" | "delete-only";
+  mode?: "row" | "delete-only" | "view-delete";
   /** Where to go after a successful delete. Defaults to staying put + refresh. */
   redirectTo?: string;
 };
@@ -33,6 +33,8 @@ export function JobCardRowActions({
   const router = useRouter();
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [pending, startTransition] = useTransition();
+  const showView = mode === "row" || mode === "view-delete";
+  const showEdit = mode === "row";
 
   function onConfirmDelete() {
     startTransition(async () => {
@@ -63,39 +65,35 @@ export function JobCardRowActions({
         onClick={(event) => event.stopPropagation()}
         onKeyDown={(event) => event.stopPropagation()}
       >
-        {mode === "row" ? (
-          <>
-            <Button asChild variant="outline" size="icon-sm">
-              <Link href={`/orders/${orderId}`} aria-label={t("view")}>
-                <Eye className="size-4" aria-hidden />
-              </Link>
-            </Button>
-            {canWrite ? (
-              <Button asChild variant="outline" size="icon-sm">
-                <Link
-                  href={`/orders/${orderId}?section=details`}
-                  aria-label={t("edit")}
-                >
-                  <Pencil className="size-4" aria-hidden />
-                </Link>
-              </Button>
-            ) : null}
-          </>
+        {showView ? (
+          <Button asChild variant="outline" size="icon-sm">
+            <Link href={`/orders/${orderId}`} aria-label={t("view")}>
+              <Eye className="size-4" aria-hidden />
+            </Link>
+          </Button>
+        ) : null}
+        {showEdit && canWrite ? (
+          <Button asChild variant="outline" size="icon-sm">
+            <Link
+              href={`/orders/${orderId}?section=details`}
+              aria-label={t("edit")}
+            >
+              <Pencil className="size-4" aria-hidden />
+            </Link>
+          </Button>
         ) : null}
         {canWrite ? (
-          <>
-            <Button
-              type="button"
-              variant="outline"
-              size="icon-sm"
-              disabled={pending}
-              className="text-danger hover:bg-danger/5 hover:text-danger"
-              aria-label={t("delete")}
-              onClick={() => setDeleteOpen(true)}
-            >
-              <Trash2 className="size-4" aria-hidden />
-            </Button>
-          </>
+          <Button
+            type="button"
+            variant="outline"
+            size="icon-sm"
+            disabled={pending}
+            className="text-danger hover:bg-danger/5 hover:text-danger"
+            aria-label={t("delete")}
+            onClick={() => setDeleteOpen(true)}
+          >
+            <Trash2 className="size-4" aria-hidden />
+          </Button>
         ) : null}
       </div>
 

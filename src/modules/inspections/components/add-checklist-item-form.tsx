@@ -25,7 +25,7 @@ export function AddChecklistItemForm({ orderId }: Props) {
     <div className="space-y-3">
       <div className="flex flex-wrap items-end justify-between gap-2">
         <div>
-          <strong className="text-[13px] font-semibold text-slate-900">
+          <strong className="text-[16px] font-semibold text-slate-900">
             {t("addCustomItemTitle")}
           </strong>
           <p className="mt-0.5 text-[11px] text-slate-500">

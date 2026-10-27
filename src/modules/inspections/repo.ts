@@ -47,6 +47,7 @@ const repairSelect = {
   description: true,
   quantity: true,
   unitPricePaise: true,
+  partId: true,
   sortOrder: true,
   createdAt: true,
   updatedAt: true,
@@ -325,6 +326,7 @@ export async function createSuggestedRepair(
     description: string;
     quantity: number;
     unitPricePaise: number;
+    partId: string | null;
     actorId: string;
   },
 ) {
@@ -342,6 +344,7 @@ export async function createSuggestedRepair(
       description: data.description,
       quantity: data.quantity,
       unitPricePaise: data.unitPricePaise,
+      partId: data.type === "PART" ? data.partId : null,
       sortOrder,
     },
     select: repairSelect,
@@ -357,6 +360,7 @@ export async function createSuggestedRepair(
       serviceOrderId: data.serviceOrderId,
       type: data.type,
       description: data.description,
+      partId: data.partId,
       unitPricePaise: data.unitPricePaise,
     },
   });

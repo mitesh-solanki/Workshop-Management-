@@ -5,7 +5,6 @@ import {
   formatCreditNoteNumber,
   formatInvoiceNumber,
   financialYearStart,
-  garageInvoiceCode,
 } from "@/lib/financial-year";
 import { prisma } from "@/lib/db";
 import type { GstSplitKindValue } from "@/lib/gst";
@@ -179,17 +178,6 @@ export async function createDraftInvoice(
  * Allocate the next invoice number with a counter row lock (FOR UPDATE).
  * Must run inside an existing transaction when composing with other writes.
  */
-async function loadGarageInvoiceCode(
-  tx: Prisma.TransactionClient,
-  garageId: string,
-): Promise<string> {
-  const garage = await tx.garage.findFirst({
-    where: { id: garageId },
-    select: { name: true },
-  });
-  return garageInvoiceCode(garage?.name ?? "");
-}
-
 export async function allocateInvoiceNumber(
   tx: Prisma.TransactionClient,
   garageId: string,
@@ -200,7 +188,6 @@ export async function allocateInvoiceNumber(
   invoiceNumber: string;
 }> {
   const fyStart = financialYearStart(at);
-  const garageCode = await loadGarageInvoiceCode(tx, garageId);
 
   await tx.$executeRaw`
     INSERT INTO "InvoiceNumberCounter" ("id", "garageId", "financialYearStart", "lastNumber")
@@ -230,7 +217,7 @@ export async function allocateInvoiceNumber(
   return {
     financialYearStart: fyStart,
     sequenceNumber,
-    invoiceNumber: formatInvoiceNumber(fyStart, sequenceNumber, garageCode),
+    invoiceNumber: formatInvoiceNumber(fyStart, sequenceNumber),
   };
 }
 
@@ -244,7 +231,6 @@ export async function allocateCreditNoteNumber(
   creditNoteNumber: string;
 }> {
   const fyStart = financialYearStart(at);
-  const garageCode = await loadGarageInvoiceCode(tx, garageId);
 
   await tx.$executeRaw`
     INSERT INTO "CreditNoteNumberCounter" ("id", "garageId", "financialYearStart", "lastNumber")
@@ -274,7 +260,7 @@ export async function allocateCreditNoteNumber(
   return {
     financialYearStart: fyStart,
     sequenceNumber,
-    creditNoteNumber: formatCreditNoteNumber(fyStart, sequenceNumber, garageCode),
+    creditNoteNumber: formatCreditNoteNumber(fyStart, sequenceNumber),
   };
 }
 

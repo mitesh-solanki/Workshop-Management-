@@ -53,7 +53,7 @@ function SearchInput({
         onChange={(event) => onValueChange(event.target.value)}
         className={cn(
           // Hide native clear (type=search / WebKit) — we use our own X.
-          "h-11 min-h-11 rounded-lg border-slate-200 bg-card pl-9 text-base md:text-sm [&::-webkit-search-cancel-button]:hidden [&::-webkit-search-decoration]:hidden",
+          "h-11 min-h-11 rounded-lg border-slate-200 bg-card pl-9 text-sm [&::-webkit-search-cancel-button]:hidden [&::-webkit-search-decoration]:hidden",
           value ? "pr-11" : "pr-3",
         )}
       />

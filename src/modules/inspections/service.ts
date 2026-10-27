@@ -1,5 +1,6 @@
 import "server-only";
 
+import { Prisma } from "@prisma/client";
 import { AppError, ForbiddenError, NotFoundError } from "@/lib/errors";
 import { requireRole, type RoleSession } from "@/lib/rbac";
 import {
@@ -35,6 +36,7 @@ import {
   findSuggestedRepairById,
   updateInspectionItemById,
 } from "@/modules/inspections/repo";
+import { findPartById } from "@/modules/inventory/repo";
 import { findServiceOrderById } from "@/modules/service-orders/repo";
 
 const WRITE_ROLES = ["OWNER", "MANAGER", "TECHNICIAN"] as const;
@@ -114,14 +116,32 @@ export async function getOrCreateInspection(
   }
 
   assertCanMutateOrder(session, order);
-  const created = await createInspectionWithDefaults(session.garageId, {
-    serviceOrderId: order.id,
-    actorId: session.userId,
-  });
-  if (!created) {
-    throw new AppError("INSPECTION_CREATE_FAILED");
+  try {
+    const created = await createInspectionWithDefaults(session.garageId, {
+      serviceOrderId: order.id,
+      actorId: session.userId,
+    });
+    if (!created) {
+      throw new AppError("INSPECTION_CREATE_FAILED");
+    }
+    return await withMediaUrls(created);
+  } catch (error) {
+    // Two page loads can both see "no inspection" and race to create.
+    // The unique serviceOrderId constraint wins; the loser reloads the winner.
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2002"
+    ) {
+      const raced = await findInspectionByServiceOrderId(
+        session.garageId,
+        order.id,
+      );
+      if (raced) {
+        return await withMediaUrls(raced);
+      }
+    }
+    throw error;
   }
-  return await withMediaUrls(created);
 }
 
 export async function getInspectionForOrder(
@@ -347,6 +367,16 @@ export async function addSuggestedRepairLine(
     throw new AppError("INSPECTION_CREATE_FAILED");
   }
 
+  if (input.type === "PART") {
+    if (!input.partId) {
+      throw new AppError("inventory.part_required", 400);
+    }
+    const part = await findPartById(session.garageId, input.partId);
+    if (!part) {
+      throw new NotFoundError();
+    }
+  }
+
   return createSuggestedRepair(session.garageId, {
     inspectionId: inspection.id,
     serviceOrderId: order.id,
@@ -354,6 +384,7 @@ export async function addSuggestedRepairLine(
     description: input.description,
     quantity: input.quantity,
     unitPricePaise: input.unitPricePaise,
+    partId: input.type === "PART" ? input.partId : null,
     actorId: session.userId,
   });
 }

@@ -6,7 +6,6 @@ import {
   formatInvoiceNumber,
   financialYearStart,
   formatFinancialYearLabel,
-  garageInvoiceCode,
 } from "@/lib/financial-year";
 import {
   computeLineGst,
@@ -71,16 +70,11 @@ describe("financial year", () => {
     expect(financialYearStart(new Date(2026, 0, 15))).toBe(2025); // 15 Jan
   });
 
-  it("formats labels and invoice numbers with garage code", () => {
+  it("formats labels and invoice numbers", () => {
     expect(formatFinancialYearLabel(2025)).toBe("2025-26");
-    expect(garageInvoiceCode("Prime Motors")).toBe("PM");
-    expect(garageInvoiceCode("Maruti")).toBe("MAR");
-    expect(garageInvoiceCode("Billing test garage")).toBe("BTG");
-    expect(garageInvoiceCode("Shree Auto Care Centre")).toBe("SACC");
-    expect(garageInvoiceCode("")).toBe("XX");
-    expect(formatInvoiceNumber(2025, 1, "PM")).toBe("INV-PM/2025-26/0001");
-    expect(formatInvoiceNumber(2025, 42, "PM")).toBe("INV-PM/2025-26/0042");
-    expect(formatCreditNoteNumber(2025, 3, "PM")).toBe("CN-PM/2025-26/0003");
+    expect(formatInvoiceNumber(2025, 1)).toBe("INV-2025-26-0001");
+    expect(formatInvoiceNumber(2025, 42)).toBe("INV-2025-26-0042");
+    expect(formatCreditNoteNumber(2025, 3)).toBe("CN-2025-26-0003");
   });
 });
 

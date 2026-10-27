@@ -1,9 +1,9 @@
 "use client";
 
-import { useActionState, useEffect, useId, useRef } from "react";
+import { useActionState, useEffect, useId, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
-import { FormSelect } from "@/components/ui/form-select";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { toast } from "@/components/ui/toast";
 import { GST_STATE_CODES } from "@/lib/gstin";
 import { cn } from "@/lib/utils";
@@ -39,6 +39,18 @@ export function CreateInvoiceForm({
   )
     ? defaultPlaceOfSupplyStateCode
     : "24";
+  const [placeOfSupplyStateCode, setPlaceOfSupplyStateCode] =
+    useState(defaultCode);
+
+  const stateOptions = useMemo(
+    () =>
+      GST_STATE_CODES.map((code) => ({
+        value: code,
+        label: tGst(`states.${code}`),
+        keywords: code,
+      })),
+    [tGst],
+  );
 
   useEffect(() => {
     if (!state.message || state.message === handledMessage.current) return;
@@ -61,14 +73,16 @@ export function CreateInvoiceForm({
           <label htmlFor={`${idPrefix}-pos`} className={labelClass}>
             {t("placeOfSupply")}
           </label>
-          <FormSelect
+          <SearchableSelect
             id={`${idPrefix}-pos`}
             name="placeOfSupplyStateCode"
-            defaultValue={defaultCode}
-            options={GST_STATE_CODES.map((code) => ({
-              value: code,
-              label: `${tGst(`states.${code}`)} (${code})`,
-            }))}
+            value={placeOfSupplyStateCode}
+            onChange={setPlaceOfSupplyStateCode}
+            options={stateOptions}
+            clearable={false}
+            placeholder={t("placeOfSupplyPlaceholder")}
+            searchPlaceholder={t("placeOfSupplySearchPlaceholder")}
+            emptyLabel={t("placeOfSupplyEmpty")}
           />
           <p className="mt-1.5 text-[13px] leading-snug text-slate-500">
             {t("placeOfSupplyHint")}

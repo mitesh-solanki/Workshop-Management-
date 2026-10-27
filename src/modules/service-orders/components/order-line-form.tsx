@@ -13,6 +13,10 @@ import { FormField } from "@/components/ui/form-field";
 import { FormSelect } from "@/components/ui/form-select";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/toast";
+import {
+  PartPickerSelect,
+  type PartPickerItem,
+} from "@/modules/inventory/components/part-picker-select";
 import { QuantityStepper } from "@/modules/inventory/components/quantity-stepper";
 
 const initial: ServiceOrderActionState = { ok: false };
@@ -20,21 +24,11 @@ const initial: ServiceOrderActionState = { ok: false };
 const fieldControlClass =
   "h-11 min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-[14px] shadow-xs outline-none focus-visible:border-blue-600 focus-visible:ring-2 focus-visible:ring-blue-600/25";
 
-export type OrderLinePartOption = {
-  id: string;
-  name: string;
-  sku: string;
-  unit: string;
-  sellingPricePaise: number;
-  quantityOnHand: number;
-};
-
 type Props = {
   orderId: string;
-  parts: OrderLinePartOption[];
 };
 
-export function OrderLineForm({ orderId, parts }: Props) {
+export function OrderLineForm({ orderId }: Props) {
   const t = useTranslations("orders");
   const ti = useTranslations("inventory");
   const bound = useMemo(
@@ -44,17 +38,16 @@ export function OrderLineForm({ orderId, parts }: Props) {
   const [state, formAction, pending] = useActionState(bound, initial);
   const handledMessage = useRef<string | null>(null);
   const [lineType, setLineType] = useState<"LABOUR" | "PART">("LABOUR");
-  const [partId, setPartId] = useState(parts[0]?.id ?? "");
-  const selected = useMemo(
-    () => parts.find((p) => p.id === partId) ?? null,
-    [parts, partId],
-  );
+  const [partId, setPartId] = useState("");
+  const [selected, setSelected] = useState<PartPickerItem | null>(null);
 
   useEffect(() => {
     if (!state.message || state.message === handledMessage.current) return;
     handledMessage.current = state.message;
     if (state.ok) {
       toast.success(t("lineAdded"));
+      setPartId("");
+      setSelected(null);
     } else {
       toast.error(state.message);
     }
@@ -62,8 +55,8 @@ export function OrderLineForm({ orderId, parts }: Props) {
 
   return (
     <form action={formAction}>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-12 sm:items-end sm:gap-3">
-        <FormField id="type" label={t("lineType")} className="sm:col-span-2">
+      <div className="grid grid-cols-1 items-end gap-3 sm:grid-cols-2 lg:grid-cols-[8rem_minmax(0,1fr)_9rem_9.5rem_auto] lg:gap-3">
+        <FormField id="type" label={t("lineType")}>
           <FormSelect
             id="type"
             name="type"
@@ -81,38 +74,27 @@ export function OrderLineForm({ orderId, parts }: Props) {
         </FormField>
 
         {lineType === "PART" ? (
-          <FormField id="partId" label={ti("part")} className="sm:col-span-5">
-            {parts.length === 0 ? (
-              <p className="flex h-11 items-center text-[14px] text-muted-foreground">
-                {ti("noPartsForSale")}
-              </p>
-            ) : (
-              <>
-                <FormSelect
-                  id="partId"
-                  name="partId"
-                  required
-                  value={partId}
-                  onValueChange={setPartId}
-                  options={parts.map((part) => ({
-                    value: part.id,
-                    label: `${part.name} (${part.sku}) · ${part.quantityOnHand} ${part.unit}`,
-                  }))}
-                  triggerClassName={fieldControlClass}
-                />
-                <input
-                  type="hidden"
-                  name="description"
-                  value={selected ? `${selected.name} (${selected.sku})` : ""}
-                />
-              </>
-            )}
+          <FormField id="partId" label={ti("part")} className="sm:col-span-2 lg:col-span-1">
+            <PartPickerSelect
+              id="partId"
+              name="partId"
+              value={partId}
+              onChange={(nextId, part) => {
+                setPartId(nextId);
+                setSelected(part);
+              }}
+            />
+            <input
+              type="hidden"
+              name="description"
+              value={selected ? `${selected.name} (${selected.sku})` : ""}
+            />
           </FormField>
         ) : (
           <FormField
             id="description"
             label={t("lineDescription")}
-            className="sm:col-span-5"
+            className="sm:col-span-2 lg:col-span-1"
           >
             <Input
               id="description"
@@ -132,7 +114,6 @@ export function OrderLineForm({ orderId, parts }: Props) {
           label={t("quantity")}
           defaultValue={1}
           min={1}
-          className="sm:col-span-2"
         />
 
         <RupeePriceInput
@@ -142,23 +123,20 @@ export function OrderLineForm({ orderId, parts }: Props) {
             lineType === "PART" ? (selected?.sellingPricePaise ?? 0) : 0
           }
           key={`${lineType}-${selected?.id ?? "labour"}`}
-          className="sm:col-span-2"
           inputClassName="h-11 min-h-11 rounded-lg border-slate-300 text-[14px] shadow-xs focus-visible:border-blue-600 focus-visible:ring-blue-600/25"
         />
 
-        <div className="flex sm:col-span-1 sm:justify-end">
-          <Button
-            type="submit"
-            size="icon"
-            loading={pending}
-            disabled={lineType === "PART" && parts.length === 0}
-            aria-label={t("addLineItem")}
-            title={t("addLineItem")}
-            className="size-11 min-h-11 min-w-11 border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 hover:text-blue-800"
-          >
-            <Plus className="size-5" strokeWidth={2.5} />
-          </Button>
-        </div>
+        <Button
+          type="submit"
+          variant="primary"
+          size="md"
+          loading={pending}
+          disabled={lineType === "PART" && !partId}
+          className="h-11 min-h-11 gap-1.5 px-4"
+        >
+          <Plus className="size-4" strokeWidth={2.5} />
+          {t("addLineAction")}
+        </Button>
       </div>
     </form>
   );

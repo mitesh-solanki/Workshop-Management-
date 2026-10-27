@@ -57,7 +57,6 @@ export async function createEstimateRevisionAction(
     const session = await requireSession();
     await createEstimateRevision(session, orderId, {
       notes: String(formData.get("notes") ?? ""),
-      includeNewSources: formData.get("includeNewSources") != null,
     });
     revalidateEstimate(orderId);
     return { ok: true, message: "revisionCreated" };
@@ -77,10 +76,9 @@ export async function addEstimateLineAction(
   try {
     const session = await requireSession();
     const description = String(formData.get("description") ?? "").trim();
-    const reason = String(formData.get("reason") ?? "").trim();
     await addManualEstimateLine(session, orderId, {
       type: String(formData.get("type") ?? "") as EstimateLineTypeValue,
-      description: reason ? `${description} — ${reason}` : description,
+      description,
       quantity: String(formData.get("quantity") ?? "1"),
       unitPricePaise: String(formData.get("unitPriceRupees") ?? "0"),
       gstRatePercent: String(formData.get("gstRatePercent") ?? "18"),

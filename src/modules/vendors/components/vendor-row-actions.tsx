@@ -39,48 +39,47 @@ export function VendorRowActions({
   }
 
   return (
-    <>
-      <div
-        className="flex items-center gap-1.5"
-        data-row-stop
-        onClick={(event) => event.stopPropagation()}
-        onKeyDown={(event) => event.stopPropagation()}
-      >
-        <Button asChild variant="outline" size="icon">
-          <Link href={`/vendors/${vendor.id}`} aria-label={t("view")}>
-            <Eye className="size-4" aria-hidden />
-          </Link>
-        </Button>
-        {canWrite ? (
-          <>
-            <EditVendorModal vendor={vendor} />
-            <Button
-              type="button"
-              variant="outline"
-              size="icon"
-              disabled={pending}
-              className="text-danger hover:bg-danger/5 hover:text-danger"
-              aria-label={t("delete")}
-              onClick={() => setDeleteOpen(true)}
-            >
-              <Trash2 className="size-4" aria-hidden />
-            </Button>
-          </>
-        ) : null}
-      </div>
-
-      <ConfirmDialog
-        open={deleteOpen}
-        onOpenChange={(open) => {
-          if (!open && !pending) setDeleteOpen(false);
-        }}
-        title={t("deleteTitle")}
-        description={t("deleteConfirm", { name: vendor.name })}
-        confirmLabel={t("delete")}
-        variant="danger"
-        loading={pending && deleteOpen}
-        onConfirm={onConfirmDelete}
-      />
-    </>
+    <div
+      className="flex items-center gap-1.5"
+      data-row-stop
+      onClick={(event) => event.stopPropagation()}
+      onKeyDown={(event) => event.stopPropagation()}
+    >
+      <Button asChild variant="outline" size="icon">
+        <Link href={`/vendors/${vendor.id}`} aria-label={t("view")}>
+          <Eye className="size-4" aria-hidden />
+        </Link>
+      </Button>
+      {canWrite ? (
+        <>
+          <EditVendorModal vendor={vendor} />
+          <ConfirmDialog
+            open={deleteOpen}
+            onOpenChange={(next) => {
+              if (pending && !next) return;
+              setDeleteOpen(next);
+            }}
+            title={t("deleteTitle")}
+            description={t("deleteConfirm", { name: vendor.name })}
+            confirmLabel={t("delete")}
+            variant="danger"
+            loading={pending && deleteOpen}
+            onConfirm={onConfirmDelete}
+            trigger={
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                disabled={pending}
+                className="text-danger hover:bg-danger/5 hover:text-danger"
+                aria-label={t("delete")}
+              >
+                <Trash2 className="size-4" aria-hidden />
+              </Button>
+            }
+          />
+        </>
+      ) : null}
+    </div>
   );
 }

@@ -115,6 +115,179 @@ export async function searchParts(
   }));
 }
 
+const PICKER_SCAN_BATCH = 40;
+
+/**
+ * Page of in-stock parts for the searchable picker (stock derived from movements).
+ * `offset` is how many in-stock matches to skip.
+ */
+export async function searchInStockPartsPage(
+  garageId: string,
+  q: string,
+  offset: number,
+  pageSize: number,
+): Promise<{
+  items: Array<{
+    id: string;
+    name: string;
+    sku: string;
+    unit: string;
+    sellingPricePaise: number;
+    quantityOnHand: number;
+  }>;
+  nextOffset: number;
+  hasMore: boolean;
+}> {
+  const query = q.trim();
+  const where = {
+    garageId,
+    ...(query
+      ? {
+          OR: [
+            { name: { contains: query, mode: "insensitive" as const } },
+            { sku: { contains: query, mode: "insensitive" as const } },
+            { hsn: { contains: query, mode: "insensitive" as const } },
+          ],
+        }
+      : {}),
+  };
+
+  let partSkip = 0;
+  let inStockSeen = 0;
+  const collected: Array<{
+    id: string;
+    name: string;
+    sku: string;
+    unit: string;
+    sellingPricePaise: number;
+    quantityOnHand: number;
+  }> = [];
+  let hasMore = false;
+  let exhausted = false;
+
+  while (!exhausted) {
+    const batch = await prisma.part.findMany({
+      where,
+      select: {
+        id: true,
+        name: true,
+        sku: true,
+        unit: true,
+        sellingPricePaise: true,
+      },
+      orderBy: [{ name: "asc" }, { sku: "asc" }],
+      skip: partSkip,
+      take: PICKER_SCAN_BATCH,
+    });
+
+    if (batch.length < PICKER_SCAN_BATCH) {
+      exhausted = true;
+    }
+    partSkip += batch.length;
+    if (batch.length === 0) {
+      break;
+    }
+
+    const stocks = await getStockLevelsForParts(
+      garageId,
+      batch.map((part) => part.id),
+    );
+
+    for (const part of batch) {
+      const quantityOnHand = stocks.get(part.id) ?? 0;
+      if (quantityOnHand <= 0) {
+        continue;
+      }
+      if (inStockSeen < offset) {
+        inStockSeen += 1;
+        continue;
+      }
+      if (collected.length < pageSize) {
+        collected.push({ ...part, quantityOnHand });
+        inStockSeen += 1;
+        continue;
+      }
+      hasMore = true;
+      break;
+    }
+
+    if (hasMore) {
+      break;
+    }
+  }
+
+  return {
+    items: collected,
+    nextOffset: offset + collected.length,
+    hasMore,
+  };
+}
+
+/**
+ * Page of all parts matching a search (includes zero stock). For catalog pickers
+ * that should not browse until the user types.
+ */
+export async function searchPartsCatalogPage(
+  garageId: string,
+  q: string,
+  offset: number,
+  pageSize: number,
+): Promise<{
+  items: Array<{
+    id: string;
+    name: string;
+    sku: string;
+    unit: string;
+    sellingPricePaise: number;
+    quantityOnHand: number;
+  }>;
+  nextOffset: number;
+  hasMore: boolean;
+}> {
+  const query = q.trim();
+  const where = {
+    garageId,
+    ...(query
+      ? {
+          OR: [
+            { name: { contains: query, mode: "insensitive" as const } },
+            { sku: { contains: query, mode: "insensitive" as const } },
+            { hsn: { contains: query, mode: "insensitive" as const } },
+          ],
+        }
+      : {}),
+  };
+
+  const batch = await prisma.part.findMany({
+    where,
+    select: {
+      id: true,
+      name: true,
+      sku: true,
+      unit: true,
+      sellingPricePaise: true,
+    },
+    orderBy: [{ name: "asc" }, { sku: "asc" }],
+    skip: offset,
+    take: pageSize + 1,
+  });
+
+  const page = batch.slice(0, pageSize);
+  const stocks = await getStockLevelsForParts(
+    garageId,
+    page.map((part) => part.id),
+  );
+
+  return {
+    items: page.map((part) => ({
+      ...part,
+      quantityOnHand: stocks.get(part.id) ?? 0,
+    })),
+    nextOffset: offset + page.length,
+    hasMore: batch.length > pageSize,
+  };
+}
+
 export async function findPartById(garageId: string, partId: string) {
   const part = await prisma.part.findFirst({
     where: { id: partId, garageId },
@@ -357,6 +530,90 @@ export async function updatePart(
   });
 }
 
+/** Business links that block delete (stock movements alone do not). */
+export async function countPartLinkedRecords(
+  garageId: string,
+  partId: string,
+) {
+  const [
+    serviceOrderLines,
+    directSaleLines,
+    partsRequests,
+    purchaseOrderLines,
+    goodsReceiptLines,
+    purchaseReturns,
+    suggestedRepairs,
+  ] = await Promise.all([
+    prisma.serviceOrderLine.count({
+      where: { partId, serviceOrder: { garageId } },
+    }),
+    prisma.directSaleLine.count({
+      where: { partId, garageId },
+    }),
+    prisma.partsRequest.count({
+      where: { partId, garageId },
+    }),
+    prisma.purchaseOrderLine.count({
+      where: { partId, garageId },
+    }),
+    prisma.goodsReceiptLine.count({
+      where: { partId, garageId },
+    }),
+    prisma.purchaseReturn.count({
+      where: { partId, garageId },
+    }),
+    prisma.suggestedRepair.count({
+      where: { partId, garageId },
+    }),
+  ]);
+
+  return (
+    serviceOrderLines +
+    directSaleLines +
+    partsRequests +
+    purchaseOrderLines +
+    goodsReceiptLines +
+    purchaseReturns +
+    suggestedRepairs
+  );
+}
+
+export async function deletePartById(
+  garageId: string,
+  partId: string,
+  data: { actorId: string; name: string; sku: string },
+) {
+  return prisma.$transaction(async (tx) => {
+    await tx.stockMovement.deleteMany({
+      where: { garageId, partId },
+    });
+
+    const result = await tx.part.deleteMany({
+      where: { id: partId, garageId },
+    });
+
+    if (result.count === 0) {
+      return null;
+    }
+
+    await tx.auditLog.create({
+      data: {
+        garageId,
+        actorId: data.actorId,
+        action: "inventory.part_deleted",
+        entity: "Part",
+        entityId: partId,
+        meta: {
+          name: data.name,
+          sku: data.sku,
+        } satisfies Prisma.InputJsonValue,
+      },
+    });
+
+    return { id: partId };
+  });
+}
+
 export type StockMutationResult =
   | {
       ok: true;
@@ -382,7 +639,7 @@ export async function applyStockMovement(
     /** Absolute positive qty for IN/OUT; signed delta for ADJUSTMENT. */
     quantity: number;
     note: string | null;
-    actorId: string;
+    actorId: string | null;
     serviceOrderId?: string | null;
     serviceOrderLineId?: string | null;
     directSaleId?: string | null;

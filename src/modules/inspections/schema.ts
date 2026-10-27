@@ -58,12 +58,45 @@ export const addChecklistItemSchema = z.object({
   label: z.string().trim().min(1).max(120),
 });
 
-export const addSuggestedRepairSchema = z.object({
-  type: z.enum(SUGGESTED_REPAIR_TYPES),
-  description: z.string().trim().min(1).max(500),
-  quantity: quantityField,
-  unitPricePaise: rupeesToPaiseSchema,
-});
+export const addSuggestedRepairSchema = z
+  .object({
+    type: z.enum(SUGGESTED_REPAIR_TYPES),
+    description: z.string().trim().max(500),
+    quantity: quantityField,
+    unitPricePaise: rupeesToPaiseSchema,
+    partId: z
+      .union([z.string(), z.null(), z.undefined()])
+      .transform((value) => {
+        if (value == null || value === "") {
+          return null;
+        }
+        return value.trim();
+      }),
+  })
+  .superRefine((data, ctx) => {
+    if (data.type === "PART") {
+      if (!data.partId) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["partId"],
+          message: "Part required",
+        });
+      }
+      if (!data.description.trim()) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["description"],
+          message: "Description required",
+        });
+      }
+    } else if (!data.description.trim()) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["description"],
+        message: "Description required",
+      });
+    }
+  });
 
 export const createUploadUrlSchema = z.object({
   inspectionItemId: z.string().trim().min(1),

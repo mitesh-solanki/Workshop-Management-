@@ -20,6 +20,14 @@ vi.mock("@/modules/estimates/repo", () => ({
   createEstimateWithLines: vi.fn(),
   addEstimateLine: vi.fn(),
   recordLineApproval: vi.fn(),
+  EstimateStockTxError: class EstimateStockTxError extends Error {
+    reason: string;
+    constructor(reason: string) {
+      super(reason);
+      this.name = "EstimateStockTxError";
+      this.reason = reason;
+    }
+  },
 }));
 
 import { findInspectionByServiceOrderId } from "@/modules/inspections/repo";
@@ -221,33 +229,10 @@ describe("estimates service", () => {
     vi.mocked(listEstimatesForOrder).mockResolvedValue([]);
   });
 
-  it("creates an estimate from order lines and suggested repairs", async () => {
+  it("creates an estimate from job-card labour and parts lines only", async () => {
     const order = sampleOrder();
     vi.mocked(findServiceOrderById).mockResolvedValue(order);
     vi.mocked(findCurrentEstimate).mockResolvedValue(null);
-    vi.mocked(findInspectionByServiceOrderId).mockResolvedValue({
-      id: "insp-1",
-      garageId: garageA,
-      serviceOrderId: order.id,
-      notes: null,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      items: [],
-      suggestedRepairs: [
-        {
-          id: "sr-1",
-          garageId: garageA,
-          inspectionId: "insp-1",
-          type: "LABOUR",
-          description: "Wheel alignment",
-          quantity: 1,
-          unitPricePaise: 30_000,
-          sortOrder: 0,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        },
-      ],
-    });
     vi.mocked(createEstimateWithLines).mockResolvedValue({
       id: "est-1",
       garageId: garageA,
@@ -292,13 +277,14 @@ describe("estimates service", () => {
           expect.objectContaining({
             sourceOrderLineId: "sol-1",
             description: "Brake pad labour",
-          }),
-          expect.objectContaining({
-            sourceSuggestedRepairId: "sr-1",
-            description: "Wheel alignment",
+            sourceSuggestedRepairId: null,
           }),
         ]),
       }),
+    );
+    const created = vi.mocked(createEstimateWithLines).mock.calls[0]?.[1];
+    expect(created?.lines.every((line) => line.sourceSuggestedRepairId == null)).toBe(
+      true,
     );
     expect(result.totals.all.lineCount).toBe(1);
   });
@@ -337,6 +323,7 @@ describe("estimates service", () => {
     });
     vi.mocked(findServiceOrderById).mockResolvedValue(order);
     vi.mocked(recordLineApproval).mockResolvedValue({
+      ok: true,
       line: {
         id: "el-1",
         garageId: garageA,
@@ -385,7 +372,50 @@ describe("estimates service", () => {
         note: "Customer said yes",
       }),
     );
-    expect(result.line?.approvalState).toBe("APPROVED");
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.line.approvalState).toBe("APPROVED");
+    }
+  });
+
+  it("blocks approving a part line when stock is short", async () => {
+    const order = sampleOrder();
+    vi.mocked(findEstimateLineById).mockResolvedValue({
+      id: "el-part",
+      garageId: garageA,
+      estimateId: "est-1",
+      type: "PART",
+      description: "Oil filter",
+      quantity: 1,
+      unitPricePaise: 20_000,
+      gstRatePercent: 18,
+      hsnOrSac: "87089900",
+      approvalState: "PENDING",
+      sourceOrderLineId: "sol-part",
+      sourceSuggestedRepairId: null,
+      sortOrder: 0,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      estimate: {
+        id: "est-1",
+        serviceOrderId: order.id,
+        supersededAt: null,
+        revisionNumber: 1,
+      },
+    });
+    vi.mocked(findServiceOrderById).mockResolvedValue(order);
+    vi.mocked(recordLineApproval).mockResolvedValue({
+      ok: false,
+      reason: "INSUFFICIENT_STOCK",
+    });
+
+    await expect(
+      setEstimateLineApproval(ownerA, "el-part", {
+        approvalState: "APPROVED",
+        method: "MANUAL",
+        note: null,
+      }),
+    ).rejects.toMatchObject({ code: "inventory.insufficient_stock" });
   });
 
   it("creates a revision without deleting the previous estimate", async () => {
@@ -434,7 +464,6 @@ describe("estimates service", () => {
     });
 
     await createEstimateRevision(ownerA, order.id, {
-      includeNewSources: true,
       notes: "Extra work",
     });
 
@@ -450,14 +479,11 @@ describe("estimates service", () => {
             approvalState: "APPROVED",
             sourceOrderLineId: "sol-1",
           }),
-          expect.objectContaining({
-            sourceOrderLineId: "sol-2",
-            description: "Brake pads",
-            approvalState: "PENDING",
-          }),
         ],
       }),
     );
+    const call = vi.mocked(createEstimateWithLines).mock.calls[0]?.[1];
+    expect(call?.lines).toHaveLength(1);
   });
 
   it("rejects cross-garage estimate reads", async () => {

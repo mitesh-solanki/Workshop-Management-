@@ -19,6 +19,8 @@ import {
   type UpdateServiceOrderStatusInput,
 } from "@/modules/service-orders/schema";
 import {
+  countOverdueServiceOrders,
+  countServiceOrdersByStatus,
   createServiceOrder,
   createServiceOrderLine,
   deleteServiceOrderById,
@@ -28,6 +30,7 @@ import {
   listServiceOrderAuditLogs,
   listServiceOrders,
   listServiceOrdersByCustomer,
+  listServiceOrdersByVehicle,
   listTechniciansInGarage,
   updateServiceOrderDetails,
   updateServiceOrderLine,
@@ -101,6 +104,22 @@ export async function listOrders(
   });
 }
 
+export async function getDashboardOrderCounts(session: RoleSession) {
+  requireRole(session, READ_ROLES);
+
+  const scope =
+    session.role === "TECHNICIAN"
+      ? { technicianId: session.userId }
+      : {};
+
+  const [statusCounts, overdueCount] = await Promise.all([
+    countServiceOrdersByStatus(session.garageId, scope),
+    countOverdueServiceOrders(session.garageId, scope),
+  ]);
+
+  return { statusCounts, overdueCount };
+}
+
 /** Bay chips for the board — scoped by technician filter only (not by selected bay). */
 export async function getBayOccupancy(
   session: RoleSession,
@@ -139,6 +158,40 @@ export async function listCustomerServiceHistory(
   }
 
   return listServiceOrdersByCustomer(session.garageId, customerId);
+}
+
+/** Vehicle service history, scoped for technicians to their assignments. */
+export async function listVehicleServiceHistory(
+  session: RoleSession,
+  vehicleId: string,
+) {
+  requireRole(session, READ_ROLES);
+
+  const vehicle = await findVehicleById(session.garageId, vehicleId);
+  if (!vehicle) {
+    throw new NotFoundError();
+  }
+
+  if (session.role === "TECHNICIAN") {
+    const assigned = await listServiceOrders(session.garageId, {
+      technicianId: session.userId,
+    });
+    return assigned
+      .filter((order) => order.vehicleId === vehicleId)
+      .map((order) => ({
+        id: order.id,
+        status: order.status,
+        complaint: order.complaint,
+        createdAt: order.createdAt,
+        expectedCompletion: order.expectedCompletion,
+        vehicle: {
+          id: order.vehicle.id,
+          registrationNumber: order.vehicle.registrationNumber,
+        },
+      }));
+  }
+
+  return listServiceOrdersByVehicle(session.garageId, vehicleId);
 }
 
 export async function getOrder(session: RoleSession, orderId: string) {
@@ -318,10 +371,7 @@ export async function addOrderLine(
   });
 
   if (!result.ok) {
-    if (result.reason === "PART_NOT_FOUND") {
-      throw new NotFoundError();
-    }
-    throw new AppError("inventory.insufficient_stock", 409);
+    throw new NotFoundError();
   }
 
   return result.line;
@@ -352,10 +402,7 @@ export async function updateOrderLine(
   });
 
   if (!result.ok) {
-    if (result.reason === "NOT_FOUND" || result.reason === "PART_NOT_FOUND") {
-      throw new NotFoundError();
-    }
-    throw new AppError("inventory.insufficient_stock", 409);
+    throw new NotFoundError();
   }
 
   return result.line;
@@ -381,10 +428,10 @@ export async function removeOrderLine(
   });
 
   if (!result.ok) {
-    if (result.reason === "NOT_FOUND" || result.reason === "PART_NOT_FOUND") {
-      throw new NotFoundError();
+    if (result.reason === "APPROVED_ON_ESTIMATE") {
+      throw new AppError("orders.line_approved_on_estimate", 409);
     }
-    throw new AppError("inventory.insufficient_stock", 409);
+    throw new NotFoundError();
   }
 }
 

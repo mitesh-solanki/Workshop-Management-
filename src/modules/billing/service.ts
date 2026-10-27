@@ -299,6 +299,45 @@ export async function finalizeInvoice(
     throw error;
   }
 
+  // A draft is a snapshot. If the estimate changed while it was open,
+  // require the user to remake the draft before it can be finalized.
+  const draft = await findInvoiceById(session.garageId, input.invoiceId);
+  if (!draft) {
+    throw new NotFoundError();
+  }
+  const estimate = await findCurrentEstimate(session.garageId, draft.serviceOrderId);
+  const issuedInvoices = await listInvoicesForOrder(
+    session.garageId,
+    draft.serviceOrderId,
+  );
+  const alreadyIssued = new Set(
+    issuedInvoices
+      .filter((invoice) => invoice.status === "FINALIZED")
+      .flatMap((invoice) => invoice.lines.map((line) => line.estimateLineId))
+      .filter((id): id is string => id !== null),
+  );
+  const expected = (estimate?.lines ?? []).filter(
+    (line) => line.approvalState === "APPROVED" && !alreadyIssued.has(line.id),
+  );
+  const sameLines =
+    estimate?.id === draft.estimateId &&
+    draft.lines.length === expected.length &&
+    expected.every((line) => {
+      const snapshot = draft.lines.find((item) => item.estimateLineId === line.id);
+      return (
+        snapshot != null &&
+        snapshot.description === line.description &&
+        snapshot.type === line.type &&
+        snapshot.quantity === line.quantity &&
+        snapshot.unitPricePaise === line.unitPricePaise &&
+        snapshot.gstRatePercent === line.gstRatePercent &&
+        snapshot.hsnOrSac === line.hsnOrSac
+      );
+    });
+  if (!sameLines) {
+    throw new AppError("billing.invoice_draft_outdated");
+  }
+
   const result = await finalizeInvoiceInTransaction(
     session.garageId,
     input.invoiceId,
@@ -592,9 +631,10 @@ export async function getInvoicePdfBuffer(
       receivedAt: payment.receivedAt,
     })),
     creditNotes: invoice.creditNotes.map((note) => ({
-      creditNoteNumber: note.creditNoteNumber,
+      reason: note.reason as "CORRECTION" | "REFUND" | "OTHER",
+      notes: note.notes,
+      itemDescriptions: note.lines.map((line) => line.description),
       totalPaise: note.totalPaise,
-      reason: note.reason,
     })),
     notes: invoice.notes,
   });

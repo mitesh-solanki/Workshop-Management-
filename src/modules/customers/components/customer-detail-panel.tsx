@@ -1,9 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { useState } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import {
   Car,
@@ -17,16 +15,8 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { usePageDetailLabel } from "@/components/page-chrome";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription } from "@/components/ui/card";
-import {
-  DescriptionDetails,
-  DescriptionItem,
-  DescriptionList,
-  DescriptionTerm,
-} from "@/components/ui/description-list";
-import { ListCard, ListCardGroup } from "@/components/ui/list-card";
 import {
   SectionDesktopNav,
   SectionMobileNavBar,
@@ -35,9 +25,11 @@ import {
   sectionDomId,
   useSectionScrollSpy,
 } from "@/hooks/use-section-scroll-spy";
-import { getDateStatus, type DateStatus } from "@/lib/date-status";
-import type { ServiceOrderStatus } from "@/lib/service-order-status";
 import { cn } from "@/lib/utils";
+import {
+  CustomerVehiclesList,
+  type CustomerVehicleRow,
+} from "@/modules/customers/components/customer-vehicles-list";
 import {
   EditCustomerModal,
   type EditCustomerValues,
@@ -45,97 +37,23 @@ import {
 import {
   CUSTOMER_SECTION_ID_PREFIX,
   CUSTOMER_SECTIONS,
-  VEHICLE_SECTION_ID_PREFIX,
-  VEHICLE_SECTIONS,
 } from "@/modules/customers/customer-sections";
-import { JobCardRowActions } from "@/modules/service-orders/components/job-card-row-actions";
+import {
+  ServiceHistoryList,
+  type ServiceHistoryRow,
+} from "@/modules/service-orders/components/service-history-list";
 import { CreateVehicleModal } from "@/modules/vehicles/components/create-vehicle-modal";
-import { DeleteVehicleButton } from "@/modules/vehicles/components/delete-vehicle-button";
-import { EditVehicleModal } from "@/modules/vehicles/components/edit-vehicle-modal";
 
-type VehicleRow = {
-  id: string;
-  registrationNumber: string;
-  make: string;
-  model: string;
-  stateCode: string;
-  year: number | null;
-  odometer: number | null;
-  insuranceExpiry: Date | string | null;
-  pucExpiry: Date | string | null;
-  fitnessExpiry: Date | string | null;
-};
-
-export type ServiceHistoryRow = {
-  id: string;
-  status: ServiceOrderStatus;
-  complaint: string;
-  createdAt: Date | string;
-  expectedCompletion: Date | string | null;
-  vehicle: {
-    id: string;
-    registrationNumber: string;
-  };
-};
-
-function asDate(value: Date | string | null): Date | null {
-  if (!value) return null;
-  const date = value instanceof Date ? value : new Date(value);
-  return Number.isNaN(date.getTime()) ? null : date;
-}
-
-function vehicleListSubtitle(
-  vehicle: Pick<VehicleRow, "make" | "model" | "year" | "odometer">,
-  locale: string,
-  tv: (key: string, values?: Record<string, string | number>) => string,
-) {
-  const parts = [`${vehicle.make} ${vehicle.model}`.trim()];
-  if (vehicle.year != null) {
-    parts.push(tv("yearShort", { year: vehicle.year }));
-  }
-  if (vehicle.odometer != null) {
-    parts.push(
-      tv("odometerShort", {
-        value: vehicle.odometer.toLocaleString(locale),
-      }),
-    );
-  }
-  return parts.join(" · ");
-}
+export type { ServiceHistoryRow };
 
 type Props = {
   customer: EditCustomerValues;
-  vehicles: VehicleRow[];
+  vehicles: CustomerVehicleRow[];
   serviceHistory: ServiceHistoryRow[];
   canWrite: boolean;
   canCreateOrder: boolean;
   locale: string;
-  initialVehicleId?: string | null;
 };
-
-function statusVariant(
-  status: DateStatus,
-): "success" | "warning" | "danger" | "secondary" {
-  switch (status) {
-    case "ok":
-      return "success";
-    case "soon":
-      return "warning";
-    case "expired":
-      return "danger";
-    default:
-      return "secondary";
-  }
-}
-
-function formatDate(value: Date | null, locale: string, empty: string) {
-  if (!value) return empty;
-  return new Intl.DateTimeFormat(locale, {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  }).format(value);
-}
 
 function SectionBlock({
   id,
@@ -177,88 +95,7 @@ export function CustomerDetailPanel({
   canWrite,
   canCreateOrder,
   locale,
-  initialVehicleId = null,
 }: Props) {
-  const router = useRouter();
-  const pathname = usePathname();
-
-  const initialVehicle =
-    initialVehicleId && vehicles.some((v) => v.id === initialVehicleId)
-      ? initialVehicleId
-      : null;
-
-  const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(
-    initialVehicle,
-  );
-
-  const selectedVehicle =
-    vehicles.find((vehicle) => vehicle.id === selectedVehicleId) ?? null;
-
-  function setVehicleQuery(vehicleId: string | null) {
-    const next = vehicleId
-      ? `${pathname}?vehicle=${encodeURIComponent(vehicleId)}`
-      : pathname;
-    router.replace(next, { scroll: false });
-  }
-
-  function openVehicle(vehicleId: string) {
-    setSelectedVehicleId(vehicleId);
-    setVehicleQuery(vehicleId);
-  }
-
-  function closeVehicle() {
-    setSelectedVehicleId(null);
-    setVehicleQuery(null);
-  }
-
-  if (selectedVehicle) {
-    return (
-      <VehicleDetailView
-        key={selectedVehicle.id}
-        customerId={customer.id}
-        customerName={customer.name}
-        vehicle={selectedVehicle}
-        serviceHistory={serviceHistory.filter(
-          (order) => order.vehicle.id === selectedVehicle.id,
-        )}
-        canWrite={canWrite}
-        canCreateOrder={canCreateOrder}
-        locale={locale}
-        onBack={closeVehicle}
-      />
-    );
-  }
-
-  return (
-    <CustomerSectionsView
-      customer={customer}
-      vehicles={vehicles}
-      serviceHistory={serviceHistory}
-      canWrite={canWrite}
-      canCreateOrder={canCreateOrder}
-      locale={locale}
-      openVehicle={openVehicle}
-    />
-  );
-}
-
-function CustomerSectionsView({
-  customer,
-  vehicles,
-  serviceHistory,
-  canWrite,
-  canCreateOrder,
-  locale,
-  openVehicle,
-}: {
-  customer: EditCustomerValues;
-  vehicles: VehicleRow[];
-  serviceHistory: ServiceHistoryRow[];
-  canWrite: boolean;
-  canCreateOrder: boolean;
-  locale: string;
-  openVehicle: (vehicleId: string) => void;
-}) {
   const t = useTranslations("customers");
   const tv = useTranslations("vehicles");
   const to = useTranslations("orders");
@@ -281,11 +118,68 @@ function CustomerSectionsView({
     },
   ];
 
+  const newJobHref =
+    vehicles.length === 1
+      ? `/orders/new?vehicleId=${vehicles[0]!.id}`
+      : "/orders/new";
+
+  const mobileCtas =
+    canWrite || (canCreateOrder && vehicles.length > 0) ? (
+      <>
+        {canWrite ? (
+          <CreateVehicleModal
+            customerId={customer.id}
+            customerName={customer.name}
+            onCreated={() => scrollToSection("vehicles")}
+            trigger={
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="min-h-10 min-w-0 flex-1"
+              >
+                <Plus className="size-3.5 shrink-0" aria-hidden />
+                <span className="truncate">{tv("add")}</span>
+              </Button>
+            }
+          />
+        ) : null}
+        {canCreateOrder && vehicles.length > 0 ? (
+          <Button asChild size="sm" className="min-h-10 min-w-0 flex-1">
+            <Link href={newJobHref}>
+              <Plus className="size-3.5 shrink-0" aria-hidden />
+              <span className="truncate">{to("createShort")}</span>
+            </Link>
+          </Button>
+        ) : null}
+      </>
+    ) : null;
+
   const navProps = {
     title: t("sectionsTitle"),
     items: navItems,
     active: activeSection,
     onChange: scrollToSection,
+    backHref: "/customers",
+    backLabel: t("back"),
+    heading: customer.name,
+    headingActions: canWrite ? (
+      <EditCustomerModal
+        customer={customer}
+        trigger={
+          <Button
+            type="button"
+            variant="outline"
+            size="icon-sm"
+            className="size-9"
+            aria-label={t("edit")}
+          >
+            <Pencil className="size-4" aria-hidden />
+          </Button>
+        }
+      />
+    ) : undefined,
+    ctaRow: mobileCtas,
   } as const;
 
   const metaParts = [
@@ -295,12 +189,7 @@ function CustomerSectionsView({
 
   return (
     <div className="space-y-4">
-      <header
-        className={cn(
-          "flex flex-wrap items-center justify-between gap-3",
-          activeSection !== "details" && "hidden lg:flex",
-        )}
-      >
+      <header className="hidden flex-wrap items-center justify-between gap-3 lg:flex">
         <div className="min-w-0">
           <h1 className="truncate text-[clamp(24px,3.5vw,30px)] leading-tight font-semibold tracking-[0.02em] text-[#152238]">
             {customer.name}
@@ -341,464 +230,144 @@ function CustomerSectionsView({
       <SectionMobileNavBar {...navProps} />
 
       <div className="grid items-start gap-4 lg:grid-cols-[minmax(220px,260px)_minmax(0,1fr)] lg:gap-6">
-        <SectionDesktopNav {...navProps} />
+        <SectionDesktopNav
+          title={navProps.title}
+          items={navProps.items}
+          active={navProps.active}
+          onChange={navProps.onChange}
+        />
 
         <div className="flex min-w-0 flex-col gap-4">
-        <SectionBlock
-          id={sectionDomId(CUSTOMER_SECTION_ID_PREFIX, "details")}
-          title={t("details")}
-          subtitle={t("detailsDescription")}
-          sectionRef={setSectionRef("details")}
-        >
-          <dl className="grid gap-4 px-5 py-5 sm:grid-cols-2 sm:gap-x-8 sm:px-6">
-            <Fact
-              icon={Phone}
-              label={t("phone")}
-              value={
-                <a
-                  href={`tel:${customer.phone}`}
-                  className="font-medium text-blue-700 hover:underline"
-                >
-                  {customer.phone}
-                </a>
-              }
-            />
-            <Fact
-              icon={MapPin}
-              label={t("address")}
-              value={customer.address ?? t("notSet")}
-              muted={!customer.address}
-            />
-            <Fact
-              icon={NotebookPen}
-              label={t("notes")}
-              value={customer.notes ?? t("notSet")}
-              muted={!customer.notes}
-              multiline
-              className="sm:col-span-2"
-            />
-          </dl>
-        </SectionBlock>
-
-        <SectionBlock
-          id={sectionDomId(CUSTOMER_SECTION_ID_PREFIX, "vehicles")}
-          title={t("vehicles")}
-          subtitle={t("vehiclesDescription")}
-          sectionRef={setSectionRef("vehicles")}
-          action={
-            canWrite ? (
-              <CreateVehicleModal
-                customerId={customer.id}
-                customerName={customer.name}
-                onCreated={() => scrollToSection("vehicles")}
-              />
-            ) : undefined
-          }
-        >
-          {vehicles.length === 0 ? (
-            <EmptyState
-              icon={Car}
-              title={t("noVehicles")}
-              body={t("noVehiclesDescription")}
-              action={
-                canWrite ? (
-                  <CreateVehicleModal
-                    customerId={customer.id}
-                    customerName={customer.name}
-                  />
-                ) : null
-              }
-            />
-          ) : (
-            <ListCardGroup className="rounded-none border-0 shadow-none">
-              {vehicles.map((vehicle) => (
-                <li key={vehicle.id}>
-                  <ListCard
-                    onClick={() => openVehicle(vehicle.id)}
-                    title={vehicle.registrationNumber}
-                    subtitle={vehicleListSubtitle(vehicle, locale, tv)}
-                    className="px-5 py-3.5 sm:px-6"
-                  />
-                </li>
-              ))}
-            </ListCardGroup>
-          )}
-        </SectionBlock>
-
-        <SectionBlock
-          id={sectionDomId(CUSTOMER_SECTION_ID_PREFIX, "service")}
-          title={t("serviceHistory")}
-          subtitle={t("serviceHistoryDescription")}
-          sectionRef={setSectionRef("service")}
-          action={
-            canCreateOrder && vehicles.length > 0 ? (
-              vehicles.length === 1 ? (
-                <Button asChild size="md">
-                  <Link href={`/orders/new?vehicleId=${vehicles[0]!.id}`}>
-                    <Plus className="size-4" aria-hidden />
-                    {to("createShort")}
-                  </Link>
-                </Button>
-              ) : (
-                <Button asChild size="md">
-                  <Link href="/orders/new">
-                    <Plus className="size-4" aria-hidden />
-                    {to("createShort")}
-                  </Link>
-                </Button>
-              )
-            ) : undefined
-          }
-        >
-          <ServiceHistoryList
-            orders={serviceHistory}
-            locale={locale}
-            customerId={customer.id}
-            canWrite={canCreateOrder}
-            emptyTitle={t("serviceHistoryEmpty")}
-            emptyBody={
-              vehicles.length === 0
-                ? t("noVehiclesDescription")
-                : t("serviceHistoryPlaceholder")
-            }
-            showRegistration
-            statusLabel={(status) => to(`statuses.${status}`)}
-          />
-        </SectionBlock>
-
-        <SectionBlock
-          id={sectionDomId(CUSTOMER_SECTION_ID_PREFIX, "communication")}
-          title={t("communicationHistory")}
-          subtitle={t("communicationHistoryDescription")}
-          sectionRef={setSectionRef("communication")}
-        >
-          <EmptyState
-            icon={MessageSquare}
-            title={t("communicationHistoryEmpty")}
-            body={t("communicationHistoryPlaceholder")}
-            centered
-          />
-        </SectionBlock>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function VehicleDetailView({
-  customerId,
-  customerName,
-  vehicle,
-  serviceHistory,
-  canWrite,
-  canCreateOrder,
-  locale,
-  onBack,
-}: {
-  customerId: string;
-  customerName: string;
-  vehicle: VehicleRow;
-  serviceHistory: ServiceHistoryRow[];
-  canWrite: boolean;
-  canCreateOrder: boolean;
-  locale: string;
-  onBack: () => void;
-}) {
-  const t = useTranslations("customers");
-  const tv = useTranslations("vehicles");
-  const to = useTranslations("orders");
-  const tGst = useTranslations("gst");
-  usePageDetailLabel(vehicle.registrationNumber);
-  const { activeSection, scrollToSection, setSectionRef } =
-    useSectionScrollSpy({
-      sections: VEHICLE_SECTIONS,
-      idPrefix: VEHICLE_SECTION_ID_PREFIX,
-      initialSection: "overview",
-    });
-
-  const createJobCard = (size: "sm" | "md" = "md") =>
-    canCreateOrder ? (
-      <Button asChild size={size}>
-        <Link href={`/orders/new?vehicleId=${vehicle.id}`}>
-          <Plus className="size-4" aria-hidden />
-          {to("createShort")}
-        </Link>
-      </Button>
-    ) : null;
-
-  const expiryRows = [
-    {
-      key: "insurance",
-      term: tv("insuranceExpiry"),
-      value: asDate(vehicle.insuranceExpiry),
-      status: getDateStatus(asDate(vehicle.insuranceExpiry)),
-    },
-    {
-      key: "puc",
-      term: tv("pucExpiry"),
-      value: asDate(vehicle.pucExpiry),
-      status: getDateStatus(asDate(vehicle.pucExpiry)),
-    },
-    {
-      key: "fitness",
-      term: tv("fitnessExpiry"),
-      value: asDate(vehicle.fitnessExpiry),
-      status: getDateStatus(asDate(vehicle.fitnessExpiry)),
-    },
-  ] as const;
-
-  const vehicleLabel = `${vehicle.make} ${vehicle.model}`.trim();
-
-  const headerActions = (
-    <div className="flex flex-wrap items-center gap-2">
-      {createJobCard()}
-      {canWrite ? (
-        <EditVehicleModal
-          vehicle={{
-            id: vehicle.id,
-            customerId,
-            registrationNumber: vehicle.registrationNumber,
-            make: vehicle.make,
-            model: vehicle.model,
-            stateCode: vehicle.stateCode,
-            year: vehicle.year,
-            odometer: vehicle.odometer,
-            insuranceExpiry: vehicle.insuranceExpiry,
-            pucExpiry: vehicle.pucExpiry,
-            fitnessExpiry: vehicle.fitnessExpiry,
-          }}
-        />
-      ) : null}
-      {canWrite ? (
-        <DeleteVehicleButton
-          vehicleId={vehicle.id}
-          customerId={customerId}
-          className="min-h-11"
-        />
-      ) : null}
-    </div>
-  );
-
-  const vehicleNavItems = [
-    { id: "overview" as const, label: tv("overview"), icon: Car },
-    {
-      id: "service" as const,
-      label: tv("serviceHistory"),
-      icon: Wrench,
-    },
-  ];
-
-  const vehicleNavProps = {
-    title: tv("sectionsTitle"),
-    items: vehicleNavItems,
-    active: activeSection,
-    onChange: scrollToSection,
-    onBack,
-    backLabel: t("backToVehicles"),
-  } as const;
-
-  return (
-    <div className="space-y-4">
-      <header
-        className={cn(
-          "flex flex-wrap items-center justify-between gap-3",
-          activeSection !== "overview" && "hidden lg:flex",
-        )}
-      >
-        <div className="min-w-0">
-          <h1 className="truncate text-[clamp(24px,3.5vw,30px)] leading-tight font-semibold tracking-[0.02em] text-[#152238]">
-            {vehicle.registrationNumber}
-          </h1>
-          <p className="mt-1 truncate text-[14px] text-[#5c6b7e]">
-            <Link
-              href={`/customers/${customerId}`}
-              className="font-medium text-[#1f5eff] underline-offset-4 hover:underline"
-            >
-              {customerName}
-            </Link>
-            {vehicleLabel ? (
-              <>
-                <span className="text-slate-300"> · </span>
-                {vehicleLabel}
-              </>
-            ) : null}
-          </p>
-        </div>
-        {headerActions}
-      </header>
-
-      <SectionMobileNavBar {...vehicleNavProps} />
-
-      <div className="grid items-start gap-4 lg:grid-cols-[minmax(220px,260px)_minmax(0,1fr)] lg:gap-6">
-        <SectionDesktopNav {...vehicleNavProps} />
-
-        <div className="flex min-w-0 flex-col gap-4">
-        <SectionBlock
-          id={sectionDomId(VEHICLE_SECTION_ID_PREFIX, "overview")}
-          title={tv("overview")}
-          subtitle={vehicleLabel || undefined}
-          sectionRef={setSectionRef("overview")}
-        >
-          <div className="px-5 py-5 sm:px-6">
-            <DescriptionList>
-              <DescriptionItem>
-                <DescriptionTerm>{tv("registrationNumber")}</DescriptionTerm>
-                <DescriptionDetails className="font-medium tracking-wide">
-                  {vehicle.registrationNumber}
-                </DescriptionDetails>
-              </DescriptionItem>
-              <DescriptionItem>
-                <DescriptionTerm>{tv("make")}</DescriptionTerm>
-                <DescriptionDetails>{vehicle.make}</DescriptionDetails>
-              </DescriptionItem>
-              <DescriptionItem>
-                <DescriptionTerm>{tv("model")}</DescriptionTerm>
-                <DescriptionDetails>{vehicle.model}</DescriptionDetails>
-              </DescriptionItem>
-              <DescriptionItem>
-                <DescriptionTerm>{tv("state")}</DescriptionTerm>
-                <DescriptionDetails>
-                  {tGst(`states.${vehicle.stateCode}`)} ({vehicle.stateCode})
-                </DescriptionDetails>
-              </DescriptionItem>
-              <DescriptionItem>
-                <DescriptionTerm>{tv("year")}</DescriptionTerm>
-                <DescriptionDetails>
-                  {vehicle.year ?? tv("notSet")}
-                </DescriptionDetails>
-              </DescriptionItem>
-              <DescriptionItem>
-                <DescriptionTerm>{tv("odometer")}</DescriptionTerm>
-                <DescriptionDetails>
-                  {vehicle.odometer != null
-                    ? `${vehicle.odometer.toLocaleString(locale)} ${tv("km")}`
-                    : tv("notSet")}
-                </DescriptionDetails>
-              </DescriptionItem>
-              {expiryRows.map((row) => (
-                <DescriptionItem key={row.key}>
-                  <DescriptionTerm>{row.term}</DescriptionTerm>
-                  <DescriptionDetails className="inline-flex flex-wrap items-center gap-2">
-                    <span>{formatDate(row.value, locale, tv("notSet"))}</span>
-                    <Badge variant={statusVariant(row.status)}>
-                      {tv(`status.${row.status}`)}
-                    </Badge>
-                  </DescriptionDetails>
-                </DescriptionItem>
-              ))}
-            </DescriptionList>
-          </div>
-        </SectionBlock>
-
-        <SectionBlock
-          id={sectionDomId(VEHICLE_SECTION_ID_PREFIX, "service")}
-          title={tv("serviceHistory")}
-          subtitle={tv("serviceHistoryDescription")}
-          sectionRef={setSectionRef("service")}
-          action={createJobCard()}
-        >
-          <ServiceHistoryList
-            orders={serviceHistory}
-            locale={locale}
-            customerId={customerId}
-            canWrite={canCreateOrder}
-            emptyTitle={tv("serviceHistoryEmpty")}
-            emptyBody={tv("serviceHistoryPlaceholder")}
-            showRegistration={false}
-            statusLabel={(status) => to(`statuses.${status}`)}
-          />
-        </SectionBlock>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function ServiceHistoryList({
-  orders,
-  locale,
-  customerId,
-  canWrite,
-  emptyTitle,
-  emptyBody,
-  showRegistration,
-  statusLabel,
-  emptyAction,
-}: {
-  orders: ServiceHistoryRow[];
-  locale: string;
-  customerId: string;
-  canWrite: boolean;
-  emptyTitle: string;
-  emptyBody: string;
-  showRegistration: boolean;
-  statusLabel: (status: ServiceOrderStatus) => string;
-  emptyAction?: ReactNode;
-}) {
-  if (orders.length === 0) {
-    return (
-      <EmptyState
-        icon={Wrench}
-        title={emptyTitle}
-        body={emptyBody}
-        action={emptyAction}
-        centered
-      />
-    );
-  }
-
-  return (
-    <ul className="divide-y divide-slate-100">
-      {orders.map((order) => {
-        const created = asDate(order.createdAt);
-        const title = showRegistration
-          ? order.vehicle.registrationNumber
-          : order.complaint;
-        const subtitle = showRegistration
-          ? order.complaint
-          : created
-            ? formatDate(created, locale, "")
-            : undefined;
-        return (
-          <li
-            key={order.id}
-            className="flex flex-col gap-3 px-5 py-3.5 sm:flex-row sm:items-center sm:gap-4 sm:px-6"
+          <SectionBlock
+            id={sectionDomId(CUSTOMER_SECTION_ID_PREFIX, "details")}
+            title={t("details")}
+            subtitle={t("detailsDescription")}
+            sectionRef={setSectionRef("details")}
           >
-            <Link
-              href={`/orders/${order.id}`}
-              className="min-w-0 flex-1 space-y-0.5 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-teal-600"
-            >
-              <div className="flex items-start justify-between gap-2">
-                <p
-                  className={cn(
-                    "min-w-0 text-body font-medium text-slate-900",
-                    showRegistration
-                      ? "truncate"
-                      : "whitespace-normal break-words",
-                  )}
-                >
-                  {title}
-                </p>
-                <span className="shrink-0 pt-0.5 text-caption text-slate-500">
-                  {statusLabel(order.status)}
-                </span>
-              </div>
-              {subtitle ? (
-                <p className="whitespace-normal break-words text-caption text-slate-600">
-                  {subtitle}
-                </p>
-              ) : null}
-            </Link>
-            <JobCardRowActions
-              orderId={order.id}
-              customerId={customerId}
-              label={title}
+            <dl className="grid gap-4 px-5 py-5 sm:grid-cols-2 sm:gap-x-8 sm:px-6">
+              <Fact
+                icon={Phone}
+                label={t("phone")}
+                value={
+                  <a
+                    href={`tel:${customer.phone}`}
+                    className="font-medium text-blue-700 hover:underline"
+                  >
+                    {customer.phone}
+                  </a>
+                }
+              />
+              <Fact
+                icon={MapPin}
+                label={t("address")}
+                value={customer.address ?? t("notSet")}
+                muted={!customer.address}
+              />
+              <Fact
+                icon={NotebookPen}
+                label={t("notes")}
+                value={customer.notes ?? t("notSet")}
+                muted={!customer.notes}
+                multiline
+                className="sm:col-span-2"
+              />
+            </dl>
+          </SectionBlock>
+
+          <SectionBlock
+            id={sectionDomId(CUSTOMER_SECTION_ID_PREFIX, "vehicles")}
+            title={t("vehicles")}
+            subtitle={t("vehiclesDescription")}
+            sectionRef={setSectionRef("vehicles")}
+            action={
+              canWrite ? (
+                <CreateVehicleModal
+                  customerId={customer.id}
+                  customerName={customer.name}
+                  onCreated={() => scrollToSection("vehicles")}
+                  trigger={
+                    <Button type="button" size="md" className="text-white">
+                      <Plus className="size-4 text-white" aria-hidden />
+                      <span className="lg:hidden">{t("addShort")}</span>
+                      <span className="hidden lg:inline">{tv("add")}</span>
+                    </Button>
+                  }
+                />
+              ) : undefined
+            }
+          >
+            <CustomerVehiclesList
+              vehicles={vehicles}
+              customerId={customer.id}
+              locale={locale}
               canWrite={canWrite}
+              empty={
+                <EmptyState
+                  icon={Car}
+                  title={t("noVehicles")}
+                  body={t("noVehiclesDescription")}
+                  action={
+                    canWrite ? (
+                      <CreateVehicleModal
+                        customerId={customer.id}
+                        customerName={customer.name}
+                      />
+                    ) : null
+                  }
+                />
+              }
             />
-          </li>
-        );
-      })}
-    </ul>
+          </SectionBlock>
+
+          <SectionBlock
+            id={sectionDomId(CUSTOMER_SECTION_ID_PREFIX, "service")}
+            title={t("serviceHistory")}
+            subtitle={t("serviceHistoryDescription")}
+            sectionRef={setSectionRef("service")}
+            action={
+              canCreateOrder && vehicles.length > 0 ? (
+                <Button asChild size="md">
+                  <Link href={newJobHref}>
+                    <Plus className="size-4" aria-hidden />
+                    <span className="lg:hidden">{t("addShort")}</span>
+                    <span className="hidden lg:inline">{to("createShort")}</span>
+                  </Link>
+                </Button>
+              ) : undefined
+            }
+          >
+            <ServiceHistoryList
+              orders={serviceHistory}
+              locale={locale}
+              customerId={customer.id}
+              canWrite={canCreateOrder}
+              emptyTitle={t("serviceHistoryEmpty")}
+              emptyBody={
+                vehicles.length === 0
+                  ? t("noVehiclesDescription")
+                  : t("serviceHistoryPlaceholder")
+              }
+              showRegistration
+              statusLabel={(status) => to(`statuses.${status}`)}
+            />
+          </SectionBlock>
+
+          <SectionBlock
+            id={sectionDomId(CUSTOMER_SECTION_ID_PREFIX, "communication")}
+            title={t("communicationHistory")}
+            subtitle={t("communicationHistoryDescription")}
+            sectionRef={setSectionRef("communication")}
+          >
+            <EmptyState
+              icon={MessageSquare}
+              title={t("communicationHistoryEmpty")}
+              body={t("communicationHistoryPlaceholder")}
+              centered
+            />
+          </SectionBlock>
+        </div>
+      </div>
+    </div>
   );
 }
 

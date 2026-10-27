@@ -351,7 +351,13 @@ export async function approveEstimateLineViaLiveLink(
     fromState: "PENDING",
     toState: input.approvalState,
   });
-  if (!result) {
+  if (!result.ok) {
+    if (result.reason === "INSUFFICIENT_STOCK") {
+      throw new AppError("inventory.insufficient_stock", 409);
+    }
+    if (result.reason === "PART_NOT_FOUND") {
+      throw new NotFoundError();
+    }
     throw new AppError("APPROVAL_CONFLICT");
   }
   return { ok: true as const };

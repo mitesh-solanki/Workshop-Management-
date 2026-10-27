@@ -1,10 +1,9 @@
 export const JOB_CARD_SECTIONS = [
   "details",
-  "lines",
   "inspection",
+  "lines",
   "estimate",
   "billing",
-  "liveLink",
   "timeline",
 ] as const;
 

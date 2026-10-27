@@ -67,12 +67,12 @@
   --destructive-foreground: var(--danger-foreground);
 
   /* Service order status — one distinct colour each */
-  --status-waiting: 215 16% 46%;
+  --status-waiting: 45 93% 42%;
   --status-inspection: 199 89% 40%;
   --status-in-progress: var(--blue-600);
-  --status-waiting-parts: 38 92% 44%;
-  --status-ready: 152 60% 36%;
-  --status-completed: 222 47% 20%;
+  --status-waiting-parts: 25 95% 45%;
+  --status-ready: 173 58% 34%;
+  --status-completed: 152 60% 36%;
 
   /* radius-xl cards */
   --radius: 0.75rem;

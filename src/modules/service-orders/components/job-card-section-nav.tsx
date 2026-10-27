@@ -14,12 +14,11 @@ type Props = {
 
 const SECTION_NUMBERS: Record<JobCardSection, string> = {
   details: "01",
-  lines: "02",
-  inspection: "03",
+  inspection: "02",
+  lines: "03",
   estimate: "04",
   billing: "05",
-  liveLink: "06",
-  timeline: "07",
+  timeline: "06",
 };
 
 export function JobCardSectionNav({ section, onSectionChange }: Props) {
@@ -27,7 +26,6 @@ export function JobCardSectionNav({ section, onSectionChange }: Props) {
   const ti = useTranslations("inspections");
   const te = useTranslations("estimates");
   const tb = useTranslations("billing");
-  const tl = useTranslations("liveLink");
 
   const labels: Record<JobCardSection, string> = {
     details: t("details"),
@@ -35,7 +33,6 @@ export function JobCardSectionNav({ section, onSectionChange }: Props) {
     inspection: ti("title"),
     estimate: te("title"),
     billing: tb("title"),
-    liveLink: tl("title"),
     timeline: t("timeline"),
   };
 
@@ -45,7 +42,6 @@ export function JobCardSectionNav({ section, onSectionChange }: Props) {
     inspection: t("sectionNav.inspection"),
     estimate: t("sectionNav.estimate"),
     billing: t("sectionNav.billing"),
-    liveLink: t("sectionNav.liveLink"),
     timeline: t("sectionNav.timeline"),
   };
 

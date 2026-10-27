@@ -93,6 +93,7 @@ export async function addSuggestedRepairAction(
       description: String(formData.get("description") ?? ""),
       quantity: String(formData.get("quantity") ?? "1"),
       unitPricePaise: String(formData.get("unitPriceRupees") ?? "0"),
+      partId: String(formData.get("partId") ?? ""),
     });
     revalidatePath(`/orders/${orderId}/inspection`);
     return { ok: true, message: "repairAdded" };

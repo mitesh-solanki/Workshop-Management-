@@ -10,6 +10,10 @@ import {
   createDirectSaleRecord,
   createPartRecord,
   deleteDirectSaleRecord,
+  deletePartRecord,
+  getPart,
+  listPartsForCatalogSearchPage,
+  listPartsForPickerPage,
   recordStockAdjustment,
   recordStockIn,
   recordStockOut,
@@ -107,6 +111,21 @@ export async function updatePartAction(
     revalidatePath(`/inventory/${partId}`);
     revalidatePath("/dashboard");
     return { ok: true, message: t("saved") };
+  } catch (error) {
+    return { ok: false, message: await translateError(error) };
+  }
+}
+
+export async function deletePartAction(
+  partId: string,
+): Promise<InventoryActionState> {
+  const t = await getTranslations("inventory");
+  try {
+    const session = await requireSession();
+    await deletePartRecord(session, partId);
+    revalidatePath("/inventory");
+    revalidatePath("/dashboard");
+    return { ok: true, message: t("deleted") };
   } catch (error) {
     return { ok: false, message: await translateError(error) };
   }
@@ -246,4 +265,61 @@ export async function deleteDirectSaleAction(
   } catch (error) {
     return { ok: false, message: await translateError(error) };
   }
+}
+
+export type PartsPickerPageResult = {
+  items: Array<{
+    id: string;
+    name: string;
+    sku: string;
+    unit: string;
+    sellingPricePaise: number;
+    quantityOnHand: number;
+  }>;
+  nextOffset: number;
+  hasMore: boolean;
+};
+
+/** Paginated in-stock parts for SearchableSelect (search + scroll load-more). */
+export async function searchPartsPickerAction(
+  q: string,
+  offset = 0,
+  pageSize = 25,
+): Promise<PartsPickerPageResult> {
+  const session = await requireSession();
+  return listPartsForPickerPage(session, { q, offset, pageSize });
+}
+
+/** Resolve one part for a picker so an already-selected value stays labelled. */
+export async function getPartPickerItemAction(
+  partId: string,
+): Promise<PartsPickerPageResult["items"][number] | null> {
+  try {
+    const session = await requireSession();
+    const part = await getPart(session, partId);
+    return {
+      id: part.id,
+      name: part.name,
+      sku: part.sku,
+      unit: part.unit,
+      sellingPricePaise: part.sellingPricePaise,
+      quantityOnHand: part.quantityOnHand,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** Search all parts (including zero stock). Returns nothing until the query is typed. */
+export async function searchPartsCatalogAction(
+  q: string,
+  offset = 0,
+  pageSize = 25,
+): Promise<PartsPickerPageResult> {
+  const session = await requireSession();
+  const query = q.trim();
+  if (query.length < 1) {
+    return { items: [], nextOffset: 0, hasMore: false };
+  }
+  return listPartsForCatalogSearchPage(session, { q: query, offset, pageSize });
 }

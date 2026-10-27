@@ -1,7 +1,6 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 import { requireSession } from "@/lib/session";
 import { translateError } from "@/lib/translate-error";
 import { getTranslations } from "next-intl/server";
@@ -18,6 +17,7 @@ import {
 export type ServiceOrderActionState = {
   ok: boolean;
   message?: string;
+  orderId?: string;
 };
 
 function parseCreateOrderForm(formData: FormData) {
@@ -63,31 +63,26 @@ function parseUpdateOrderForm(formData: FormData) {
   };
 }
 
-/** Create basic job card, then open the edit hub to add the rest. */
+/** Create basic job card, then the client opens Labour & parts (no hard redirect). */
 export async function createServiceOrderAction(
   _prev: ServiceOrderActionState,
   formData: FormData,
 ): Promise<ServiceOrderActionState> {
-  let orderId: string;
-  let customerId: string;
+  const t = await getTranslations("orders");
   try {
     const session = await requireSession();
     const order = await createOrder(session, parseCreateOrderForm(formData));
-    orderId = order.id;
-    customerId = order.customerId;
+    revalidatePath("/orders");
+    revalidatePath("/workshop");
+    revalidatePath("/dashboard");
+    revalidatePath(`/customers/${order.customerId}`);
+    return { ok: true, message: t("created"), orderId: order.id };
   } catch (error) {
     return {
       ok: false,
       message: await translateError(error),
     };
   }
-
-  revalidatePath("/orders");
-  revalidatePath("/workshop");
-  revalidatePath("/dashboard");
-  revalidatePath(`/customers/${customerId}`);
-  revalidatePath(`/orders/${orderId}`);
-  redirect(`/orders/${orderId}`);
 }
 
 export async function updateServiceOrderAction(

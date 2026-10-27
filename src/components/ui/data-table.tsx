@@ -97,9 +97,9 @@ function DataTable<TData, TValue = unknown>({
 
   const pagination = manual
     ? {
-        pageIndex: serverPagination!.pageIndex,
-        pageSize: serverPagination!.pageSize,
-      }
+      pageIndex: serverPagination!.pageIndex,
+      pageSize: serverPagination!.pageSize,
+    }
     : clientPagination;
 
   const pageCount = useMemo(() => {
@@ -133,13 +133,13 @@ function DataTable<TData, TValue = unknown>({
     state: { pagination },
     ...(manual
       ? {
-          manualPagination: true as const,
-          pageCount,
-          rowCount: serverPagination!.rowCount,
-        }
+        manualPagination: true as const,
+        pageCount,
+        rowCount: serverPagination!.rowCount,
+      }
       : {
-          getPaginationRowModel: getPaginationRowModel(),
-        }),
+        getPaginationRowModel: getPaginationRowModel(),
+      }),
   });
 
   const rows = table.getRowModel().rows;
@@ -203,7 +203,7 @@ function DataTable<TData, TValue = unknown>({
                       className={cn(
                         "rounded-xl border border-border bg-card p-4 shadow-sm",
                         href &&
-                          "cursor-pointer transition-colors active:bg-muted/40",
+                        "cursor-pointer transition-colors active:bg-muted/40",
                       )}
                       onClick={
                         href
@@ -213,11 +213,11 @@ function DataTable<TData, TValue = unknown>({
                       onKeyDown={
                         href
                           ? (event) => {
-                              if (event.key === "Enter" || event.key === " ") {
-                                event.preventDefault();
-                                onRowActivate(row.original, event);
-                              }
+                            if (event.key === "Enter" || event.key === " ") {
+                              event.preventDefault();
+                              onRowActivate(row.original, event);
                             }
+                          }
                           : undefined
                       }
                     >
@@ -250,9 +250,9 @@ function DataTable<TData, TValue = unknown>({
                         {header.isPlaceholder
                           ? null
                           : flexRender(
-                              header.column.columnDef.header,
-                              header.getContext(),
-                            )}
+                            header.column.columnDef.header,
+                            header.getContext(),
+                          )}
                       </TableHead>
                     ))}
                   </TableRow>
@@ -303,7 +303,7 @@ function DataTable<TData, TValue = unknown>({
       )}
 
       {!isEmpty || !empty ? (
-        <div className="flex flex-col gap-3 border-t border-border px-3 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-4">
+        <div className="flex flex-col gap-1 sm:gap-3 border-t border-border px-3 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-4">
           <p className="text-sm text-muted-foreground">
             {t("showing", { from, to, total: rowCount })}
           </p>

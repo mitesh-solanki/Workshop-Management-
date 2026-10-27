@@ -34,6 +34,12 @@ type SharedProps<T extends string> = {
   backLabel?: string;
   onBack?: () => void;
   leading?: ReactNode;
+  /** Mobile sticky title (Cruise-style). Desktop ignores this. */
+  heading?: string;
+  /** Right-side actions on the mobile heading row (icon buttons). */
+  headingActions?: ReactNode;
+  /** Full-width CTA row under the mobile heading (e.g. New Job Card). */
+  ctaRow?: ReactNode;
 };
 
 function useActiveItem<T extends string>(
@@ -41,6 +47,44 @@ function useActiveItem<T extends string>(
   active: T,
 ) {
   return items.find((item) => item.id === active) ?? items[0];
+}
+
+function MobileBackButton({
+  backHref,
+  backLabel,
+  onBack,
+}: {
+  backHref?: string;
+  backLabel?: string;
+  onBack?: () => void;
+}) {
+  if (backHref) {
+    return (
+      <Button
+        asChild
+        variant="outline"
+        size="icon-sm"
+        className="size-9 shrink-0 rounded-full border-slate-200"
+        aria-label={backLabel}
+      >
+        <Link href={backHref}>
+          <ChevronLeft className="size-4" aria-hidden />
+        </Link>
+      </Button>
+    );
+  }
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      size="icon-sm"
+      className="size-9 shrink-0 rounded-full border-slate-200"
+      aria-label={backLabel}
+      onClick={onBack}
+    >
+      <ChevronLeft className="size-4" aria-hidden />
+    </Button>
+  );
 }
 
 /** Sticky section picker for mobile — must sit outside CSS grid so sticky can travel. */
@@ -52,39 +96,48 @@ export function SectionMobileNavBar<T extends string>({
   backHref,
   backLabel,
   onBack,
+  heading,
+  headingActions,
+  ctaRow,
 }: Omit<SharedProps<T>, "leading">) {
   const activeItem = useActiveItem(items, active);
   const ActiveIcon = activeItem?.icon;
   const showBack = Boolean(backHref || onBack);
+  const showHeadingRow = Boolean(heading || headingActions);
 
   return (
-    <div className="sticky top-0 z-30 -mx-4 border-b border-border bg-card/95 px-4 py-2 backdrop-blur-md supports-backdrop-filter:bg-card/90 lg:hidden">
-      <div className="flex items-center gap-2">
-        {showBack ? (
-          backHref ? (
-            <Button
-              asChild
-              variant="outline"
-              size="icon-sm"
-              className="size-9 shrink-0 rounded-full border-slate-200"
-              aria-label={backLabel}
-            >
-              <Link href={backHref}>
-                <ChevronLeft className="size-4" aria-hidden />
-              </Link>
-            </Button>
+    <div className="sticky top-0 z-30 -mx-4 -mt-5! border-b border-border bg-card/95 px-4 py-2 shadow-[0_8px_28px_-14px_rgba(15,23,42,0.18)] backdrop-blur-md supports-backdrop-filter:bg-card/90 lg:hidden">
+      {showHeadingRow ? (
+        <div className="flex min-w-0 items-center gap-2 py-1.5">
+          {showBack ? (
+            <MobileBackButton
+              backHref={backHref}
+              backLabel={backLabel}
+              onBack={onBack}
+            />
+          ) : null}
+          {heading ? (
+            <span className="min-w-0 flex-1 truncate text-base font-semibold tracking-tight text-slate-900">
+              {heading}
+            </span>
           ) : (
-            <Button
-              type="button"
-              variant="outline"
-              size="icon-sm"
-              className="size-9 shrink-0 rounded-full border-slate-200"
-              aria-label={backLabel}
-              onClick={onBack}
-            >
-              <ChevronLeft className="size-4" aria-hidden />
-            </Button>
-          )
+            <span className="min-w-0 flex-1" />
+          )}
+          {headingActions ? (
+            <div className="flex shrink-0 items-center gap-1.5">
+              {headingActions}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
+      <div className="flex items-center gap-2">
+        {showBack && !showHeadingRow ? (
+          <MobileBackButton
+            backHref={backHref}
+            backLabel={backLabel}
+            onBack={onBack}
+          />
         ) : null}
 
         <DropdownMenu>

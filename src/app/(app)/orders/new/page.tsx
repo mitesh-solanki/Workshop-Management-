@@ -5,6 +5,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
 import { ForbiddenError } from "@/lib/errors";
 import { requireRole, requireSession } from "@/lib/session";
+import { listBaysForSelect } from "@/modules/bays/service";
 import { listCustomers } from "@/modules/customers/service";
 import { NewJobCardForm } from "@/modules/service-orders/components/new-job-card-form";
 import { listAssignableTechnicians } from "@/modules/service-orders/service";
@@ -45,9 +46,10 @@ export default async function NewJobCardPage({ searchParams }: Props) {
     throw error;
   }
 
-  const [{ items: customers }, technicians] = await Promise.all([
+  const [{ items: customers }, technicians, bays] = await Promise.all([
     listCustomers(session, { pageSize: 50 }),
     listAssignableTechnicians(session),
+    listBaysForSelect(session),
   ]);
 
   const vehicles = customers.flatMap((customer) =>
@@ -93,6 +95,7 @@ export default async function NewJobCardPage({ searchParams }: Props) {
         <NewJobCardForm
           vehicles={vehicles}
           technicians={technicians}
+          bays={bays}
           initialVehicleId={initialVehicleId?.trim() ?? ""}
         />
       )}

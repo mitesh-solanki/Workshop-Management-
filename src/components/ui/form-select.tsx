@@ -65,14 +65,14 @@ export function FormSelect({
   const [uncontrolled, setUncontrolled] = useState(
     () => defaultValue ?? "",
   );
-  const current = isControlled ? value : uncontrolled;
+  const current = (isControlled ? value : uncontrolled) ?? "";
 
   const listOptions = options.filter(
     (option) => !(option.value === "" && option.disabled),
   );
   const hasEmptyChoice = listOptions.some((option) => option.value === "");
-  const radixValue =
-    current === "" && !hasEmptyChoice ? undefined : toInternal(current);
+  const placeholderEmpty = current === "" && !hasEmptyChoice;
+  const radixValue = toInternal(current);
 
   function handleChange(next: string) {
     const external = fromInternal(next);
@@ -100,12 +100,28 @@ export function FormSelect({
             triggerClassName,
           )}
         >
-          <SelectValue placeholder={placeholder} />
+          {placeholderEmpty && placeholder ? (
+            <SelectValue placeholder={placeholder}>
+              <span className="text-muted-foreground">{placeholder}</span>
+            </SelectValue>
+          ) : (
+            <SelectValue placeholder={placeholder} />
+          )}
         </SelectTrigger>
         <SelectContent
           position="popper"
           className="max-h-72 min-w-[var(--radix-select-trigger-width)]"
         >
+          {placeholderEmpty ? (
+            <SelectItem
+              value={EMPTY_VALUE}
+              disabled
+              className="pointer-events-none hidden"
+              aria-hidden
+            >
+              {placeholder ?? "\u00A0"}
+            </SelectItem>
+          ) : null}
           {listOptions.map((option) => (
             <SelectItem
               key={option.value === "" ? EMPTY_VALUE : option.value}

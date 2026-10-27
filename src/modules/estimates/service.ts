@@ -2,7 +2,6 @@ import "server-only";
 
 import { AppError, ForbiddenError, NotFoundError } from "@/lib/errors";
 import { requireRole, type RoleSession } from "@/lib/rbac";
-import { findInspectionByServiceOrderId } from "@/modules/inspections/repo";
 import { findServiceOrderById } from "@/modules/service-orders/repo";
 import type { ServiceOrderStatusValue } from "@/modules/service-orders/schema";
 import {
@@ -24,6 +23,7 @@ import {
   addEstimateLine,
   createEstimateWithLines,
   deleteEstimateLine,
+  EstimateStockTxError,
   findCurrentEstimate,
   findEstimateById,
   findEstimateLineById,
@@ -87,7 +87,7 @@ async function collectSourceLines(
     return [];
   }
 
-  const fromOrder: SourceLine[] = order.lines.map((line) => ({
+  return order.lines.map((line) => ({
     type: line.type,
     description: line.description,
     quantity: line.quantity,
@@ -95,23 +95,6 @@ async function collectSourceLines(
     sourceOrderLineId: line.id,
     sourceSuggestedRepairId: null,
   }));
-
-  const inspection = await findInspectionByServiceOrderId(
-    garageId,
-    serviceOrderId,
-  );
-  const fromInspection: SourceLine[] = (inspection?.suggestedRepairs ?? []).map(
-    (repair) => ({
-      type: repair.type,
-      description: repair.description,
-      quantity: repair.quantity,
-      unitPricePaise: repair.unitPricePaise,
-      sourceOrderLineId: null,
-      sourceSuggestedRepairId: repair.id,
-    }),
-  );
-
-  return [...fromOrder, ...fromInspection];
 }
 
 function toCreateInput(
@@ -177,7 +160,7 @@ export async function getEstimateById(session: RoleSession, estimateId: string) 
   return withTotals(estimate);
 }
 
-/** Build the first estimate from order lines and inspection suggested repairs. */
+/** Build the first estimate from job-card labour and parts lines. */
 export async function createEstimateFromSources(
   session: RoleSession,
   serviceOrderId: string,
@@ -212,8 +195,8 @@ export async function createEstimateFromSources(
 }
 
 /**
- * Create a revised estimate: keeps the previous revision, copies its lines
- * (including approval state), and optionally appends new order/inspection sources.
+ * Create a revised estimate: keeps the previous revision and copies its lines
+ * (including approval state). Add extra work on the new current estimate with Add.
  */
 export async function createEstimateRevision(
   session: RoleSession,
@@ -243,43 +226,12 @@ export async function createEstimateRevision(
     sortOrder: index,
   }));
 
-  let extra: EstimateLineCreateInput[] = [];
-  if (input.includeNewSources) {
-    const sources = await collectSourceLines(session.garageId, order.id);
-    const knownOrderLineIds = new Set(
-      copied
-        .map((line) => line.sourceOrderLineId)
-        .filter((id): id is string => Boolean(id)),
-    );
-    const knownRepairIds = new Set(
-      copied
-        .map((line) => line.sourceSuggestedRepairId)
-        .filter((id): id is string => Boolean(id)),
-    );
-    const novel = sources.filter((source) => {
-      if (
-        source.sourceOrderLineId &&
-        knownOrderLineIds.has(source.sourceOrderLineId)
-      ) {
-        return false;
-      }
-      if (
-        source.sourceSuggestedRepairId &&
-        knownRepairIds.has(source.sourceSuggestedRepairId)
-      ) {
-        return false;
-      }
-      return true;
-    });
-    extra = toCreateInput(novel, copied.length);
-  }
-
   const estimate = await createEstimateWithLines(session.garageId, {
     serviceOrderId: order.id,
     revisionNumber: current.revisionNumber + 1,
     notes: input.notes ?? null,
     createdById: session.userId,
-    lines: [...copied, ...extra],
+    lines: copied,
     supersedeEstimateId: current.id,
   });
   if (!estimate) {
@@ -353,6 +305,9 @@ export async function removeEstimateLine(
   if (result === "billed") {
     throw new AppError("ESTIMATE_LINE_BILLED");
   }
+  if (result === "insufficient_stock") {
+    throw new AppError("inventory.insufficient_stock", 409);
+  }
 }
 
 export async function setEstimateLineApproval(
@@ -391,7 +346,13 @@ export async function setEstimateLineApproval(
     note: input.note,
     recordedById: session.userId,
   });
-  if (!result?.line) {
+  if (!result.ok) {
+    if (result.reason === "INSUFFICIENT_STOCK") {
+      throw new AppError("inventory.insufficient_stock", 409);
+    }
+    if (result.reason === "PART_NOT_FOUND") {
+      throw new NotFoundError();
+    }
     throw new AppError("APPROVAL_CONFLICT");
   }
   return result;
@@ -430,17 +391,30 @@ export async function savePermissionLine(
   }
 
   if (detailsChanged) {
-    const updated = await updateEstimateLineDetails(session.garageId, {
-      lineId: existing.id,
-      estimateId: existing.estimateId,
-      serviceOrderId: order.id,
-      description: input.description,
-      quantity: input.quantity,
-      unitPricePaise: input.unitPricePaise,
-      actorId: session.userId,
-    });
-    if (!updated) {
-      throw new NotFoundError();
+    try {
+      const updated = await updateEstimateLineDetails(session.garageId, {
+        lineId: existing.id,
+        estimateId: existing.estimateId,
+        serviceOrderId: order.id,
+        description: input.description,
+        quantity: input.quantity,
+        unitPricePaise: input.unitPricePaise,
+        actorId: session.userId,
+      });
+      if (updated === "billed") {
+        throw new AppError("ESTIMATE_LINE_BILLED");
+      }
+      if (!updated) {
+        throw new NotFoundError();
+      }
+    } catch (error) {
+      if (
+        error instanceof EstimateStockTxError &&
+        error.reason === "INSUFFICIENT_STOCK"
+      ) {
+        throw new AppError("inventory.insufficient_stock", 409);
+      }
+      throw error;
     }
   }
 
@@ -455,7 +429,13 @@ export async function savePermissionLine(
       note: input.note,
       recordedById: session.userId,
     });
-    if (!result?.line) {
+    if (!result.ok) {
+      if (result.reason === "INSUFFICIENT_STOCK") {
+        throw new AppError("inventory.insufficient_stock", 409);
+      }
+      if (result.reason === "PART_NOT_FOUND") {
+        throw new NotFoundError();
+      }
       throw new AppError("APPROVAL_CONFLICT");
     }
     return result;

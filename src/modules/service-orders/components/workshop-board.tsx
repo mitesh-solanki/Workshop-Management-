@@ -38,24 +38,23 @@ export type BoardTechnician = {
   email: string;
 };
 
-export type BoardBay = {
-  bay: string;
-  count: number;
-  registrationNumbers: string[];
+export type BoardBayOption = {
+  id: string;
+  name: string;
 };
 
 type Props = {
   orders: BoardOrder[];
   technicians: BoardTechnician[];
-  bays: BoardBay[];
+  bays: BoardBayOption[];
   selectedTechnicianId: string;
   selectedBay: string;
   canFilterTechnicians: boolean;
   canMutate: boolean;
 };
 
-const boardSelectTriggerClass =
-  "h-9 min-h-9 sm:w-auto sm:min-w-[11rem]";
+const boardSelectTriggerClass = "h-9 min-h-9 w-auto min-w-[11rem]";
+const boardFilterSelectClass = "w-auto shrink-0";
 
 function formatDue(value: Date | string | null, empty: string): string {
   if (!value) {
@@ -217,90 +216,41 @@ export function WorkshopBoard({
   return (
     <div className="space-y-3">
       {(canFilterTechnicians || bays.length > 0) && (
-        <div className="flex flex-col gap-2.5 rounded-xl border border-slate-200 bg-card px-3 py-2.5 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-3">
+        <div className="flex flex-row flex-wrap items-center justify-end gap-2.5 rounded-xl border border-slate-200 bg-card px-3 py-2.5 sm:gap-3">
           {canFilterTechnicians ? (
-            <div className="flex min-w-0 flex-1 flex-col gap-1 sm:flex-row sm:items-center sm:gap-2">
-              <label
-                htmlFor="board-technician"
-                className="shrink-0 text-caption font-medium text-slate-500"
-              >
-                {t("filterTechnician")}
-              </label>
-              <FormSelect
-                id="board-technician"
-                value={selectedTechnicianId}
-                onValueChange={(technicianId) =>
-                  pushFilters({ technicianId })
-                }
-                options={[
-                  { value: "", label: t("filterAllTechnicians") },
-                  ...technicians.map((tech) => ({
-                    value: tech.id,
-                    label: techLabel(tech),
-                  })),
-                ]}
-                triggerClassName={boardSelectTriggerClass}
-              />
-            </div>
+            <FormSelect
+              id="board-technician"
+              value={selectedTechnicianId}
+              onValueChange={(technicianId) =>
+                pushFilters({ technicianId })
+              }
+              options={[
+                { value: "", label: t("filterAllTechnicians") },
+                ...technicians.map((tech) => ({
+                  value: tech.id,
+                  label: techLabel(tech),
+                })),
+              ]}
+              className={boardFilterSelectClass}
+              triggerClassName={boardSelectTriggerClass}
+            />
           ) : null}
 
           {bays.length > 0 ? (
-            <section
-              className="flex min-w-0 flex-wrap items-center gap-1.5 sm:justify-end"
-              aria-label={t("filterBay")}
-            >
-              <span className="text-caption font-medium text-slate-500">
-                {t("filterBay")}
-              </span>
-              <ul className="flex flex-wrap gap-1">
-                <li>
-                  <button
-                    type="button"
-                    aria-pressed={!selectedBay}
-                    onClick={() => pushFilters({ bay: "" })}
-                    className={cn(
-                      "inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium",
-                      !selectedBay
-                        ? "border-blue-700 bg-blue-700 text-white"
-                        : "border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100",
-                    )}
-                  >
-                    {t("filterAllBays")}
-                  </button>
-                </li>
-                {bays.map((bay) => {
-                  const active = selectedBay === bay.bay;
-                  return (
-                    <li key={bay.bay}>
-                      <button
-                        type="button"
-                        title={bay.registrationNumbers.join(", ")}
-                        aria-pressed={active}
-                        onClick={() =>
-                          pushFilters({ bay: active ? "" : bay.bay })
-                        }
-                        className={cn(
-                          "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs",
-                          active
-                            ? "border-blue-700 bg-blue-700 text-white"
-                            : "border-slate-200 bg-slate-50 text-slate-900 hover:bg-slate-100",
-                        )}
-                      >
-                        <span className="font-semibold">{bay.bay}</span>
-                        <span
-                          className={cn(
-                            "tabular-nums",
-                            active ? "text-blue-100" : "text-slate-500",
-                          )}
-                        >
-                          {bay.count}
-                        </span>
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-            </section>
+            <FormSelect
+              id="board-bay"
+              value={selectedBay}
+              onValueChange={(bay) => pushFilters({ bay })}
+              options={[
+                { value: "", label: t("filterAllBays") },
+                ...bays.map((bay) => ({
+                  value: bay.name,
+                  label: bay.name,
+                })),
+              ]}
+              className={boardFilterSelectClass}
+              triggerClassName={boardSelectTriggerClass}
+            />
           ) : null}
         </div>
       )}

@@ -202,16 +202,30 @@ export function InvoicePreviewDialog({
 
               <div className="mt-[23px] grid gap-6 sm:grid-cols-[1fr_265px] sm:gap-[25px]">
                 <div className="text-[11px]">
-                  <b className="font-semibold">{t("paperCustomerNote")}</b>
-                  <p className="mt-1 text-[#617187]">
-                    {data.notes?.trim() || "—"}
-                  </p>
+                  {data.notes?.trim() ? (
+                    <>
+                      <b className="font-semibold">{t("paperCustomerNote")}</b>
+                      <p className="mt-1 text-[#617187]">{data.notes.trim()}</p>
+                    </>
+                  ) : null}
                   {data.isPreview ? (
-                    <p className="mt-[30px] text-[10px] text-[#9ba7b5]">
+                    <p
+                      className={
+                        data.notes?.trim()
+                          ? "mt-[30px] text-[10px] text-[#9ba7b5]"
+                          : "text-[10px] text-[#9ba7b5]"
+                      }
+                    >
                       {t("paperPreviewTaxNote")}
                     </p>
                   ) : (
-                    <p className="mt-[30px] text-[10px] text-[#9ba7b5]">
+                    <p
+                      className={
+                        data.notes?.trim()
+                          ? "mt-[30px] text-[10px] text-[#9ba7b5]"
+                          : "text-[10px] text-[#9ba7b5]"
+                      }
+                    >
                       {t("notEInvoice")}
                     </p>
                   )}

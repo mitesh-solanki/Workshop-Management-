@@ -48,7 +48,7 @@ export default async function LiveLinkPage({ params, searchParams }: Props) {
   }
 
   return (
-    <main className="min-h-full w-full bg-background">
+    <main className="min-h-full w-full">
       <PublicLiveViewPanel
         token={token}
         view={result.view}

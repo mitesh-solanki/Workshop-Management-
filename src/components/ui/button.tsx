@@ -32,15 +32,16 @@ const buttonVariants = cva(
       size: {
         // Use text-xs (font-size only). Avoid text-caption here — it shares the
         // text-* namespace and can override text-white on primary buttons.
-        sm: "h-9 min-h-9 gap-1.5 rounded-md px-3 text-xs has-[>svg]:px-2.5",
+        sm: "h-9 min-h-9 gap-1.5 rounded-md px-3 text-sm has-[>svg]:px-2.5",
         md: "h-11 min-h-11 px-4 py-2 has-[>svg]:px-3",
         default: "h-11 min-h-11 px-4 py-2 has-[>svg]:px-3",
         lg: "h-12 min-h-12 rounded-xl px-6 text-base has-[>svg]:px-4",
-        icon: "size-11 min-h-11 min-w-11",
-        "icon-xs": "size-7 rounded-md [&_svg:not([class*='size-'])]:size-3",
-        "icon-sm": "size-9 min-h-9 min-w-9",
-        "icon-lg": "size-12 min-h-12 min-w-12",
-        xs: "h-7 gap-1 rounded-md px-2 text-xs has-[>svg]:px-1.5 [&_svg:not([class*='size-'])]:size-3",
+        icon: "size-11 min-h-11 min-w-11 p-0 leading-none",
+        "icon-xs":
+          "size-7 rounded-md p-0 leading-none [&_svg:not([class*='size-'])]:size-3",
+        "icon-sm": "size-9 min-h-9 min-w-9 p-0 leading-none",
+        "icon-lg": "size-12 min-h-12 min-w-12 p-0 leading-none",
+        xs: "h-8 min-h-8 gap-1 rounded-md px-2.5 text-sm has-[>svg]:px-2 [&_svg:not([class*='size-'])]:size-3.5",
       },
     },
     defaultVariants: {

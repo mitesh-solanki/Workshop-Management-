@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactElement } from "react";
 import { XIcon } from "lucide-react";
 import { useTranslations } from "next-intl";
 import {
@@ -10,6 +11,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
+  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 
@@ -26,6 +28,11 @@ type ConfirmDialogProps = {
   variant?: "default" | "danger";
   loading?: boolean;
   onConfirm: () => void;
+  /**
+   * Optional trigger. Prefer this over a separate button that only sets
+   * `open` — a plain outside click races with Radix and can close instantly.
+   */
+  trigger?: ReactElement;
 };
 
 /**
@@ -42,6 +49,7 @@ export function ConfirmDialog({
   variant = "default",
   loading = false,
   onConfirm,
+  trigger,
 }: ConfirmDialogProps) {
   const t = useTranslations("common");
 
@@ -58,7 +66,10 @@ export function ConfirmDialog({
         onOpenChange(next);
       }}
     >
-      <AlertDialogContent className="relative gap-5 sm:max-w-md">
+      {trigger ? (
+        <AlertDialogTrigger asChild>{trigger}</AlertDialogTrigger>
+      ) : null}
+      <AlertDialogContent className="z-10050 gap-5 sm:max-w-md">
         <button
           type="button"
           onClick={close}

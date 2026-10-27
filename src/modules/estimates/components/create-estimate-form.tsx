@@ -10,6 +10,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { FormField } from "@/components/ui/form-field";
 import { Textarea } from "@/components/ui/textarea";
+import { markOpenLiveLinkEmbed } from "@/modules/live-link/components/live-link-staff-panel";
 
 const initial: EstimateActionState = { ok: false };
 
@@ -34,33 +35,42 @@ export function CreateEstimateForm(props: Props) {
     }
     return createEstimateAction.bind(null, props.orderId);
   }, [props.mode, props.orderId]);
-  const [state, formAction, pending] = useActionState(bound, initial);
+  const wrapped = useMemo(() => {
+    return async (
+      prev: EstimateActionState,
+      formData: FormData,
+    ): Promise<EstimateActionState> => {
+      const result = await bound(prev, formData);
+      if (result.ok && props.mode === "create") {
+        markOpenLiveLinkEmbed(props.orderId);
+      }
+      return result;
+    };
+  }, [bound, props.mode, props.orderId]);
+  const [state, formAction, pending] = useActionState(wrapped, initial);
+
+  const isRevision = props.mode === "revision";
 
   return (
     <form action={formAction} className="flex w-full max-w-xl flex-col gap-4">
-      <FormField id="notes" label={t("notes")} className="w-full">
+      <FormField
+        id="notes"
+        label={isRevision ? t("revisionReason") : t("notes")}
+        className="w-full"
+      >
         <Textarea
           id="notes"
           name="notes"
           rows={3}
           maxLength={2000}
-          placeholder={t("notesPlaceholder")}
+          placeholder={
+            isRevision
+              ? t("revisionReasonPlaceholder")
+              : t("notesPlaceholder")
+          }
           className="min-h-20 w-full min-w-0 [field-sizing:fixed]"
         />
       </FormField>
-
-      {props.mode === "revision" ? (
-        <label className="flex items-center gap-2 text-sm text-slate-700">
-          <input
-            type="checkbox"
-            name="includeNewSources"
-            value="true"
-            defaultChecked
-            className="size-4 shrink-0"
-          />
-          <span>{t("includeNewSources")}</span>
-        </label>
-      ) : null}
 
       {state.message && !state.ok ? (
         <p className="text-sm text-red-600" role="status">
@@ -77,7 +87,7 @@ export function CreateEstimateForm(props: Props) {
         >
           {pending
             ? t("saving")
-            : props.mode === "revision"
+            : isRevision
               ? t("createRevision", { number: props.nextRevision })
               : t("createFromSources")}
         </Button>

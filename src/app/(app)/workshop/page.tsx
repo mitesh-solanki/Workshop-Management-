@@ -1,9 +1,9 @@
 import { getTranslations } from "next-intl/server";
 import { PageHeader } from "@/components/ui/page-header";
 import { requireSession } from "@/lib/session";
+import { listBaysForSelect } from "@/modules/bays/service";
 import { WorkshopBoard } from "@/modules/service-orders/components/workshop-board";
 import {
-  getBayOccupancy,
   listBoardTechnicians,
   listOrders,
 } from "@/modules/service-orders/service";
@@ -37,8 +37,7 @@ export default async function WorkshopPage({ searchParams }: Props) {
       ...(selectedBay ? { bay: selectedBay } : {}),
     }),
     listBoardTechnicians(session),
-    // Occupancy chips stay visible for all bays under the technician scope.
-    getBayOccupancy(session, filterOptions),
+    listBaysForSelect(session).catch(() => []),
   ]);
 
   const canMutate =

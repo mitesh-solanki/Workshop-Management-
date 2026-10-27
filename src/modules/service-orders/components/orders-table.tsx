@@ -55,26 +55,26 @@ export function OrdersTable({
     const matched = !q
       ? [...orders]
       : orders.filter((order) => {
-          const registration = order.vehicle.registrationNumber.toLowerCase();
-          const customer = order.customer.name.toLowerCase();
-          const complaint = order.complaint.toLowerCase();
-          const makeModel =
-            `${order.vehicle.make} ${order.vehicle.model}`.toLowerCase();
-          const tech = (
-            order.technician?.name?.trim() ||
-            order.technician?.email ||
-            ""
-          ).toLowerCase();
-          const statusLabel = t(`statuses.${order.status}`).toLowerCase();
-          return (
-            registration.includes(q) ||
-            customer.includes(q) ||
-            complaint.includes(q) ||
-            makeModel.includes(q) ||
-            tech.includes(q) ||
-            statusLabel.includes(q)
-          );
-        });
+        const registration = order.vehicle.registrationNumber.toLowerCase();
+        const customer = order.customer.name.toLowerCase();
+        const complaint = order.complaint.toLowerCase();
+        const makeModel =
+          `${order.vehicle.make} ${order.vehicle.model}`.toLowerCase();
+        const tech = (
+          order.technician?.name?.trim() ||
+          order.technician?.email ||
+          ""
+        ).toLowerCase();
+        const statusLabel = t(`statuses.${order.status}`).toLowerCase();
+        return (
+          registration.includes(q) ||
+          customer.includes(q) ||
+          complaint.includes(q) ||
+          makeModel.includes(q) ||
+          tech.includes(q) ||
+          statusLabel.includes(q)
+        );
+      });
 
     matched.sort((a, b) => {
       if (sort === "reg_asc" || sort === "reg_desc") {
@@ -146,7 +146,7 @@ export function OrdersTable({
           <span className="text-muted-foreground">
             {row.original.technician
               ? row.original.technician.name?.trim() ||
-                row.original.technician.email
+              row.original.technician.email
               : t("technicianUnassigned")}
           </span>
         ),
@@ -188,7 +188,7 @@ export function OrdersTable({
       defaultPageSize={10}
       getRowHref={(row) => `/orders/${row.id}`}
       toolbar={
-        <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+        <div className="flex w-full gap-2 items-center justify-between">
           <SearchInput
             value={query}
             onValueChange={setQuery}

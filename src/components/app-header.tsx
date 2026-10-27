@@ -3,11 +3,11 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { Bell, ChevronRight, Search } from "lucide-react";
+import { Bell, ChevronRight } from "lucide-react";
+import { GlobalSearch } from "@/components/global-search";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { usePageChrome } from "@/components/page-chrome";
 import type { NavKey } from "@/components/shared/nav-items";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { SidebarTrigger, useSidebar } from "@/components/ui/sidebar";
 import {
@@ -61,102 +61,95 @@ export function AppHeader({ appName, garageName }: AppHeaderProps) {
       : tNav("openMenu")
     : tNav("toggleSidebar");
 
+  const breadcrumb = (
+    <nav
+      aria-label={tShell("breadcrumb")}
+      className={
+        detailLabel
+          ? "flex min-w-0 items-center gap-1 text-caption text-slate-500"
+          : "flex min-w-0 items-center gap-1 text-caption text-slate-500"
+      }
+    >
+      <Link
+        href="/dashboard"
+        className="truncate hover:text-slate-800 focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
+      >
+        {garageName}
+      </Link>
+      {!isHome && match ? (
+        <>
+          <ChevronRight className="size-3 shrink-0 opacity-60" aria-hidden />
+          {detailLabel ? (
+            <>
+              <Link
+                href={sectionHref}
+                className="truncate hover:text-slate-800 focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
+              >
+                {sectionTitle}
+              </Link>
+              <ChevronRight
+                className="size-3 shrink-0 opacity-60"
+                aria-hidden
+              />
+              <span className="truncate text-slate-600" aria-current="page">
+                {detailLabel}
+              </span>
+            </>
+          ) : (
+            <span className="truncate text-slate-600" aria-current="page">
+              {sectionTitle}
+            </span>
+          )}
+        </>
+      ) : null}
+    </nav>
+  );
+
+  const titleBlock = (
+    <div className="min-w-0">
+      <p className="truncate text-section-title text-slate-900">{pageTitle}</p>
+      {breadcrumb}
+    </div>
+  );
+
+  const actions = (
+    <div className="flex shrink-0 items-center gap-1.5 ml-auto">
+      <LanguageSwitcher />
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className="inline-flex">
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              disabled
+              aria-label={tShell("notifications")}
+              className="rounded-full border-blue-200 bg-white text-blue-600 hover:bg-blue-50 [&_svg]:text-blue-600"
+            >
+              <Bell className="size-5" aria-hidden />
+            </Button>
+          </span>
+        </TooltipTrigger>
+        <TooltipContent side="bottom">
+          {tShell("notificationsSoon")}
+        </TooltipContent>
+      </Tooltip>
+    </div>
+  );
+
   return (
     <header className="sticky top-0 z-30 shrink-0 border-b border-slate-200 bg-card/95 backdrop-blur-md supports-backdrop-filter:bg-card/80">
-      <div className="flex h-16 w-full items-center gap-2 px-4 sm:px-6 lg:px-[34px]">
-        <SidebarTrigger
-          aria-label={triggerLabel}
-          className="-ml-3 shrink-0 text-slate-500 hover:bg-slate-100 hover:text-slate-900"
-        />
+      <div className="flex w-full flex-col gap-2 px-3 pt-2.5 pb-2.5 sm:px-6 sm:pt-3 sm:pb-3 lg:px-8.5 md:gap-0 md:py-0">
+        <div className="flex h-11 w-full items-center gap-2 md:h-16">
+          <SidebarTrigger
+            aria-label={triggerLabel}
+            className="-ml-1 shrink-0 text-slate-500 border hover:bg-slate-100 hover:text-slate-900 sm:-ml-3"
+          />
+          <div className="min-w-0 flex-1 md:max-w-sm xl:max-w-md">
+            <GlobalSearch />
+          </div>
 
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-section-title text-slate-900">
-            {pageTitle}
-          </p>
-          <nav
-            aria-label={tShell("breadcrumb")}
-            className={
-              detailLabel
-                ? "flex min-w-0 items-center gap-1 text-caption text-slate-500"
-                : "hidden min-w-0 items-center gap-1 text-caption text-slate-500 md:flex"
-            }
-          >
-            <Link
-              href="/dashboard"
-              className="truncate hover:text-slate-800 focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
-            >
-              {garageName}
-            </Link>
-            {!isHome && match ? (
-              <>
-                <ChevronRight className="size-3 shrink-0 opacity-60" aria-hidden />
-                {detailLabel ? (
-                  <>
-                    <Link
-                      href={sectionHref}
-                      className="truncate hover:text-slate-800 focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
-                    >
-                      {sectionTitle}
-                    </Link>
-                    <ChevronRight
-                      className="size-3 shrink-0 opacity-60"
-                      aria-hidden
-                    />
-                    <span className="truncate text-slate-600" aria-current="page">
-                      {detailLabel}
-                    </span>
-                  </>
-                ) : (
-                  <span className="truncate text-slate-600" aria-current="page">
-                    {sectionTitle}
-                  </span>
-                )}
-              </>
-            ) : null}
-          </nav>
-        </div>
-
-        <div className="hidden max-w-sm flex-1 xl:max-w-md md:block">
-          <label className="relative block">
-            <span className="sr-only">{tShell("searchLabel")}</span>
-            <Search
-              className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-slate-400"
-              aria-hidden
-            />
-            <Input
-              type="search"
-              placeholder={tShell("searchPlaceholder")}
-              className="h-11 rounded-lg border-slate-200 bg-slate-50 pl-9 pr-16"
-              disabled
-              aria-disabled
-            />
-            <kbd className="pointer-events-none absolute top-1/2 right-2.5 hidden -translate-y-1/2 rounded border border-slate-200 bg-card px-1.5 py-0.5 text-[10px] font-medium text-slate-500 sm:inline">
-              {tShell("searchShortcut")}
-            </kbd>
-          </label>
-        </div>
-
-        <div className="flex shrink-0 items-center gap-1.5">
-          <LanguageSwitcher />
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <span className="inline-flex">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  disabled
-                  aria-label={tShell("notifications")}
-                  className="text-slate-500"
-                >
-                  <Bell className="size-5" aria-hidden />
-                </Button>
-              </span>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">
-              {tShell("notificationsSoon")}
-            </TooltipContent>
-          </Tooltip>
+          {actions}
         </div>
       </div>
     </header>

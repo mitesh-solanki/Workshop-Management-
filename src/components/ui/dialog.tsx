@@ -48,10 +48,33 @@ function DialogOverlay({
   )
 }
 
+function isSearchableSelectLayer(target: EventTarget | null) {
+  return (
+    target instanceof Element &&
+    Boolean(target.closest("[data-slot='searchable-select-dropdown']"))
+  )
+}
+
+function focusSearchableSelectTarget(target: EventTarget | null) {
+  if (!(target instanceof Element)) return
+  const root = target.closest("[data-slot='searchable-select-dropdown']")
+  if (!root) return
+  const input =
+    target instanceof HTMLInputElement
+      ? target
+      : root.querySelector("input")
+  queueMicrotask(() => {
+    input?.focus()
+  })
+}
+
 function DialogContent({
   className,
   children,
   showCloseButton = true,
+  onInteractOutside,
+  onFocusOutside,
+  onPointerDownOutside,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   showCloseButton?: boolean
@@ -69,6 +92,25 @@ function DialogContent({
           className
         )}
         {...props}
+        onInteractOutside={(event) => {
+          if (isSearchableSelectLayer(event.target)) {
+            event.preventDefault()
+          }
+          onInteractOutside?.(event)
+        }}
+        onFocusOutside={(event) => {
+          if (isSearchableSelectLayer(event.target)) {
+            event.preventDefault()
+          }
+          onFocusOutside?.(event)
+        }}
+        onPointerDownOutside={(event) => {
+          if (isSearchableSelectLayer(event.target)) {
+            event.preventDefault()
+            focusSearchableSelectTarget(event.target)
+          }
+          onPointerDownOutside?.(event)
+        }}
       >
         {children}
         {showCloseButton && (

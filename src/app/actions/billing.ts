@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { getTranslations } from "next-intl/server";
 import { AppError } from "@/lib/errors";
 import { requireSession } from "@/lib/session";
 import { translateError } from "@/lib/translate-error";
@@ -211,13 +212,19 @@ export async function createCreditNoteAction(
     const unitPrices = formData.getAll("unitPriceRupees").map(String);
     const gstRates = formData.getAll("gstRatePercent").map(String);
     const hsnCodes = formData.getAll("hsnOrSac").map(String);
-    const lines = descriptions.map((description, index) => ({
-      description,
-      quantity: quantities[index] ?? "1",
-      unitPricePaise: unitPrices[index] ?? "0",
-      gstRatePercent: gstRates[index] ?? "18",
-      hsnOrSac: hsnCodes[index] ?? "",
-    }));
+    const lines = descriptions
+      .map((description, index) => ({
+        description,
+        quantity: quantities[index] ?? "1",
+        unitPricePaise: unitPrices[index] ?? "0",
+        gstRatePercent: gstRates[index] ?? "18",
+        hsnOrSac: hsnCodes[index] ?? "",
+      }))
+      .filter((line) => line.description.trim().length > 0);
+    if (lines.length === 0) {
+      const t = await getTranslations("billing");
+      return { ok: false, message: t("errors.creditNoteNeedItem") };
+    }
     await createCreditNote(session, {
       invoiceId,
       reason: String(formData.get("reason") ?? "CORRECTION") as CreditNoteReasonValue,

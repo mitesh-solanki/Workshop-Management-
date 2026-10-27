@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { Prisma } from "@prisma/client";
 import { ForbiddenError } from "@/lib/errors";
 import type { RoleSession } from "@/lib/rbac";
 import {
@@ -28,6 +29,10 @@ vi.mock("@/modules/service-orders/repo", () => ({
   findServiceOrderById: vi.fn(),
 }));
 
+vi.mock("@/modules/inventory/repo", () => ({
+  findPartById: vi.fn(),
+}));
+
 vi.mock("@/modules/inspections/repo", () => ({
   findInspectionByServiceOrderId: vi.fn(),
   findInspectionItemById: vi.fn(),
@@ -43,6 +48,7 @@ vi.mock("@/modules/inspections/repo", () => ({
 }));
 
 import { findServiceOrderById } from "@/modules/service-orders/repo";
+import { findPartById } from "@/modules/inventory/repo";
 import {
   createInspectionWithDefaults,
   createSuggestedRepair,
@@ -183,6 +189,24 @@ describe("inspection access", () => {
     expect(inspection?.items).toHaveLength(7);
   });
 
+  it("returns the existing inspection when create races on serviceOrderId", async () => {
+    vi.mocked(findServiceOrderById).mockResolvedValue(sampleOrder);
+    vi.mocked(findInspectionByServiceOrderId)
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(sampleInspection);
+    vi.mocked(createInspectionWithDefaults).mockRejectedValue(
+      new Prisma.PrismaClientKnownRequestError("Unique constraint failed", {
+        code: "P2002",
+        clientVersion: "6.19.3",
+        meta: { target: ["serviceOrderId"] },
+      }),
+    );
+
+    const inspection = await getOrCreateInspection(ownerA, "order-1");
+    expect(inspection?.id).toBe(sampleInspection.id);
+    expect(findInspectionByServiceOrderId).toHaveBeenCalledTimes(2);
+  });
+
   it("blocks a technician from another assignment", async () => {
     vi.mocked(findServiceOrderById).mockResolvedValue(sampleOrder);
     await expect(getOrCreateInspection(techOther, "order-1")).rejects.toBeInstanceOf(
@@ -244,17 +268,49 @@ describe("inspection access", () => {
     ).rejects.toBeInstanceOf(ForbiddenError);
   });
 
-  it("saves suggested labour and part lines without part inventory ids", async () => {
+  it("requires part id for suggested part repairs", async () => {
     vi.mocked(findServiceOrderById).mockResolvedValue(sampleOrder);
     vi.mocked(findInspectionByServiceOrderId).mockResolvedValue(sampleInspection);
+
+    await expect(
+      addSuggestedRepairLine(ownerA, "order-1", {
+        type: "PART",
+        description: "Brake pads",
+        quantity: "1",
+        unitPricePaise: "1200",
+        partId: "",
+      }),
+    ).rejects.toThrow();
+    expect(createSuggestedRepair).not.toHaveBeenCalled();
+  });
+
+  it("saves suggested part repairs with inventory partId", async () => {
+    vi.mocked(findServiceOrderById).mockResolvedValue(sampleOrder);
+    vi.mocked(findInspectionByServiceOrderId).mockResolvedValue(sampleInspection);
+    vi.mocked(findPartById).mockResolvedValue({
+      id: "part-1",
+      garageId: garageA,
+      name: "Brake pads",
+      sku: "PAD-1",
+      unit: "pcs",
+      purchasePricePaise: 80000,
+      sellingPricePaise: 120000,
+      gstRatePercent: 18,
+      hsn: "87089900",
+      lowStockLevel: 2,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      quantityOnHand: 4,
+    });
     vi.mocked(createSuggestedRepair).mockResolvedValue({
       id: "rep-1",
       garageId: garageA,
       inspectionId: "insp-1",
       type: "PART",
-      description: "Brake pads",
+      description: "Brake pads (PAD-1)",
       quantity: 1,
       unitPricePaise: 120000,
+      partId: "part-1",
       sortOrder: 0,
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -262,22 +318,22 @@ describe("inspection access", () => {
 
     const repair = await addSuggestedRepairLine(ownerA, "order-1", {
       type: "PART",
-      description: "Brake pads",
+      description: "Brake pads (PAD-1)",
       quantity: "1",
       unitPricePaise: "1200",
+      partId: "part-1",
     });
-    expect(repair.unitPricePaise).toBe(120000);
+
+    expect(repair.partId).toBe("part-1");
+    expect(findPartById).toHaveBeenCalledWith(garageA, "part-1");
     expect(createSuggestedRepair).toHaveBeenCalledWith(
       garageA,
       expect.objectContaining({
         type: "PART",
-        description: "Brake pads",
+        partId: "part-1",
+        description: "Brake pads (PAD-1)",
         unitPricePaise: 120000,
       }),
-    );
-    expect(createSuggestedRepair).toHaveBeenCalledWith(
-      garageA,
-      expect.not.objectContaining({ partId: expect.anything() }),
     );
   });
 
@@ -290,6 +346,7 @@ describe("inspection access", () => {
       description: "Pad change",
       quantity: 1,
       unitPricePaise: 50000,
+      partId: null,
       sortOrder: 0,
       createdAt: new Date(),
       updatedAt: new Date(),

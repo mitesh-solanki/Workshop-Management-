@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Eye } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
+import { DeletePartButton } from "@/modules/inventory/components/delete-part-button";
 import {
   EditPartModal,
   type EditPartValues,
@@ -29,7 +30,12 @@ export function InventoryRowActions({ part, canWrite }: Props) {
           <Eye className="size-4" aria-hidden />
         </Link>
       </Button>
-      {canWrite ? <EditPartModal part={part} /> : null}
+      {canWrite ? (
+        <>
+          <EditPartModal part={part} />
+          <DeletePartButton partId={part.id} partName={part.name} />
+        </>
+      ) : null}
     </div>
   );
 }

@@ -18,6 +18,7 @@ import { SmoothAccordion } from "@/components/ui/smooth-accordion";
 import { toast } from "@/components/ui/toast";
 import { formatRupees } from "@/lib/money";
 import { cn } from "@/lib/utils";
+import { CompactLineApproval } from "@/modules/estimates/components/compact-line-approval";
 import { LineApprovalForm } from "@/modules/estimates/components/line-approval-form";
 import type {
   EstimateApprovalStateValue,
@@ -38,6 +39,7 @@ type Props = {
     gstRatePercent: number;
     approvalState: EstimateApprovalStateValue;
     totalPaise: number;
+    partId?: string | null;
   };
 };
 
@@ -58,7 +60,7 @@ export function EstimatePermissionLine({
 }: Props) {
   const t = useTranslations("estimates");
   const tc = useTranslations("common");
-  const [open, setOpen] = useState(line.approvalState === "PENDING");
+  const [open, setOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [removing, startRemove] = useTransition();
   const tone = approvalTone(line.approvalState);
@@ -120,12 +122,12 @@ export function EstimatePermissionLine({
             {line.description}
           </b>
           <small className="mt-0.5 block text-[13px] text-slate-500">
-            {`${t(`lineTypes.${typeKey as EstimateLineTypeValue}`)} ┬╖ ${line.quantity} ├ù ${formatRupees(line.unitPricePaise)}`}
-            {line.hsnOrSac ? ` ┬╖ ${line.hsnOrSac}` : null}
-            {` ┬╖ GST ${line.gstRatePercent}%`}
+            {`${t(`lineTypes.${typeKey as EstimateLineTypeValue}`)} · ${line.quantity} × ${formatRupees(line.unitPricePaise)}`}
+            {line.hsnOrSac ? ` · ${line.hsnOrSac}` : null}
+            {` · GST ${line.gstRatePercent}%`}
           </small>
         </div>
-        <div className="flex flex-wrap items-center justify-end gap-2">
+        <div className="flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto sm:flex-nowrap">
           <strong className="text-[15px] font-semibold text-slate-900">
             {formatRupees(line.totalPaise)}
           </strong>
@@ -140,6 +142,16 @@ export function EstimatePermissionLine({
           >
             {t(`approvalStatesShort.${line.approvalState}`)}
           </span>
+          {canEdit && !open && line.approvalState === "PENDING" ? (
+            <CompactLineApproval
+              orderId={orderId}
+              lineId={line.id}
+              approvalState={line.approvalState}
+              description={line.description}
+              quantity={line.quantity}
+              unitPricePaise={line.unitPricePaise}
+            />
+          ) : null}
           {canEdit ? (
             <div
               className="flex items-center gap-1.5"
@@ -203,19 +215,16 @@ export function EstimatePermissionLine({
 
       {canEdit ? (
         <SmoothAccordion open={open}>
-          <div className="space-y-4 border-t border-slate-300 bg-[#fbfcff] px-4 py-4 sm:px-5">
-            <p className="rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-[13px] leading-relaxed text-slate-600">
-              {line.approvalState === "APPROVED"
-                ? t("editNoticeApproved")
-                : t("editNoticePending")}
-            </p>
+          <div className="border-t border-slate-300 bg-[#fbfcff] px-3 py-3 sm:px-4">
             <LineApprovalForm
               orderId={orderId}
               lineId={line.id}
+              lineType={typeKey as EstimateLineTypeValue}
               currentState={line.approvalState}
               description={line.description}
               quantity={line.quantity}
               unitPricePaise={line.unitPricePaise}
+              initialPartId={line.partId}
               onSaved={() => setOpen(false)}
             />
           </div>
@@ -288,7 +297,7 @@ export function SmoothHistoryPanel({
         onClick={() => setOpen((value) => !value)}
       >
         <span>{title}</span>
-        <span className="inline-flex items-center gap-1 font-normal text-slate-400">
+        <span className="inline-flex items-center gap-1 font-normal text-slate-600">
           {hint}
           <ChevronDown
             className={cn(

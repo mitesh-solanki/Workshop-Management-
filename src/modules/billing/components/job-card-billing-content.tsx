@@ -8,6 +8,7 @@ import { CreateInvoiceForm } from "@/modules/billing/components/create-invoice-f
 import { InvoicePreviewButton } from "@/modules/billing/components/invoice-preview-button";
 import type { InvoicePreviewData } from "@/modules/billing/components/invoice-preview-dialog";
 import type { getInvoicesForOrder } from "@/modules/billing/service";
+import { LiveLinkStaffPanel } from "@/modules/live-link/components/live-link-staff-panel";
 
 type InvoiceList = Awaited<ReturnType<typeof getInvoicesForOrder>>;
 
@@ -45,6 +46,9 @@ type Props = {
   hasUnbilledApprovedLines: boolean;
   defaultPlaceOfSupplyStateCode: string;
   preview: BillingPreviewContext;
+  liveLinkActive: { id: string; expiresAt: Date | string } | null;
+  canEditLiveLink: boolean;
+  hasEstimate: boolean;
 };
 
 function formatIssuedAt(date: Date, locale: string) {
@@ -63,10 +67,22 @@ export async function JobCardBillingContent({
   hasUnbilledApprovedLines,
   defaultPlaceOfSupplyStateCode,
   preview,
+  liveLinkActive,
+  canEditLiveLink,
+  hasEstimate,
 }: Props) {
   const t = await getTranslations("billing");
+  const tGst = await getTranslations("gst");
   const locale = await getLocale();
   const pdfLocale = locale === "hi" || locale === "gu" ? locale : "en";
+
+  function stateName(code: string) {
+    try {
+      return tGst(`states.${code}`);
+    } catch {
+      return code;
+    }
+  }
 
   const draftPreview: InvoicePreviewData | null =
     hasUnbilledApprovedLines && preview.approvedLines.length > 0
@@ -145,7 +161,13 @@ export async function JobCardBillingContent({
         id: note.id,
         creditNoteNumber: note.creditNoteNumber,
         reason: note.reason,
+        notes: note.notes,
         totalPaise: note.totalPaise,
+        lines: note.lines.map((line) => ({
+          id: line.id,
+          description: line.description,
+          totalPaise: line.totalPaise,
+        })),
       })),
       preview: {
         heading:
@@ -168,7 +190,7 @@ export async function JobCardBillingContent({
           invoice.serviceOrder.vehicle?.registrationNumber ??
           preview.vehicleRegistration,
         jobLabel: preview.jobLabel,
-        placeOfSupplyLabel: `${t("placeOfSupply")}: ${invoice.placeOfSupplyStateCode}`,
+        placeOfSupplyLabel: `${t("placeOfSupply")}: ${stateName(invoice.placeOfSupplyStateCode)}`,
         notes: invoice.notes,
         lines: invoice.lines.map((line) => ({
           id: line.id,
@@ -190,7 +212,16 @@ export async function JobCardBillingContent({
   });
 
   return (
-    <div className="space-y-5 px-4 py-5 sm:px-5">
+    <div className="space-y-5">
+      {hasEstimate ? (
+        <LiveLinkStaffPanel
+          orderId={orderId}
+          active={liveLinkActive}
+          canEdit={canEditLiveLink}
+          variant="embed"
+        />
+      ) : null}
+
       <div className="flex gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3.5">
         <span className="grid size-8 shrink-0 place-items-center rounded-full bg-emerald-100 text-[17px] font-black text-emerald-700">
           ✓

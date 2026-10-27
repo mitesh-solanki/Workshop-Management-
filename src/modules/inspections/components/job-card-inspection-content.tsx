@@ -3,7 +3,6 @@ import { getTranslations } from "next-intl/server";
 import { EmptyState } from "@/components/ui/empty-state";
 import { AddChecklistItemForm } from "@/modules/inspections/components/add-checklist-item-form";
 import { InspectionConditionGrid } from "@/modules/inspections/components/inspection-condition-grid";
-import { SuggestedRepairSection } from "@/modules/inspections/components/suggested-repair-form";
 import type { InspectionItemResultValue } from "@/modules/inspections/schema";
 
 type Media = {
@@ -22,20 +21,11 @@ type Item = {
   media: Media[];
 };
 
-type Repair = {
-  id: string;
-  type: "LABOUR" | "PART";
-  description: string;
-  quantity: number;
-  unitPricePaise: number;
-};
-
 type Props = {
   orderId: string;
   canEdit: boolean;
   inspection: {
     items: Item[];
-    suggestedRepairs: Repair[];
   } | null;
 };
 
@@ -48,14 +38,14 @@ export async function JobCardInspectionContent({
 
   if (!inspection) {
     return (
-      <div className="px-4 py-5 sm:px-5">
+      <div>
         <EmptyState icon={ClipboardList} title={t("emptyReadOnly")} compact />
       </div>
     );
   }
 
   return (
-    <div className="space-y-5 px-4 py-5 sm:px-5">
+    <div className="space-y-5">
       <InspectionConditionGrid
         orderId={orderId}
         canEdit={canEdit}
@@ -67,14 +57,6 @@ export async function JobCardInspectionContent({
           <AddChecklistItemForm orderId={orderId} />
         </div>
       ) : null}
-
-      <div className="border-t-2 border-slate-300 pt-5">
-        <SuggestedRepairSection
-          orderId={orderId}
-          canEdit={canEdit}
-          repairs={inspection.suggestedRepairs}
-        />
-      </div>
     </div>
   );
 }

@@ -7,7 +7,7 @@ describe("invoice PDF generation", () => {
     const { buffer, labels } = await generateInvoicePdf({
       locale: "en",
       status: "FINALIZED",
-      invoiceNumber: "INV-TG/2025-26/0001",
+      invoiceNumber: "INV-2025-26-0001",
       issuedAt: new Date("2025-06-15T10:00:00Z"),
       garage: {
         name: "Test Garage",
@@ -52,7 +52,7 @@ describe("invoice PDF generation", () => {
     // pdfkit may hex-encode strings; latin1 still surfaces the invoice number bytes.
     const asLatin1 = buffer.toString("latin1");
     expect(
-      asLatin1.includes("INV-TG/2025-26/0001") || asLatin1.includes("0001"),
+      asLatin1.includes("INV-2025-26-0001") || asLatin1.includes("0001"),
     ).toBe(true);
     expect(labels).toEqual(getInvoicePdfLabels("en"));
     expect(labels.notEInvoice).toMatch(/not an e-invoice/i);

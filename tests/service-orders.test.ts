@@ -23,6 +23,7 @@ vi.mock("@/modules/service-orders/repo", () => ({
   createServiceOrder: vi.fn(),
   updateServiceOrderStatus: vi.fn(),
   createServiceOrderLine: vi.fn(),
+  deleteServiceOrderLine: vi.fn(),
   listServiceOrderAuditLogs: vi.fn(),
 }));
 
@@ -30,6 +31,7 @@ import { findVehicleById } from "@/modules/vehicles/repo";
 import {
   createServiceOrder,
   createServiceOrderLine,
+  deleteServiceOrderLine,
   findServiceOrderById,
   findTechnicianInGarage,
   listServiceOrders,
@@ -45,6 +47,7 @@ import {
   getOrderForGarageId,
   listCustomerServiceHistory,
   listOrders,
+  removeOrderLine,
 } from "@/modules/service-orders/service";
 
 const garageA = "garage-a";
@@ -540,6 +543,20 @@ describe("listCustomerServiceHistory", () => {
         vehicle: { id: "veh-1", registrationNumber: "GJ01AB1234" },
       },
     ]);
+  });
+});
+
+describe("removeOrderLine approved estimate guard", () => {
+  it("blocks deleting a part line approved on the current estimate", async () => {
+    vi.mocked(findServiceOrderById).mockResolvedValue(sampleOrder());
+    vi.mocked(deleteServiceOrderLine).mockResolvedValue({
+      ok: false,
+      reason: "APPROVED_ON_ESTIMATE",
+    });
+
+    await expect(removeOrderLine(ownerA, "order-1", "sol-1")).rejects.toMatchObject({
+      code: "orders.line_approved_on_estimate",
+    } satisfies Partial<AppError>);
   });
 });
 

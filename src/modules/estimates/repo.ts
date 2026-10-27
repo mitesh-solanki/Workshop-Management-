@@ -7,6 +7,111 @@ import type {
   Prisma,
 } from "@prisma/client";
 import { prisma } from "@/lib/db";
+import { applyStockMovement } from "@/modules/inventory/repo";
+
+class EstimateStockTxError extends Error {
+  readonly reason: "INSUFFICIENT_STOCK" | "PART_NOT_FOUND";
+
+  constructor(reason: "INSUFFICIENT_STOCK" | "PART_NOT_FOUND") {
+    super(reason);
+    this.name = "EstimateStockTxError";
+    this.reason = reason;
+  }
+}
+
+/**
+ * Linked job-card part for an estimate line, if any.
+ * Manual / inspection-only lines have no inventory part to move.
+ */
+export async function findLinkedPartLine(
+  tx: Prisma.TransactionClient,
+  garageId: string,
+  line: {
+    type: EstimateLineType;
+    sourceOrderLineId: string | null;
+    sourceSuggestedRepairId: string | null;
+  },
+) {
+  if (line.type !== "PART") {
+    return null;
+  }
+  if (line.sourceOrderLineId) {
+    const orderLine = await tx.serviceOrderLine.findFirst({
+      where: { id: line.sourceOrderLineId, garageId, type: "PART" },
+      select: { id: true, partId: true },
+    });
+    if (!orderLine?.partId) {
+      return null;
+    }
+    return {
+      partId: orderLine.partId,
+      serviceOrderLineId: orderLine.id,
+    };
+  }
+  if (line.sourceSuggestedRepairId) {
+    const repair = await tx.suggestedRepair.findFirst({
+      where: {
+        id: line.sourceSuggestedRepairId,
+        garageId,
+        type: "PART",
+      },
+      select: { partId: true },
+    });
+    if (!repair?.partId) {
+      return null;
+    }
+    return { partId: repair.partId, serviceOrderLineId: null };
+  }
+  return null;
+}
+
+export async function applyApprovedPartStock(
+  tx: Prisma.TransactionClient,
+  garageId: string,
+  data: {
+    partId: string;
+    serviceOrderId: string;
+    serviceOrderLineId: string | null;
+    quantity: number;
+    type: "IN" | "OUT";
+    actorId: string | null;
+    note: string;
+  },
+) {
+  if (data.quantity <= 0) {
+    return;
+  }
+
+  // serviceOrderLineId is unique on StockMovement — only attach it on the
+  // first OUT for that job-card line. Later returns / re-issues stay unlinked.
+  let serviceOrderLineId: string | null = null;
+  if (data.type === "OUT" && data.serviceOrderLineId) {
+    const linked = await tx.stockMovement.findFirst({
+      where: { garageId, serviceOrderLineId: data.serviceOrderLineId },
+      select: { id: true },
+    });
+    if (!linked) {
+      serviceOrderLineId = data.serviceOrderLineId;
+    }
+  }
+
+  const stock = await applyStockMovement(
+    garageId,
+    {
+      partId: data.partId,
+      type: data.type,
+      quantity: data.quantity,
+      note: data.note,
+      actorId: data.actorId,
+      serviceOrderId: data.serviceOrderId,
+      serviceOrderLineId,
+    },
+    tx,
+  );
+  if (!stock.ok) {
+    throw new EstimateStockTxError(stock.reason);
+  }
+}
 
 const approvalSelect = {
   id: true,
@@ -110,6 +215,18 @@ export async function listEstimatesForOrder(
       createdAt: true,
       createdBy: {
         select: { id: true, name: true, email: true },
+      },
+      lines: {
+        select: {
+          id: true,
+          type: true,
+          description: true,
+          quantity: true,
+          unitPricePaise: true,
+          approvalState: true,
+          sortOrder: true,
+        },
+        orderBy: [{ sortOrder: "asc" as const }, { createdAt: "asc" as const }],
       },
       _count: { select: { lines: true } },
     },
@@ -229,6 +346,34 @@ export async function updateEstimateLineDetails(
   },
 ) {
   return prisma.$transaction(async (tx) => {
+    const existing = await tx.estimateLine.findFirst({
+      where: {
+        id: data.lineId,
+        garageId,
+        estimateId: data.estimateId,
+      },
+      select: lineSelect,
+    });
+    if (!existing) {
+      return null;
+    }
+
+    const quantityDelta = data.quantity - existing.quantity;
+    if (existing.approvalState === "APPROVED" && quantityDelta !== 0) {
+      const linked = await findLinkedPartLine(tx, garageId, existing);
+      if (linked) {
+        await applyApprovedPartStock(tx, garageId, {
+          partId: linked.partId,
+          serviceOrderId: data.serviceOrderId,
+          serviceOrderLineId: linked.serviceOrderLineId,
+          quantity: Math.abs(quantityDelta),
+          type: quantityDelta > 0 ? "OUT" : "IN",
+          actorId: data.actorId,
+          note: `Estimate line qty change ${data.serviceOrderId} (line ${existing.id})`,
+        });
+      }
+    }
+
     const updated = await tx.estimateLine.updateMany({
       where: {
         id: data.lineId,
@@ -351,44 +496,118 @@ export async function deleteEstimateLine(
     description: string;
     actorId: string;
   },
-): Promise<"ok" | "not_found" | "billed"> {
-  return prisma.$transaction(async (tx) => {
-    const billed = await tx.invoiceLine.count({
-      where: { garageId, estimateLineId: data.lineId },
-    });
-    if (billed > 0) {
-      return "billed";
-    }
+): Promise<"ok" | "not_found" | "billed" | "insufficient_stock"> {
+  try {
+    return await prisma.$transaction(async (tx) => {
+      const billed = await tx.invoiceLine.count({
+        where: { garageId, estimateLineId: data.lineId },
+      });
+      if (billed > 0) {
+        return "billed";
+      }
 
-    const removed = await tx.estimateLine.deleteMany({
-      where: {
-        id: data.lineId,
-        garageId,
-        estimateId: data.estimateId,
-      },
-    });
-    if (removed.count === 0) {
-      return "not_found";
-    }
-
-    await tx.auditLog.create({
-      data: {
-        garageId,
-        actorId: data.actorId,
-        action: "estimate.line_removed",
-        entity: "EstimateLine",
-        entityId: data.lineId,
-        meta: {
-          serviceOrderId: data.serviceOrderId,
+      const existing = await tx.estimateLine.findFirst({
+        where: {
+          id: data.lineId,
+          garageId,
           estimateId: data.estimateId,
-          description: data.description,
-        } satisfies Prisma.InputJsonValue,
-      },
-    });
+        },
+        select: lineSelect,
+      });
+      if (!existing) {
+        return "not_found";
+      }
 
-    return "ok";
-  });
+      if (existing.approvalState === "APPROVED") {
+        const linked = await findLinkedPartLine(tx, garageId, existing);
+        if (linked) {
+          await applyApprovedPartStock(tx, garageId, {
+            partId: linked.partId,
+            serviceOrderId: data.serviceOrderId,
+            serviceOrderLineId: linked.serviceOrderLineId,
+            quantity: existing.quantity,
+            type: "IN",
+            actorId: data.actorId,
+            note: `Estimate line removed ${data.serviceOrderId} (line ${existing.id})`,
+          });
+        }
+      }
+
+      const removed = await tx.estimateLine.deleteMany({
+        where: {
+          id: data.lineId,
+          garageId,
+          estimateId: data.estimateId,
+        },
+      });
+      if (removed.count === 0) {
+        return "not_found";
+      }
+
+      await tx.auditLog.create({
+        data: {
+          garageId,
+          actorId: data.actorId,
+          action: "estimate.line_removed",
+          entity: "EstimateLine",
+          entityId: data.lineId,
+          meta: {
+            serviceOrderId: data.serviceOrderId,
+            estimateId: data.estimateId,
+            description: data.description,
+          } satisfies Prisma.InputJsonValue,
+        },
+      });
+
+      return "ok";
+    });
+  } catch (error) {
+    if (error instanceof EstimateStockTxError) {
+      return "insufficient_stock";
+    }
+    throw error;
+  }
 }
+
+export type RecordLineApprovalResult =
+  | {
+      ok: true;
+      line: {
+        id: string;
+        garageId: string;
+        estimateId: string;
+        type: EstimateLineType;
+        description: string;
+        quantity: number;
+        unitPricePaise: number;
+        gstRatePercent: number;
+        hsnOrSac: string;
+        approvalState: EstimateLineApprovalState;
+        sourceOrderLineId: string | null;
+        sourceSuggestedRepairId: string | null;
+        sortOrder: number;
+        createdAt: Date;
+        updatedAt: Date;
+      };
+      approval: {
+        id: string;
+        garageId: string;
+        estimateId: string;
+        estimateLineId: string;
+        fromState: EstimateLineApprovalState | null;
+        toState: EstimateLineApprovalState;
+        method: EstimateApprovalMethod;
+        recordedById: string | null;
+        note: string | null;
+        createdAt: Date;
+        recordedBy: {
+          id: string;
+          name: string | null;
+          email: string;
+        } | null;
+      };
+    }
+  | { ok: false; reason: "CONFLICT" | "INSUFFICIENT_STOCK" | "PART_NOT_FOUND" };
 
 export async function recordLineApproval(
   garageId: string,
@@ -402,58 +621,110 @@ export async function recordLineApproval(
     note: string | null;
     recordedById: string;
   },
-) {
-  return prisma.$transaction(async (tx) => {
-    const updated = await tx.estimateLine.updateMany({
-      where: {
-        id: data.estimateLineId,
-        garageId,
-        estimateId: data.estimateId,
-        approvalState: data.fromState,
-      },
-      data: { approvalState: data.toState },
-    });
-    if (updated.count === 0) {
-      return null;
-    }
+): Promise<RecordLineApprovalResult> {
+  try {
+    const result = await prisma.$transaction(async (tx) => {
+      const existing = await tx.estimateLine.findFirst({
+        where: {
+          id: data.estimateLineId,
+          garageId,
+          estimateId: data.estimateId,
+          approvalState: data.fromState,
+        },
+        select: lineSelect,
+      });
+      if (!existing) {
+        return { ok: false as const, reason: "CONFLICT" as const };
+      }
 
-    const approval = await tx.estimateApproval.create({
-      data: {
-        garageId,
-        estimateId: data.estimateId,
-        estimateLineId: data.estimateLineId,
-        fromState: data.fromState,
-        toState: data.toState,
-        method: data.method,
-        recordedById: data.recordedById,
-        note: data.note,
-      },
-      select: approvalSelect,
-    });
+      const linked = await findLinkedPartLine(tx, garageId, existing);
+      if (linked) {
+        if (data.fromState !== "APPROVED" && data.toState === "APPROVED") {
+          await applyApprovedPartStock(tx, garageId, {
+            partId: linked.partId,
+            serviceOrderId: data.serviceOrderId,
+            serviceOrderLineId: linked.serviceOrderLineId,
+            quantity: existing.quantity,
+            type: "OUT",
+            actorId: data.recordedById,
+            note: `Estimate approved ${data.serviceOrderId} (line ${existing.id})`,
+          });
+        } else if (data.fromState === "APPROVED" && data.toState !== "APPROVED") {
+          await applyApprovedPartStock(tx, garageId, {
+            partId: linked.partId,
+            serviceOrderId: data.serviceOrderId,
+            serviceOrderLineId: linked.serviceOrderLineId,
+            quantity: existing.quantity,
+            type: "IN",
+            actorId: data.recordedById,
+            note: `Estimate unapproved ${data.serviceOrderId} (line ${existing.id})`,
+          });
+        }
+      }
 
-    await tx.auditLog.create({
-      data: {
-        garageId,
-        actorId: data.recordedById,
-        action: "estimate.line_approval",
-        entity: "Estimate",
-        entityId: data.estimateId,
-        meta: {
-          serviceOrderId: data.serviceOrderId,
-          lineId: data.estimateLineId,
+      const updated = await tx.estimateLine.updateMany({
+        where: {
+          id: data.estimateLineId,
+          garageId,
+          estimateId: data.estimateId,
+          approvalState: data.fromState,
+        },
+        data: { approvalState: data.toState },
+      });
+      if (updated.count === 0) {
+        return { ok: false as const, reason: "CONFLICT" as const };
+      }
+
+      const approval = await tx.estimateApproval.create({
+        data: {
+          garageId,
+          estimateId: data.estimateId,
+          estimateLineId: data.estimateLineId,
           fromState: data.fromState,
           toState: data.toState,
           method: data.method,
-          approvalId: approval.id,
-        } satisfies Prisma.InputJsonValue,
-      },
+          recordedById: data.recordedById,
+          note: data.note,
+        },
+        select: approvalSelect,
+      });
+
+      await tx.auditLog.create({
+        data: {
+          garageId,
+          actorId: data.recordedById,
+          action: "estimate.line_approval",
+          entity: "Estimate",
+          entityId: data.estimateId,
+          meta: {
+            serviceOrderId: data.serviceOrderId,
+            lineId: data.estimateLineId,
+            fromState: data.fromState,
+            toState: data.toState,
+            method: data.method,
+            approvalId: approval.id,
+          } satisfies Prisma.InputJsonValue,
+        },
+      });
+
+      const line = await tx.estimateLine.findFirst({
+        where: { id: data.estimateLineId, garageId },
+        select: lineSelect,
+      });
+      if (!line) {
+        return { ok: false as const, reason: "CONFLICT" as const };
+      }
+
+      return { ok: true as const, line, approval };
     });
 
-    const line = await tx.estimateLine.findFirst({
-      where: { id: data.estimateLineId, garageId },
-      select: lineSelect,
-    });
-
-    return { line, approval };
-  });
+    return result;
+  } catch (error) {
+    if (error instanceof EstimateStockTxError) {
+      return { ok: false, reason: error.reason };
+    }
+    throw error;
+  }
 }
+
+export { EstimateStockTxError };

@@ -62,7 +62,7 @@ const controlClass =
   "h-11 min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-[14px] shadow-xs focus-visible:border-blue-600 focus-visible:ring-2 focus-visible:ring-blue-600/25";
 
 const actionBtnClass =
-  "size-11 min-h-11 min-w-11 rounded-lg border border-slate-300 bg-white shadow-xs";
+  "inline-flex size-11 min-h-11 min-w-11 items-center justify-center rounded-lg border border-slate-300 bg-white p-0 leading-none shadow-xs [&_svg]:size-5 [&_svg]:shrink-0";
 
 function parsePricePaise(raw: string, fallback: Paise): Paise {
   const parsed = parseRupeesToPaise(raw);
@@ -77,10 +77,10 @@ function TypeBadge({ type }: { type: string }) {
   return (
     <span
       className={cn(
-        "inline-flex w-max rounded-md px-2 py-1 text-[12px] font-bold",
+        "inline-flex w-max rounded-md border px-2 py-0.5 text-[11px] font-semibold",
         typeKey === "PART"
-          ? "bg-amber-50 text-amber-800"
-          : "bg-[#edf4ff] text-[#456cd8]",
+          ? "border-blue-200 bg-blue-50 text-blue-800"
+          : "border-orange-200 bg-orange-50 text-orange-800",
       )}
     >
       {t(`lineTypes.${typeKey}`)}
@@ -298,14 +298,25 @@ function OrderLineCard({
           action={formAction}
           className="space-y-3"
         >
-          <div className="grid grid-cols-1 items-start gap-4 sm:grid-cols-2 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1.2fr)_auto] lg:gap-5">
-            <div className="min-w-0 space-y-1.5 sm:col-span-2 lg:col-span-1">
-              <div className="flex flex-wrap items-center gap-2">
-                <p className="text-[13px] font-semibold text-slate-600">
-                  {t("lineDescription")}
-                </p>
-                <TypeBadge type={line.type} />
-              </div>
+          <div className="grid grid-cols-1 gap-x-5 gap-y-1.5 sm:grid-cols-2 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1.2fr)_auto]">
+            <div className="flex min-h-7 flex-wrap items-center gap-2 sm:col-span-2 lg:col-span-1">
+              <p className="text-[13px] font-semibold text-slate-600">
+                {t("lineDescription")}
+              </p>
+              <TypeBadge type={line.type} />
+            </div>
+            <p className="hidden min-h-7 items-center text-[13px] font-semibold text-slate-600 lg:flex">
+              {t("quantity")}
+            </p>
+            <p className="hidden min-h-7 items-center text-[13px] font-semibold text-slate-600 lg:flex">
+              {t("unitPrice")}
+            </p>
+            <p className="hidden min-h-7 items-center text-[13px] font-semibold text-slate-600 lg:flex">
+              {t("lineSubtotal")}
+            </p>
+            <div className="hidden min-h-7 lg:block" aria-hidden />
+
+            <div className="min-w-0 sm:col-span-2 lg:col-span-1">
               <Input
                 id={`line-desc-${line.id}`}
                 name="description"
@@ -318,7 +329,7 @@ function OrderLineCard({
             </div>
 
             <div className="min-w-0">
-              <p className="mb-1.5 text-[13px] font-semibold text-slate-600">
+              <p className="mb-1.5 text-[13px] font-semibold text-slate-600 lg:hidden">
                 {t("quantity")}
               </p>
               <QuantityStepper
@@ -335,7 +346,7 @@ function OrderLineCard({
             <div className="min-w-0">
               <label
                 htmlFor={`line-price-${line.id}`}
-                className="mb-1.5 block text-[13px] font-semibold text-slate-600"
+                className="mb-1.5 block text-[13px] font-semibold text-slate-600 lg:hidden"
               >
                 {t("unitPrice")}
               </label>
@@ -369,13 +380,16 @@ function OrderLineCard({
               />
             </div>
 
-            <LineStat
-              value={formatRupees(liveTotal)}
-              label={t("lineSubtotal")}
-              emphasize
-            />
+            <div className="min-w-0">
+              <p className="mb-1 text-[13px] font-semibold text-slate-600 lg:hidden">
+                {t("lineSubtotal")}
+              </p>
+              <p className="flex h-11 min-h-11 items-center text-[15px] font-extrabold tabular-nums text-slate-950">
+                {formatRupees(liveTotal)}
+              </p>
+            </div>
 
-            <div className="flex justify-start lg:justify-end">
+            <div className="flex h-11 min-h-11 items-center justify-start lg:justify-end">
               {actions}
             </div>
           </div>
@@ -393,7 +407,7 @@ function OrderLineCard({
     <>
       {deleteDialog}
       <div className="rounded-[10px] border border-[#e8edf5] bg-[#fafcff] p-3.5 sm:p-4">
-        <div className="grid grid-cols-1 items-start gap-4 sm:grid-cols-2 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1.2fr)_auto] lg:gap-5">
+        <div className="grid grid-cols-1 items-center gap-4 sm:grid-cols-2 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1.2fr)_auto] lg:gap-5">
           <div className="min-w-0 sm:col-span-2 lg:col-span-1">
             <div className="mb-1 flex flex-wrap items-center gap-2">
               <p className="text-[13px] font-semibold text-slate-600">
@@ -418,7 +432,7 @@ function OrderLineCard({
           />
 
           {actions ? (
-            <div className="flex justify-start border-t border-slate-200 pt-3 sm:col-span-2 lg:col-span-1 lg:justify-end lg:border-0 lg:pt-0">
+            <div className="flex items-center justify-start self-center border-t border-slate-200 pt-3 sm:col-span-2 lg:col-span-1 lg:justify-end lg:border-0 lg:pt-0">
               {actions}
             </div>
           ) : null}

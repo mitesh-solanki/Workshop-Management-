@@ -14,11 +14,10 @@ import { JobCardEstimateContent } from "@/modules/estimates/components/job-card-
 import { getEstimateForOrder } from "@/modules/estimates/service";
 import { JobCardInspectionContent } from "@/modules/inspections/components/job-card-inspection-content";
 import { getOrCreateInspection } from "@/modules/inspections/service";
-import { LiveLinkStaffPanel } from "@/modules/live-link/components/live-link-staff-panel";
 import { getLiveLinkStatusForOrder } from "@/modules/live-link/service";
+import { listBaysForSelect } from "@/modules/bays/service";
 import { JobCardDetailPanel } from "@/modules/service-orders/components/job-card-detail-panel";
 import { isJobCardSection } from "@/modules/service-orders/job-card-sections";
-import { listParts } from "@/modules/inventory/service";
 import {
   getOrder,
   getOrderTimeline,
@@ -48,7 +47,7 @@ export default async function OrderEditPage({ params, searchParams }: Props) {
   let estimate: Awaited<ReturnType<typeof getEstimateForOrder>>;
   let invoices: Awaited<ReturnType<typeof getInvoicesForOrder>>;
   let technicians: Awaited<ReturnType<typeof listAssignableTechnicians>>;
-  let parts: Awaited<ReturnType<typeof listParts>> = [];
+  let bays: { id: string; name: string }[] = [];
   let garage: Awaited<ReturnType<typeof getGarageBillingProfile>> = null;
   let liveLinkStatus: Awaited<ReturnType<typeof getLiveLinkStatusForOrder>> = {
     active: null,
@@ -62,7 +61,7 @@ export default async function OrderEditPage({ params, searchParams }: Props) {
       estimate,
       invoices,
       technicians,
-      parts,
+      bays,
       garage,
       liveLinkStatus,
     ] = await Promise.all([
@@ -71,7 +70,7 @@ export default async function OrderEditPage({ params, searchParams }: Props) {
       getEstimateForOrder(session, id),
       getInvoicesForOrder(session, id),
       listAssignableTechnicians(session),
-      listParts(session),
+      listBaysForSelect(session).catch(() => []),
       getGarageBillingProfile(session),
       getLiveLinkStatusForOrder(session, id).catch(() => ({ active: null })),
     ]);
@@ -149,7 +148,7 @@ export default async function OrderEditPage({ params, searchParams }: Props) {
   const placeCode = order.vehicle.stateCode || "24";
   let placeLabel = placeCode;
   try {
-    placeLabel = `${tGst(`states.${placeCode}`)} (${placeCode})`;
+    placeLabel = tGst(`states.${placeCode}`);
   } catch {
     placeLabel = placeCode;
   }
@@ -202,18 +201,11 @@ export default async function OrderEditPage({ params, searchParams }: Props) {
         }}
         timeline={timeline}
         technicians={technicians}
+        bays={bays}
         canMutate={canMutate}
         canRequestParts={canRequestParts}
         locale={locale}
         initialSection={initialSection}
-        parts={parts.map((part) => ({
-          id: part.id,
-          name: part.name,
-          sku: part.sku,
-          unit: part.unit,
-          sellingPricePaise: part.sellingPricePaise,
-          quantityOnHand: part.quantityOnHand,
-        }))}
         inspectionContent={
           <JobCardInspectionContent
             orderId={order.id}
@@ -222,7 +214,6 @@ export default async function OrderEditPage({ params, searchParams }: Props) {
               inspection
                 ? {
                     items: inspection.items,
-                    suggestedRepairs: inspection.suggestedRepairs,
                   }
                 : null
             }
@@ -233,6 +224,8 @@ export default async function OrderEditPage({ params, searchParams }: Props) {
             orderId={order.id}
             canEdit={canMutate}
             data={estimate}
+            liveLinkActive={liveLinkStatus.active}
+            canEditLiveLink={canBill}
           />
         }
         billingContent={
@@ -243,6 +236,9 @@ export default async function OrderEditPage({ params, searchParams }: Props) {
             hasApprovedEstimateLines={hasApprovedEstimateLines}
             hasUnbilledApprovedLines={hasUnbilledApprovedLines}
             defaultPlaceOfSupplyStateCode={order.vehicle.stateCode}
+            liveLinkActive={liveLinkStatus.active}
+            canEditLiveLink={canBill}
+            hasEstimate={Boolean(estimate.current)}
             preview={{
               garageName: garage?.name ?? t("title"),
               garageAddress: garage?.address ?? null,
@@ -260,13 +256,6 @@ export default async function OrderEditPage({ params, searchParams }: Props) {
               approvedTotalPaise,
               approvedTaxLabel: te("gstShort"),
             }}
-          />
-        }
-        liveLinkContent={
-          <LiveLinkStaffPanel
-            orderId={order.id}
-            active={liveLinkStatus.active}
-            canEdit={canBill}
           />
         }
       />

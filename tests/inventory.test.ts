@@ -18,6 +18,8 @@ vi.mock("@/modules/inventory/repo", () => ({
   listLowStockParts: vi.fn(),
   createPart: vi.fn(),
   updatePart: vi.fn(),
+  countPartLinkedRecords: vi.fn(),
+  deletePartById: vi.fn(),
   applyStockMovement: vi.fn(),
   createDirectSale: vi.fn(),
   DirectSaleTxError: class DirectSaleTxError extends Error {
@@ -36,7 +38,9 @@ vi.mock("@/modules/inventory/repo", () => ({
 
 import {
   applyStockMovement,
+  countPartLinkedRecords,
   createDirectSale,
+  deletePartById,
   findPartById,
   findPartBySku,
   listLowStockParts,
@@ -44,6 +48,7 @@ import {
 import { parseDirectSaleFormData } from "@/modules/inventory/direct-sale-form-data";
 import {
   createDirectSaleRecord,
+  deletePartRecord,
   getLowStockAlerts,
   getPartForGarageId,
   recordStockAdjustment,
@@ -237,6 +242,65 @@ describe("inventory service stock guards", () => {
     expect(alerts).toHaveLength(1);
     expect(alerts[0]?.id).toBe("part-low");
     expect(listLowStockParts).toHaveBeenCalledWith(garageA);
+  });
+
+  it("blocks deleting a part that is linked to jobs or purchases", async () => {
+    vi.mocked(findPartById).mockResolvedValue({
+      id: "part-1",
+      garageId: garageA,
+      name: "Oil",
+      sku: "OIL-1",
+      unit: "L",
+      purchasePricePaise: 100,
+      sellingPricePaise: 200,
+      gstRatePercent: 18,
+      hsn: "2710",
+      lowStockLevel: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      quantityOnHand: 4,
+    });
+    vi.mocked(countPartLinkedRecords).mockResolvedValue(2);
+
+    await expect(deletePartRecord(ownerA, "part-1")).rejects.toMatchObject({
+      code: "inventory.part_in_use",
+    } satisfies Partial<AppError>);
+    expect(deletePartById).not.toHaveBeenCalled();
+  });
+
+  it("deletes an unused part", async () => {
+    vi.mocked(findPartById).mockResolvedValue({
+      id: "part-2",
+      garageId: garageA,
+      name: "Filter",
+      sku: "FLT-1",
+      unit: "pcs",
+      purchasePricePaise: 100,
+      sellingPricePaise: 200,
+      gstRatePercent: 18,
+      hsn: "8708",
+      lowStockLevel: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      quantityOnHand: 0,
+    });
+    vi.mocked(countPartLinkedRecords).mockResolvedValue(0);
+    vi.mocked(deletePartById).mockResolvedValue({ id: "part-2" });
+
+    await expect(deletePartRecord(ownerA, "part-2")).resolves.toEqual({
+      id: "part-2",
+    });
+    expect(deletePartById).toHaveBeenCalledWith(garageA, "part-2", {
+      actorId: ownerA.userId,
+      name: "Filter",
+      sku: "FLT-1",
+    });
+  });
+
+  it("forbids technicians from deleting parts", async () => {
+    await expect(deletePartRecord(technicianA, "part-1")).rejects.toBeInstanceOf(
+      ForbiddenError,
+    );
   });
 });
 

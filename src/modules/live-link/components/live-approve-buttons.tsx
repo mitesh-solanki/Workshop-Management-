@@ -67,22 +67,22 @@ export function LiveApproveButtons({ token, lineId }: Props) {
   const busy = approvePending || rejectPending;
 
   return (
-    <div className="flex flex-wrap gap-2">
-      <form action={approveAction}>
+    <div className="flex w-full shrink-0 items-center gap-2 sm:w-auto sm:justify-end">
+      <form action={approveAction} className="min-w-0 flex-1 sm:flex-none">
         <Button
           type="submit"
           disabled={busy}
-          className="min-h-11 min-w-[44px]"
+          className="h-11 min-h-11 w-full min-w-11 px-3 sm:w-auto sm:px-4"
         >
           {approvePending ? t("saving") : t("approve")}
         </Button>
       </form>
-      <form action={rejectAction}>
+      <form action={rejectAction} className="min-w-0 flex-1 sm:flex-none">
         <Button
           type="submit"
           variant="outline"
           disabled={busy}
-          className="min-h-11 min-w-[44px]"
+          className="h-11 min-h-11 w-full min-w-11 px-3 sm:w-auto sm:px-4"
         >
           {rejectPending ? t("saving") : t("reject")}
         </Button>

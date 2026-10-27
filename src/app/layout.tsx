@@ -88,7 +88,10 @@ export default function RootLayout({
       suppressHydrationWarning
       className={`${inter.variable} ${outfit.variable} ${notoDevanagari.variable} ${notoGujarati.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="flex h-full min-h-0 flex-col overflow-hidden font-sans">
+      <body
+        className="flex h-full min-h-0 flex-col overflow-hidden font-sans"
+        suppressHydrationWarning
+      >
         <Suspense
           fallback={
             <div className="flex min-h-0 flex-1 flex-col">

@@ -1,6 +1,7 @@
 import {
   Car,
   ClipboardList,
+  Columns3,
   Contact,
   FileText,
   Kanban,
@@ -21,6 +22,7 @@ export type AppRole = "OWNER" | "MANAGER" | "TECHNICIAN" | "ACCOUNTANT";
 export type NavKey =
   | "dashboard"
   | "workshop"
+  | "bays"
   | "customers"
   | "vehicles"
   | "invoices"
@@ -76,6 +78,13 @@ export const APP_NAV_ITEMS: readonly NavItem[] = [
     key: "orders",
     icon: ClipboardList,
     group: "workshop",
+  },
+  {
+    href: "/bays",
+    key: "bays",
+    icon: Columns3,
+    group: "workshop",
+    roles: ["OWNER", "MANAGER", "TECHNICIAN"],
   },
   {
     href: "/customers",

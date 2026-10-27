@@ -57,7 +57,9 @@ export type BillingInvoiceCardModel = {
     id: string;
     creditNoteNumber: string;
     reason: string;
+    notes: string | null;
     totalPaise: number;
+    lines: Array<{ id: string; description: string; totalPaise: number }>;
   }>;
   preview: InvoicePreviewData;
 };
@@ -116,6 +118,15 @@ export function BillingInvoiceWorkspace({
   defaultPlaceOfSupplyStateCode,
 }: Props) {
   const t = useTranslations("billing");
+  const tGst = useTranslations("gst");
+
+  function stateName(code: string) {
+    try {
+      return tGst(`states.${code}`);
+    } catch {
+      return code;
+    }
+  }
   const tabLabels = {
     draft: (amount: string) => t("tabDraft", { amount }),
     paid: (number: string) => t("tabPaid", { number }),
@@ -178,7 +189,7 @@ export function BillingInvoiceWorkspace({
               {" · "}
               {t(`gstSplit.${active.gstSplit}`)}
               {" · "}
-              {t("placeOfSupply")}: {active.placeOfSupplyStateCode}
+              {t("placeOfSupply")}: {stateName(active.placeOfSupplyStateCode)}
             </p>
             <span
               className={cn(
@@ -382,22 +393,69 @@ export function BillingInvoiceWorkspace({
           {active.creditNotes.length > 0 ? (
             <BillingCollapsibleCard
               title={t("creditNotesHistoryTitle")}
-              hint={t("creditNotes")}
-              defaultOpen={false}
+              hint={t("creditNotesHistoryHint")}
+              defaultOpen
             >
-              <ul className="space-y-2 text-[14px] text-slate-700">
-                {active.creditNotes.map((note) => (
-                  <li
-                    key={note.id}
-                    className="rounded-lg border border-slate-200 bg-white px-3 py-2"
-                  >
-                    {note.creditNoteNumber} ·{" "}
-                    {t(
-                      `reasons.${note.reason as "CORRECTION" | "RETURN" | "DISCOUNT" | "OTHER"}`,
-                    )}{" "}
-                    · {formatRupees(note.totalPaise)}
-                  </li>
-                ))}
+              <ul className="space-y-3">
+                {active.creditNotes.map((note) => {
+                  const reasonKey =
+                    note.reason as "CORRECTION" | "REFUND" | "OTHER";
+                  const reasonTone =
+                    note.reason === "REFUND"
+                      ? "border-sky-200 bg-sky-50 text-sky-800"
+                      : note.reason === "OTHER"
+                        ? "border-slate-200 bg-slate-100 text-slate-700"
+                        : "border-amber-200 bg-amber-50 text-amber-900";
+                  return (
+                    <li
+                      key={note.id}
+                      className="overflow-hidden rounded-xl border border-amber-200 bg-gradient-to-br from-amber-50 via-orange-50/80 to-white shadow-sm"
+                    >
+                      <div className="flex flex-wrap items-start justify-between gap-2 border-b border-amber-100/80 px-3.5 py-3">
+                        <div className="min-w-0 space-y-1.5">
+                          <p className="text-[14px] font-bold tabular-nums text-slate-900">
+                            {note.creditNoteNumber}
+                          </p>
+                          <span
+                            className={`inline-flex rounded-full border px-2.5 py-0.5 text-[12px] font-bold ${reasonTone}`}
+                          >
+                            {t(`reasons.${reasonKey}`)}
+                          </span>
+                        </div>
+                        <p className="text-[16px] font-bold tabular-nums text-amber-800">
+                          −{formatRupees(note.totalPaise)}
+                        </p>
+                      </div>
+                      <div className="space-y-2.5 px-3.5 py-3">
+                        {note.notes?.trim() ? (
+                          <p className="rounded-lg border border-amber-100 bg-white/80 px-3 py-2 text-[13px] leading-relaxed text-slate-800">
+                            <span className="mb-0.5 block text-[11px] font-bold tracking-wide text-amber-700 uppercase">
+                              {t("creditNoteMessageLabel")}
+                            </span>
+                            {note.notes.trim()}
+                          </p>
+                        ) : null}
+                        {note.lines.length > 0 ? (
+                          <ul className="space-y-1.5">
+                            {note.lines.map((line) => (
+                              <li
+                                key={line.id}
+                                className="flex items-start justify-between gap-3 rounded-lg bg-white/70 px-3 py-2 text-[13px]"
+                              >
+                                <span className="min-w-0 font-medium text-slate-800">
+                                  {line.description}
+                                </span>
+                                <span className="shrink-0 tabular-nums font-semibold text-slate-600">
+                                  {formatRupees(line.totalPaise)}
+                                </span>
+                              </li>
+                            ))}
+                          </ul>
+                        ) : null}
+                      </div>
+                    </li>
+                  );
+                })}
               </ul>
             </BillingCollapsibleCard>
           ) : null}

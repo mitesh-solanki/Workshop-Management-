@@ -139,6 +139,15 @@ export const partSearchSchema = z.object({
   sort: partSortSchema,
 });
 
+/** In-stock part picker pages for SearchableSelect load-more. */
+export const partPickerPageSchema = z.object({
+  q: searchQuery,
+  offset: z.coerce.number().int().min(0).max(10_000).default(0),
+  pageSize: z.coerce.number().int().min(1).max(50).default(25),
+});
+
+export type PartPickerPageInput = z.input<typeof partPickerPageSchema>;
+
 export const createPartSchema = z.object({
   name: z
     .string()
@@ -169,6 +178,10 @@ export const createPartSchema = z.object({
 });
 
 export const updatePartSchema = createPartSchema.omit({ openingStock: true });
+
+export const deletePartSchema = z.object({
+  partId: z.string().trim().min(1, { error: "validation.required" }),
+});
 
 export const stockInSchema = z.object({
   partId: z.string().trim().min(1),

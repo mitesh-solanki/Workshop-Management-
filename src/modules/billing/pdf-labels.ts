@@ -34,6 +34,11 @@ export type InvoicePdfLabels = {
   pendingBalance: string;
   payments: string;
   creditNotes: string;
+  creditNoteReasons: {
+    CORRECTION: string;
+    REFUND: string;
+    OTHER: string;
+  };
   notes: string;
   authorisedSignatory: string;
   thankYou: string;
@@ -73,10 +78,15 @@ const LABELS: Record<PdfLocale, Omit<InvoicePdfLabels, "locale">> = {
     amountPaid: "Paid",
     pendingBalance: "Balance",
     payments: "Payments",
-    creditNotes: "Credit notes",
+    creditNotes: "Adjustments",
+    creditNoteReasons: {
+      CORRECTION: "Correction",
+      REFUND: "Refund",
+      OTHER: "Other",
+    },
     notes: "Customer note",
     authorisedSignatory: "Authorised signatory",
-    thankYou: "Thank you for your business.",
+    thankYou: "Thank you for using our service.",
     notEInvoice:
       "This is a tax invoice for workshop records. It is not an e-invoice (no IRN).",
   },
@@ -111,10 +121,15 @@ const LABELS: Record<PdfLocale, Omit<InvoicePdfLabels, "locale">> = {
     amountPaid: "भुगतान",
     pendingBalance: "बकाया",
     payments: "भुगतान",
-    creditNotes: "क्रेडिट नोट",
+    creditNotes: "समायोजन",
+    creditNoteReasons: {
+      CORRECTION: "सुधार",
+      REFUND: "रिफंड",
+      OTHER: "अन्य",
+    },
     notes: "ग्राहक नोट",
     authorisedSignatory: "अधिकृत हस्ताक्षरकर्ता",
-    thankYou: "आपके व्यवसाय के लिए धन्यवाद।",
+    thankYou: "हमारी सेवा का उपयोग करने के लिए धन्यवाद।",
     notEInvoice:
       "यह वर्कशॉप रिकॉर्ड के लिए कर चालान है। यह ई-इनवॉइस नहीं है (कोई IRN नहीं)।",
   },
@@ -149,10 +164,15 @@ const LABELS: Record<PdfLocale, Omit<InvoicePdfLabels, "locale">> = {
     amountPaid: "ચૂકવેલ",
     pendingBalance: "બાકી",
     payments: "ચુકવણીઓ",
-    creditNotes: "ક્રેડિટ નોટ",
+    creditNotes: "સમાયોજન",
+    creditNoteReasons: {
+      CORRECTION: "સુધારો",
+      REFUND: "રિફંડ",
+      OTHER: "અન્ય",
+    },
     notes: "ગ્રાહક નોંધ",
     authorisedSignatory: "અધિકૃત હસ્તાક્ષરકર્તા",
-    thankYou: "તમારા વ્યવસાય માટે આભાર.",
+    thankYou: "અમારી સેવાનો ઉપયોગ કરવા બદલ આભાર.",
     notEInvoice:
       "આ વર્કશોપ રેકોર્ડ માટે ટેક્સ ઇનવૉઇસ છે. આ ઈ-ઇનવૉઇસ નથી (IRN નથી).",
   },

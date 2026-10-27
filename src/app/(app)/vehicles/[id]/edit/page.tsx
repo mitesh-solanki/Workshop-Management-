@@ -7,7 +7,7 @@ type Props = {
   params: Promise<{ id: string }>;
 };
 
-/** Vehicle edit is a modal on the customer detail page. */
+/** Edit opens as a modal on the vehicle detail page. */
 export const instant = false;
 
 export default async function EditVehiclePage({ params }: Props) {
@@ -24,7 +24,5 @@ export default async function EditVehiclePage({ params }: Props) {
     throw error;
   }
 
-  redirect(
-    `/customers/${vehicle.customerId}?vehicle=${encodeURIComponent(vehicle.id)}`,
-  );
+  redirect(`/vehicles/${vehicle.id}`);
 }

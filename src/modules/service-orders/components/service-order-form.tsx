@@ -1,6 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import { useActionState, useEffect, useMemo, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import {
   createServiceOrderAction,
@@ -28,6 +30,11 @@ type TechnicianOption = {
   email: string;
 };
 
+export type BayOption = {
+  id: string;
+  name: string;
+};
+
 type LockedContext = {
   customerName: string;
   registrationNumber: string;
@@ -39,6 +46,7 @@ type CreateProps = {
   vehicleId: string;
   defaultOdometer: number | null;
   technicians: TechnicianOption[];
+  bays: BayOption[];
   className?: string;
 };
 
@@ -46,6 +54,7 @@ type EditProps = {
   mode: "edit";
   orderId: string;
   technicians: TechnicianOption[];
+  bays: BayOption[];
   locked: LockedContext;
   defaults: {
     complaint: string;
@@ -79,6 +88,7 @@ export function datetimeLocalFromOrder(
 
 export function ServiceOrderForm(props: Props) {
   const t = useTranslations("orders");
+  const router = useRouter();
   const orderId = props.mode === "edit" ? props.orderId : null;
   const action = useMemo(() => {
     if (props.mode === "create" || !orderId) {
@@ -95,10 +105,13 @@ export function ServiceOrderForm(props: Props) {
     handledMessage.current = state.message;
     if (state.ok) {
       toast.success(state.message);
+      if (props.mode === "create" && state.orderId) {
+        router.push(`/orders/${state.orderId}?section=inspection`);
+      }
     } else {
       toast.error(state.message);
     }
-  }, [state]);
+  }, [state, props.mode, router]);
 
   const defaults =
     props.mode === "edit"
@@ -114,6 +127,19 @@ export function ServiceOrderForm(props: Props) {
           status: "WAITING" as const,
         };
 
+  const baySelectOptions = useMemo(() => {
+    const knownNames = new Set(props.bays.map((bay) => bay.name));
+    const options = props.bays.map((bay) => ({
+      value: bay.name,
+      label: bay.name,
+    }));
+    const assigned = defaults.bay.trim();
+    if (assigned && !knownNames.has(assigned)) {
+      options.unshift({ value: assigned, label: assigned });
+    }
+    return options;
+  }, [props.bays, defaults.bay]);
+
   const currentStatus =
     props.mode === "edit" ? props.defaults.status : ("WAITING" as const);
   const nextStatuses = STATUS_TRANSITIONS[currentStatus];
@@ -121,6 +147,32 @@ export function ServiceOrderForm(props: Props) {
     props.mode === "edit"
       ? ([currentStatus, ...nextStatuses] as ServiceOrderStatusValue[])
       : [];
+
+  const bayField = (
+    <div className="space-y-2">
+      {props.bays.length === 0 ? (
+        <p className="text-caption text-slate-500">
+          {t("baysEmptyHint")}{" "}
+          <Link
+            href="/bays"
+            className="font-medium text-teal-700 underline-offset-4 hover:underline"
+          >
+            {t("goToBays")}
+          </Link>
+        </p>
+      ) : null}
+      <FormField id="bay" label={t("bay")}>
+        <FormSelect
+          id="bay"
+          name="bay"
+          defaultValue={defaults.bay}
+          disabled={readOnly}
+          placeholder={t("bayPlaceholder")}
+          options={baySelectOptions}
+        />
+      </FormField>
+    </div>
+  );
 
   return (
     <form
@@ -155,17 +207,7 @@ export function ServiceOrderForm(props: Props) {
               </FormField>
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
-              <FormField id="bay" label={t("bay")}>
-                <Input
-                  id="bay"
-                  name="bay"
-                  maxLength={40}
-                  placeholder={t("bayPlaceholder")}
-                  defaultValue={defaults.bay}
-                  disabled={readOnly}
-                  className="h-11 min-h-11"
-                />
-              </FormField>
+              {bayField}
               <FormField id="status" label={t("statusField")}>
                 <FormSelect
                   id="status"
@@ -187,19 +229,7 @@ export function ServiceOrderForm(props: Props) {
             </p>
           </>
         ) : (
-          <div className="grid gap-4 sm:grid-cols-2">
-            <FormField id="bay" label={t("bay")}>
-              <Input
-                id="bay"
-                name="bay"
-                maxLength={40}
-                placeholder={t("bayPlaceholder")}
-                defaultValue={defaults.bay}
-                disabled={readOnly}
-                className="h-11 min-h-11"
-              />
-            </FormField>
-          </div>
+          <div className="grid gap-4 sm:grid-cols-2">{bayField}</div>
         )}
       </div>
 

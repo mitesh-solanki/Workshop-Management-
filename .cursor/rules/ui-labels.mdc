@@ -1,0 +1,29 @@
+---
+description: Title Case for English action buttons, nav labels, and modal titles
+alwaysApply: true
+---
+
+# English UI label casing
+
+For **en** strings that are buttons, primary actions, nav items, page titles, or modal titles: use **Title Case** — capitalise every principal word, including the second word.
+
+## Do
+
+- `Add Bay`, `Add Bays`, `Add Vendor`, `New Job Card`, `Save Changes`
+- `Parts Requests`, `Purchase Orders`, `Vendor Bills`
+
+## Do not
+
+- `Add bay`, `Add bays`, `Add vendor`, `New job card`, `Save changes` (as a button/title)
+
+## Applies to
+
+- `messages/en.json` keys used as buttons, nav, page headers, dialog titles
+- Default trigger / primary button copy in components
+
+## Does not apply to
+
+- Full sentences, hints, empty-state body copy, or validation messages (those stay sentence case)
+- `hi.json` / `gu.json` (follow normal language rules; do not force English Title Case)
+
+When adding or changing English UI labels, match vendors-style Title Case (`Add Vendor`) — never leave the second word lowercase in an action name.

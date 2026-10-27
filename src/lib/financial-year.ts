@@ -16,57 +16,24 @@ export function formatFinancialYearLabel(start: number): string {
   return `${start}-${endTwo}`;
 }
 
-/**
- * Short garage code from the garage name for invoice prefixes.
- * "Prime Motors" → "PM"; "Maruti" → "MAR"; empty → "XX".
- */
-export function garageInvoiceCode(name: string): string {
-  const words = name
-    .trim()
-    .split(/[\s\-_./]+/)
-    .map((word) => word.replace(/[^A-Za-z0-9]/g, ""))
-    .filter((word) => word.length > 0 && /^[A-Za-z]/.test(word));
-
-  if (words.length === 0) {
-    return "XX";
-  }
-
-  if (words.length === 1) {
-    const word = words[0]!.toUpperCase();
-    if (word.length === 1) {
-      return `${word}X`;
-    }
-    return word.slice(0, Math.min(3, word.length));
-  }
-
-  return words
-    .slice(0, 4)
-    .map((word) => word[0]!.toUpperCase())
-    .join("");
-}
-
-/** Invoice number: INV-PM/2025-26/0001 */
+/** Invoice number: INV-2025-26-0001 (sequential per garage per FY). */
 export function formatInvoiceNumber(
   financialYearStartYear: number,
   sequence: number,
-  garageCode = "XX",
 ): string {
   if (!Number.isInteger(sequence) || sequence < 1) {
     throw new Error("sequence must be a positive integer");
   }
-  const code = garageCode.trim().toUpperCase() || "XX";
-  return `INV-${code}/${formatFinancialYearLabel(financialYearStartYear)}/${String(sequence).padStart(4, "0")}`;
+  return `INV-${formatFinancialYearLabel(financialYearStartYear)}-${String(sequence).padStart(4, "0")}`;
 }
 
-/** Credit note number: CN-PM/2025-26/0001 */
+/** Credit note number: CN-2025-26-0001 */
 export function formatCreditNoteNumber(
   financialYearStartYear: number,
   sequence: number,
-  garageCode = "XX",
 ): string {
   if (!Number.isInteger(sequence) || sequence < 1) {
     throw new Error("sequence must be a positive integer");
   }
-  const code = garageCode.trim().toUpperCase() || "XX";
-  return `CN-${code}/${formatFinancialYearLabel(financialYearStartYear)}/${String(sequence).padStart(4, "0")}`;
+  return `CN-${formatFinancialYearLabel(financialYearStartYear)}-${String(sequence).padStart(4, "0")}`;
 }

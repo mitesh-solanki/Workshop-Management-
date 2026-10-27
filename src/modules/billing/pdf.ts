@@ -33,9 +33,10 @@ export type InvoicePdfPayment = {
 };
 
 export type InvoicePdfCreditNote = {
-  creditNoteNumber: string;
+  reason: "CORRECTION" | "REFUND" | "OTHER";
+  notes: string | null;
+  itemDescriptions: string[];
   totalPaise: Paise;
-  reason: string;
 };
 
 export type InvoicePdfInput = {
@@ -579,15 +580,20 @@ export async function generateInvoicePdf(
   ensureSpace(doc, 140);
 
   const summaryTop = doc.y;
-  setBoldFont(doc, fontPath, 9);
-  doc.fillColor(COLORS.text).text(labels.notes, PAGE.margin, summaryTop, {
-    width: remarkW,
-  });
-  setBodyFont(doc, fontPath, 8);
-  doc.fillColor(COLORS.metaBody).text(input.notes?.trim() || "—", PAGE.margin, doc.y + 4, {
-    width: remarkW,
-  });
-  let remarkBottom = doc.y + 10;
+  const noteText = input.notes?.trim() ?? "";
+  let remarkBottom = summaryTop;
+
+  if (noteText) {
+    setBoldFont(doc, fontPath, 9);
+    doc.fillColor(COLORS.text).text(labels.notes, PAGE.margin, summaryTop, {
+      width: remarkW,
+    });
+    setBodyFont(doc, fontPath, 8);
+    doc
+      .fillColor(COLORS.metaBody)
+      .text(noteText, PAGE.margin, doc.y + 4, { width: remarkW });
+    remarkBottom = doc.y + 10;
+  }
 
   if (input.payments.length > 0) {
     setBoldFont(doc, fontPath, 8);
@@ -615,16 +621,27 @@ export async function generateInvoicePdf(
       width: remarkW,
     });
     remarkBottom = doc.y + 3;
-    setBodyFont(doc, fontPath, 7.5);
-    doc.fillColor(COLORS.metaBody);
     for (const note of input.creditNotes) {
+      const reasonLabel =
+        labels.creditNoteReasons[note.reason] ?? note.reason;
+      setBodyFont(doc, fontPath, 7.5);
+      doc.fillColor(COLORS.metaBody);
       doc.text(
-        `${note.creditNoteNumber}  ·  ${note.reason}  ·  ${money(note.totalPaise)}`,
+        `${reasonLabel}  ·  −${money(note.totalPaise)}`,
         PAGE.margin,
         remarkBottom,
         { width: remarkW },
       );
       remarkBottom = doc.y + 2;
+      const message =
+        note.notes?.trim() ||
+        note.itemDescriptions.map((item) => item.trim()).filter(Boolean).join(", ");
+      if (message) {
+        setBodyFont(doc, fontPath, 7);
+        doc.fillColor(COLORS.footer);
+        doc.text(message, PAGE.margin, remarkBottom, { width: remarkW });
+        remarkBottom = doc.y + 3;
+      }
     }
     remarkBottom += 6;
   }

@@ -75,16 +75,6 @@ export const createEstimateSchema = z.object({
 
 export const createEstimateRevisionSchema = z.object({
   notes: optionalNotes.optional(),
-  /** When true, also pull new order lines / suggested repairs not yet on the estimate. */
-  includeNewSources: z
-    .union([z.boolean(), z.string(), z.undefined()])
-    .optional()
-    .transform((value) => {
-      if (value === true || value === "true" || value === "on" || value === "1") {
-        return true;
-      }
-      return false;
-    }),
 });
 
 export const addEstimateLineSchema = z.object({

@@ -20,7 +20,7 @@ export default async function DirectSalesPage() {
 
   const [sales, parts, customers] = await Promise.all([
     listSales(session),
-    canSale ? listParts(session) : Promise.resolve([]),
+    canSale ? listParts(session, { inStockOnly: true }) : Promise.resolve([]),
     canSale
       ? listCustomers(session, { pageSize: 50 })
       : Promise.resolve({

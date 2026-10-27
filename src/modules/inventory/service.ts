@@ -5,6 +5,8 @@ import { requireRole, type RoleSession } from "@/lib/rbac";
 import {
   createDirectSaleSchema,
   createPartSchema,
+  deletePartSchema,
+  partPickerPageSchema,
   partSearchSchema,
   stockAdjustSchema,
   stockInSchema,
@@ -19,9 +21,11 @@ import {
 } from "@/modules/inventory/schema";
 import {
   applyStockMovement,
+  countPartLinkedRecords,
   createDirectSale as createDirectSaleRepo,
   createPart,
   deleteDirectSale as deleteDirectSaleRepo,
+  deletePartById,
   DirectSaleTxError,
   updateDirectSale as updateDirectSaleRepo,
   findDirectSaleById,
@@ -30,7 +34,9 @@ import {
   listDirectSales,
   listLowStockParts,
   listPartMovements,
+  searchInStockPartsPage,
   searchParts,
+  searchPartsCatalogPage,
   updatePart,
 } from "@/modules/inventory/repo";
 
@@ -49,11 +55,45 @@ function mapStockFailure(
 
 export async function listParts(
   session: RoleSession,
-  raw: { q?: string; sort?: string } = {},
+  raw: { q?: string; sort?: string; inStockOnly?: boolean } = {},
 ) {
   requireRole(session, READ_ROLES);
-  const input = partSearchSchema.parse(raw);
-  return searchParts(session.garageId, input.q, input.sort);
+  const { inStockOnly = false, ...search } = raw;
+  const input = partSearchSchema.parse(search);
+  const parts = await searchParts(session.garageId, input.q, input.sort);
+  if (!inStockOnly) {
+    return parts;
+  }
+  return parts.filter((part) => part.quantityOnHand > 0);
+}
+
+export async function listPartsForPickerPage(
+  session: RoleSession,
+  raw: { q?: string; offset?: number; pageSize?: number } = {},
+) {
+  requireRole(session, READ_ROLES);
+  const input = partPickerPageSchema.parse(raw);
+  return searchInStockPartsPage(
+    session.garageId,
+    input.q,
+    input.offset,
+    input.pageSize,
+  );
+}
+
+/** All parts matching search (including zero stock). No browse until user types. */
+export async function listPartsForCatalogSearchPage(
+  session: RoleSession,
+  raw: { q?: string; offset?: number; pageSize?: number } = {},
+) {
+  requireRole(session, READ_ROLES);
+  const input = partPickerPageSchema.parse(raw);
+  return searchPartsCatalogPage(
+    session.garageId,
+    input.q,
+    input.offset,
+    input.pageSize,
+  );
 }
 
 export async function getPart(session: RoleSession, partId: string) {
@@ -131,6 +171,36 @@ export async function updatePartRecord(
     throw new NotFoundError();
   }
   return part;
+}
+
+export async function deletePartRecord(
+  session: RoleSession,
+  partId: string,
+) {
+  requireRole(session, WRITE_ROLES);
+  const { partId: id } = deletePartSchema.parse({ partId });
+
+  const part = await findPartById(session.garageId, id);
+  if (!part) {
+    throw new NotFoundError();
+  }
+
+  const linked = await countPartLinkedRecords(session.garageId, id);
+  if (linked > 0) {
+    throw new AppError("inventory.part_in_use", 409);
+  }
+
+  const deleted = await deletePartById(session.garageId, id, {
+    actorId: session.userId,
+    name: part.name,
+    sku: part.sku,
+  });
+
+  if (!deleted) {
+    throw new NotFoundError();
+  }
+
+  return deleted;
 }
 
 export async function recordStockIn(

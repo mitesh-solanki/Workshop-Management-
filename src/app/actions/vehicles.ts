@@ -4,12 +4,54 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 import { translateError } from "@/lib/translate-error";
+import { requireRole } from "@/lib/rbac";
 import { requireSession } from "@/lib/session";
 import {
   createVehicleRecord,
   deleteVehicleRecord,
+  listVehicles,
   updateVehicleRecord,
 } from "@/modules/vehicles/service";
+
+export type VehiclePickerItem = {
+  id: string;
+  registrationNumber: string;
+  make: string;
+  model: string;
+  odometer: number | null;
+  customerName: string;
+};
+
+export async function searchVehiclesPickerAction(
+  q: string,
+): Promise<{ items: VehiclePickerItem[] }> {
+  const session = requireRole(await requireSession(), [
+    "OWNER",
+    "MANAGER",
+    "TECHNICIAN",
+  ]);
+  const trimmed = q.trim();
+  if (trimmed.length < 2) {
+    return { items: [] };
+  }
+
+  const { items } = await listVehicles(session, {
+    q: trimmed,
+    pageSize: 20,
+    sort: "name_asc",
+  });
+
+  return {
+    items: items.map((vehicle) => ({
+      id: vehicle.id,
+      registrationNumber: vehicle.registrationNumber,
+      make: vehicle.make,
+      model: vehicle.model,
+      odometer: vehicle.odometer,
+      customerName: vehicle.customer.name,
+    })),
+  };
+}
 
 export type VehicleActionState = {
   ok: boolean;
@@ -107,15 +149,17 @@ export async function deleteVehicleAction(
   _prev?: VehicleActionState,
   _formData?: FormData,
 ): Promise<VehicleActionState> {
+  const t = await getTranslations("vehicles");
+
   try {
     const session = await requireSession();
     await deleteVehicleRecord(session, vehicleId);
     revalidatePath("/customers");
     revalidatePath(`/customers/${customerId}`);
     revalidatePath("/vehicles");
+    revalidatePath(`/vehicles/${vehicleId}`);
+    return { ok: true, message: t("deleted") };
   } catch (error) {
     return { ok: false, message: await translateError(error) };
   }
-
-  redirect(`/customers/${customerId}`);
 }

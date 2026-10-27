@@ -1,6 +1,7 @@
 import { getTranslations } from "next-intl/server";
 import { computeLineGst } from "@/lib/gst";
-import { formatRupees } from "@/lib/money";
+import { formatRupees, multiplyByQuantity } from "@/lib/money";
+import { cn } from "@/lib/utils";
 import { CreateEstimateForm } from "@/modules/estimates/components/create-estimate-form";
 import { EstimateLineForm } from "@/modules/estimates/components/estimate-line-form";
 import {
@@ -12,6 +13,7 @@ import type {
   EstimateApprovalStateValue,
 } from "@/modules/estimates/schema";
 import type { getEstimateForOrder } from "@/modules/estimates/service";
+import { LiveLinkStaffPanel } from "@/modules/live-link/components/live-link-staff-panel";
 
 type EstimateData = Awaited<ReturnType<typeof getEstimateForOrder>>;
 
@@ -19,15 +21,20 @@ type Props = {
   orderId: string;
   canEdit: boolean;
   data: EstimateData;
+  liveLinkActive: { id: string; expiresAt: Date | string } | null;
+  canEditLiveLink: boolean;
 };
 
 export async function JobCardEstimateContent({
   orderId,
   canEdit,
   data,
+  liveLinkActive,
+  canEditLiveLink,
 }: Props) {
   const t = await getTranslations("estimates");
-  const { current, revisions } = data;
+  const { current, revisions, order } = data;
+  const previewLines = order.lines;
 
   const approvedCount =
     current?.lines.filter((line) => line.approvalState === "APPROVED").length ??
@@ -37,18 +44,92 @@ export async function JobCardEstimateContent({
     0;
 
   return (
-    <div className="space-y-5 px-4 py-5 sm:px-5">
+    <div className="space-y-5">
       {!current ? (
-        <section className="space-y-3">
-          <p className="text-sm text-slate-600">
-            {canEdit ? t("emptyHint") : t("emptyReadOnly")}
-          </p>
-          {canEdit ? (
-            <CreateEstimateForm orderId={orderId} mode="create" />
+        <section className="space-y-5">
+          <div className="rounded-[11px] border border-[#c9d8ff] bg-[#edf4ff]/70 px-4 py-4">
+            <h3 className="text-[15px] font-semibold text-slate-900">
+              {t("emptyTitle")}
+            </h3>
+            <p className="mt-1 text-[13px] leading-relaxed text-slate-600">
+              {canEdit ? t("emptyHint") : t("emptyReadOnly")}
+            </p>
+
+            <div className="mt-4">
+              <p className="text-[13px] font-semibold text-slate-800">
+                {t("emptyPreviewTitle")}
+              </p>
+              {previewLines.length === 0 ? (
+                <p className="mt-2 rounded-[10px] border border-dashed border-slate-300 bg-slate-50/80 px-4 py-5 text-[13px] text-slate-600">
+                  {t("emptyPreviewEmpty")}
+                </p>
+              ) : (
+                <ul className="mt-2 divide-y divide-slate-200/80 overflow-hidden rounded-[10px] border border-slate-200 bg-white">
+                  {previewLines.map((line) => {
+                    const typeKey =
+                      line.type === "PART" || line.type === "LABOUR"
+                        ? line.type
+                        : "LABOUR";
+                    const lineTotal = multiplyByQuantity(
+                      line.unitPricePaise,
+                      line.quantity,
+                    );
+                    return (
+                      <li
+                        key={line.id}
+                        className="flex items-center justify-between gap-3 px-3.5 py-3"
+                      >
+                        <div className="flex min-w-0 flex-1 items-center gap-2">
+                          <span
+                            className={cn(
+                              "inline-flex shrink-0 rounded-md border px-2 py-0.5 text-[11px] font-semibold",
+                              typeKey === "PART"
+                                ? "border-blue-200 bg-blue-50 text-blue-800"
+                                : "border-orange-200 bg-orange-50 text-orange-800",
+                            )}
+                          >
+                            {t(`lineTypes.${typeKey}`)}
+                          </span>
+                          <p className="truncate text-[14px] font-medium text-slate-900">
+                            {line.description}
+                          </p>
+                        </div>
+                        <div className="shrink-0 text-right">
+                          <p className="text-[12px] tabular-nums text-slate-500">
+                            {t("emptyPreviewQtyPrice", {
+                              quantity: line.quantity,
+                              price: formatRupees(line.unitPricePaise),
+                            })}
+                          </p>
+                          <p className="text-[14px] font-semibold tabular-nums text-slate-900">
+                            {formatRupees(lineTotal)}
+                          </p>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
+          </div>
+          {canEdit && previewLines.length > 0 ? (
+            <div className="space-y-2">
+              <p className="text-[13px] font-medium text-slate-800">
+                {t("emptyCreateLead")}
+              </p>
+              <CreateEstimateForm orderId={orderId} mode="create" />
+            </div>
           ) : null}
         </section>
       ) : (
         <>
+          <LiveLinkStaffPanel
+            orderId={orderId}
+            active={liveLinkActive}
+            canEdit={canEditLiveLink}
+            variant="embed"
+          />
+
           <div className="flex flex-wrap items-start justify-between gap-2">
             <div className="rounded-[11px] border border-slate-300 bg-blue-50/70 px-4 py-3.5">
               <strong className="text-[13px] font-semibold text-slate-900">
@@ -100,6 +181,12 @@ export async function JobCardEstimateContent({
               <ul className="grid gap-3">
                 {current.lines.map((line, index) => {
                   const amounts = computeLineGst(line);
+                  const linkedPartId =
+                    line.sourceOrderLineId != null
+                      ? (order.lines.find(
+                          (orderLine) => orderLine.id === line.sourceOrderLineId,
+                        )?.partId ?? null)
+                      : null;
                   return (
                     <EstimatePermissionLine
                       key={line.id}
@@ -116,6 +203,7 @@ export async function JobCardEstimateContent({
                         gstRatePercent: line.gstRatePercent,
                         approvalState: line.approvalState,
                         totalPaise: amounts.totalPaise,
+                        partId: linkedPartId,
                       }}
                     />
                   );
@@ -159,17 +247,18 @@ export async function JobCardEstimateContent({
             </div>
           </section>
 
-          {current.totals.pending.totalPaise > 0 ||
-          current.totals.rejected.totalPaise > 0 ? (
-            <p className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2.5 text-[13px] text-amber-900">
+          {canEdit ? (
+            <div className="space-y-3 border-t border-slate-300 pt-5">
+              <EstimateLineForm orderId={orderId} />
+              <p className="rounded-lg border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-[13px] leading-relaxed text-amber-950">
+                {t("excludedFromBillNote")}
+              </p>
+            </div>
+          ) : current.totals.pending.totalPaise > 0 ||
+            current.totals.rejected.totalPaise > 0 ? (
+            <p className="rounded-lg border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-[13px] leading-relaxed text-amber-950">
               {t("excludedFromBillNote")}
             </p>
-          ) : null}
-
-          {canEdit ? (
-            <div className="border-t border-slate-300 pt-5">
-              <EstimateLineForm orderId={orderId} />
-            </div>
           ) : null}
 
           {canEdit ? (
@@ -246,23 +335,90 @@ export async function JobCardEstimateContent({
 
       {revisions.length > 0 ? (
         <SmoothHistoryPanel title={t("revisionHistory")} hint={t("seeEarlier")}>
-          <ul>
+          <ul className="divide-y divide-slate-200">
             {revisions.map((rev) => (
-              <li
-                key={rev.id}
-                className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-300 px-4 py-3 text-sm last:border-b-0"
-              >
-                <div>
-                  <p className="font-medium text-slate-900">
-                    {t("revisionLabel", { number: rev.revisionNumber })}
-                    {rev.supersededAt == null
-                      ? ` · ${t("currentRevision")}`
-                      : ` · ${t("superseded")}`}
-                  </p>
-                  <p className="text-[13px] text-slate-500">
-                    {`${t("lineCount", { count: rev._count.lines })} · ${rev.createdAt.toLocaleString()}`}
-                  </p>
+              <li key={rev.id} className="space-y-3 px-4 py-4">
+                <div className="flex flex-wrap items-end justify-between gap-2">
+                  <div className="min-w-0 space-y-1">
+                    <p className="font-medium text-slate-900">
+                      {t("revisionLabel", { number: rev.revisionNumber })}
+                      {rev.supersededAt == null
+                        ? ` · ${t("currentRevision")}`
+                        : ` · ${t("superseded")}`}
+                    </p>
+                    <p className="text-[13px] text-slate-500">
+                      {`${t("lineCount", { count: rev.lines.length })} · ${rev.createdAt.toLocaleString()}`}
+                    </p>
+                    {rev.notes ? (
+                      <p className="text-[13px] text-slate-600">{rev.notes}</p>
+                    ) : null}
+                  </div>
                 </div>
+                {rev.lines.length === 0 ? (
+                  <p className="rounded-[10px] border border-dashed border-slate-300 bg-slate-50/80 px-4 py-4 text-[13px] text-slate-600">
+                    {t("revisionLinesEmpty")}
+                  </p>
+                ) : (
+                  <ul className="divide-y divide-slate-200/80 overflow-hidden rounded-[10px] border border-slate-200 bg-white">
+                    {rev.lines.map((line) => {
+                      const typeKey =
+                        line.type === "PART" || line.type === "LABOUR"
+                          ? line.type
+                          : "LABOUR";
+                      const lineTotal = multiplyByQuantity(
+                        line.unitPricePaise,
+                        line.quantity,
+                      );
+                      return (
+                        <li
+                          key={line.id}
+                          className="flex flex-wrap items-center justify-between gap-3 px-3.5 py-3"
+                        >
+                          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+                            <span
+                              className={cn(
+                                "inline-flex shrink-0 rounded-md border px-2 py-0.5 text-[11px] font-semibold",
+                                typeKey === "PART"
+                                  ? "border-blue-200 bg-blue-50 text-blue-800"
+                                  : "border-orange-200 bg-orange-50 text-orange-800",
+                              )}
+                            >
+                              {t(`lineTypes.${typeKey}`)}
+                            </span>
+                            <p className="min-w-0 truncate text-[14px] font-medium text-slate-900">
+                              {line.description}
+                            </p>
+                            <span
+                              className={cn(
+                                "inline-flex shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold",
+                                line.approvalState === "APPROVED"
+                                  ? "bg-emerald-50 text-emerald-800"
+                                  : line.approvalState === "REJECTED"
+                                    ? "bg-red-50 text-red-700"
+                                    : "bg-amber-50 text-amber-800",
+                              )}
+                            >
+                              {t(
+                                `approvalStatesShort.${line.approvalState as EstimateApprovalStateValue}`,
+                              )}
+                            </span>
+                          </div>
+                          <div className="shrink-0 text-right">
+                            <p className="text-[12px] tabular-nums text-slate-500">
+                              {t("emptyPreviewQtyPrice", {
+                                quantity: line.quantity,
+                                price: formatRupees(line.unitPricePaise),
+                              })}
+                            </p>
+                            <p className="text-[14px] font-semibold tabular-nums text-slate-900">
+                              {formatRupees(lineTotal)}
+                            </p>
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
               </li>
             ))}
           </ul>

@@ -102,11 +102,18 @@ export function AppSidebar({
           className={cn(
             "flex h-14 items-center gap-3 px-2",
             collapsed && "justify-center px-0",
-            isMobile && "pr-1",
+            "pr-1 lg:pr-0",
           )}
         >
-          <AppLogoMark size="lg" className="shrink-0" />
-          {!collapsed ? (
+          <Link
+            href="/dashboard"
+            className={cn(
+              "flex min-w-0 flex-1 items-center gap-3 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-blue-600",
+              collapsed && "flex-none justify-center",
+            )}
+            aria-label={appName}
+          >
+            <AppLogoMark size="lg" className="shrink-0" />
             <div className="min-w-0 flex-1 group-data-[collapsible=icon]:hidden">
               <p className="font-brand truncate text-sm font-semibold tracking-tight text-sidebar-foreground">
                 {appName}
@@ -115,19 +122,17 @@ export function AppSidebar({
                 {garageName}
               </p>
             </div>
-          ) : null}
-          {isMobile ? (
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              aria-label={t("closeMenu")}
-              className="ml-auto shrink-0 text-slate-500 hover:bg-slate-100 hover:text-slate-900"
-              onClick={() => setOpenMobile(false)}
-            >
-              <X className="size-5" aria-hidden />
-            </Button>
-          ) : null}
+          </Link>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            aria-label={t("closeMenu")}
+            className="ml-auto shrink-0 text-slate-500 hover:bg-slate-100 hover:text-slate-900 lg:hidden"
+            onClick={() => setOpenMobile(false)}
+          >
+            <X className="size-5" aria-hidden />
+          </Button>
         </div>
       </SidebarHeader>
 
@@ -313,7 +318,7 @@ export function AppSidebar({
         />
       </SidebarFooter>
 
-      {!isMobile ? <SidebarRail /> : null}
+      <SidebarRail />
     </Sidebar>
   );
 }

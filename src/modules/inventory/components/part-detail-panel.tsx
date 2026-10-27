@@ -31,6 +31,7 @@ import {
 } from "@/hooks/use-section-scroll-spy";
 import { formatRupees } from "@/lib/money";
 import { cn } from "@/lib/utils";
+import { DeletePartButton } from "@/modules/inventory/components/delete-part-button";
 import {
   EditPartModal,
   type EditPartValues,
@@ -311,15 +312,24 @@ export function PartDetailPanel({
             sectionRef={setSectionRef("details")}
             action={
               canWrite ? (
-                <EditPartModal
-                  part={editValues}
-                  trigger={
-                    <Button type="button" variant="outline" size="md">
-                      <Pencil className="size-4" aria-hidden />
-                      {t("edit")}
-                    </Button>
-                  }
-                />
+                <div className="flex flex-wrap items-center gap-2">
+                  <EditPartModal
+                    part={editValues}
+                    trigger={
+                      <Button type="button" variant="outline" size="md">
+                        <Pencil className="size-4" aria-hidden />
+                        {t("edit")}
+                      </Button>
+                    }
+                  />
+                  <DeletePartButton
+                    partId={part.id}
+                    partName={part.name}
+                    redirectToList
+                    size="md"
+                    showLabel
+                  />
+                </div>
               ) : null
             }
           >

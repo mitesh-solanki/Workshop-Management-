@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import {
   sectionDomId,
@@ -8,6 +8,7 @@ import {
 } from "@/hooks/use-section-scroll-spy";
 import {
   JOB_CARD_SECTIONS,
+  isJobCardSection,
   type JobCardSection,
 } from "@/modules/service-orders/job-card-sections";
 
@@ -28,6 +29,15 @@ type Options = {
   mode?: "tabs" | "scroll";
 };
 
+function sectionUrl(pathname: string, section: JobCardSection) {
+  const params = new URLSearchParams();
+  if (section !== "details") {
+    params.set("section", section);
+  }
+  const query = params.toString();
+  return query ? `${pathname}?${query}` : pathname;
+}
+
 export function useJobCardSections({
   initialSection = "details",
   syncUrl = false,
@@ -39,24 +49,28 @@ export function useJobCardSections({
   const syncSectionToUrl = useCallback(
     (section: JobCardSection) => {
       if (!syncUrl) return;
-      const params = new URLSearchParams();
-      if (section !== "details") {
-        params.set("section", section);
+      const url = sectionUrl(pathname, section);
+      if (mode === "tabs" && typeof window !== "undefined") {
+        // Soft URL update — avoids remounting the job-card chrome via RSC.
+        window.history.replaceState(window.history.state, "", url);
+        return;
       }
-      const query = params.toString();
-      router.replace(query ? `${pathname}?${query}` : pathname, {
-        scroll: false,
-      });
+      router.replace(url, { scroll: false });
     },
-    [pathname, router, syncUrl],
+    [mode, pathname, router, syncUrl],
   );
 
   const [tabSection, setTabSection] = useState<JobCardSection>(initialSection);
-  const [syncedInitial, setSyncedInitial] = useState(initialSection);
-  if (mode === "tabs" && syncedInitial !== initialSection) {
-    setSyncedInitial(initialSection);
-    setTabSection(initialSection);
-  }
+
+  useEffect(() => {
+    if (mode !== "tabs" || !syncUrl) return;
+    const onPopState = () => {
+      const raw = new URLSearchParams(window.location.search).get("section");
+      setTabSection(isJobCardSection(raw) ? raw : "details");
+    };
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, [mode, syncUrl]);
 
   const scrollSpy = useSectionScrollSpy({
     sections: JOB_CARD_SECTIONS,

@@ -76,9 +76,6 @@ export function LanguageSwitcher({
               }}
             >
               <span className="flex min-w-0 items-center gap-2">
-                <span className="w-7 shrink-0 text-xs font-medium tracking-wide text-muted-foreground">
-                  {LOCALE_SHORT[code]}
-                </span>
                 <span className="truncate">{t(code)}</span>
               </span>
               {selected ? (

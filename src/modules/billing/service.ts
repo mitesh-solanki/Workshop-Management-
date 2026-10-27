@@ -592,9 +592,10 @@ export async function getInvoicePdfBuffer(
       receivedAt: payment.receivedAt,
     })),
     creditNotes: invoice.creditNotes.map((note) => ({
-      creditNoteNumber: note.creditNoteNumber,
+      reason: note.reason as "CORRECTION" | "REFUND" | "OTHER",
+      notes: note.notes,
+      itemDescriptions: note.lines.map((line) => line.description),
       totalPaise: note.totalPaise,
-      reason: note.reason,
     })),
     notes: invoice.notes,
   });

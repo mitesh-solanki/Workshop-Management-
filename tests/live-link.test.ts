@@ -350,8 +350,9 @@ describe("live link estimate approve / reject", () => {
       },
     } as never);
     vi.mocked(recordOnlineLineApproval).mockResolvedValue({
-      id: "approval-1",
-    } as never);
+      ok: true,
+      approval: { id: "approval-1" },
+    });
 
     const result = await approveEstimateLineViaLiveLink(token, "2.2.2.2", {
       lineId: "line-1",
@@ -384,8 +385,9 @@ describe("live link estimate approve / reject", () => {
       },
     } as never);
     vi.mocked(recordOnlineLineApproval).mockResolvedValue({
-      id: "approval-2",
-    } as never);
+      ok: true,
+      approval: { id: "approval-2" },
+    });
 
     const result = await approveEstimateLineViaLiveLink(token, "2.2.2.2", {
       lineId: "line-2",

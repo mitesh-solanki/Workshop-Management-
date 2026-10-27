@@ -208,7 +208,7 @@ describe("billing against Postgres", () => {
     );
     if (finalized && "allocated" in finalized && finalized.allocated) {
       expect(finalized.allocated.invoiceNumber).toMatch(
-        /^INV-[A-Z0-9]{2,4}\/\d{4}-\d{2}\/\d{4}$/,
+        /^INV-\d{4}-\d{2}-\d{4}$/,
       );
     }
   });

@@ -12,6 +12,7 @@ import {
   Wrench,
 } from "lucide-react";
 import { getLocale, getTranslations } from "next-intl/server";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { StatCard, type StatCardTone } from "@/components/ui/stat-card";
@@ -19,10 +20,11 @@ import {
   SERVICE_ORDER_STATUSES,
   type ServiceOrderStatus,
 } from "@/lib/service-order-status";
-import { formatRupees } from "@/lib/money";
 import { requireSession } from "@/lib/session";
+import { LowStockAlertList } from "@/modules/inventory/components/low-stock-alert-list";
 import { getLowStockAlerts } from "@/modules/inventory/service";
 import { getGarageSettings } from "@/modules/settings/service";
+import { getDashboardOrderCounts } from "@/modules/service-orders/service";
 
 /** Auth session uses request-time crypto — do not prerender this route. */
 export const instant = false;
@@ -69,7 +71,11 @@ export default async function DashboardPage() {
     year: "numeric",
   }).format(new Date());
 
-  const statusCounts: Record<ServiceOrderStatus, number> = {
+  const showOrderStats = !isTechnician && !isAccountant;
+  const orderCounts = showOrderStats
+    ? await getDashboardOrderCounts(session)
+    : null;
+  const statusCounts = orderCounts?.statusCounts ?? {
     WAITING: 0,
     INSPECTION: 0,
     IN_PROGRESS: 0,
@@ -77,12 +83,12 @@ export default async function DashboardPage() {
     READY: 0,
     COMPLETED: 0,
   };
-  const overdueCount = 0;
+  const overdueCount = orderCounts?.overdueCount ?? 0;
 
   if (isTechnician) {
     return (
-      <main className="space-y-6">
-        <header className="space-y-1">
+      <main className="mx-auto w-full max-w-6xl space-y-6">
+        <header className="space-y-1 text-center sm:text-left">
           <p className="text-caption font-medium tracking-wide text-slate-500 uppercase">
             {garage.name}
           </p>
@@ -110,12 +116,17 @@ export default async function DashboardPage() {
         </section>
 
         <section className="space-y-3" aria-labelledby="low-stock-heading">
-          <h2
-            id="low-stock-heading"
-            className="text-section-title text-slate-900"
-          >
-            {t("lowStock")}
-          </h2>
+          <div className="flex flex-wrap items-center gap-2">
+            <h2
+              id="low-stock-heading"
+              className="text-section-title text-slate-900"
+            >
+              {t("lowStock")}
+            </h2>
+            {lowStock.length > 0 ? (
+              <Badge variant="warning">{lowStock.length}</Badge>
+            ) : null}
+          </div>
           {lowStock.length === 0 ? (
             <EmptyState
               compact
@@ -124,30 +135,10 @@ export default async function DashboardPage() {
               description={t("lowStockEmptyDescription")}
             />
           ) : (
-            <ul className="divide-y rounded-xl border border-amber-200 bg-amber-50/60">
-              {lowStock.slice(0, 8).map((part) => (
-                <li
-                  key={part.id}
-                  className="flex min-h-12 items-center justify-between gap-2 px-3 py-2.5"
-                >
-                  <Link
-                    href={`/inventory/${part.id}`}
-                    className="min-w-0 flex-1 hover:underline"
-                  >
-                    <p className="truncate text-sm font-medium text-slate-900">
-                      {part.name}
-                    </p>
-                    <p className="truncate text-caption text-slate-600">
-                      {part.sku} · {formatRupees(part.sellingPricePaise)} ·{" "}
-                      {ti("stockCount", {
-                        count: part.quantityOnHand,
-                        unit: part.unit,
-                      })}
-                    </p>
-                  </Link>
-                </li>
-              ))}
-            </ul>
+            <LowStockAlertList
+              parts={lowStock}
+              requestLabel={t("requestPart")}
+            />
           )}
         </section>
       </main>
@@ -155,8 +146,8 @@ export default async function DashboardPage() {
   }
 
   return (
-    <main className="space-y-8">
-      <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+    <main className="mx-auto w-full max-w-6xl space-y-8">
+      <header className="flex flex-col items-center gap-4 text-center sm:flex-row sm:items-start sm:justify-between sm:text-left">
         <div className="min-w-0 space-y-1">
           <p className="text-caption font-medium tracking-wide text-slate-500 uppercase">
             {garage.name}
@@ -167,7 +158,7 @@ export default async function DashboardPage() {
           <p className="text-body text-slate-600">{todayLabel}</p>
         </div>
         {canCreateWorkshop ? (
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap justify-center gap-2 sm:justify-end">
             <Button asChild variant="secondary" size="md">
               <Link href="/customers/new">
                 <UserPlus className="size-4" aria-hidden />
@@ -175,7 +166,7 @@ export default async function DashboardPage() {
               </Link>
             </Button>
             <Button asChild size="md">
-              <Link href="/orders">
+              <Link href="/orders/new">
                 <Plus className="size-4" aria-hidden />
                 {t("newOrder")}
               </Link>
@@ -196,9 +187,6 @@ export default async function DashboardPage() {
             >
               {t("ordersByStatus")}
             </h2>
-            <p className="text-caption text-slate-500">
-              {t("countsPlaceholder")}
-            </p>
           </div>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {SERVICE_ORDER_STATUSES.map((status) => {
@@ -241,7 +229,7 @@ export default async function DashboardPage() {
               action={
                 canCreateWorkshop ? (
                   <Button asChild size="sm">
-                    <Link href="/orders">
+                    <Link href="/orders/new">
                       <Plus className="size-4" aria-hidden />
                       {t("newOrder")}
                     </Link>
@@ -257,10 +245,17 @@ export default async function DashboardPage() {
         ) : null}
 
         <div className="space-y-3">
-          <div className="flex flex-wrap items-end justify-between gap-2">
-            <h2 className="text-section-title text-slate-900">{t("lowStock")}</h2>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-section-title text-slate-900">
+                {t("lowStock")}
+              </h2>
+              {lowStock.length > 0 ? (
+                <Badge variant="warning">{lowStock.length}</Badge>
+              ) : null}
+            </div>
             {canManageStock ? (
-              <Button asChild variant="secondary" size="sm">
+              <Button asChild size="sm">
                 <Link href="/inventory">{ti("title")}</Link>
               </Button>
             ) : null}
@@ -273,37 +268,11 @@ export default async function DashboardPage() {
               description={t("lowStockEmptyDescription")}
             />
           ) : (
-            <ul className="divide-y rounded-xl border border-amber-200 bg-amber-50/60">
-              {lowStock.slice(0, 8).map((part) => (
-                <li
-                  key={part.id}
-                  className="flex min-h-12 items-center justify-between gap-2 px-3 py-2.5"
-                >
-                  <Link
-                    href={`/inventory/${part.id}`}
-                    className="min-w-0 flex-1 hover:underline"
-                  >
-                    <p className="truncate text-sm font-medium text-slate-900">
-                      {part.name}
-                    </p>
-                    <p className="truncate text-caption text-slate-600">
-                      {part.sku} · {formatRupees(part.sellingPricePaise)} ·{" "}
-                      {ti("stockCount", {
-                        count: part.quantityOnHand,
-                        unit: part.unit,
-                      })}
-                    </p>
-                  </Link>
-                  {canManageStock ? (
-                    <Button asChild variant="secondary" size="sm">
-                      <Link href={`/parts-requests?partId=${part.id}`}>
-                        {t("requestPart")}
-                      </Link>
-                    </Button>
-                  ) : null}
-                </li>
-              ))}
-            </ul>
+            <LowStockAlertList
+              parts={lowStock}
+              canRequest={canManageStock}
+              requestLabel={t("requestPart")}
+            />
           )}
         </div>
       </section>

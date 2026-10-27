@@ -1,9 +1,10 @@
 "use client";
 
+import { useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { FormField } from "@/components/ui/form-field";
-import { FormSelect } from "@/components/ui/form-select";
 import { Input } from "@/components/ui/input";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { GST_STATE_CODES } from "@/lib/gstin";
 import { DEFAULT_VEHICLE_STATE_CODE } from "@/modules/vehicles/schema";
 
@@ -37,7 +38,19 @@ type Props = {
 export function VehicleFields({ idPrefix, defaults = {}, customerId }: Props) {
   const t = useTranslations("vehicles");
   const tGst = useTranslations("gst");
-  const stateDefault = defaults.stateCode ?? DEFAULT_VEHICLE_STATE_CODE;
+  const [stateCode, setStateCode] = useState(
+    () => defaults.stateCode ?? DEFAULT_VEHICLE_STATE_CODE,
+  );
+
+  const stateOptions = useMemo(
+    () =>
+      GST_STATE_CODES.map((code) => ({
+        value: code,
+        label: tGst(`states.${code}`),
+        keywords: code,
+      })),
+    [tGst],
+  );
 
   return (
     <>
@@ -65,14 +78,16 @@ export function VehicleFields({ idPrefix, defaults = {}, customerId }: Props) {
         label={t("state")}
         hint={t("stateHint")}
       >
-        <FormSelect
+        <SearchableSelect
           id={`${idPrefix}-state`}
           name="stateCode"
-          defaultValue={stateDefault}
-          options={GST_STATE_CODES.map((code) => ({
-            value: code,
-            label: `${tGst(`states.${code}`)} (${code})`,
-          }))}
+          value={stateCode}
+          onChange={setStateCode}
+          options={stateOptions}
+          clearable={false}
+          placeholder={t("statePlaceholder")}
+          searchPlaceholder={t("stateSearchPlaceholder")}
+          emptyLabel={t("stateEmpty")}
         />
       </FormField>
 

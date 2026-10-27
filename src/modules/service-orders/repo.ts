@@ -8,6 +8,26 @@ import type {
 } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { applyStockMovement } from "@/modules/inventory/repo";
+import {
+  SERVICE_ORDER_STATUSES,
+  type ServiceOrderStatusValue,
+} from "@/modules/service-orders/schema";
+
+function emptyStatusCounts(): Record<ServiceOrderStatusValue, number> {
+  return Object.fromEntries(
+    SERVICE_ORDER_STATUSES.map((status) => [status, 0]),
+  ) as Record<ServiceOrderStatusValue, number>;
+}
+
+function serviceOrderScopeWhere(
+  garageId: string,
+  options: { technicianId?: string } = {},
+): Prisma.ServiceOrderWhereInput {
+  return {
+    garageId,
+    ...(options.technicianId ? { technicianId: options.technicianId } : {}),
+  };
+}
 
 const lineSelect = {
   id: true,
@@ -103,25 +123,69 @@ export async function listServiceOrders(
   });
 }
 
+export async function countServiceOrdersByStatus(
+  garageId: string,
+  options: { technicianId?: string } = {},
+): Promise<Record<ServiceOrderStatusValue, number>> {
+  const groups = await prisma.serviceOrder.groupBy({
+    by: ["status"],
+    where: serviceOrderScopeWhere(garageId, options),
+    _count: { _all: true },
+  });
+
+  const counts = emptyStatusCounts();
+  for (const row of groups) {
+    counts[row.status] = row._count._all;
+  }
+  return counts;
+}
+
+export async function countOverdueServiceOrders(
+  garageId: string,
+  options: { technicianId?: string } = {},
+): Promise<number> {
+  return prisma.serviceOrder.count({
+    where: {
+      ...serviceOrderScopeWhere(garageId, options),
+      status: { not: "COMPLETED" },
+      expectedCompletion: { lt: new Date() },
+    },
+  });
+}
+
+const historySelect = {
+  id: true,
+  status: true,
+  complaint: true,
+  createdAt: true,
+  expectedCompletion: true,
+  vehicle: {
+    select: {
+      id: true,
+      registrationNumber: true,
+    },
+  },
+} as const;
+
 export async function listServiceOrdersByCustomer(
   garageId: string,
   customerId: string,
 ) {
   return prisma.serviceOrder.findMany({
     where: { garageId, customerId },
-    select: {
-      id: true,
-      status: true,
-      complaint: true,
-      createdAt: true,
-      expectedCompletion: true,
-      vehicle: {
-        select: {
-          id: true,
-          registrationNumber: true,
-        },
-      },
-    },
+    select: historySelect,
+    orderBy: { createdAt: "desc" },
+    take: 50,
+  });
+}
+
+export async function listServiceOrdersByVehicle(
+  garageId: string,
+  vehicleId: string,
+) {
+  return prisma.serviceOrder.findMany({
+    where: { garageId, vehicleId },
+    select: historySelect,
     orderBy: { createdAt: "desc" },
     take: 50,
   });
@@ -321,11 +385,11 @@ export type CreateServiceOrderLineResult =
         updatedAt: Date;
       };
     }
-  | { ok: false; reason: "PART_NOT_FOUND" | "INSUFFICIENT_STOCK" };
+  | { ok: false; reason: "PART_NOT_FOUND" };
 
 /**
- * Adds a labour/part line. When type is PART and partId is set, creates a
- * StockMovement OUT in the same transaction (inventory is the only stock path).
+ * Adds a labour/part line. Stock is not reduced here — parts leave inventory
+ * only when the matching estimate line is approved.
  */
 export async function createServiceOrderLine(
   garageId: string,
@@ -371,25 +435,6 @@ export async function createServiceOrderLine(
         select: lineSelect,
       });
 
-      if (data.type === "PART" && data.partId) {
-        const stock = await applyStockMovement(
-          garageId,
-          {
-            partId: data.partId,
-            type: "OUT",
-            quantity: data.quantity,
-            note: `Service order ${data.serviceOrderId}`,
-            actorId: data.actorId,
-            serviceOrderId: data.serviceOrderId,
-            serviceOrderLineId: created.id,
-          },
-          tx,
-        );
-        if (!stock.ok) {
-          throw new StockLineTxError(stock.reason);
-        }
-      }
-
       await tx.auditLog.create({
         data: {
           garageId,
@@ -414,10 +459,7 @@ export async function createServiceOrderLine(
     return { ok: true, line };
   } catch (error) {
     if (error instanceof StockLineTxError) {
-      if (error.reason === "NOT_FOUND") {
-        return { ok: false, reason: "PART_NOT_FOUND" };
-      }
-      return { ok: false, reason: error.reason };
+      return { ok: false, reason: "PART_NOT_FOUND" };
     }
     throw error;
   }
@@ -439,7 +481,7 @@ type ServiceOrderLineRow = {
 
 export type UpdateServiceOrderLineResult =
   | { ok: true; line: ServiceOrderLineRow }
-  | { ok: false; reason: "NOT_FOUND" | "PART_NOT_FOUND" | "INSUFFICIENT_STOCK" };
+  | { ok: false; reason: "NOT_FOUND" };
 
 export async function updateServiceOrderLine(
   garageId: string,
@@ -464,31 +506,6 @@ export async function updateServiceOrderLine(
       });
       if (!existing) {
         throw new StockLineTxError("NOT_FOUND");
-      }
-
-      const quantityDelta = data.quantity - existing.quantity;
-      if (
-        existing.type === "PART" &&
-        existing.partId &&
-        quantityDelta !== 0
-      ) {
-        // Do not set serviceOrderLineId - the original OUT already owns that
-        // unique FK. Later qty adjustments are extra movements on the order.
-        const stock = await applyStockMovement(
-          garageId,
-          {
-            partId: existing.partId,
-            type: quantityDelta > 0 ? "OUT" : "IN",
-            quantity: Math.abs(quantityDelta),
-            note: `Service order line update ${data.serviceOrderId} (line ${existing.id})`,
-            actorId: data.actorId,
-            serviceOrderId: data.serviceOrderId,
-          },
-          tx,
-        );
-        if (!stock.ok) {
-          throw new StockLineTxError(stock.reason);
-        }
       }
 
       const updated = await tx.serviceOrderLine.update({
@@ -526,7 +543,7 @@ export async function updateServiceOrderLine(
     return { ok: true, line };
   } catch (error) {
     if (error instanceof StockLineTxError) {
-      return { ok: false, reason: error.reason };
+      return { ok: false, reason: "NOT_FOUND" };
     }
     throw error;
   }
@@ -534,7 +551,7 @@ export async function updateServiceOrderLine(
 
 export type DeleteServiceOrderLineResult =
   | { ok: true }
-  | { ok: false; reason: "NOT_FOUND" | "PART_NOT_FOUND" | "INSUFFICIENT_STOCK" };
+  | { ok: false; reason: "NOT_FOUND" | "APPROVED_ON_ESTIMATE" };
 
 export async function deleteServiceOrderLine(
   garageId: string,
@@ -558,23 +575,21 @@ export async function deleteServiceOrderLine(
         throw new StockLineTxError("NOT_FOUND");
       }
 
-      if (existing.type === "PART" && existing.partId) {
-        // Return stock without serviceOrderLineId - that unique slot is already
-        // used by the OUT created when the part line was added.
-        const stock = await applyStockMovement(
-          garageId,
-          {
-            partId: existing.partId,
-            type: "IN",
-            quantity: existing.quantity,
-            note: `Service order line removed ${data.serviceOrderId} (line ${existing.id})`,
-            actorId: data.actorId,
-            serviceOrderId: data.serviceOrderId,
+      if (existing.type === "PART") {
+        const approvedEstimateLine = await tx.estimateLine.findFirst({
+          where: {
+            garageId,
+            sourceOrderLineId: existing.id,
+            approvalState: "APPROVED",
+            estimate: {
+              serviceOrderId: data.serviceOrderId,
+              supersededAt: null,
+            },
           },
-          tx,
-        );
-        if (!stock.ok) {
-          throw new StockLineTxError(stock.reason);
+          select: { id: true },
+        });
+        if (approvedEstimateLine) {
+          throw new StockLineTxError("APPROVED_ON_ESTIMATE");
         }
       }
 
@@ -602,16 +617,19 @@ export async function deleteServiceOrderLine(
     return { ok: true };
   } catch (error) {
     if (error instanceof StockLineTxError) {
-      return { ok: false, reason: error.reason };
+      if (error.reason === "APPROVED_ON_ESTIMATE") {
+        return { ok: false, reason: "APPROVED_ON_ESTIMATE" };
+      }
+      return { ok: false, reason: "NOT_FOUND" };
     }
     throw error;
   }
 }
 
 class StockLineTxError extends Error {
-  readonly reason: "NOT_FOUND" | "PART_NOT_FOUND" | "INSUFFICIENT_STOCK";
+  readonly reason: "NOT_FOUND" | "PART_NOT_FOUND" | "APPROVED_ON_ESTIMATE";
 
-  constructor(reason: "NOT_FOUND" | "PART_NOT_FOUND" | "INSUFFICIENT_STOCK") {
+  constructor(reason: "NOT_FOUND" | "PART_NOT_FOUND" | "APPROVED_ON_ESTIMATE") {
     super(reason);
     this.name = "StockLineTxError";
     this.reason = reason;
@@ -641,7 +659,7 @@ export async function listServiceOrderAuditLogs(
         },
       },
     },
-    orderBy: { createdAt: "asc" },
+    orderBy: { createdAt: "desc" },
   });
 }
 
@@ -662,6 +680,35 @@ export async function deleteServiceOrderById(
     });
     if (!existing) {
       return null;
+    }
+
+    // Return any stock still held by this job (Agree OUT with no Disagree IN).
+    const held = await tx.stockMovement.groupBy({
+      by: ["partId"],
+      where: { garageId, serviceOrderId: orderId },
+      _sum: { quantityChange: true },
+    });
+    for (const row of held) {
+      const net = row._sum.quantityChange ?? 0;
+      if (net >= 0) {
+        continue;
+      }
+      const restored = await applyStockMovement(
+        garageId,
+        {
+          partId: row.partId,
+          type: "IN",
+          quantity: -net,
+          note: `Job card deleted ${orderId}`,
+          actorId: data.actorId,
+          serviceOrderId: orderId,
+          serviceOrderLineId: null,
+        },
+        tx,
+      );
+      if (!restored.ok) {
+        throw new Error(`STOCK_RESTORE_FAILED:${restored.reason}`);
+      }
     }
 
     await tx.serviceOrder.delete({

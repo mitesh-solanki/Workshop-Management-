@@ -64,8 +64,8 @@ const gstRateField = z
 const hsnOrSacField = z
   .string()
   .trim()
-  .min(2)
-  .max(16)
+  .min(2, { error: "validation.hsnOrSac" })
+  .max(16, { error: "validation.tooLong" })
   .regex(/^[0-9A-Za-z]+$/, "validation.invalidInput");
 
 /** Create a draft (or finalize immediately) from approved estimate lines. */
@@ -164,7 +164,11 @@ export const recordRefundSchema = recordPaymentSchema;
 export type RecordRefundInput = z.input<typeof recordRefundSchema>;
 
 export const creditNoteLineSchema = z.object({
-  description: z.string().trim().min(1).max(500),
+  description: z
+    .string()
+    .trim()
+    .min(1, { error: "validation.required" })
+    .max(500, { error: "validation.tooLong" }),
   quantity: quantityField,
   unitPricePaise: rupeesToPaiseSchema,
   gstRatePercent: gstRateField,
@@ -175,7 +179,14 @@ export const createCreditNoteSchema = z.object({
   invoiceId: z.string().trim().min(1),
   reason: z.enum(CREDIT_NOTE_REASONS),
   notes: optionalNotes.optional(),
-  lines: z.array(creditNoteLineSchema).min(1).max(200),
+  lines: z.preprocess((value) => {
+    if (!Array.isArray(value)) return value;
+    return value.filter((row) => {
+      if (!row || typeof row !== "object") return false;
+      const description = (row as { description?: unknown }).description;
+      return String(description ?? "").trim().length > 0;
+    });
+  }, z.array(creditNoteLineSchema).min(1).max(200)),
 });
 
 export type CreateCreditNoteInput = z.input<typeof createCreditNoteSchema>;

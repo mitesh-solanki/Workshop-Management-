@@ -5,7 +5,12 @@ import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { FormSelect } from "@/components/ui/form-select";
 import { toast } from "@/components/ui/toast";
-import { formatRupees, paiseToRupeesInput } from "@/lib/money";
+import {
+  formatRupees,
+  parseRupeesToPaise,
+  paiseToRupeesInput,
+  sanitizeRupeesTyping,
+} from "@/lib/money";
 import { cn } from "@/lib/utils";
 import {
   recordPaymentAction,
@@ -40,6 +45,15 @@ function methodFieldName(method: SingleMethod): string {
   }
 }
 
+/** Keep typing flexible, but never above the balance due. */
+function clampRupeesToMax(raw: string, maxPaise: number): string {
+  const sanitized = sanitizeRupeesTyping(raw);
+  const paise = parseRupeesToPaise(sanitized);
+  if (paise == null) return sanitized;
+  if (paise > maxPaise) return paiseToRupeesInput(maxPaise);
+  return sanitized;
+}
+
 type Props = {
   invoiceId: string;
   orderId: string;
@@ -60,6 +74,14 @@ export function RecordPaymentForm({
   const [amountRupees, setAmountRupees] = useState(
     paiseToRupeesInput(pendingPaise),
   );
+  const [cashRupees, setCashRupees] = useState("");
+  const [upiRupees, setUpiRupees] = useState("");
+  const [cardRupees, setCardRupees] = useState("");
+  const maxAmountLabel = formatRupees(pendingPaise);
+
+  useEffect(() => {
+    setAmountRupees((current) => clampRupeesToMax(current, pendingPaise));
+  }, [pendingPaise]);
 
   useEffect(() => {
     if (!state.message || state.message === handledMessage.current) return;
@@ -74,6 +96,30 @@ export function RecordPaymentForm({
       toast.error(state.message);
     }
   }, [state, t]);
+
+  function onAmountChange(raw: string) {
+    setAmountRupees(clampRupeesToMax(raw, pendingPaise));
+  }
+
+  function onMixedChange(part: "cash" | "upi" | "card", raw: string) {
+    const sanitized = sanitizeRupeesTyping(raw);
+    const otherCash = part === "cash" ? 0 : (parseRupeesToPaise(cashRupees) ?? 0);
+    const otherUpi = part === "upi" ? 0 : (parseRupeesToPaise(upiRupees) ?? 0);
+    const otherCard = part === "card" ? 0 : (parseRupeesToPaise(cardRupees) ?? 0);
+    const maxForPart = Math.max(0, pendingPaise - otherCash - otherUpi - otherCard);
+    const clamped = clampRupeesToMax(sanitized, maxForPart);
+    const nextCash = part === "cash" ? clamped : cashRupees;
+    const nextUpi = part === "upi" ? clamped : upiRupees;
+    const nextCard = part === "card" ? clamped : cardRupees;
+    if (part === "cash") setCashRupees(clamped);
+    if (part === "upi") setUpiRupees(clamped);
+    if (part === "card") setCardRupees(clamped);
+    const totalPaise =
+      (parseRupeesToPaise(nextCash) ?? 0) +
+      (parseRupeesToPaise(nextUpi) ?? 0) +
+      (parseRupeesToPaise(nextCard) ?? 0);
+    setAmountRupees(paiseToRupeesInput(Math.min(totalPaise, pendingPaise)));
+  }
 
   if (pendingPaise <= 0) {
     return (
@@ -90,7 +136,7 @@ export function RecordPaymentForm({
           {t("pendingBalance")}
         </p>
         <p className="mt-0.5 text-[18px] font-bold tabular-nums text-slate-900">
-          {formatRupees(pendingPaise)}
+          {maxAmountLabel}
         </p>
       </div>
 
@@ -121,10 +167,17 @@ export function RecordPaymentForm({
             name="amountRupees"
             className={cn(controlClass, "tabular-nums")}
             value={amountRupees}
-            onChange={(event) => setAmountRupees(event.target.value)}
+            onChange={(event) => onAmountChange(event.target.value)}
             inputMode="decimal"
+            max={paiseToRupeesInput(pendingPaise)}
+            aria-describedby={`${idPrefix}-amount-hint`}
           />
-          <p className="mt-1.5 text-[13px] text-slate-500">{t("amountHint")}</p>
+          <p
+            id={`${idPrefix}-amount-hint`}
+            className="mt-1.5 text-[13px] text-slate-500"
+          >
+            {t("amountHint")}
+          </p>
         </div>
         {isSingleMethod(method) ? (
           <div className="min-w-0">
@@ -139,8 +192,9 @@ export function RecordPaymentForm({
               name={methodFieldName(method)}
               className={cn(controlClass, "tabular-nums")}
               value={amountRupees}
-              onChange={(event) => setAmountRupees(event.target.value)}
+              onChange={(event) => onAmountChange(event.target.value)}
               inputMode="decimal"
+              max={paiseToRupeesInput(pendingPaise)}
             />
           </div>
         ) : (
@@ -159,6 +213,10 @@ export function RecordPaymentForm({
                 id={`${idPrefix}-cash`}
                 name="cashRupees"
                 className={cn(controlClass, "tabular-nums")}
+                value={cashRupees}
+                onChange={(event) =>
+                  onMixedChange("cash", event.target.value)
+                }
                 inputMode="decimal"
                 placeholder="0"
               />
@@ -171,6 +229,10 @@ export function RecordPaymentForm({
                 id={`${idPrefix}-upi`}
                 name="upiRupees"
                 className={cn(controlClass, "tabular-nums")}
+                value={upiRupees}
+                onChange={(event) =>
+                  onMixedChange("upi", event.target.value)
+                }
                 inputMode="decimal"
                 placeholder="0"
               />
@@ -183,6 +245,10 @@ export function RecordPaymentForm({
                 id={`${idPrefix}-card`}
                 name="cardRupees"
                 className={cn(controlClass, "tabular-nums")}
+                value={cardRupees}
+                onChange={(event) =>
+                  onMixedChange("card", event.target.value)
+                }
                 inputMode="decimal"
                 placeholder="0"
               />
@@ -198,14 +264,16 @@ export function RecordPaymentForm({
         </p>
       ) : null}
 
-      <Button
-        type="submit"
-        size="md"
-        loading={pending}
-        className="min-h-11 bg-blue-600 px-5 text-[14px] font-bold text-white hover:bg-blue-700"
-      >
-        {pending ? t("saving") : t("savePayment")}
-      </Button>
+      <div className="flex justify-end">
+        <Button
+          type="submit"
+          size="md"
+          loading={pending}
+          className="min-h-11 w-full bg-blue-600 px-5 text-[14px] font-bold text-white hover:bg-blue-700 sm:w-auto"
+        >
+          {pending ? t("saving") : t("savePayment")}
+        </Button>
+      </div>
     </form>
   );
 }

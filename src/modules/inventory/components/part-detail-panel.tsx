@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import { useMemo } from "react";
+import Link from "next/link";
 import { useTranslations } from "next-intl";
 import {
   ArrowDownToLine,
@@ -32,10 +33,7 @@ import {
 import { formatRupees } from "@/lib/money";
 import { cn } from "@/lib/utils";
 import { DeletePartButton } from "@/modules/inventory/components/delete-part-button";
-import {
-  EditPartModal,
-  type EditPartValues,
-} from "@/modules/inventory/components/edit-part-modal";
+import type { EditPartValues } from "@/modules/inventory/components/edit-part-modal";
 import {
   AddStockDialog,
   CorrectStockDialog,
@@ -202,18 +200,6 @@ export function PartDetailPanel({
     year: "numeric",
   });
 
-  const editValues: EditPartValues = {
-    id: part.id,
-    name: part.name,
-    sku: part.sku,
-    unit: part.unit,
-    purchasePricePaise: part.purchasePricePaise,
-    sellingPricePaise: part.sellingPricePaise,
-    gstRatePercent: part.gstRatePercent,
-    hsn: part.hsn,
-    lowStockLevel: part.lowStockLevel,
-  };
-
   const requestModal = canManageRequests ? (
     <CreatePartsRequestModal
       parts={[
@@ -313,15 +299,12 @@ export function PartDetailPanel({
             action={
               canWrite ? (
                 <div className="flex flex-wrap items-center gap-2">
-                  <EditPartModal
-                    part={editValues}
-                    trigger={
-                      <Button type="button" variant="outline" size="md">
-                        <Pencil className="size-4" aria-hidden />
-                        {t("edit")}
-                      </Button>
-                    }
-                  />
+                  <Button asChild variant="outline" size="md">
+                    <Link href={`/inventory/${part.id}/edit`}>
+                      <Pencil className="size-4" aria-hidden />
+                      {t("edit")}
+                    </Link>
+                  </Button>
                   <DeletePartButton
                     partId={part.id}
                     partName={part.name}

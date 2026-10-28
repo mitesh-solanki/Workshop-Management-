@@ -50,10 +50,13 @@ export async function findGarageStockSettings(
 }
 
 function partOrderBy(
-  sort: "newest" | "updated" | "name_asc" | "name_desc",
+  sort: "newest" | "oldest" | "updated" | "name_asc" | "name_desc",
 ) {
   if (sort === "newest") {
     return [{ createdAt: "desc" as const }, { name: "asc" as const }];
+  }
+  if (sort === "oldest") {
+    return [{ createdAt: "asc" as const }, { name: "asc" as const }];
   }
   if (sort === "updated") {
     return [{ updatedAt: "desc" as const }, { name: "asc" as const }];
@@ -67,7 +70,7 @@ function partOrderBy(
 export async function searchParts(
   garageId: string,
   q: string,
-  sort: "newest" | "updated" | "name_asc" | "name_desc" = "name_asc",
+  sort: "newest" | "oldest" | "updated" | "name_asc" | "name_desc" = "newest",
 ) {
   const query = q.trim();
   const parts = await prisma.part.findMany({

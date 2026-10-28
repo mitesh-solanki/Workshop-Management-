@@ -14,6 +14,10 @@ vi.mock("@/modules/vehicles/repo", () => ({
   findVehicleById: vi.fn(),
 }));
 
+vi.mock("@/modules/bays/repo", () => ({
+  findBayById: vi.fn(),
+}));
+
 vi.mock("@/modules/service-orders/repo", () => ({
   listTechniciansInGarage: vi.fn(),
   findTechnicianInGarage: vi.fn(),
@@ -27,6 +31,7 @@ vi.mock("@/modules/service-orders/repo", () => ({
   listServiceOrderAuditLogs: vi.fn(),
 }));
 
+import { findBayById } from "@/modules/bays/repo";
 import { findVehicleById } from "@/modules/vehicles/repo";
 import {
   createServiceOrder,
@@ -333,18 +338,109 @@ describe("role limits", () => {
     expect(createServiceOrderLine).not.toHaveBeenCalled();
   });
 
-  it("blocks technicians from creating orders", async () => {
-    await expect(
-      createOrder(techA, {
-        vehicleId: "veh-1",
-        complaint: "Noise",
-        requestedServices: null,
-        odometerIn: null,
-        expectedCompletion: null,
-        technicianId: null,
-        bay: null,
+  it("lets technicians create orders assigned to themselves", async () => {
+    vi.mocked(findVehicleById).mockResolvedValue(sampleVehicle);
+    vi.mocked(findTechnicianInGarage).mockResolvedValue({
+      id: "tech-a",
+      name: "Ravi",
+      email: "ravi@example.com",
+      role: "TECHNICIAN",
+    });
+    vi.mocked(createServiceOrder).mockResolvedValue(
+      sampleOrder({ technicianId: "tech-a" }),
+    );
+
+    await createOrder(techA, {
+      vehicleId: "veh-1",
+      complaint: "Noise",
+      requestedServices: null,
+      odometerIn: null,
+      expectedCompletion: null,
+      technicianId: null,
+      bay: null,
+      priority: "NORMAL",
+    });
+
+    expect(createServiceOrder).toHaveBeenCalledWith(
+      garageA,
+      expect.objectContaining({
+        technicianId: "tech-a",
+        actorId: "tech-a",
       }),
-    ).rejects.toBeInstanceOf(ForbiddenError);
+    );
+  });
+
+  it("forces technician labour/part lines to zero price without changing owner pricing", async () => {
+    vi.mocked(findServiceOrderById).mockResolvedValue(
+      sampleOrder({ technicianId: "tech-a" }),
+    );
+    vi.mocked(createServiceOrderLine).mockResolvedValue({
+      ok: true,
+      line: {
+        id: "line-1",
+        garageId: garageA,
+        serviceOrderId: "order-1",
+        type: "LABOUR",
+        description: "Pad change",
+        quantity: 1,
+        unitPricePaise: 0,
+        partId: null,
+        sortOrder: 0,
+        createdAt: new Date("2026-01-01T00:00:00.000Z"),
+        updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+      },
+    });
+
+    await addOrderLine(techA, "order-1", {
+      type: "LABOUR",
+      description: "Pad change",
+      quantity: 1,
+      unitPricePaise: "999",
+      partId: null,
+    });
+
+    expect(createServiceOrderLine).toHaveBeenCalledWith(
+      garageA,
+      expect.objectContaining({
+        unitPricePaise: 0,
+        actorId: "tech-a",
+      }),
+    );
+
+    vi.mocked(createServiceOrderLine).mockClear();
+    vi.mocked(findServiceOrderById).mockResolvedValue(sampleOrder());
+    vi.mocked(createServiceOrderLine).mockResolvedValue({
+      ok: true,
+      line: {
+        id: "line-2",
+        garageId: garageA,
+        serviceOrderId: "order-1",
+        type: "LABOUR",
+        description: "Pad change",
+        quantity: 1,
+        unitPricePaise: 99900,
+        partId: null,
+        sortOrder: 0,
+        createdAt: new Date("2026-01-01T00:00:00.000Z"),
+        updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+      },
+    });
+
+    await addOrderLine(ownerA, "order-1", {
+      type: "LABOUR",
+      description: "Pad change",
+      quantity: 1,
+      unitPricePaise: "999",
+      partId: null,
+    });
+
+    expect(createServiceOrderLine).toHaveBeenCalledWith(
+      garageA,
+      expect.objectContaining({
+        unitPricePaise: 99900,
+        actorId: "owner-a",
+      }),
+    );
   });
 
   it("blocks changes on completed orders", async () => {
@@ -404,6 +500,34 @@ describe("role limits", () => {
     expect(listServiceOrders).toHaveBeenCalledWith(garageA, {
       bay: "Bay 1",
     });
+  });
+
+  it("lets managers filter the board by bayId mapped to bay name", async () => {
+    vi.mocked(findBayById).mockResolvedValue({
+      id: "bay-1",
+      name: "Bay 1",
+      active: true,
+      sortOrder: 0,
+      createdAt: new Date("2026-01-01"),
+      updatedAt: new Date("2026-01-01"),
+    });
+    vi.mocked(listServiceOrders).mockResolvedValue([sampleOrder()]);
+
+    await listOrders(managerA, { bayId: "bay-1" });
+
+    expect(findBayById).toHaveBeenCalledWith(garageA, "bay-1");
+    expect(listServiceOrders).toHaveBeenCalledWith(garageA, {
+      bay: "Bay 1",
+    });
+  });
+
+  it("ignores unknown bayId when filtering the board", async () => {
+    vi.mocked(findBayById).mockResolvedValue(null);
+    vi.mocked(listServiceOrders).mockResolvedValue([sampleOrder()]);
+
+    await listOrders(managerA, { bayId: "missing-bay" });
+
+    expect(listServiceOrders).toHaveBeenCalledWith(garageA, {});
   });
 
   it("combines technician and bay filters", async () => {

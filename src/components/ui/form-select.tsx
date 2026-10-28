@@ -73,6 +73,9 @@ export function FormSelect({
   const hasEmptyChoice = listOptions.some((option) => option.value === "");
   const placeholderEmpty = current === "" && !hasEmptyChoice;
   const radixValue = toInternal(current);
+  const selectedLabel = listOptions.find(
+    (option) => option.value === current,
+  )?.label;
 
   function handleChange(next: string) {
     const external = fromInternal(next);
@@ -105,7 +108,9 @@ export function FormSelect({
               <span className="text-muted-foreground">{placeholder}</span>
             </SelectValue>
           ) : (
-            <SelectValue placeholder={placeholder} />
+            <SelectValue placeholder={placeholder}>
+              {selectedLabel}
+            </SelectValue>
           )}
         </SelectTrigger>
         <SelectContent

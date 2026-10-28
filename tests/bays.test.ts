@@ -76,8 +76,8 @@ describe("bays roles and garage isolation", () => {
     vi.clearAllMocks();
   });
 
-  it("lets technicians read but not write", () => {
-    expect(() => assertCanAccessBays(techA)).not.toThrow();
+  it("blocks technicians from bays", () => {
+    expect(() => assertCanAccessBays(techA)).toThrow(ForbiddenError);
     expect(canWriteBays(techA)).toBe(false);
     expect(canWriteBays(ownerA)).toBe(true);
   });
@@ -108,7 +108,7 @@ describe("bays roles and garage isolation", () => {
 
     const result = await listBays(ownerA, { q: "Bay" });
 
-    expect(searchBays).toHaveBeenCalledWith(garageA, "Bay", 1, 10, "sort_asc");
+    expect(searchBays).toHaveBeenCalledWith(garageA, "Bay", 1, 10, "newest");
     expect(countOpenOrdersByBayName).toHaveBeenCalledWith(garageA, ["Bay 1"]);
     expect(result.items[0]?.openJobCount).toBe(2);
     expect(searchBays).not.toHaveBeenCalledWith(

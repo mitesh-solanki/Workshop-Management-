@@ -88,10 +88,16 @@ function vehicleSearchWhere(garageId: string, q: string | undefined) {
   };
 }
 
-function vehicleOrderBy(sort: "newest" | "updated") {
+function vehicleOrderBy(sort: "newest" | "oldest" | "updated") {
   if (sort === "updated") {
     return [
       { updatedAt: "desc" as const },
+      { registrationNumber: "asc" as const },
+    ];
+  }
+  if (sort === "oldest") {
+    return [
+      { createdAt: "asc" as const },
       { registrationNumber: "asc" as const },
     ];
   }
@@ -154,7 +160,12 @@ export async function searchVehicles(
   q: string | undefined,
   page: number,
   pageSize: number,
-  sort: "newest" | "updated" | "name_asc" | "name_desc" = "name_asc",
+  sort:
+    | "newest"
+    | "oldest"
+    | "updated"
+    | "name_asc"
+    | "name_desc" = "newest",
 ) {
   const where = vehicleSearchWhere(garageId, q);
   const skip = (page - 1) * pageSize;
@@ -209,7 +220,9 @@ export async function searchVehicles(
           },
         },
       },
-      orderBy: vehicleOrderBy(sort),
+      orderBy: vehicleOrderBy(
+        sort === "updated" || sort === "oldest" ? sort : "newest",
+      ),
       skip,
       take: pageSize,
     }),

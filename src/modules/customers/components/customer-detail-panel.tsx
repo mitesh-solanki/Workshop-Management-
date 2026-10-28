@@ -118,42 +118,24 @@ export function CustomerDetailPanel({
     },
   ];
 
-  const newJobHref =
-    vehicles.length === 1
-      ? `/orders/new?vehicleId=${vehicles[0]!.id}`
-      : "/orders/new";
-
-  const mobileCtas =
-    canWrite || (canCreateOrder && vehicles.length > 0) ? (
-      <>
-        {canWrite ? (
-          <CreateVehicleModal
-            customerId={customer.id}
-            customerName={customer.name}
-            onCreated={() => scrollToSection("vehicles")}
-            trigger={
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="min-h-10 min-w-0 flex-1"
-              >
-                <Plus className="size-3.5 shrink-0" aria-hidden />
-                <span className="truncate">{tv("add")}</span>
-              </Button>
-            }
-          />
-        ) : null}
-        {canCreateOrder && vehicles.length > 0 ? (
-          <Button asChild size="sm" className="min-h-10 min-w-0 flex-1">
-            <Link href={newJobHref}>
-              <Plus className="size-3.5 shrink-0" aria-hidden />
-              <span className="truncate">{to("createShort")}</span>
-            </Link>
-          </Button>
-        ) : null}
-      </>
-    ) : null;
+  const mobileCtas = canWrite ? (
+    <CreateVehicleModal
+      customerId={customer.id}
+      customerName={customer.name}
+      onCreated={() => scrollToSection("vehicles")}
+      trigger={
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="min-h-10 min-w-0 flex-1"
+        >
+          <Plus className="size-3.5 shrink-0" aria-hidden />
+          <span className="truncate">{tv("add")}</span>
+        </Button>
+      }
+    />
+  ) : null;
 
   const navProps = {
     title: t("sectionsTitle"),
@@ -301,19 +283,13 @@ export function CustomerDetailPanel({
               customerId={customer.id}
               locale={locale}
               canWrite={canWrite}
+              canCreateOrder={canCreateOrder}
               empty={
                 <EmptyState
                   icon={Car}
                   title={t("noVehicles")}
                   body={t("noVehiclesDescription")}
-                  action={
-                    canWrite ? (
-                      <CreateVehicleModal
-                        customerId={customer.id}
-                        customerName={customer.name}
-                      />
-                    ) : null
-                  }
+                  centered
                 />
               }
             />
@@ -326,10 +302,10 @@ export function CustomerDetailPanel({
             sectionRef={setSectionRef("service")}
             action={
               canCreateOrder && vehicles.length > 0 ? (
-                <Button asChild size="md">
-                  <Link href={newJobHref}>
-                    <Plus className="size-4" aria-hidden />
-                    <span className="lg:hidden">{t("addShort")}</span>
+                <Button asChild size="md" className="text-white">
+                  <Link href={`/orders/new?customerId=${customer.id}`}>
+                    <Plus className="size-4 text-white" aria-hidden />
+                    <span className="lg:hidden">{to("createShort")}</span>
                     <span className="hidden lg:inline">{to("createShort")}</span>
                   </Link>
                 </Button>
@@ -346,6 +322,16 @@ export function CustomerDetailPanel({
                 vehicles.length === 0
                   ? t("noVehiclesDescription")
                   : t("serviceHistoryPlaceholder")
+              }
+              emptyAction={
+                canCreateOrder && vehicles.length > 0 ? (
+                  <Button asChild size="md" className="text-white">
+                    <Link href={`/orders/new?customerId=${customer.id}`}>
+                      <Plus className="size-4 text-white" aria-hidden />
+                      {to("createShort")}
+                    </Link>
+                  </Button>
+                ) : undefined
               }
               showRegistration
               statusLabel={(status) => to(`statuses.${status}`)}

@@ -11,6 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
+  DialogBody,
   DialogClose,
   DialogContent,
   DialogDescription,
@@ -106,7 +107,7 @@ export function EditDirectSaleModal({
           <DialogDescription>{t("editSaleSubtitle")}</DialogDescription>
         </DialogHeader>
 
-        <div className="max-h-[min(75vh,36rem)] overflow-y-auto bg-background px-5 py-5 sm:px-6">
+        <DialogBody className="bg-background px-5 py-5 sm:px-6">
           <DirectSaleForm
             key={`${sale.id}-${open ? "open" : "closed"}`}
             formId={formId}
@@ -128,7 +129,7 @@ export function EditDirectSaleModal({
             }}
           />
           <input type="hidden" form={formId} name="saleId" value={sale.id} />
-        </div>
+        </DialogBody>
 
         <DialogFooter className="gap-2 border-t border-border bg-muted/30 px-5 py-4 sm:justify-end sm:px-6">
           <DialogClose asChild>

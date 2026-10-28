@@ -10,6 +10,7 @@ import {
 type Props = {
   section: JobCardSection;
   onSectionChange: (section: JobCardSection) => void;
+  sections?: readonly JobCardSection[];
 };
 
 const SECTION_NUMBERS: Record<JobCardSection, string> = {
@@ -21,7 +22,11 @@ const SECTION_NUMBERS: Record<JobCardSection, string> = {
   timeline: "06",
 };
 
-export function JobCardSectionNav({ section, onSectionChange }: Props) {
+export function JobCardSectionNav({
+  section,
+  onSectionChange,
+  sections = JOB_CARD_SECTIONS,
+}: Props) {
   const t = useTranslations("orders");
   const ti = useTranslations("inspections");
   const te = useTranslations("estimates");
@@ -45,6 +50,13 @@ export function JobCardSectionNav({ section, onSectionChange }: Props) {
     timeline: t("sectionNav.timeline"),
   };
 
+  const numbers = Object.fromEntries(
+    sections.map((id, index) => [
+      id,
+      String(index + 1).padStart(2, "0"),
+    ]),
+  ) as Record<JobCardSection, string>;
+
   return (
     <nav
       aria-label={t("sectionsTitle")}
@@ -54,7 +66,7 @@ export function JobCardSectionNav({ section, onSectionChange }: Props) {
         {t("sectionsTitle")}
       </h3>
       <div className="flex gap-1.5 overflow-x-auto lg:flex-col lg:overflow-visible">
-        {JOB_CARD_SECTIONS.map((id) => {
+        {sections.map((id) => {
           const isActive = section === id;
           return (
             <button
@@ -77,7 +89,7 @@ export function JobCardSectionNav({ section, onSectionChange }: Props) {
                     : "border-[#d7deea] bg-white text-slate-500",
                 )}
               >
-                {SECTION_NUMBERS[id]}
+                {numbers[id] ?? SECTION_NUMBERS[id]}
               </span>
               <span className="min-w-0">
                 <span className="block truncate text-[13px] font-bold">

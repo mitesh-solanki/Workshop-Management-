@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useMemo, useRef, useState } from "react";
+import { useActionState, useEffect, useId, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Banknote } from "lucide-react";
@@ -11,6 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
+  DialogBody,
   DialogClose,
   DialogContent,
   DialogDescription,
@@ -55,6 +56,7 @@ export function RecordPaymentModal({
   const t = useTranslations("vendorBills");
   const te = useTranslations("errors");
   const tc = useTranslations("common");
+  const formId = useId();
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [values, setValues] = useState<FormValues>({
@@ -144,85 +146,87 @@ export function RecordPaymentModal({
           </DialogDescription>
         </DialogHeader>
 
-        <form
-          action={(formData) => {
-            if (!validateClient()) return;
-            formAction(formData);
-          }}
-          className="flex flex-col gap-4 px-5 py-4"
-        >
-          <FormField
-            id="modal-pay-amount"
-            label={t("amount")}
-            error={fieldErrors.amount}
-            hint={tc("unitPriceHint")}
+        <DialogBody className="px-5 py-4">
+          <form
+            id={formId}
+            action={(formData) => {
+              if (!validateClient()) return;
+              formAction(formData);
+            }}
+            className="flex flex-col gap-4"
           >
-            <Input
+            <FormField
               id="modal-pay-amount"
-              name="amount"
-              type="text"
-              inputMode="decimal"
-              autoComplete="off"
-              required
-              placeholder={t("amountPlaceholder")}
-              value={values.amount}
-              aria-invalid={Boolean(fieldErrors.amount)}
-              className="h-11 min-h-11"
-              onBeforeInput={(event) => {
-                const native = event.nativeEvent as InputEvent;
-                const data = native.data;
-                if (data == null || data === "") return;
-                if (!/^[\d.]+$/.test(data)) {
-                  event.preventDefault();
+              label={t("amount")}
+              error={fieldErrors.amount}
+              hint={tc("unitPriceHint")}
+            >
+              <Input
+                id="modal-pay-amount"
+                name="amount"
+                type="text"
+                inputMode="decimal"
+                autoComplete="off"
+                required
+                placeholder={t("amountPlaceholder")}
+                value={values.amount}
+                aria-invalid={Boolean(fieldErrors.amount)}
+                className="h-11 min-h-11"
+                onBeforeInput={(event) => {
+                  const native = event.nativeEvent as InputEvent;
+                  const data = native.data;
+                  if (data == null || data === "") return;
+                  if (!/^[\d.]+$/.test(data)) {
+                    event.preventDefault();
+                  }
+                }}
+                onChange={(e) =>
+                  setField("amount", sanitizeRupeesTyping(e.target.value))
                 }
-              }}
-              onChange={(e) =>
-                setField("amount", sanitizeRupeesTyping(e.target.value))
-              }
-              onFocus={(event) => {
-                if (isZeroRupeesInput(event.currentTarget.value)) {
-                  event.currentTarget.select();
-                }
-              }}
-            />
-          </FormField>
-          <FormField id="modal-pay-method" label={t("method")}>
-            <FormSelect
-              id="modal-pay-method"
-              name="method"
-              value={values.method}
-              onValueChange={(value) => setField("method", value)}
-              triggerClassName="h-11 min-h-11"
-              options={[
-                { value: "CASH", label: t("methods.CASH") },
-                { value: "UPI", label: t("methods.UPI") },
-                { value: "BANK", label: t("methods.BANK") },
-                { value: "CARD", label: t("methods.CARD") },
-                { value: "OTHER", label: t("methods.OTHER") },
-              ]}
-            />
-          </FormField>
-          <FormField id="modal-pay-notes" label={t("notes")}>
-            <Textarea
-              id="modal-pay-notes"
-              name="notes"
-              rows={2}
-              value={values.notes}
-              onChange={(e) => setField("notes", e.target.value)}
-            />
-          </FormField>
-
-          <DialogFooter className="gap-2 border-t border-border px-0 pt-4 sm:justify-end">
-            <DialogClose asChild>
-              <Button type="button" variant="secondary" size="md">
-                {t("cancel")}
-              </Button>
-            </DialogClose>
-            <Button type="submit" size="md" loading={pending}>
-              {pending ? t("saving") : t("recordPayment")}
+                onFocus={(event) => {
+                  if (isZeroRupeesInput(event.currentTarget.value)) {
+                    event.currentTarget.select();
+                  }
+                }}
+              />
+            </FormField>
+            <FormField id="modal-pay-method" label={t("method")}>
+              <FormSelect
+                id="modal-pay-method"
+                name="method"
+                value={values.method}
+                onValueChange={(value) => setField("method", value)}
+                triggerClassName="h-11 min-h-11"
+                options={[
+                  { value: "CASH", label: t("methods.CASH") },
+                  { value: "UPI", label: t("methods.UPI") },
+                  { value: "BANK", label: t("methods.BANK") },
+                  { value: "CARD", label: t("methods.CARD") },
+                  { value: "OTHER", label: t("methods.OTHER") },
+                ]}
+              />
+            </FormField>
+            <FormField id="modal-pay-notes" label={t("notes")}>
+              <Textarea
+                id="modal-pay-notes"
+                name="notes"
+                rows={2}
+                value={values.notes}
+                onChange={(e) => setField("notes", e.target.value)}
+              />
+            </FormField>
+          </form>
+        </DialogBody>
+        <DialogFooter className="gap-2 border-t border-border bg-background px-5 py-4 sm:justify-end">
+          <DialogClose asChild>
+            <Button type="button" variant="secondary" size="md">
+              {t("cancel")}
             </Button>
-          </DialogFooter>
-        </form>
+          </DialogClose>
+          <Button type="submit" form={formId} size="md" loading={pending}>
+            {pending ? t("saving") : t("recordPayment")}
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

@@ -15,9 +15,10 @@ const DEBOUNCE_MS = 300;
 
 const SORT_LABEL_KEYS: Record<
   VendorSort,
-  "newest" | "nameAsc" | "nameDesc"
+  "newest" | "oldest" | "nameAsc" | "nameDesc"
 > = {
   newest: "newest",
+  oldest: "oldest",
   name_asc: "nameAsc",
   name_desc: "nameDesc",
 };

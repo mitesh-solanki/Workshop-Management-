@@ -1,14 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { Eye } from "lucide-react";
+import { Eye, Pencil } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { DeletePartButton } from "@/modules/inventory/components/delete-part-button";
-import {
-  EditPartModal,
-  type EditPartValues,
-} from "@/modules/inventory/components/edit-part-modal";
+import type { EditPartValues } from "@/modules/inventory/components/edit-part-modal";
 
 type Props = {
   part: EditPartValues;
@@ -32,7 +29,14 @@ export function InventoryRowActions({ part, canWrite }: Props) {
       </Button>
       {canWrite ? (
         <>
-          <EditPartModal part={part} />
+          <Button asChild variant="outline" size="icon-sm">
+            <Link
+              href={`/inventory/${part.id}/edit`}
+              aria-label={t("edit")}
+            >
+              <Pencil className="size-4" aria-hidden />
+            </Link>
+          </Button>
           <DeletePartButton partId={part.id} partName={part.name} />
         </>
       ) : null}

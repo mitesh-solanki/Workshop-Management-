@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useRef, useState } from "react";
+import { useActionState, useEffect, useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Plus } from "lucide-react";
@@ -11,6 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
+  DialogBody,
   DialogClose,
   DialogContent,
   DialogDescription,
@@ -35,6 +36,7 @@ export function CreateBayModal({ trigger, size = "md" }: Props) {
   const t = useTranslations("bays");
   const te = useTranslations("errors");
   const router = useRouter();
+  const formId = useId();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [fieldError, setFieldError] = useState<string | undefined>();
@@ -107,45 +109,47 @@ export function CreateBayModal({ trigger, size = "md" }: Props) {
           <DialogDescription>{t("newSubtitle")}</DialogDescription>
         </DialogHeader>
 
-        <form
-          action={(formData) => {
-            if (!validateClient()) return;
-            formAction(formData);
-          }}
-          className="flex flex-col gap-4 px-5 py-4"
-        >
-          <FormField
-            id="modal-bay-name"
-            label={t("name")}
-            error={fieldError}
+        <DialogBody className="px-5 py-4">
+          <form
+            id={formId}
+            action={(formData) => {
+              if (!validateClient()) return;
+              formAction(formData);
+            }}
+            className="flex flex-col gap-4"
           >
-            <Input
+            <FormField
               id="modal-bay-name"
-              name="name"
-              value={name}
-              onChange={(e) => {
-                setName(e.target.value);
-                if (fieldError) setFieldError(undefined);
-              }}
-              maxLength={BAY_NAME_MAX}
-              autoFocus
-              placeholder={t("namePlaceholder")}
-              aria-invalid={Boolean(fieldError)}
-              className="h-11 min-h-11"
-            />
-          </FormField>
-
-          <DialogFooter className="gap-2 border-t border-border pt-4 sm:justify-end">
-            <DialogClose asChild>
-              <Button type="button" variant="outline" disabled={pending}>
-                {t("cancel")}
-              </Button>
-            </DialogClose>
-            <Button type="submit" disabled={pending}>
-              {pending ? t("saving") : t("create")}
+              label={t("name")}
+              error={fieldError}
+            >
+              <Input
+                id="modal-bay-name"
+                name="name"
+                value={name}
+                onChange={(e) => {
+                  setName(e.target.value);
+                  if (fieldError) setFieldError(undefined);
+                }}
+                maxLength={BAY_NAME_MAX}
+                autoFocus
+                placeholder={t("namePlaceholder")}
+                aria-invalid={Boolean(fieldError)}
+                className="h-11 min-h-11"
+              />
+            </FormField>
+          </form>
+        </DialogBody>
+        <DialogFooter className="gap-2 border-t border-border bg-background px-5 py-4 sm:justify-end">
+          <DialogClose asChild>
+            <Button type="button" variant="outline" disabled={pending}>
+              {t("cancel")}
             </Button>
-          </DialogFooter>
-        </form>
+          </DialogClose>
+          <Button type="submit" form={formId} disabled={pending}>
+            {pending ? t("saving") : t("create")}
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

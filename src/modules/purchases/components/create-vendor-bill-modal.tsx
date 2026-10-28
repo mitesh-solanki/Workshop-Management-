@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useRef, useState } from "react";
+import { useActionState, useEffect, useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Plus, Upload, X } from "lucide-react";
@@ -11,6 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
+  DialogBody,
   DialogClose,
   DialogContent,
   DialogDescription,
@@ -24,6 +25,7 @@ import { FormSelect } from "@/components/ui/form-select";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/toast";
+import { finishCreateModalNavigation } from "@/lib/create-modal-navigation";
 import {
   isZeroRupeesInput,
   parseRupeesToPaise,
@@ -79,6 +81,7 @@ export function CreateVendorBillModal({
   const te = useTranslations("errors");
   const tc = useTranslations("common");
   const router = useRouter();
+  const formId = useId();
   const [open, setOpen] = useState(false);
   const [values, setValues] = useState(() =>
     emptyValues(defaultVendorId, defaultPurchaseOrderId),
@@ -140,7 +143,13 @@ export function CreateVendorBillModal({
           }
           return;
         }
-        router.push(`/vendor-bills/${billId}`);
+        finishCreateModalNavigation({
+          kind: "vendor-bill",
+          recordId: billId,
+          href: `/vendor-bills/${billId}`,
+          router,
+          close: () => setOpen(false),
+        });
       }, 0);
     })();
   }, [state, router, t, stayAndRefresh, defaultVendorId, defaultPurchaseOrderId]);
@@ -238,204 +247,206 @@ export function CreateVendorBillModal({
           <DialogDescription>{t("newSubtitle")}</DialogDescription>
         </DialogHeader>
 
-        <form
-          action={(formData) => {
-            if (!validateClient()) return;
-            formAction(formData);
-          }}
-          className="flex max-h-[min(80vh,40rem)] flex-col gap-4 overflow-y-auto px-5 py-4"
-        >
-          {defaultVendorId ? (
-            <input type="hidden" name="vendorId" value={defaultVendorId} />
-          ) : (
-            <FormField
-              id="modal-vb-vendor"
-              label={t("vendor")}
-              error={fieldErrors.vendorId}
-            >
-              <FormSelect
-                id="modal-vb-vendor"
-                name="vendorId"
-                required
-                value={vendorIdValue}
-                onValueChange={(value) => {
-                  setValues((prev) => ({
-                    ...prev,
-                    vendorId: value,
-                    purchaseOrderId:
-                      prev.purchaseOrderId &&
-                      purchaseOrders.some(
-                        (po) =>
-                          po.id === prev.purchaseOrderId &&
-                          po.vendorId === value,
-                      )
-                        ? prev.purchaseOrderId
-                        : "",
-                  }));
-                  setFieldErrors((prev) => {
-                    if (!prev.vendorId && !prev.purchaseOrderId) return prev;
-                    const next = { ...prev };
-                    delete next.vendorId;
-                    delete next.purchaseOrderId;
-                    return next;
-                  });
-                }}
-                placeholder={t("vendorPlaceholder")}
-                triggerClassName="h-11 min-h-11"
-                options={vendors.map((vendor) => ({
-                  value: vendor.id,
-                  label: vendor.name,
-                }))}
-              />
-            </FormField>
-          )}
-          {purchaseOrders.length > 0 ? (
-            <FormField id="modal-vb-po" label={t("purchaseOrder")}>
-              <FormSelect
-                id="modal-vb-po"
-                name="purchaseOrderId"
-                value={values.purchaseOrderId ?? ""}
-                onValueChange={onPurchaseOrderChange}
-                placeholder={t("purchaseOrderPlaceholder")}
-                triggerClassName="h-11 min-h-11"
-                options={[
-                  { value: "", label: t("purchaseOrderNone") },
-                  ...purchaseOrdersForVendor.map((po) => ({
-                    value: po.id,
-                    label: po.number,
-                  })),
-                ]}
-              />
-            </FormField>
-          ) : null}
-          <div className="grid gap-4 sm:grid-cols-2">
-            <FormField id="modal-vb-billNumber" label={t("billNumber")}>
-              <Input
-                id="modal-vb-billNumber"
-                name="billNumber"
-                value={values.billNumber}
-                onChange={(e) => setField("billNumber", e.target.value)}
-                className="h-11 min-h-11"
-              />
-            </FormField>
-            <FormField id="modal-vb-billDate" label={t("billDate")}>
-              <Input
-                id="modal-vb-billDate"
-                name="billDate"
-                type="date"
-                value={values.billDate}
-                onChange={(e) => setField("billDate", e.target.value)}
-                className="h-11 min-h-11"
-              />
-            </FormField>
-          </div>
-          <FormField
-            id="modal-vb-amount"
-            label={t("amount")}
-            error={fieldErrors.amount}
-            hint={tc("unitPriceHint")}
+        <DialogBody className="px-5 py-4">
+          <form
+            id={formId}
+            action={(formData) => {
+              if (!validateClient()) return;
+              formAction(formData);
+            }}
+            className="flex flex-col gap-4"
           >
-            <Input
-              id="modal-vb-amount"
-              name="amount"
-              type="text"
-              inputMode="decimal"
-              autoComplete="off"
-              required
-              placeholder={t("amountPlaceholder")}
-              value={values.amount ?? ""}
-              aria-invalid={Boolean(fieldErrors.amount)}
-              className="h-11 min-h-11"
-              onBeforeInput={(event) => {
-                const native = event.nativeEvent as InputEvent;
-                const data = native.data;
-                if (data == null || data === "") return;
-                if (!/^[\d.]+$/.test(data)) {
-                  event.preventDefault();
-                }
-              }}
-              onChange={(e) =>
-                setField("amount", sanitizeRupeesTyping(e.target.value))
-              }
-              onFocus={(event) => {
-                if (isZeroRupeesInput(event.currentTarget.value)) {
-                  event.currentTarget.select();
-                }
-              }}
-            />
-          </FormField>
-          <FormField id="modal-vb-notes" label={t("notes")}>
-            <Textarea
-              id="modal-vb-notes"
-              name="notes"
-              rows={2}
-              value={values.notes}
-              onChange={(e) => setField("notes", e.target.value)}
-            />
-          </FormField>
-
-          <FormField id="modal-vb-file" label={t("attachmentLabel")}>
-            <input
-              ref={fileInputRef}
-              id="modal-vb-file"
-              type="file"
-              accept="image/jpeg,image/png,image/webp,application/pdf"
-              className="hidden"
-              disabled={busy}
-              onChange={(event) => {
-                const next = event.target.files?.[0] ?? null;
-                pendingFileRef.current = next;
-                setFile(next);
-              }}
-            />
-            <div className="flex flex-wrap items-center gap-2">
-              <Button
-                type="button"
-                variant="secondary"
-                size="md"
-                disabled={busy}
-                onClick={() => fileInputRef.current?.click()}
+            {defaultVendorId ? (
+              <input type="hidden" name="vendorId" value={defaultVendorId} />
+            ) : (
+              <FormField
+                id="modal-vb-vendor"
+                label={t("vendor")}
+                error={fieldErrors.vendorId}
               >
-                <Upload className="size-4" aria-hidden />
-                {file ? t("changeAttachment") : t("uploadAttachment")}
-              </Button>
-              {file ? (
-                <div className="flex min-h-11 max-w-full items-center gap-2 rounded-md border border-border px-3 text-sm">
-                  <span className="truncate">{file.name}</span>
-                  <button
-                    type="button"
-                    className="inline-flex size-8 shrink-0 items-center justify-center rounded-md hover:bg-muted"
-                    aria-label={t("clearAttachment")}
-                    onClick={() => {
-                      pendingFileRef.current = null;
-                      setFile(null);
-                      if (fileInputRef.current) {
-                        fileInputRef.current.value = "";
-                      }
-                    }}
-                  >
-                    <X className="size-4" aria-hidden />
-                  </button>
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground">
-                  {t("attachmentOptional")}
-                </p>
-              )}
+                <FormSelect
+                  id="modal-vb-vendor"
+                  name="vendorId"
+                  required
+                  value={vendorIdValue}
+                  onValueChange={(value) => {
+                    setValues((prev) => ({
+                      ...prev,
+                      vendorId: value,
+                      purchaseOrderId:
+                        prev.purchaseOrderId &&
+                        purchaseOrders.some(
+                          (po) =>
+                            po.id === prev.purchaseOrderId &&
+                            po.vendorId === value,
+                        )
+                          ? prev.purchaseOrderId
+                          : "",
+                    }));
+                    setFieldErrors((prev) => {
+                      if (!prev.vendorId && !prev.purchaseOrderId) return prev;
+                      const next = { ...prev };
+                      delete next.vendorId;
+                      delete next.purchaseOrderId;
+                      return next;
+                    });
+                  }}
+                  placeholder={t("vendorPlaceholder")}
+                  triggerClassName="h-11 min-h-11"
+                  options={vendors.map((vendor) => ({
+                    value: vendor.id,
+                    label: vendor.name,
+                  }))}
+                />
+              </FormField>
+            )}
+            {purchaseOrders.length > 0 ? (
+              <FormField id="modal-vb-po" label={t("purchaseOrder")}>
+                <FormSelect
+                  id="modal-vb-po"
+                  name="purchaseOrderId"
+                  value={values.purchaseOrderId ?? ""}
+                  onValueChange={onPurchaseOrderChange}
+                  placeholder={t("purchaseOrderPlaceholder")}
+                  triggerClassName="h-11 min-h-11"
+                  options={[
+                    { value: "", label: t("purchaseOrderNone") },
+                    ...purchaseOrdersForVendor.map((po) => ({
+                      value: po.id,
+                      label: po.number,
+                    })),
+                  ]}
+                />
+              </FormField>
+            ) : null}
+            <div className="grid gap-4 sm:grid-cols-2">
+              <FormField id="modal-vb-billNumber" label={t("billNumber")}>
+                <Input
+                  id="modal-vb-billNumber"
+                  name="billNumber"
+                  value={values.billNumber}
+                  onChange={(e) => setField("billNumber", e.target.value)}
+                  className="h-11 min-h-11"
+                />
+              </FormField>
+              <FormField id="modal-vb-billDate" label={t("billDate")}>
+                <Input
+                  id="modal-vb-billDate"
+                  name="billDate"
+                  type="date"
+                  value={values.billDate}
+                  onChange={(e) => setField("billDate", e.target.value)}
+                  className="h-11 min-h-11"
+                />
+              </FormField>
             </div>
-          </FormField>
+            <FormField
+              id="modal-vb-amount"
+              label={t("amount")}
+              error={fieldErrors.amount}
+              hint={tc("unitPriceHint")}
+            >
+              <Input
+                id="modal-vb-amount"
+                name="amount"
+                type="text"
+                inputMode="decimal"
+                autoComplete="off"
+                required
+                placeholder={t("amountPlaceholder")}
+                value={values.amount ?? ""}
+                aria-invalid={Boolean(fieldErrors.amount)}
+                className="h-11 min-h-11"
+                onBeforeInput={(event) => {
+                  const native = event.nativeEvent as InputEvent;
+                  const data = native.data;
+                  if (data == null || data === "") return;
+                  if (!/^[\d.]+$/.test(data)) {
+                    event.preventDefault();
+                  }
+                }}
+                onChange={(e) =>
+                  setField("amount", sanitizeRupeesTyping(e.target.value))
+                }
+                onFocus={(event) => {
+                  if (isZeroRupeesInput(event.currentTarget.value)) {
+                    event.currentTarget.select();
+                  }
+                }}
+              />
+            </FormField>
+            <FormField id="modal-vb-notes" label={t("notes")}>
+              <Textarea
+                id="modal-vb-notes"
+                name="notes"
+                rows={2}
+                value={values.notes}
+                onChange={(e) => setField("notes", e.target.value)}
+              />
+            </FormField>
 
-          <DialogFooter className="gap-2 border-t border-border px-0 pt-4 sm:justify-end">
-            <DialogClose asChild>
-              <Button type="button" variant="secondary" size="md" disabled={busy}>
-                {t("cancel")}
-              </Button>
-            </DialogClose>
-            <Button type="submit" size="md" loading={busy}>
-              {busy ? t("saving") : t("create")}
+            <FormField id="modal-vb-file" label={t("attachmentLabel")}>
+              <input
+                ref={fileInputRef}
+                id="modal-vb-file"
+                type="file"
+                accept="image/jpeg,image/png,image/webp,application/pdf"
+                className="hidden"
+                disabled={busy}
+                onChange={(event) => {
+                  const next = event.target.files?.[0] ?? null;
+                  pendingFileRef.current = next;
+                  setFile(next);
+                }}
+              />
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="md"
+                  disabled={busy}
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <Upload className="size-4" aria-hidden />
+                  {file ? t("changeAttachment") : t("uploadAttachment")}
+                </Button>
+                {file ? (
+                  <div className="flex min-h-11 max-w-full items-center gap-2 rounded-md border border-border px-3 text-sm">
+                    <span className="truncate">{file.name}</span>
+                    <button
+                      type="button"
+                      className="inline-flex size-8 shrink-0 items-center justify-center rounded-md hover:bg-muted"
+                      aria-label={t("clearAttachment")}
+                      onClick={() => {
+                        pendingFileRef.current = null;
+                        setFile(null);
+                        if (fileInputRef.current) {
+                          fileInputRef.current.value = "";
+                        }
+                      }}
+                    >
+                      <X className="size-4" aria-hidden />
+                    </button>
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    {t("attachmentOptional")}
+                  </p>
+                )}
+              </div>
+            </FormField>
+          </form>
+        </DialogBody>
+        <DialogFooter className="gap-2 border-t border-border bg-background px-5 py-4 sm:justify-end">
+          <DialogClose asChild>
+            <Button type="button" variant="secondary" size="md" disabled={busy}>
+              {t("cancel")}
             </Button>
-          </DialogFooter>
-        </form>
+          </DialogClose>
+          <Button type="submit" form={formId} size="md" loading={busy}>
+            {busy ? t("saving") : t("create")}
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

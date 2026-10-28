@@ -37,7 +37,9 @@ export default async function CustomerDetailPage({ params }: Props) {
     session.role === "MANAGER" ||
     session.role === "TECHNICIAN";
   const canCreateOrder =
-    session.role === "OWNER" || session.role === "MANAGER";
+    session.role === "OWNER" ||
+    session.role === "MANAGER" ||
+    session.role === "TECHNICIAN";
 
   return (
     <main className="w-full space-y-4">

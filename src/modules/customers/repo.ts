@@ -157,9 +157,12 @@ function customerSearchWhere(garageId: string, q: string | undefined) {
   };
 }
 
-function customerOrderBy(sort: "newest" | "updated") {
+function customerOrderBy(sort: "newest" | "oldest" | "updated") {
   if (sort === "updated") {
     return [{ updatedAt: "desc" as const }, { name: "asc" as const }];
+  }
+  if (sort === "oldest") {
+    return [{ createdAt: "asc" as const }, { name: "asc" as const }];
   }
   return [{ createdAt: "desc" as const }, { name: "asc" as const }];
 }
@@ -214,7 +217,12 @@ export async function searchCustomers(
   q: string | undefined,
   page: number,
   pageSize: number,
-  sort: "newest" | "updated" | "name_asc" | "name_desc" = "newest",
+  sort:
+    | "newest"
+    | "oldest"
+    | "updated"
+    | "name_asc"
+    | "name_desc" = "newest",
 ) {
   const where = customerSearchWhere(garageId, q);
   const skip = (page - 1) * pageSize;
@@ -263,7 +271,9 @@ export async function searchCustomers(
           orderBy: { registrationNumber: "asc" },
         },
       },
-      orderBy: customerOrderBy(sort),
+      orderBy: customerOrderBy(
+        sort === "updated" || sort === "oldest" ? sort : "newest",
+      ),
       skip,
       take: pageSize,
     }),

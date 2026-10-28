@@ -6,6 +6,7 @@ import { Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
   DialogHeader,
@@ -38,12 +39,12 @@ export function ImportModal({ entity, trigger, size = "md" }: Props) {
           </Button>
         )}
       </DialogTrigger>
-      <DialogContent className="flex max-h-[min(92vh,880px)] w-[calc(100%-1rem)] max-w-3xl flex-col gap-0 overflow-hidden p-0 sm:w-[calc(100%-1.5rem)] sm:max-w-3xl lg:max-w-3xl">
-        <DialogHeader className="shrink-0 border-b border-border px-4 py-4 text-left sm:px-5">
+      <DialogContent className="w-[calc(100%-1rem)] max-w-3xl gap-0 p-0 sm:w-[calc(100%-1.5rem)] sm:max-w-3xl lg:max-w-3xl">
+        <DialogHeader className="border-b border-border px-4 py-4 text-left sm:px-5">
           <DialogTitle>{t(`titles.${entity}`)}</DialogTitle>
           <DialogDescription>{t("subtitleModule")}</DialogDescription>
         </DialogHeader>
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-5">
+        <DialogBody className="px-4 py-4 sm:px-5">
           {open ? (
             <ImportWizard
               key={entity}
@@ -51,7 +52,7 @@ export function ImportModal({ entity, trigger, size = "md" }: Props) {
               onDone={() => setOpen(false)}
             />
           ) : null}
-        </div>
+        </DialogBody>
       </DialogContent>
     </Dialog>
   );

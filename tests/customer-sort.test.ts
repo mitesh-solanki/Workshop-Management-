@@ -7,7 +7,8 @@ describe("customer list sort", () => {
     expect(parsed.sort).toBe("newest");
   });
 
-  it("accepts last modified, A–Z and Z–A", () => {
+  it("accepts oldest, last modified, A–Z and Z–A", () => {
+    expect(customerSearchSchema.parse({ sort: "oldest" }).sort).toBe("oldest");
     expect(customerSearchSchema.parse({ sort: "updated" }).sort).toBe(
       "updated",
     );

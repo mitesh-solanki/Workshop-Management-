@@ -81,6 +81,11 @@ const orderListSelect = {
       email: true,
     },
   },
+  lines: {
+    where: { type: "PART" as const, unitPricePaise: 0 },
+    select: { id: true },
+    take: 1,
+  },
 } as const;
 
 export async function listTechniciansInGarage(garageId: string) {
@@ -150,6 +155,43 @@ export async function countOverdueServiceOrders(
       status: { not: "COMPLETED" },
       expectedCompletion: { lt: new Date() },
     },
+  });
+}
+
+/**
+ * Open jobs for the home “today” list: due today or opened today
+ * (bounds are UTC instants for the workshop calendar day).
+ */
+export async function listServiceOrdersForToday(
+  garageId: string,
+  day: { start: Date; end: Date },
+  options: { technicianId?: string } = {},
+) {
+  return prisma.serviceOrder.findMany({
+    where: {
+      ...serviceOrderScopeWhere(garageId, options),
+      status: { not: "COMPLETED" },
+      OR: [
+        {
+          expectedCompletion: {
+            gte: day.start,
+            lt: day.end,
+          },
+        },
+        {
+          createdAt: {
+            gte: day.start,
+            lt: day.end,
+          },
+        },
+      ],
+    },
+    select: orderListSelect,
+    orderBy: [
+      { expectedCompletion: "asc" },
+      { createdAt: "desc" },
+    ],
+    take: 25,
   });
 }
 
@@ -491,6 +533,7 @@ export async function updateServiceOrderLine(
     description: string;
     quantity: number;
     unitPricePaise: number;
+    partId?: string | null;
     actorId: string;
   },
 ): Promise<UpdateServiceOrderLineResult> {
@@ -508,12 +551,30 @@ export async function updateServiceOrderLine(
         throw new StockLineTxError("NOT_FOUND");
       }
 
+      const nextPartId =
+        existing.type === "PART" && data.partId !== undefined
+          ? data.partId
+          : existing.partId;
+
+      if (existing.type === "PART" && nextPartId) {
+        const part = await tx.part.findFirst({
+          where: { id: nextPartId, garageId },
+          select: { id: true },
+        });
+        if (!part) {
+          throw new StockLineTxError("PART_NOT_FOUND");
+        }
+      }
+
       const updated = await tx.serviceOrderLine.update({
         where: { id: existing.id },
         data: {
           description: data.description,
           quantity: data.quantity,
           unitPricePaise: data.unitPricePaise,
+          ...(existing.type === "PART" && data.partId !== undefined
+            ? { partId: nextPartId }
+            : {}),
         },
         select: lineSelect,
       });
@@ -531,8 +592,10 @@ export async function updateServiceOrderLine(
             description: updated.description,
             quantity: updated.quantity,
             unitPricePaise: updated.unitPricePaise,
+            partId: updated.partId,
             previousQuantity: existing.quantity,
             previousUnitPricePaise: existing.unitPricePaise,
+            previousPartId: existing.partId,
           } satisfies Prisma.InputJsonValue,
         },
       });
@@ -543,6 +606,9 @@ export async function updateServiceOrderLine(
     return { ok: true, line };
   } catch (error) {
     if (error instanceof StockLineTxError) {
+      if (error.reason === "PART_NOT_FOUND") {
+        return { ok: false, reason: "NOT_FOUND" };
+      }
       return { ok: false, reason: "NOT_FOUND" };
     }
     throw error;

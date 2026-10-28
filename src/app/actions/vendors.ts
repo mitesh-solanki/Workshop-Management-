@@ -7,6 +7,7 @@ import { requireSession } from "@/lib/session";
 import {
   createVendorRecord,
   deleteVendorRecord,
+  getVendorOptions,
   updateVendorRecord,
 } from "@/modules/vendors/service";
 
@@ -74,5 +75,17 @@ export async function deleteVendorAction(
     return { ok: true, message: t("deleted") };
   } catch (error) {
     return { ok: false, message: await translateError(error) };
+  }
+}
+
+/** Active vendors for selects (id + name). */
+export async function getVendorOptionsAction(): Promise<
+  Array<{ id: string; name: string }>
+> {
+  try {
+    const session = await requireSession();
+    return await getVendorOptions(session);
+  } catch {
+    return [];
   }
 }

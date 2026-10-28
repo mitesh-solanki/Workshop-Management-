@@ -14,6 +14,10 @@ export default async function OrdersPage() {
   const t = await getTranslations("orders");
   const orders = await listOrders(session);
   const canWrite =
+    session.role === "OWNER" ||
+    session.role === "MANAGER" ||
+    session.role === "TECHNICIAN";
+  const showNeedsPricing =
     session.role === "OWNER" || session.role === "MANAGER";
 
   const createAction = canWrite ? (
@@ -44,6 +48,11 @@ export default async function OrdersPage() {
           complaint: order.complaint,
           bay: order.bay,
           createdAt: order.createdAt,
+          expectedCompletion: order.expectedCompletion,
+          needsPricing:
+            showNeedsPricing &&
+            order.status !== "COMPLETED" &&
+            order.lines.length > 0,
           vehicle: {
             registrationNumber: order.vehicle.registrationNumber,
             make: order.vehicle.make,

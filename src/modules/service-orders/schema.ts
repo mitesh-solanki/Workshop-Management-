@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { rupeesToPaiseSchema } from "@/lib/money";
+import { VEHICLE_ODOMETER_MAX } from "@/modules/vehicles/schema";
 
 export const SERVICE_ORDER_STATUSES = [
   "WAITING",
@@ -109,7 +110,7 @@ const optionalOdometer = z
       return null;
     }
     const n = typeof value === "number" ? value : Number(value);
-    if (!Number.isInteger(n) || n < 0 || n > 9_999_999) {
+    if (!Number.isInteger(n) || n < 0 || n > VEHICLE_ODOMETER_MAX) {
       ctx.addIssue({ code: "custom", message: "validation.invalidOdometer" });
       return z.NEVER;
     }
@@ -236,6 +237,15 @@ export const updateServiceOrderLineSchema = z.object({
   description: z.string().trim().min(1).max(500),
   quantity: quantityField,
   unitPricePaise: rupeesToPaiseSchema,
+  partId: z
+    .union([z.string(), z.null(), z.undefined()])
+    .transform((value) => {
+      if (value == null || value === "") {
+        return null;
+      }
+      return value.trim();
+    })
+    .optional(),
 });
 
 export type CreateServiceOrderInput = z.input<typeof createServiceOrderSchema>;

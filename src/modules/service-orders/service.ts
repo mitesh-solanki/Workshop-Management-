@@ -2,6 +2,7 @@ import "server-only";
 
 import { AppError, ForbiddenError, NotFoundError } from "@/lib/errors";
 import { requireRole, type RoleSession } from "@/lib/rbac";
+import { findBayById } from "@/modules/bays/repo";
 import { findVehicleById } from "@/modules/vehicles/repo";
 import {
   addServiceOrderLineSchema,
@@ -18,6 +19,7 @@ import {
   type UpdateServiceOrderLineInput,
   type UpdateServiceOrderStatusInput,
 } from "@/modules/service-orders/schema";
+import { calendarDayBoundsUtc } from "@/lib/calendar-day";
 import {
   countOverdueServiceOrders,
   countServiceOrdersByStatus,
@@ -31,13 +33,30 @@ import {
   listServiceOrders,
   listServiceOrdersByCustomer,
   listServiceOrdersByVehicle,
+  listServiceOrdersForToday,
   listTechniciansInGarage,
   updateServiceOrderDetails,
   updateServiceOrderLine,
   updateServiceOrderStatus,
 } from "@/modules/service-orders/repo";
 
-const CREATE_ROLES = ["OWNER", "MANAGER"] as const;
+async function resolveBayFilterName(
+  garageId: string,
+  options: { bay?: string; bayId?: string },
+): Promise<string | undefined> {
+  const bayName = options.bay?.trim() || undefined;
+  if (bayName) {
+    return bayName;
+  }
+  const bayId = options.bayId?.trim() || undefined;
+  if (!bayId) {
+    return undefined;
+  }
+  const bay = await findBayById(garageId, bayId);
+  return bay?.name;
+}
+
+const CREATE_ROLES = ["OWNER", "MANAGER", "TECHNICIAN"] as const;
 const MANAGE_ROLES = ["OWNER", "MANAGER"] as const;
 const LINE_ROLES = ["OWNER", "MANAGER", "TECHNICIAN"] as const;
 const READ_ROLES = ["OWNER", "MANAGER", "TECHNICIAN", "ACCOUNTANT"] as const;
@@ -84,11 +103,11 @@ export async function listBoardTechnicians(session: RoleSession) {
 
 export async function listOrders(
   session: RoleSession,
-  options: { technicianId?: string; bay?: string } = {},
+  options: { technicianId?: string; bay?: string; bayId?: string } = {},
 ) {
   requireRole(session, READ_ROLES);
 
-  const bay = options.bay?.trim() || undefined;
+  const bay = await resolveBayFilterName(session.garageId, options);
 
   if (session.role === "TECHNICIAN") {
     return listServiceOrders(session.garageId, {
@@ -118,6 +137,19 @@ export async function getDashboardOrderCounts(session: RoleSession) {
   ]);
 
   return { statusCounts, overdueCount };
+}
+
+/** Home “due today” panel — open jobs due today or opened today. */
+export async function listDashboardTodayOrders(session: RoleSession) {
+  requireRole(session, ["OWNER", "MANAGER", "TECHNICIAN"]);
+
+  const scope =
+    session.role === "TECHNICIAN"
+      ? { technicianId: session.userId }
+      : {};
+  const day = calendarDayBoundsUtc();
+
+  return listServiceOrdersForToday(session.garageId, day, scope);
 }
 
 /** Bay chips for the board — scoped by technician filter only (not by selected bay). */
@@ -222,10 +254,13 @@ export async function createOrder(
     throw new NotFoundError();
   }
 
-  if (input.technicianId) {
+  const technicianId =
+    session.role === "TECHNICIAN" ? session.userId : input.technicianId;
+
+  if (technicianId) {
     const technician = await findTechnicianInGarage(
       session.garageId,
-      input.technicianId,
+      technicianId,
     );
     if (!technician) {
       throw new AppError("INVALID_TECHNICIAN", 400);
@@ -239,7 +274,7 @@ export async function createOrder(
     requestedServices: input.requestedServices,
     odometerIn: input.odometerIn,
     expectedCompletion: input.expectedCompletion,
-    technicianId: input.technicianId,
+    technicianId,
     bay: input.bay,
     priority: input.priority,
     actorId: session.userId,
@@ -360,12 +395,15 @@ export async function addOrderLine(
     throw new AppError("inventory.part_required", 400);
   }
 
+  const unitPricePaise =
+    session.role === "TECHNICIAN" ? 0 : input.unitPricePaise;
+
   const result = await createServiceOrderLine(session.garageId, {
     serviceOrderId: order.id,
     type: input.type,
     description: input.description,
     quantity: input.quantity,
-    unitPricePaise: input.unitPricePaise,
+    unitPricePaise,
     partId: input.partId,
     actorId: session.userId,
   });
@@ -392,12 +430,21 @@ export async function updateOrderLine(
   }
   assertCanMutateOrder(session, order);
 
+  const existing = order.lines.find((line) => line.id === lineId);
+  const unitPricePaise =
+    session.role === "TECHNICIAN"
+      ? (existing?.unitPricePaise ?? 0)
+      : input.unitPricePaise;
+
   const result = await updateServiceOrderLine(session.garageId, {
     lineId,
     serviceOrderId: order.id,
     description: input.description,
     quantity: input.quantity,
-    unitPricePaise: input.unitPricePaise,
+    unitPricePaise,
+    ...(existing?.type === "PART"
+      ? { partId: input.partId || existing.partId }
+      : {}),
     actorId: session.userId,
   });
 

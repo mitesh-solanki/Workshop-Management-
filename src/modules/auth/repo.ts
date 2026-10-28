@@ -179,6 +179,61 @@ export async function createOwnerWithGarage(input: {
   });
 }
 
+/** Idempotent dummy / demo technician for a garage (production bootstrap). */
+export async function ensureTechnicianInGarage(input: {
+  garageId: string;
+  email: string;
+  name: string;
+  actorId?: string;
+}) {
+  const email = input.email.trim().toLowerCase();
+  const existing = await prisma.user.findUnique({ where: { email } });
+  if (existing) {
+    if (
+      existing.garageId === input.garageId &&
+      existing.role === "TECHNICIAN"
+    ) {
+      if (existing.name !== input.name) {
+        return prisma.user.update({
+          where: { id: existing.id },
+          data: { name: input.name },
+        });
+      }
+      return existing;
+    }
+    return existing;
+  }
+
+  return prisma.$transaction(async (tx) => {
+    const user = await tx.user.create({
+      data: {
+        email,
+        name: input.name,
+        emailVerified: new Date(),
+        role: "TECHNICIAN",
+        garageId: input.garageId,
+      },
+    });
+
+    await tx.auditLog.create({
+      data: {
+        garageId: input.garageId,
+        actorId: input.actorId ?? user.id,
+        action: "user.created",
+        entity: "User",
+        entityId: user.id,
+        meta: {
+          role: "TECHNICIAN",
+          email,
+          source: "prod_dummy_mechanic",
+        } satisfies Prisma.InputJsonValue,
+      },
+    });
+
+    return user;
+  });
+}
+
 export async function acceptInviteAndCreateUser(input: {
   inviteId: string;
   email: string;

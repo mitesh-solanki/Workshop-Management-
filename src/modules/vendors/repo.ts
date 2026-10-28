@@ -13,6 +13,8 @@ function vendorOrderBy(
       return { name: "asc" };
     case "name_desc":
       return { name: "desc" };
+    case "oldest":
+      return { createdAt: "asc" };
     case "newest":
     default:
       return { createdAt: "desc" };

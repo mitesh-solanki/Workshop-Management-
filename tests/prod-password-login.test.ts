@@ -18,6 +18,7 @@ vi.mock("@/lib/rate-limit", async () => {
 vi.mock("@/modules/auth/repo", () => ({
   findUserByEmailForLogin: vi.fn(),
   createOwnerWithGarage: vi.fn(),
+  ensureTechnicianInGarage: vi.fn(),
   invalidateOpenEmailOtps: vi.fn(),
   createEmailOtpRow: vi.fn(),
   findLatestEmailOtp: vi.fn(),
@@ -37,6 +38,7 @@ import {
 } from "@/modules/auth/service";
 import {
   createOwnerWithGarage,
+  ensureTechnicianInGarage,
   findUserByEmailForLogin,
 } from "@/modules/auth/repo";
 
@@ -108,6 +110,17 @@ describe("production password login", () => {
       updatedAt: new Date(),
     };
     vi.mocked(findUserByEmailForLogin).mockResolvedValue(user);
+    vi.mocked(ensureTechnicianInGarage).mockResolvedValue({
+      id: "tech-1",
+      email: "mechanic@primemotors.in",
+      name: "Demo Mechanic",
+      garageId: "g1",
+      role: "TECHNICIAN",
+      emailVerified: new Date(),
+      image: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
 
     const result = await completeProdPasswordSignIn({
       email: "Owner@PrimeMotors.in",
@@ -116,6 +129,12 @@ describe("production password login", () => {
 
     expect(result).toEqual(user);
     expect(createOwnerWithGarage).not.toHaveBeenCalled();
+    expect(ensureTechnicianInGarage).toHaveBeenCalledWith({
+      garageId: "g1",
+      email: "mechanic@primemotors.in",
+      name: "Demo Mechanic",
+      actorId: "u1",
+    });
   });
 
   it("creates owner and garage on first sign-in", async () => {
@@ -135,6 +154,17 @@ describe("production password login", () => {
       garage: { id: "g2", name: "Prime Motors" },
     };
     vi.mocked(createOwnerWithGarage).mockResolvedValue(created as never);
+    vi.mocked(ensureTechnicianInGarage).mockResolvedValue({
+      id: "tech-2",
+      email: "mechanic@primemotors.in",
+      name: "Demo Mechanic",
+      garageId: "g2",
+      role: "TECHNICIAN",
+      emailVerified: new Date(),
+      image: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
 
     const result = await completeProdPasswordSignIn({
       email: "owner@primemotors.in",
@@ -146,6 +176,65 @@ describe("production password login", () => {
       name: "Prime Motors Owner",
       garageName: "Prime Motors",
     });
+    expect(ensureTechnicianInGarage).toHaveBeenCalledWith({
+      garageId: "g2",
+      email: "mechanic@primemotors.in",
+      name: "Demo Mechanic",
+      actorId: "u2",
+    });
     expect(result).toEqual(created.user);
+  });
+
+  it("signs in the dummy mechanic with the owner password by default", async () => {
+    const owner = {
+      id: "u1",
+      email: "owner@primemotors.in",
+      name: "Prime Motors Owner",
+      garageId: "g1",
+      role: "OWNER" as const,
+      emailVerified: new Date(),
+      image: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    const tech = {
+      id: "tech-1",
+      email: "mechanic@primemotors.in",
+      name: "Demo Mechanic",
+      garageId: "g1",
+      role: "TECHNICIAN" as const,
+      emailVerified: new Date(),
+      image: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    vi.mocked(findUserByEmailForLogin).mockResolvedValueOnce(null);
+    vi.mocked(findUserByEmailForLogin).mockResolvedValueOnce(owner);
+    vi.mocked(ensureTechnicianInGarage).mockResolvedValue(tech);
+
+    const result = await completeProdPasswordSignIn({
+      email: "mechanic@primemotors.in",
+      password: "Workshop@123",
+    });
+
+    expect(ensureTechnicianInGarage).toHaveBeenCalledWith({
+      garageId: "g1",
+      email: "mechanic@primemotors.in",
+      name: "Demo Mechanic",
+      actorId: "u1",
+    });
+    expect(result).toEqual(tech);
+  });
+
+  it("rejects mechanic login when the owner garage does not exist yet", async () => {
+    vi.mocked(findUserByEmailForLogin).mockResolvedValue(null);
+
+    await expect(
+      completeProdPasswordSignIn({
+        email: "mechanic@primemotors.in",
+        password: "Workshop@123",
+      }),
+    ).rejects.toMatchObject({ code: "auth.invalid_credentials" });
+    expect(ensureTechnicianInGarage).not.toHaveBeenCalled();
   });
 });

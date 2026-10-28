@@ -126,6 +126,7 @@ export function InventoryTable({
               gstRatePercent: row.original.gstRatePercent,
               hsn: row.original.hsn,
               lowStockLevel: row.original.lowStockLevel,
+              quantityOnHand: row.original.quantityOnHand,
             }}
           />
         ),
@@ -220,6 +221,7 @@ export function InventoryTable({
                   gstRatePercent: item.gstRatePercent,
                   hsn: item.hsn,
                   lowStockLevel: item.lowStockLevel,
+                  quantityOnHand: item.quantityOnHand,
                 }}
               />
             </div>

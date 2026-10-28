@@ -17,11 +17,14 @@ import {
 type VehicleRowActionsProps = {
   vehicle: EditVehicleValues;
   canWrite: boolean;
+  /** When false, hide the view (eye) control. Default true. */
+  showView?: boolean;
 };
 
 export function VehicleRowActions({
   vehicle,
   canWrite,
+  showView = true,
 }: VehicleRowActionsProps) {
   const t = useTranslations("vehicles");
   const router = useRouter();
@@ -52,11 +55,13 @@ export function VehicleRowActions({
         onClick={(event) => event.stopPropagation()}
         onKeyDown={(event) => event.stopPropagation()}
       >
-        <Button asChild variant="outline" size="icon-sm">
-          <Link href={`/vehicles/${vehicle.id}`} aria-label={t("view")}>
-            <Eye className="size-4" aria-hidden />
-          </Link>
-        </Button>
+        {showView ? (
+          <Button asChild variant="outline" size="icon-sm">
+            <Link href={`/vehicles/${vehicle.id}`} aria-label={t("view")}>
+              <Eye className="size-4" aria-hidden />
+            </Link>
+          </Button>
+        ) : null}
         {canWrite ? (
           <>
             <EditVehicleModal

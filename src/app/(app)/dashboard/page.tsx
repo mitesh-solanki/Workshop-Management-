@@ -4,6 +4,7 @@ import {
   CheckCircle2,
   ClipboardList,
   Clock,
+  Kanban,
   Package,
   PackageSearch,
   Plus,
@@ -24,7 +25,11 @@ import { requireSession } from "@/lib/session";
 import { LowStockAlertList } from "@/modules/inventory/components/low-stock-alert-list";
 import { getLowStockAlerts } from "@/modules/inventory/service";
 import { getGarageSettings } from "@/modules/settings/service";
-import { getDashboardOrderCounts } from "@/modules/service-orders/service";
+import { DashboardTodayOrders } from "@/modules/service-orders/components/dashboard-today-orders";
+import {
+  getDashboardOrderCounts,
+  listDashboardTodayOrders,
+} from "@/modules/service-orders/service";
 
 /** Auth session uses request-time crypto — do not prerender this route. */
 export const instant = false;
@@ -50,9 +55,9 @@ const STATUS_ICON = {
 export default async function DashboardPage() {
   const session = await requireSession();
   const garage = await getGarageSettings(session);
-  const lowStock = await getLowStockAlerts(session);
   const locale = await getLocale();
   const t = await getTranslations("dashboard");
+  const tn = await getTranslations("nav");
   const ti = await getTranslations("inventory");
   const tStatus = await getTranslations("orders.statuses");
 
@@ -63,18 +68,16 @@ export default async function DashboardPage() {
     session.role === "OWNER" || session.role === "MANAGER";
   const canManageStock =
     session.role === "OWNER" || session.role === "MANAGER";
+  const showOrderStats = !isAccountant;
+  const showLowStock = !isTechnician;
 
-  const todayLabel = new Intl.DateTimeFormat(locale, {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  }).format(new Date());
-
-  const showOrderStats = !isTechnician && !isAccountant;
-  const orderCounts = showOrderStats
-    ? await getDashboardOrderCounts(session)
-    : null;
+  const lowStock = showLowStock ? await getLowStockAlerts(session) : [];
+  const [orderCounts, todayOrders] = showOrderStats
+    ? await Promise.all([
+        getDashboardOrderCounts(session),
+        listDashboardTodayOrders(session),
+      ])
+    : [null, []];
   const statusCounts = orderCounts?.statusCounts ?? {
     WAITING: 0,
     INSPECTION: 0,
@@ -85,68 +88,15 @@ export default async function DashboardPage() {
   };
   const overdueCount = orderCounts?.overdueCount ?? 0;
 
-  if (isTechnician) {
-    return (
-      <main className="mx-auto w-full max-w-6xl space-y-6">
-        <header className="space-y-1 text-center sm:text-left">
-          <p className="text-caption font-medium tracking-wide text-slate-500 uppercase">
-            {garage.name}
-          </p>
-          <h1 className="text-page-title text-slate-900">
-            {t("greeting", { name: displayName })}
-          </h1>
-          <p className="text-body text-slate-600">{todayLabel}</p>
-        </header>
-
-        <section className="space-y-3" aria-labelledby="my-jobs-heading">
-          <h2 id="my-jobs-heading" className="text-section-title text-slate-900">
-            {t("myJobs")}
-          </h2>
-          <EmptyState
-            compact
-            icon={ClipboardList}
-            title={t("myJobsEmptyTitle")}
-            description={t("myJobsEmptyDescription")}
-            action={
-              <Button asChild variant="secondary" size="sm">
-                <Link href="/orders">{t("viewOrders")}</Link>
-              </Button>
-            }
-          />
-        </section>
-
-        <section className="space-y-3" aria-labelledby="low-stock-heading">
-          <div className="flex flex-wrap items-center gap-2">
-            <h2
-              id="low-stock-heading"
-              className="text-section-title text-slate-900"
-            >
-              {t("lowStock")}
-            </h2>
-            {lowStock.length > 0 ? (
-              <Badge variant="warning">{lowStock.length}</Badge>
-            ) : null}
-          </div>
-          {lowStock.length === 0 ? (
-            <EmptyState
-              compact
-              icon={Package}
-              title={t("lowStockEmptyTitle")}
-              description={t("lowStockEmptyDescription")}
-            />
-          ) : (
-            <LowStockAlertList
-              parts={lowStock}
-              requestLabel={t("requestPart")}
-            />
-          )}
-        </section>
-      </main>
-    );
-  }
+  const todayLabel = new Intl.DateTimeFormat(locale, {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  }).format(new Date());
 
   return (
-    <main className="mx-auto w-full max-w-6xl space-y-8">
+    <main className="w-full max-w-[1600px] space-y-8">
       <header className="flex flex-col items-center gap-4 text-center sm:flex-row sm:items-start sm:justify-between sm:text-left">
         <div className="min-w-0 space-y-1">
           <p className="text-caption font-medium tracking-wide text-slate-500 uppercase">
@@ -172,10 +122,25 @@ export default async function DashboardPage() {
               </Link>
             </Button>
           </div>
+        ) : isTechnician ? (
+          <div className="flex flex-wrap justify-center gap-2 sm:justify-end">
+            <Button asChild variant="secondary" size="md">
+              <Link href="/workshop">
+                <Kanban className="size-4" aria-hidden />
+                {tn("workshop")}
+              </Link>
+            </Button>
+            <Button asChild size="md">
+              <Link href="/orders">
+                <ClipboardList className="size-4" aria-hidden />
+                {t("viewOrders")}
+              </Link>
+            </Button>
+          </div>
         ) : null}
       </header>
 
-      {!isAccountant ? (
+      {showOrderStats ? (
         <section
           className="space-y-3"
           aria-labelledby="orders-by-status-heading"
@@ -185,7 +150,7 @@ export default async function DashboardPage() {
               id="orders-by-status-heading"
               className="text-section-title text-slate-900"
             >
-              {t("ordersByStatus")}
+              {isTechnician ? t("myOrdersByStatus") : t("ordersByStatus")}
             </h2>
           </div>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
@@ -215,66 +180,80 @@ export default async function DashboardPage() {
         </section>
       ) : null}
 
-      <section className="grid gap-6 lg:grid-cols-2">
-        {!isAccountant ? (
+      <section
+        className={
+          showLowStock ? "grid gap-6 lg:grid-cols-2" : "grid gap-6"
+        }
+      >
+        {showOrderStats ? (
           <div className="space-y-3">
             <h2 className="text-section-title text-slate-900">
-              {t("dueToday")}
+              {isTechnician ? t("myDueToday") : t("dueToday")}
             </h2>
-            <EmptyState
-              compact
-              icon={ClipboardList}
-              title={t("dueTodayEmptyTitle")}
-              description={t("dueTodayEmptyDescription")}
-              action={
-                canCreateWorkshop ? (
-                  <Button asChild size="sm">
-                    <Link href="/orders/new">
-                      <Plus className="size-4" aria-hidden />
-                      {t("newOrder")}
-                    </Link>
-                  </Button>
-                ) : (
-                  <Button asChild variant="secondary" size="sm">
-                    <Link href="/orders">{t("viewOrders")}</Link>
-                  </Button>
-                )
-              }
-            />
+            {todayOrders.length === 0 ? (
+              <EmptyState
+                compact
+                icon={ClipboardList}
+                title={t("dueTodayEmptyTitle")}
+                description={
+                  isTechnician
+                    ? t("dueTodayEmptyTechnician")
+                    : t("dueTodayEmptyDescription")
+                }
+                action={
+                  canCreateWorkshop ? (
+                    <Button asChild size="sm">
+                      <Link href="/orders/new">
+                        <Plus className="size-4" aria-hidden />
+                        {t("newOrder")}
+                      </Link>
+                    </Button>
+                  ) : (
+                    <Button asChild variant="secondary" size="sm">
+                      <Link href="/orders">{t("viewOrders")}</Link>
+                    </Button>
+                  )
+                }
+              />
+            ) : (
+              <DashboardTodayOrders orders={todayOrders} />
+            )}
           </div>
         ) : null}
 
-        <div className="space-y-3">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-section-title text-slate-900">
-                {t("lowStock")}
-              </h2>
-              {lowStock.length > 0 ? (
-                <Badge variant="warning">{lowStock.length}</Badge>
+        {showLowStock ? (
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="text-section-title text-slate-900">
+                  {t("lowStock")}
+                </h2>
+                {lowStock.length > 0 ? (
+                  <Badge variant="warning">{lowStock.length}</Badge>
+                ) : null}
+              </div>
+              {canManageStock ? (
+                <Button asChild size="sm">
+                  <Link href="/inventory">{ti("title")}</Link>
+                </Button>
               ) : null}
             </div>
-            {canManageStock ? (
-              <Button asChild size="sm">
-                <Link href="/inventory">{ti("title")}</Link>
-              </Button>
-            ) : null}
+            {lowStock.length === 0 ? (
+              <EmptyState
+                compact
+                icon={Package}
+                title={t("lowStockEmptyTitle")}
+                description={t("lowStockEmptyDescription")}
+              />
+            ) : (
+              <LowStockAlertList
+                parts={lowStock}
+                canRequest={canManageStock}
+                requestLabel={t("requestPart")}
+              />
+            )}
           </div>
-          {lowStock.length === 0 ? (
-            <EmptyState
-              compact
-              icon={Package}
-              title={t("lowStockEmptyTitle")}
-              description={t("lowStockEmptyDescription")}
-            />
-          ) : (
-            <LowStockAlertList
-              parts={lowStock}
-              canRequest={canManageStock}
-              requestLabel={t("requestPart")}
-            />
-          )}
-        </div>
+        ) : null}
       </section>
     </main>
   );

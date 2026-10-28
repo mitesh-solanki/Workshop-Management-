@@ -186,3 +186,16 @@ export async function translateError(error: unknown): Promise<string> {
 
   return common("error");
 }
+
+/** Per-field messages from a ZodError (first issue per path). */
+export async function translateZodFieldErrors(
+  error: ZodError,
+): Promise<Record<string, string>> {
+  const out: Record<string, string> = {};
+  for (const issue of error.issues) {
+    const key = String(issue.path[0] ?? "");
+    if (!key || out[key]) continue;
+    out[key] = await translateZodIssue(issue);
+  }
+  return out;
+}

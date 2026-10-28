@@ -3,7 +3,8 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
-import { Car } from "lucide-react";
+import { Car, Plus } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import {
   Table,
   TableBody,
@@ -33,6 +34,7 @@ type Props = {
   customerId: string;
   locale: string;
   canWrite: boolean;
+  canCreateOrder?: boolean;
   empty: ReactNode;
 };
 
@@ -64,9 +66,11 @@ export function CustomerVehiclesList({
   customerId,
   locale,
   canWrite,
+  canCreateOrder = false,
   empty,
 }: Props) {
   const t = useTranslations("vehicles");
+  const to = useTranslations("orders");
 
   if (vehicles.length === 0) {
     return empty;
@@ -95,6 +99,9 @@ export function CustomerVehiclesList({
                   </span>
                   <span className="block truncate text-sm text-muted-foreground">
                     {makeModel(vehicle)}
+                    {vehicle.year != null
+                      ? ` · ${t("yearShort", { year: vehicle.year })}`
+                      : ""}
                   </span>
                   {vehicle.odometer != null ? (
                     <span className="block text-caption text-muted-foreground">
@@ -105,8 +112,22 @@ export function CustomerVehiclesList({
                   ) : null}
                 </span>
               </Link>
-              <div className="mt-3 flex justify-end border-t border-border pt-3">
-                <VehicleRowActions vehicle={editValues} canWrite={canWrite} />
+              <div className="mt-3 flex flex-wrap items-center justify-end gap-2 border-t border-border pt-3">
+                {canCreateOrder ? (
+                  <Button asChild size="sm" className="min-h-10 text-white">
+                    <Link
+                      href={`/orders/new?customerId=${customerId}&vehicleId=${vehicle.id}`}
+                    >
+                      <Plus className="size-3.5 text-white" aria-hidden />
+                      {to("jobCard")}
+                    </Link>
+                  </Button>
+                ) : null}
+                <VehicleRowActions
+                  vehicle={editValues}
+                  canWrite={canWrite}
+                  showView={false}
+                />
               </div>
             </li>
           );
@@ -161,10 +182,26 @@ export function CustomerVehiclesList({
                       : t("notSet")}
                   </TableCell>
                   <TableCell className="text-right">
-                    <VehicleRowActions
-                      vehicle={editValues}
-                      canWrite={canWrite}
-                    />
+                    <div className="flex items-center justify-end gap-1.5">
+                      {canCreateOrder ? (
+                        <Button asChild size="sm" className="text-white">
+                          <Link
+                            href={`/orders/new?customerId=${customerId}&vehicleId=${vehicle.id}`}
+                          >
+                            <Plus
+                              className="size-3.5 text-white"
+                              aria-hidden
+                            />
+                            {to("jobCard")}
+                          </Link>
+                        </Button>
+                      ) : null}
+                      <VehicleRowActions
+                        vehicle={editValues}
+                        canWrite={canWrite}
+                        showView={false}
+                      />
+                    </div>
                   </TableCell>
                 </TableRow>
               );

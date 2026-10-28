@@ -48,7 +48,7 @@ type Props = {
   technicians: BoardTechnician[];
   bays: BoardBayOption[];
   selectedTechnicianId: string;
-  selectedBay: string;
+  selectedBayId: string;
   canFilterTechnicians: boolean;
   canMutate: boolean;
 };
@@ -106,7 +106,7 @@ export function WorkshopBoard({
   technicians,
   bays,
   selectedTechnicianId,
-  selectedBay,
+  selectedBayId,
   canFilterTechnicians,
   canMutate,
 }: Props) {
@@ -162,18 +162,21 @@ export function WorkshopBoard({
     setError(null);
   }
 
-  function pushFilters(next: { technicianId?: string; bay?: string }) {
+  function pushFilters(next: {
+    technicianId?: string;
+    bayId?: string;
+  }) {
     const params = new URLSearchParams();
     const technicianId =
       next.technicianId !== undefined
         ? next.technicianId
         : selectedTechnicianId;
-    const bay = next.bay !== undefined ? next.bay : selectedBay;
+    const bayId = next.bayId !== undefined ? next.bayId : selectedBayId;
     if (technicianId) {
       params.set("technicianId", technicianId);
     }
-    if (bay) {
-      params.set("bay", bay);
+    if (bayId) {
+      params.set("bayId", bayId);
     }
     const query = params.toString();
     router.push(query ? `/workshop?${query}` : "/workshop");
@@ -239,12 +242,12 @@ export function WorkshopBoard({
           {bays.length > 0 ? (
             <FormSelect
               id="board-bay"
-              value={selectedBay}
-              onValueChange={(bay) => pushFilters({ bay })}
+              value={selectedBayId}
+              onValueChange={(bayId) => pushFilters({ bayId })}
               options={[
                 { value: "", label: t("filterAllBays") },
                 ...bays.map((bay) => ({
-                  value: bay.name,
+                  value: bay.id,
                   label: bay.name,
                 })),
               ]}

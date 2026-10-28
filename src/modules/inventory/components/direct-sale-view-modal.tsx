@@ -5,6 +5,7 @@ import { NotebookPen, UserRound } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
   DialogHeader,
@@ -71,7 +72,7 @@ export function DirectSaleViewModal({ sale, open, onOpenChange }: Props) {
           </div>
         </DialogHeader>
 
-        <div className="max-h-[min(75vh,36rem)] space-y-4 overflow-y-auto px-5 py-5 sm:px-6">
+        <DialogBody className="space-y-4 px-5 py-5 sm:px-6">
           <div className="flex gap-3 rounded-xl border border-border bg-card px-4 py-3.5">
             <span className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
               <UserRound className="size-4" aria-hidden />
@@ -177,7 +178,7 @@ export function DirectSaleViewModal({ sale, open, onOpenChange }: Props) {
               </div>
             </div>
           ) : null}
-        </div>
+        </DialogBody>
       </DialogContent>
     </Dialog>
   );

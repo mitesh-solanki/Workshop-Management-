@@ -36,6 +36,7 @@ export const updateCustomerSchema = createCustomerSchema;
 
 export const CUSTOMER_SORTS = [
   "newest",
+  "oldest",
   "updated",
   "name_asc",
   "name_desc",

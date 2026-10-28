@@ -8,7 +8,11 @@ import { Input } from "@/components/ui/input";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { JobCardSectionNav } from "@/modules/service-orders/components/job-card-section-nav";
 import { ServiceOrderForm } from "@/modules/service-orders/components/service-order-form";
-import type { JobCardSection } from "@/modules/service-orders/job-card-sections";
+import {
+  FULL_JOB_CARD_SURFACE,
+  type JobCardSection,
+  type JobCardSurface,
+} from "@/modules/service-orders/job-card-sections";
 import {
   jobCardSectionDomId,
   useJobCardSections,
@@ -39,15 +43,10 @@ type Props = {
   technicians: TechnicianOption[];
   bays: BayOption[];
   initialVehicleId?: string;
-};
-
-const SECTION_NUMBERS: Record<JobCardSection, string> = {
-  details: "01",
-  inspection: "02",
-  lines: "03",
-  estimate: "04",
-  billing: "05",
-  timeline: "06",
+  /** When set (technician create), assignment is locked to this user. */
+  lockTechnicianId?: string;
+  /** Defaults to full Owner/Manager surface — pass technician surface separately. */
+  surface?: JobCardSurface;
 };
 
 function SectionBlock({
@@ -55,12 +54,14 @@ function SectionBlock({
   title,
   subtitle,
   sectionRef,
+  sectionNumber,
   children,
 }: {
   id: JobCardSection;
   title: string;
   subtitle?: string;
   sectionRef: (node: HTMLElement | null) => void;
+  sectionNumber: string;
   children: ReactNode;
 }) {
   return (
@@ -71,7 +72,7 @@ function SectionBlock({
     >
       <div className="flex items-start gap-3 border-b border-[#d7deea] bg-[#f8fafc] px-4 py-4 sm:px-5">
         <span className="grid size-9 shrink-0 place-items-center rounded-[10px] bg-[#e8efff] text-[13px] font-black text-[#1f5eff]">
-          {SECTION_NUMBERS[id]}
+          {sectionNumber}
         </span>
         <div className="min-w-0 flex-1 pt-0.5">
           <h2 className="text-[17px] font-semibold tracking-tight text-[#152238]">
@@ -114,13 +115,25 @@ export function NewJobCardForm({
   technicians,
   bays,
   initialVehicleId = "",
+  lockTechnicianId,
+  surface = FULL_JOB_CARD_SURFACE,
 }: Props) {
   const t = useTranslations("orders");
   const ti = useTranslations("inspections");
   const te = useTranslations("estimates");
   const tb = useTranslations("billing");
   const [vehicleId, setVehicleId] = useState(initialVehicleId);
-  const { activeSection, scrollToSection, setSectionRef } = useJobCardSections();
+  const sections = surface.sections;
+  const showCommercial = surface.includeCommercialSections;
+  const { activeSection, scrollToSection, setSectionRef } = useJobCardSections({
+    sections,
+  });
+  const sectionNumbers = Object.fromEntries(
+    sections.map((id, index) => [
+      id,
+      String(index + 1).padStart(2, "0"),
+    ]),
+  ) as Record<JobCardSection, string>;
 
   const selected = useMemo(
     () => vehicles.find((item) => item.id === vehicleId) ?? null,
@@ -149,6 +162,7 @@ export function NewJobCardForm({
         <JobCardSectionNav
           section={activeSection}
           onSectionChange={scrollToSection}
+          sections={sections}
         />
       </aside>
 
@@ -158,6 +172,7 @@ export function NewJobCardForm({
           title={t("details")}
           subtitle={t("detailsHint")}
           sectionRef={setSectionRef("details")}
+          sectionNumber={sectionNumbers.details}
         >
           <div className="space-y-6 px-5 py-5 sm:px-6">
             <div className="grid gap-4 sm:grid-cols-2">
@@ -197,6 +212,7 @@ export function NewJobCardForm({
                 defaultOdometer={selected.odometer}
                 technicians={technicians}
                 bays={bays}
+                lockTechnicianId={lockTechnicianId}
               />
             ) : (
               <p className="rounded-lg border border-dashed border-slate-200 bg-slate-50/80 px-4 py-8 text-center text-body text-slate-600">
@@ -211,6 +227,7 @@ export function NewJobCardForm({
           title={ti("title")}
           subtitle={t("inspectionHint")}
           sectionRef={setSectionRef("inspection")}
+          sectionNumber={sectionNumbers.inspection}
         >
           <LockedBody onGoDetails={goToDetails} />
         </SectionBlock>
@@ -220,36 +237,46 @@ export function NewJobCardForm({
           title={t("lines")}
           subtitle={t("linesDescription")}
           sectionRef={setSectionRef("lines")}
+          sectionNumber={sectionNumbers.lines}
         >
           <LockedBody onGoDetails={goToDetails} />
         </SectionBlock>
 
-        <SectionBlock
-          id="estimate"
-          title={te("title")}
-          subtitle={t("estimateHint")}
-          sectionRef={setSectionRef("estimate")}
-        >
-          <LockedBody onGoDetails={goToDetails} />
-        </SectionBlock>
+        {showCommercial ? (
+          <SectionBlock
+            id="estimate"
+            title={te("title")}
+            subtitle={t("estimateHint")}
+            sectionRef={setSectionRef("estimate")}
+            sectionNumber={sectionNumbers.estimate}
+          >
+            <LockedBody onGoDetails={goToDetails} />
+          </SectionBlock>
+        ) : null}
 
-        <SectionBlock
-          id="billing"
-          title={tb("title")}
-          subtitle={t("billingHint")}
-          sectionRef={setSectionRef("billing")}
-        >
-          <LockedBody onGoDetails={goToDetails} />
-        </SectionBlock>
+        {showCommercial ? (
+          <SectionBlock
+            id="billing"
+            title={tb("title")}
+            subtitle={t("billingHint")}
+            sectionRef={setSectionRef("billing")}
+            sectionNumber={sectionNumbers.billing}
+          >
+            <LockedBody onGoDetails={goToDetails} />
+          </SectionBlock>
+        ) : null}
 
-        <SectionBlock
-          id="timeline"
-          title={t("timeline")}
-          subtitle={t("timelineHint")}
-          sectionRef={setSectionRef("timeline")}
-        >
-          <LockedBody onGoDetails={goToDetails} />
-        </SectionBlock>
+        {showCommercial ? (
+          <SectionBlock
+            id="timeline"
+            title={t("timeline")}
+            subtitle={t("timelineHint")}
+            sectionRef={setSectionRef("timeline")}
+            sectionNumber={sectionNumbers.timeline}
+          >
+            <LockedBody onGoDetails={goToDetails} />
+          </SectionBlock>
+        ) : null}
       </div>
     </div>
   );

@@ -58,17 +58,25 @@ export async function runGlobalSearch(
   const q = qRaw.trim();
   if (q.length < GLOBAL_SEARCH_MIN_CHARS) return [];
 
-  const technicianScope =
-    session.role === "TECHNICIAN" ? { technicianId: session.userId } : {};
+  const isTechnician = session.role === "TECHNICIAN";
+  const technicianScope = isTechnician
+    ? { technicianId: session.userId }
+    : {};
 
   const [customers, vehicles, orders, parts, vendors, invoices] =
     await Promise.all([
       searchCustomersForGlobal(session.garageId, q),
       searchVehiclesForGlobal(session.garageId, q),
       searchOrdersForGlobal(session.garageId, q, technicianScope),
-      searchPartsForGlobal(session.garageId, q),
-      searchVendorsForGlobal(session.garageId, q),
-      searchInvoicesForGlobal(session.garageId, q),
+      isTechnician
+        ? Promise.resolve([])
+        : searchPartsForGlobal(session.garageId, q),
+      isTechnician
+        ? Promise.resolve([])
+        : searchVendorsForGlobal(session.garageId, q),
+      isTechnician
+        ? Promise.resolve([])
+        : searchInvoicesForGlobal(session.garageId, q),
     ]);
 
   const results: GlobalSearchResult[] = [];

@@ -15,9 +15,10 @@ const DEBOUNCE_MS = 300;
 
 const SORT_LABEL_KEYS: Record<
   CustomerSort,
-  "newest" | "updated" | "nameAsc" | "nameDesc"
+  "newest" | "oldest" | "updated" | "nameAsc" | "nameDesc"
 > = {
   newest: "newest",
+  oldest: "oldest",
   updated: "updated",
   name_asc: "nameAsc",
   name_desc: "nameDesc",

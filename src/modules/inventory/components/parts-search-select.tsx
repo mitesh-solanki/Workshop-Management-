@@ -174,7 +174,7 @@ export function PartsSearchSelect({
       clearable
       disabled={disabled}
       placeholder={ti("partCatalogPlaceholder")}
-      searchPlaceholder={ti("partCatalogSearchHint")}
+      searchPlaceholder={ti("partCatalogPlaceholder")}
       emptyLabel={ti("emptySearchTitle")}
       loadingLabel={ti("pickerLoading")}
       className={className}

@@ -24,7 +24,7 @@ export default async function NewServiceOrderFromVehiclePage({
   const t = await getTranslations("orders");
 
   try {
-    requireRole(session, ["OWNER", "MANAGER"]);
+    requireRole(session, ["OWNER", "MANAGER", "TECHNICIAN"]);
   } catch (error) {
     if (error instanceof ForbiddenError) {
       return (

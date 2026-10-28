@@ -16,10 +16,10 @@ export const createBaySchema = z.object({
   ),
 });
 
-export const BAY_SORTS = ["sort_asc", "name_asc", "newest"] as const;
+export const BAY_SORTS = ["newest", "oldest", "name_asc", "name_desc"] as const;
 export type BaySort = (typeof BAY_SORTS)[number];
 
-export const baySortSchema = z.enum(BAY_SORTS).default("sort_asc");
+export const baySortSchema = z.enum(BAY_SORTS).default("newest");
 
 export const baySearchSchema = z.object({
   q: z

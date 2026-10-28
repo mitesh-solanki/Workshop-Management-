@@ -45,6 +45,16 @@ const optionalDate = z
     return parsed;
   });
 
+export const VEHICLE_YEAR_MIN = 1950;
+/** Newest allowed model year: current calendar year + 1 (next-year registrations). */
+export function getVehicleYearMax(): number {
+  return new Date().getFullYear() + 1;
+}
+
+/** Realistic garage cap — under 1 million km. */
+export const VEHICLE_ODOMETER_MAX = 999_999;
+export const VEHICLE_ODOMETER_MAX_DIGITS = 6;
+
 const optionalYear = z
   .union([z.string(), z.number(), z.null(), z.undefined()])
   .transform((value, ctx) => {
@@ -52,7 +62,8 @@ const optionalYear = z
       return null;
     }
     const n = typeof value === "number" ? value : Number(value);
-    if (!Number.isInteger(n) || n < 1950 || n > 2100) {
+    const max = getVehicleYearMax();
+    if (!Number.isInteger(n) || n < VEHICLE_YEAR_MIN || n > max) {
       ctx.addIssue({ code: "custom", message: "validation.invalidYear" });
       return z.NEVER;
     }
@@ -66,12 +77,42 @@ const optionalOdometer = z
       return null;
     }
     const n = typeof value === "number" ? value : Number(value);
-    if (!Number.isInteger(n) || n < 0 || n > 9_999_999) {
+    if (!Number.isInteger(n) || n < 0 || n > VEHICLE_ODOMETER_MAX) {
       ctx.addIssue({ code: "custom", message: "validation.invalidOdometer" });
       return z.NEVER;
     }
     return n;
   });
+
+/** Digits only, max 4 — for year typing. */
+export function sanitizeYearTyping(value: string): string {
+  return value.replace(/\D/g, "").slice(0, 4);
+}
+
+/** Digits only, max 6 — for odometer km typing. */
+export function sanitizeOdometerTyping(value: string): string {
+  return value.replace(/\D/g, "").slice(0, VEHICLE_ODOMETER_MAX_DIGITS);
+}
+
+/** Empty is ok; otherwise must be an integer year in range. */
+export function isValidVehicleYearInput(value: string): boolean {
+  const trimmed = value.trim();
+  if (!trimmed) return true;
+  if (!/^\d{4}$/.test(trimmed)) return false;
+  const n = Number(trimmed);
+  return (
+    Number.isInteger(n) && n >= VEHICLE_YEAR_MIN && n <= getVehicleYearMax()
+  );
+}
+
+/** Empty is ok; otherwise 0 … VEHICLE_ODOMETER_MAX. */
+export function isValidVehicleOdometerInput(value: string): boolean {
+  const trimmed = value.trim();
+  if (!trimmed) return true;
+  if (!/^\d{1,6}$/.test(trimmed)) return false;
+  const n = Number(trimmed);
+  return Number.isInteger(n) && n >= 0 && n <= VEHICLE_ODOMETER_MAX;
+}
 
 export const createVehicleSchema = z.object({
   customerId: z.string().trim().min(1, { error: "validation.required" }),
@@ -106,13 +147,14 @@ export const updateVehicleSchema = createVehicleSchema.omit({ customerId: true }
 
 export const VEHICLE_SORTS = [
   "newest",
+  "oldest",
   "updated",
   "name_asc",
   "name_desc",
 ] as const;
 export type VehicleSort = (typeof VEHICLE_SORTS)[number];
 
-export const vehicleSortSchema = z.enum(VEHICLE_SORTS).default("name_asc");
+export const vehicleSortSchema = z.enum(VEHICLE_SORTS).default("newest");
 
 export const vehicleSearchSchema = z.object({
   q: z

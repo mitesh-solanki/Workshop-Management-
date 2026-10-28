@@ -4,6 +4,8 @@ import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
+import { PartNameSuggestInput } from "@/modules/inventory/components/part-name-suggest-input";
 import { skuFromPartName } from "@/modules/inventory/sku-from-name";
 
 type Props = {
@@ -17,6 +19,8 @@ type Props = {
   skuClassName?: string;
   /** Rendered beside SKU (e.g. unit select). */
   afterSku?: React.ReactNode;
+  /** Put Name, SKU, and afterSku on one desktop row. */
+  singleRow?: boolean;
 };
 
 export function NameSkuFields({
@@ -28,6 +32,7 @@ export function NameSkuFields({
   nameClassName = "h-11 min-h-11",
   skuClassName = "h-11 min-h-11 font-mono uppercase",
   afterSku,
+  singleRow = false,
 }: Props) {
   const t = useTranslations("inventory");
   const [name, setName] = useState(defaultName);
@@ -38,6 +43,27 @@ export function NameSkuFields({
 
   const nameId = `${idPrefix}-name`;
   const skuId = `${idPrefix}-sku`;
+
+  function updateName(next: string) {
+    setName(next);
+    if (autoSku && !skuManual) {
+      setSku(skuFromPartName(next));
+    }
+  }
+
+  const nameField = (
+    <FormField id={nameId} label={t("name")}>
+      <PartNameSuggestInput
+        id={nameId}
+        required
+        maxLength={200}
+        autoFocus={autoFocusName}
+        value={name}
+        onValueChange={updateName}
+        className={nameClassName}
+      />
+    </FormField>
+  );
 
   const skuField = (
     <FormField
@@ -60,29 +86,23 @@ export function NameSkuFields({
     </FormField>
   );
 
+  if (singleRow) {
+    return (
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {nameField}
+        {skuField}
+        {afterSku}
+      </div>
+    );
+  }
+
   return (
     <>
-      <FormField id={nameId} label={t("name")}>
-        <Input
-          id={nameId}
-          name="name"
-          required
-          maxLength={200}
-          autoFocus={autoFocusName}
-          value={name}
-          onChange={(event) => {
-            const next = event.target.value;
-            setName(next);
-            if (autoSku && !skuManual) {
-              setSku(skuFromPartName(next));
-            }
-          }}
-          className={nameClassName}
-        />
-      </FormField>
-
+      {nameField}
       {afterSku ? (
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div
+          className={cn("grid gap-4 sm:grid-cols-2 lg:grid-cols-3")}
+        >
           {skuField}
           {afterSku}
         </div>

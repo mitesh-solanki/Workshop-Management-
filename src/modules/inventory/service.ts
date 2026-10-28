@@ -3,7 +3,10 @@ import "server-only";
 import { AppError, ForbiddenError, NotFoundError } from "@/lib/errors";
 import { requireRole, type RoleSession } from "@/lib/rbac";
 import {
+  DEFAULT_GST_RATE_PERCENT,
+  DEFAULT_PART_HSN,
   createDirectSaleSchema,
+  createPartByNameSchema,
   createPartSchema,
   deletePartSchema,
   partPickerPageSchema,
@@ -13,6 +16,7 @@ import {
   stockOutSchema,
   updatePartSchema,
   type CreateDirectSaleInput,
+  type CreatePartByNameInput,
   type CreatePartInput,
   type StockAdjustInput,
   type StockInInput,
@@ -39,10 +43,32 @@ import {
   searchPartsCatalogPage,
   updatePart,
 } from "@/modules/inventory/repo";
+import { skuFromPartName } from "@/modules/inventory/sku-from-name";
 
-const READ_ROLES = ["OWNER", "MANAGER", "TECHNICIAN", "ACCOUNTANT"] as const;
+const READ_ROLES = ["OWNER", "MANAGER", "ACCOUNTANT"] as const;
+/** Job-card item picker — technicians may browse parts, not manage stock pages. */
+const PICKER_ROLES = ["OWNER", "MANAGER", "ACCOUNTANT", "TECHNICIAN"] as const;
+/** Name-only part create from the job-card picker. */
+const NAME_CREATE_ROLES = ["OWNER", "MANAGER", "TECHNICIAN"] as const;
 const WRITE_ROLES = ["OWNER", "MANAGER"] as const;
 const SALE_ROLES = ["OWNER", "MANAGER", "ACCOUNTANT"] as const;
+
+async function allocateUniqueSku(
+  garageId: string,
+  name: string,
+): Promise<string> {
+  const base = skuFromPartName(name) || "PART";
+  for (let i = 0; i < 50; i += 1) {
+    const suffix = i === 0 ? "" : `-${i + 1}`;
+    const candidate = `${base.slice(0, Math.max(1, 64 - suffix.length))}${suffix}`;
+    const existing = await findPartBySku(garageId, candidate);
+    if (!existing) {
+      return candidate;
+    }
+  }
+  const fallback = `PART-${Date.now().toString(36).toUpperCase()}`.slice(0, 64);
+  return fallback;
+}
 
 function mapStockFailure(
   reason: "PART_NOT_FOUND" | "INSUFFICIENT_STOCK",
@@ -71,7 +97,7 @@ export async function listPartsForPickerPage(
   session: RoleSession,
   raw: { q?: string; offset?: number; pageSize?: number } = {},
 ) {
-  requireRole(session, READ_ROLES);
+  requireRole(session, PICKER_ROLES);
   const input = partPickerPageSchema.parse(raw);
   return searchInStockPartsPage(
     session.garageId,
@@ -81,12 +107,12 @@ export async function listPartsForPickerPage(
   );
 }
 
-/** All parts matching search (including zero stock). No browse until user types. */
+/** All parts matching search (including zero stock). Empty query = browse page. */
 export async function listPartsForCatalogSearchPage(
   session: RoleSession,
   raw: { q?: string; offset?: number; pageSize?: number } = {},
 ) {
-  requireRole(session, READ_ROLES);
+  requireRole(session, PICKER_ROLES);
   const input = partPickerPageSchema.parse(raw);
   return searchPartsCatalogPage(
     session.garageId,
@@ -103,6 +129,24 @@ export async function getPart(session: RoleSession, partId: string) {
     throw new NotFoundError();
   }
   return part;
+}
+
+/** Picker summary for job cards — technicians allowed; prices zeroed for them. */
+export async function getPartForPicker(session: RoleSession, partId: string) {
+  requireRole(session, PICKER_ROLES);
+  const part = await findPartById(session.garageId, partId);
+  if (!part) {
+    throw new NotFoundError();
+  }
+  const hidePrices = session.role === "TECHNICIAN";
+  return {
+    id: part.id,
+    name: part.name,
+    sku: part.sku,
+    unit: part.unit,
+    sellingPricePaise: hidePrices ? 0 : part.sellingPricePaise,
+    quantityOnHand: part.quantityOnHand,
+  };
 }
 
 export async function getPartHistory(session: RoleSession, partId: string) {
@@ -138,6 +182,32 @@ export async function createPartRecord(
     hsn: input.hsn,
     lowStockLevel: input.lowStockLevel,
     openingStock: input.openingStock,
+    actorId: session.userId,
+  });
+}
+
+/**
+ * Name-only catalogue row for job cards (technician-friendly).
+ * No prices, stock, or bills — owner fills those later.
+ */
+export async function createPartByNameRecord(
+  session: RoleSession,
+  raw: CreatePartByNameInput,
+) {
+  requireRole(session, NAME_CREATE_ROLES);
+  const input = createPartByNameSchema.parse(raw);
+  const sku = await allocateUniqueSku(session.garageId, input.name);
+
+  return createPart(session.garageId, {
+    name: input.name,
+    sku,
+    unit: "pcs",
+    purchasePricePaise: 0,
+    sellingPricePaise: 0,
+    gstRatePercent: DEFAULT_GST_RATE_PERCENT,
+    hsn: DEFAULT_PART_HSN,
+    lowStockLevel: 0,
+    openingStock: 0,
     actorId: session.userId,
   });
 }

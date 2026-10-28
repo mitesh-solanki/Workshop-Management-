@@ -77,7 +77,12 @@ export const deleteVendorSchema = z.object({
   vendorId: z.string().trim().min(1, { error: "validation.required" }),
 });
 
-export const VENDOR_SORTS = ["newest", "name_asc", "name_desc"] as const;
+export const VENDOR_SORTS = [
+  "newest",
+  "oldest",
+  "name_asc",
+  "name_desc",
+] as const;
 export type VendorSort = (typeof VENDOR_SORTS)[number];
 
 export const vendorSortSchema = z.enum(VENDOR_SORTS).default("newest");

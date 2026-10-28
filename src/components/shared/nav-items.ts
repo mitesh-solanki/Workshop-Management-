@@ -84,7 +84,7 @@ export const APP_NAV_ITEMS: readonly NavItem[] = [
     key: "bays",
     icon: Columns3,
     group: "workshop",
-    roles: ["OWNER", "MANAGER", "TECHNICIAN"],
+    roles: ["OWNER", "MANAGER"],
   },
   {
     href: "/customers",
@@ -110,6 +110,7 @@ export const APP_NAV_ITEMS: readonly NavItem[] = [
     key: "inventory",
     icon: Package,
     group: "business",
+    roles: ["OWNER", "MANAGER", "ACCOUNTANT"],
     children: [
       {
         href: "/inventory/sales",
@@ -165,7 +166,7 @@ export const APP_NAV_ITEMS: readonly NavItem[] = [
     key: "settings",
     icon: Settings,
     group: "admin",
-    roles: ["OWNER", "MANAGER", "TECHNICIAN"],
+    roles: ["OWNER", "MANAGER"],
   },
 ] as const;
 

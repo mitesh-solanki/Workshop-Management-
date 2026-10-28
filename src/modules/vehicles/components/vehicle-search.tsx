@@ -15,9 +15,10 @@ const DEBOUNCE_MS = 300;
 
 const SORT_LABEL_KEYS: Record<
   VehicleSort,
-  "newest" | "updated" | "nameAsc" | "nameDesc"
+  "newest" | "oldest" | "updated" | "nameAsc" | "nameDesc"
 > = {
   newest: "newest",
+  oldest: "oldest",
   updated: "updated",
   name_asc: "nameAsc",
   name_desc: "nameDesc",
@@ -39,10 +40,10 @@ export function VehicleSearch({ className, actions }: VehicleSearchProps) {
   const searchParams = useSearchParams();
   const [pending, startTransition] = useTransition();
   const urlQuery = searchParams.get("q") ?? "";
-  const urlSortRaw = searchParams.get("sort") ?? "name_asc";
+  const urlSortRaw = searchParams.get("sort") ?? "newest";
   const urlSort: VehicleSort = isVehicleSort(urlSortRaw)
     ? urlSortRaw
-    : "name_asc";
+    : "newest";
   const [value, setValue] = useState(urlQuery);
   const [syncedUrlQuery, setSyncedUrlQuery] = useState(urlQuery);
 
@@ -71,7 +72,7 @@ export function VehicleSearch({ className, actions }: VehicleSearchProps) {
       params.delete("q");
     }
 
-    if (sort === "name_asc") {
+    if (sort === "newest") {
       params.delete("sort");
     } else {
       params.set("sort", sort);

@@ -2,8 +2,13 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { ZodError } from "zod";
 import { getTranslations } from "next-intl/server";
-import { translateError } from "@/lib/translate-error";
+import { AppError } from "@/lib/errors";
+import {
+  translateError,
+  translateZodFieldErrors,
+} from "@/lib/translate-error";
 import { requireRole } from "@/lib/rbac";
 import { requireSession } from "@/lib/session";
 import {
@@ -57,6 +62,7 @@ export type VehicleActionState = {
   ok: boolean;
   message?: string;
   vehicleId?: string;
+  fieldErrors?: Record<string, string>;
 };
 
 function vehicleFields(formData: FormData) {
@@ -73,6 +79,28 @@ function vehicleFields(formData: FormData) {
   };
 }
 
+async function vehicleActionError(error: unknown): Promise<VehicleActionState> {
+  if (error instanceof ZodError) {
+    return {
+      ok: false,
+      message: await translateError(error),
+      fieldErrors: await translateZodFieldErrors(error),
+    };
+  }
+  if (
+    error instanceof AppError &&
+    error.code === "vehicles.duplicate_registration"
+  ) {
+    const message = await translateError(error);
+    return {
+      ok: false,
+      message,
+      fieldErrors: { registrationNumber: message },
+    };
+  }
+  return { ok: false, message: await translateError(error) };
+}
+
 export async function createVehicleAction(
   _prev: VehicleActionState,
   formData: FormData,
@@ -86,7 +114,7 @@ export async function createVehicleAction(
       ...vehicleFields(formData),
     });
   } catch (error) {
-    return { ok: false, message: await translateError(error) };
+    return vehicleActionError(error);
   }
 
   revalidatePath("/customers");
@@ -117,7 +145,7 @@ export async function createVehicleModalAction(
       vehicleId: vehicle.id,
     };
   } catch (error) {
-    return { ok: false, message: await translateError(error) };
+    return vehicleActionError(error);
   }
 }
 
@@ -139,7 +167,7 @@ export async function updateVehicleAction(
     revalidatePath(`/vehicles/${vehicleId}/edit`);
     return { ok: true, message: t("saved") };
   } catch (error) {
-    return { ok: false, message: await translateError(error) };
+    return vehicleActionError(error);
   }
 }
 

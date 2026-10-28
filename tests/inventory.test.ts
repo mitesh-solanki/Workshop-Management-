@@ -12,6 +12,8 @@ import { skuFromPartName } from "@/modules/inventory/sku-from-name";
 
 vi.mock("@/modules/inventory/repo", () => ({
   searchParts: vi.fn(),
+  searchPartsCatalogPage: vi.fn(),
+  searchInStockPartsPage: vi.fn(),
   findPartById: vi.fn(),
   findPartBySku: vi.fn(),
   listPartMovements: vi.fn(),
@@ -40,17 +42,22 @@ import {
   applyStockMovement,
   countPartLinkedRecords,
   createDirectSale,
+  createPart,
   deletePartById,
   findPartById,
   findPartBySku,
   listLowStockParts,
+  searchPartsCatalogPage,
 } from "@/modules/inventory/repo";
 import { parseDirectSaleFormData } from "@/modules/inventory/direct-sale-form-data";
 import {
   createDirectSaleRecord,
+  createPartByNameRecord,
+  createPartRecord,
   deletePartRecord,
   getLowStockAlerts,
   getPartForGarageId,
+  listPartsForCatalogSearchPage,
   recordStockAdjustment,
   recordStockOut,
 } from "@/modules/inventory/service";
@@ -219,29 +226,83 @@ describe("inventory service stock guards", () => {
     } satisfies Partial<AppError>);
   });
 
-  it("allows technician to read low-stock alerts", async () => {
-    vi.mocked(listLowStockParts).mockResolvedValue([
-      {
-        id: "part-low",
-        garageId: garageA,
-        name: "Pad",
-        sku: "PAD-1",
-        unit: "set",
-        purchasePricePaise: 1000,
-        sellingPricePaise: 2000,
-        gstRatePercent: 18,
-        hsn: "8708",
-        lowStockLevel: 5,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        quantityOnHand: 2,
-      },
-    ]);
+  it("blocks technicians from reading low-stock alerts", async () => {
+    await expect(getLowStockAlerts(technicianA)).rejects.toBeInstanceOf(
+      ForbiddenError,
+    );
+    expect(listLowStockParts).not.toHaveBeenCalled();
+  });
 
-    const alerts = await getLowStockAlerts(technicianA);
-    expect(alerts).toHaveLength(1);
-    expect(alerts[0]?.id).toBe("part-low");
-    expect(listLowStockParts).toHaveBeenCalledWith(garageA);
+  it("lets technicians search the part catalogue for job-card picking", async () => {
+    vi.mocked(searchPartsCatalogPage).mockResolvedValue({
+      items: [
+        {
+          id: "part-1",
+          name: "Pad",
+          sku: "PAD-1",
+          unit: "pcs",
+          sellingPricePaise: 50000,
+          quantityOnHand: 2,
+        },
+      ],
+      nextOffset: 1,
+      hasMore: false,
+    });
+
+    const page = await listPartsForCatalogSearchPage(technicianA, { q: "pad" });
+    expect(page.items).toHaveLength(1);
+    expect(searchPartsCatalogPage).toHaveBeenCalledWith(garageA, "pad", 0, 25);
+  });
+
+  it("lets technicians create a part by name only with zero prices", async () => {
+    vi.mocked(findPartBySku).mockResolvedValue(null);
+    vi.mocked(createPart).mockResolvedValue({
+      id: "part-new",
+      garageId: garageA,
+      name: "Brake shoe",
+      sku: "BRAKE-SHOE",
+      unit: "pcs",
+      purchasePricePaise: 0,
+      sellingPricePaise: 0,
+      gstRatePercent: 18,
+      hsn: "87089900",
+      lowStockLevel: 0,
+      quantityOnHand: 0,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    const part = await createPartByNameRecord(technicianA, {
+      name: "Brake shoe",
+    });
+
+    expect(part.sku).toBe("BRAKE-SHOE");
+    expect(createPart).toHaveBeenCalledWith(
+      garageA,
+      expect.objectContaining({
+        name: "Brake shoe",
+        purchasePricePaise: 0,
+        sellingPricePaise: 0,
+        openingStock: 0,
+        actorId: "tech-a",
+      }),
+    );
+  });
+
+  it("blocks technicians from the full create-part form path", async () => {
+    await expect(
+      createPartRecord(technicianA, {
+        name: "Oil filter",
+        sku: "OF-1",
+        unit: "pcs",
+        purchasePricePaise: "100",
+        sellingPricePaise: "150",
+        gstRatePercent: "18",
+        hsn: "87089900",
+        lowStockLevel: "2",
+        openingStock: "0",
+      }),
+    ).rejects.toBeInstanceOf(ForbiddenError);
   });
 
   it("blocks deleting a part that is linked to jobs or purchases", async () => {

@@ -1,18 +1,19 @@
 "use client";
 
-import { useActionState, useEffect, useRef, useState } from "react";
+import { useActionState, useEffect, useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Plus } from "lucide-react";
 import {
   createPartModalAction,
+  createPartShopReceiveAction,
   type InventoryActionState,
 } from "@/app/actions/inventory";
 import { RupeePriceInput } from "@/components/rupee-price-input";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
-  DialogClose,
+  DialogBody,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -24,6 +25,7 @@ import { FormField } from "@/components/ui/form-field";
 import { FormSelect } from "@/components/ui/form-select";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/toast";
+import { finishCreateModalNavigation } from "@/lib/create-modal-navigation";
 import {
   DEFAULT_GST_RATE_PERCENT,
   DEFAULT_PART_HSN,
@@ -32,6 +34,13 @@ import {
 } from "@/modules/inventory/schema";
 import { NameSkuFields } from "@/modules/inventory/components/name-sku-fields";
 import { QuantityStepper } from "@/modules/inventory/components/quantity-stepper";
+import {
+  ShopReceiveFields,
+  createEmptyShopReceiveLines,
+  shopReceiveFilesForUpload,
+  type ShopReceiveLine,
+} from "@/modules/inventory/components/shop-receive-fields";
+import { uploadVendorBillAttachmentFile } from "@/modules/purchases/components/upload-vendor-bill-attachment";
 
 const initial: InventoryActionState = { ok: false };
 
@@ -49,60 +58,71 @@ type SharedProps = {
   onCancel?: () => void;
   formKey?: string;
   idPrefix?: string;
+  /**
+   * Bought From lines (vendor + qty + bill) on create — Job Card and Inventory.
+   */
+  shopReceive?: boolean;
 };
 
 function CreatePartFormFields({
+  formId,
   formAction,
   pending,
-  onCancel,
   formKey,
   idPrefix = "modal-part",
-  cancelAsButton = false,
+  shopReceive = false,
+  shopLines,
+  onShopLinesChange,
 }: {
+  formId: string;
   formAction: (payload: FormData) => void;
   pending: boolean;
-  onCancel?: () => void;
   formKey?: string;
   idPrefix?: string;
-  cancelAsButton?: boolean;
+  shopReceive?: boolean;
+  shopLines: ShopReceiveLine[];
+  onShopLinesChange: (lines: ShopReceiveLine[]) => void;
 }) {
   const t = useTranslations("inventory");
 
   return (
     <form
+      id={formId}
       key={formKey}
       action={formAction}
-      className="flex min-w-0 max-h-[min(70vh,36rem)] flex-col gap-4 overflow-x-hidden overflow-y-auto px-5 py-4"
+      className="flex min-w-0 flex-col gap-4"
     >
       <NameSkuFields
         idPrefix={idPrefix}
         autoSku
         autoFocusName
         afterSku={
-          <FormField id={`${idPrefix}-unit`} label={t("unit")}>
-            <FormSelect
-              id={`${idPrefix}-unit`}
-              name="unit"
-              required
-              defaultValue="pcs"
-              options={PART_UNIT_OPTIONS.map((unit) => ({
-                value: unit,
-                label: t(`units.${unit}`),
-              }))}
+          <>
+            <FormField id={`${idPrefix}-unit`} label={t("unit")}>
+              <FormSelect
+                id={`${idPrefix}-unit`}
+                name="unit"
+                required
+                defaultValue="pcs"
+                options={PART_UNIT_OPTIONS.map((unit) => ({
+                  value: unit,
+                  label: t(`units.${unit}`),
+                }))}
+              />
+            </FormField>
+            <RupeePriceInput
+              id={`${idPrefix}-purchasePriceRupees`}
+              name="purchasePriceRupees"
+              label={t("purchasePrice")}
+              hint={t("priceHint")}
+              defaultPaise={0}
+              inputClassName="h-11 min-h-11"
             />
-          </FormField>
+          </>
         }
       />
 
-      <div className="grid min-w-0 gap-4 sm:grid-cols-2">
-        <RupeePriceInput
-          id={`${idPrefix}-purchasePriceRupees`}
-          name="purchasePriceRupees"
-          label={t("purchasePrice")}
-          hint={t("priceHint")}
-          defaultPaise={0}
-          inputClassName="h-11 min-h-11"
-        />
+      <div className="grid min-w-0 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <RupeePriceInput
           id={`${idPrefix}-sellingPriceRupees`}
           name="sellingPriceRupees"
@@ -111,9 +131,6 @@ function CreatePartFormFields({
           defaultPaise={0}
           inputClassName="h-11 min-h-11"
         />
-      </div>
-
-      <div className="grid min-w-0 gap-4 sm:grid-cols-2">
         <FormField id={`${idPrefix}-gstRatePercent`} label={t("gstRate")}>
           <FormSelect
             id={`${idPrefix}-gstRatePercent`}
@@ -135,16 +152,29 @@ function CreatePartFormFields({
             className="h-11 min-h-11 font-mono"
           />
         </FormField>
+        {shopReceive ? null : (
+          <QuantityStepper
+            id={`${idPrefix}-lowStockLevel`}
+            name="lowStockLevel"
+            label={t("lowStockLevel")}
+            defaultValue={0}
+            min={0}
+          />
+        )}
       </div>
 
-      <div className="grid min-w-0 gap-4 sm:grid-cols-2">
-        <QuantityStepper
-          id={`${idPrefix}-lowStockLevel`}
-          name="lowStockLevel"
-          label={t("lowStockLevel")}
-          defaultValue={0}
-          min={0}
-        />
+      {shopReceive ? (
+        <>
+          <input type="hidden" name="lowStockLevel" value="0" />
+          <input type="hidden" name="openingStock" value="0" />
+          <ShopReceiveFields
+            idPrefix={`${idPrefix}-shop`}
+            disabled={pending}
+            lines={shopLines}
+            onLinesChange={onShopLinesChange}
+          />
+        </>
+      ) : (
         <QuantityStepper
           id={`${idPrefix}-openingStock`}
           name="openingStock"
@@ -153,30 +183,37 @@ function CreatePartFormFields({
           min={0}
           hint={t("openingStockHint")}
         />
-      </div>
-
-      <DialogFooter className="sticky bottom-0 gap-2 border-t border-border bg-background px-0 pt-4 sm:justify-end">
-        {cancelAsButton ? (
-          <Button
-            type="button"
-            variant="secondary"
-            size="md"
-            onClick={onCancel}
-          >
-            {t("cancel")}
-          </Button>
-        ) : (
-          <DialogClose asChild>
-            <Button type="button" variant="secondary" size="md">
-              {t("cancel")}
-            </Button>
-          </DialogClose>
-        )}
-        <Button type="submit" size="md" loading={pending}>
-          {pending ? t("saving") : t("create")}
-        </Button>
-      </DialogFooter>
+      )}
     </form>
+  );
+}
+
+function CreatePartActions({
+  formId,
+  pending,
+  onCancel,
+}: {
+  formId: string;
+  pending: boolean;
+  onCancel: () => void;
+}) {
+  const t = useTranslations("inventory");
+
+  return (
+    <DialogFooter className="gap-2 border-t border-border bg-background px-5 py-4 sm:justify-end">
+      <Button
+        type="button"
+        variant="secondary"
+        size="md"
+        onClick={onCancel}
+        disabled={pending}
+      >
+        {t("cancel")}
+      </Button>
+      <Button type="submit" form={formId} size="md" loading={pending}>
+        {pending ? t("saving") : t("create")}
+      </Button>
+    </DialogFooter>
   );
 }
 
@@ -184,20 +221,26 @@ function useCreatePartAction({
   onCreated,
   navigateOnSuccess,
   onSuccessExtra,
+  shopReceive = false,
 }: {
   onCreated?: (part: CreatedPartSummary) => void;
   navigateOnSuccess: boolean;
   onSuccessExtra?: () => void;
+  shopReceive?: boolean;
 }) {
   const router = useRouter();
+  const t = useTranslations("inventory");
+  const tvb = useTranslations("vendorBills");
   const [state, formAction, pending] = useActionState(
-    createPartModalAction,
+    shopReceive ? createPartShopReceiveAction : createPartModalAction,
     initial,
   );
   const handled = useRef<string | null>(null);
   const onCreatedRef = useRef(onCreated);
   const navigateOnSuccessRef = useRef(navigateOnSuccess);
   const onSuccessExtraRef = useRef(onSuccessExtra);
+  const pendingFilesRef = useRef<Array<File | null>>([]);
+  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     onCreatedRef.current = onCreated;
@@ -209,32 +252,95 @@ function useCreatePartAction({
     if (!state.message || state.message === handled.current) return;
     handled.current = state.message;
 
-    if (state.ok && state.partId) {
-      toast.success(state.message);
-      const summary: CreatedPartSummary = {
-        id: state.partId,
-        name: state.partName ?? "",
-        sku: state.partSku ?? "",
-        unit: state.partUnit ?? "pcs",
-      };
-      const id = window.setTimeout(() => {
-        onCreatedRef.current?.(summary);
-        onSuccessExtraRef.current?.();
-        if (navigateOnSuccessRef.current) {
-          router.push(`/inventory/${summary.id}`);
-        }
-      }, 0);
-      return () => window.clearTimeout(id);
+    if (!(state.ok && state.partId)) {
+      toast.error(state.message);
+      return;
     }
 
-    toast.error(state.message);
-  }, [state, router]);
+    const summary: CreatedPartSummary = {
+      id: state.partId,
+      name: state.partName ?? "",
+      sku: state.partSku ?? "",
+      unit: state.partUnit ?? "pcs",
+    };
+    const billIds =
+      state.vendorBillIds ?? (state.vendorBillId ? [state.vendorBillId] : []);
+    const files = pendingFilesRef.current;
+
+    let cancelled = false;
+    void (async () => {
+      const pairs = billIds
+        .map((vendorBillId, index) => ({
+          vendorBillId,
+          file: files[index] ?? null,
+        }))
+        .filter(
+          (pair): pair is { vendorBillId: string; file: File } =>
+            pair.file != null,
+        );
+
+      if (pairs.length > 0) {
+        setUploading(true);
+        try {
+          for (const pair of pairs) {
+            await uploadVendorBillAttachmentFile({
+              vendorBillId: pair.vendorBillId,
+              file: pair.file,
+              uploadFailedMessage: tvb("uploadFailed"),
+            });
+          }
+          if (!cancelled) toast.success(state.message);
+        } catch (err) {
+          const reason =
+            err instanceof Error ? err.message : tvb("uploadFailed");
+          if (!cancelled) {
+            toast.error(t("shopReceiveUploadFailed", { reason }));
+          }
+        } finally {
+          if (!cancelled) setUploading(false);
+        }
+      } else if (!cancelled) {
+        toast.success(state.message);
+      }
+
+      if (cancelled) return;
+      pendingFilesRef.current = [];
+      onCreatedRef.current?.(summary);
+      if (navigateOnSuccessRef.current) {
+        finishCreateModalNavigation({
+          kind: "part",
+          recordId: summary.id,
+          href: `/inventory/${summary.id}`,
+          router,
+          close: () => {
+            onSuccessExtraRef.current?.();
+          },
+        });
+      } else {
+        onSuccessExtraRef.current?.();
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [state, router, t, tvb]);
 
   function resetHandled() {
     handled.current = null;
   }
 
-  return { formAction, pending, resetHandled, state };
+  function setPendingFiles(files: Array<File | null>) {
+    pendingFilesRef.current = files;
+  }
+
+  return {
+    formAction,
+    pending: pending || uploading,
+    resetHandled,
+    state,
+    setPendingFiles,
+  };
 }
 
 type Props = SharedProps & {
@@ -248,21 +354,45 @@ export function CreatePartModal({
   size = "md",
   onCreated,
   navigateOnSuccess = !onCreated,
+  shopReceive = false,
 }: Props) {
   const t = useTranslations("inventory");
+  const formId = useId();
   const [open, setOpen] = useState(false);
-  const { formAction, pending, resetHandled } = useCreatePartAction({
-    onCreated,
-    navigateOnSuccess,
-    onSuccessExtra: () => setOpen(false),
-  });
+  const [shopLines, setShopLines] = useState(createEmptyShopReceiveLines);
+  const { formAction, pending, resetHandled, setPendingFiles } =
+    useCreatePartAction({
+      onCreated,
+      navigateOnSuccess,
+      shopReceive,
+      onSuccessExtra: () => {
+        setOpen(false);
+        setShopLines(createEmptyShopReceiveLines());
+        setPendingFiles([]);
+      },
+    });
+
+  function handleShopLinesChange(lines: ShopReceiveLine[]) {
+    setShopLines(lines);
+    setPendingFiles(shopReceiveFilesForUpload(lines));
+  }
+
+  function closeModal() {
+    setOpen(false);
+    setShopLines(createEmptyShopReceiveLines());
+    setPendingFiles([]);
+  }
 
   return (
     <Dialog
       open={open}
       onOpenChange={(next) => {
-        setOpen(next);
-        if (next) resetHandled();
+        if (next) {
+          setOpen(true);
+          resetHandled();
+          return;
+        }
+        closeModal();
       }}
     >
       <DialogTrigger asChild>
@@ -273,15 +403,26 @@ export function CreatePartModal({
           </Button>
         )}
       </DialogTrigger>
-      <DialogContent className="gap-0 p-0 sm:max-w-2xl">
+      <DialogContent className="gap-0 bg-background p-0 sm:max-w-4xl">
         <DialogHeader className="border-b border-border px-5 py-4 text-left">
           <DialogTitle>{t("newTitle")}</DialogTitle>
           <DialogDescription>{t("newSubtitle")}</DialogDescription>
         </DialogHeader>
-        <CreatePartFormFields
-          formAction={formAction}
+        <DialogBody className="bg-background px-5 py-4">
+          <CreatePartFormFields
+            formId={formId}
+            formAction={formAction}
+            pending={pending}
+            formKey={open ? "create-part-open" : "create-part-closed"}
+            shopReceive={shopReceive}
+            shopLines={shopLines}
+            onShopLinesChange={handleShopLinesChange}
+          />
+        </DialogBody>
+        <CreatePartActions
+          formId={formId}
           pending={pending}
-          formKey={open ? "create-part-open" : "create-part-closed"}
+          onCancel={closeModal}
         />
       </DialogContent>
     </Dialog>
@@ -300,27 +441,49 @@ export function CreatePartEmbedded({
   onCreated,
   onCancel,
   navigateOnSuccess = false,
+  shopReceive = false,
 }: EmbeddedProps) {
   const t = useTranslations("inventory");
-  const { formAction, pending } = useCreatePartAction({
+  const formId = useId();
+  const [shopLines, setShopLines] = useState(createEmptyShopReceiveLines);
+  const { formAction, pending, setPendingFiles } = useCreatePartAction({
     onCreated,
     navigateOnSuccess,
-    onSuccessExtra: onCancel,
+    shopReceive,
+    onSuccessExtra: () => {
+      setShopLines(createEmptyShopReceiveLines());
+      setPendingFiles([]);
+      onCancel();
+    },
   });
 
+  function handleShopLinesChange(lines: ShopReceiveLine[]) {
+    setShopLines(lines);
+    setPendingFiles(shopReceiveFilesForUpload(lines));
+  }
+
   return (
-    <div className="flex min-w-0 flex-col">
-      <div className="border-b border-border px-5 py-4 text-left">
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+      <div className="relative z-10 shrink-0 border-b border-border bg-background px-5 py-4 text-left shadow-[0_6px_16px_-10px_rgba(15,23,42,0.35)]">
         <h3 className="text-lg font-semibold leading-none">{t("newTitle")}</h3>
         <p className="mt-2 text-sm text-muted-foreground">{t("newSubtitle")}</p>
       </div>
-      <CreatePartFormFields
-        formAction={formAction}
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-4">
+        <CreatePartFormFields
+          formId={formId}
+          formAction={formAction}
+          pending={pending}
+          formKey="embedded-create-part"
+          idPrefix="embedded-part"
+          shopReceive={shopReceive}
+          shopLines={shopLines}
+          onShopLinesChange={handleShopLinesChange}
+        />
+      </div>
+      <CreatePartActions
+        formId={formId}
         pending={pending}
         onCancel={onCancel}
-        cancelAsButton
-        formKey="embedded-create-part"
-        idPrefix="embedded-part"
       />
     </div>
   );

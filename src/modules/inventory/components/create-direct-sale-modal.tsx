@@ -11,6 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
+  DialogBody,
   DialogClose,
   DialogContent,
   DialogDescription,
@@ -87,7 +88,7 @@ export function CreateDirectSaleModal({
           <DialogDescription>{t("newSaleSubtitle")}</DialogDescription>
         </DialogHeader>
 
-        <div className="max-h-[min(75vh,36rem)] overflow-y-auto bg-background px-5 py-5 sm:px-6">
+        <DialogBody className="bg-background px-5 py-5 sm:px-6">
           <DirectSaleForm
             formId={formId}
             parts={parts}
@@ -96,7 +97,7 @@ export function CreateDirectSaleModal({
             pending={pending}
             hideSubmit
           />
-        </div>
+        </DialogBody>
 
         <DialogFooter className="gap-2 border-t border-border bg-muted/30 px-5 py-4 sm:justify-end sm:px-6">
           <DialogClose asChild>

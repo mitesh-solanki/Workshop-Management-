@@ -23,7 +23,7 @@ import {
 } from "@/modules/bays/schema";
 
 const WRITE_ROLES = ["OWNER", "MANAGER"] as const;
-const READ_ROLES = ["OWNER", "MANAGER", "TECHNICIAN"] as const;
+const READ_ROLES = ["OWNER", "MANAGER"] as const;
 
 function assertBayRead(session: RoleSession) {
   requireRole(session, READ_ROLES);
@@ -74,8 +74,9 @@ export async function listBays(
   };
 }
 
+/** Bay names for job-card forms — technicians may pick a bay, not manage the list. */
 export async function listBaysForSelect(session: RoleSession) {
-  assertBayRead(session);
+  requireRole(session, ["OWNER", "MANAGER", "TECHNICIAN"]);
   return listActiveBaysForSelect(session.garageId);
 }
 

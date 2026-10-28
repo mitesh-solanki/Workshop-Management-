@@ -153,6 +153,9 @@ describe("runGlobalSearch", () => {
     expect(searchOrdersForGlobal).toHaveBeenCalledWith(garageA, "brake", {
       technicianId: "tech-a",
     });
+    expect(searchPartsForGlobal).not.toHaveBeenCalled();
+    expect(searchVendorsForGlobal).not.toHaveBeenCalled();
+    expect(searchInvoicesForGlobal).not.toHaveBeenCalled();
   });
 
   it("does not scope job cards for manager or owner", async () => {

@@ -30,6 +30,7 @@ import {
   createEmailOtpRow,
   createOwnerWithGarage,
   createPrismaAuthAdapter,
+  ensureTechnicianInGarage,
   findLatestEmailOtp,
   findPendingInviteByEmail,
   findPendingInviteByTokenHash,
@@ -79,6 +80,19 @@ function getProdPasswordConfig() {
     name,
     garageName,
   };
+}
+
+/** Dummy mechanic for the production garage (assignment + optional password login). */
+function getProdTechnicianConfig(ownerPassword: string) {
+  const email = normalizeEmail(
+    process.env.AUTH_PROD_TECH_EMAIL?.trim() || "mechanic@primemotors.in",
+  );
+  const name =
+    process.env.AUTH_PROD_TECH_NAME?.trim() || "Demo Mechanic";
+  const password =
+    process.env.AUTH_PROD_TECH_PASSWORD?.trim() || ownerPassword;
+
+  return { email, name, password };
 }
 
 /** True only in production when AUTH_PROD_EMAIL and AUTH_PROD_PASSWORD are set. */
@@ -350,6 +364,20 @@ export async function completeOtpSignIn(raw: VerifyOtpInput) {
   return user;
 }
 
+async function ensureProdDummyMechanic(garageId: string, actorId?: string) {
+  const ownerConfig = getProdPasswordConfig();
+  if (!ownerConfig) {
+    return null;
+  }
+  const tech = getProdTechnicianConfig(ownerConfig.password);
+  return ensureTechnicianInGarage({
+    garageId,
+    email: tech.email,
+    name: tech.name,
+    actorId,
+  });
+}
+
 export async function completeProdPasswordSignIn(
   raw: ProdPasswordLoginInput,
   opts?: { ip?: string },
@@ -363,6 +391,7 @@ export async function completeProdPasswordSignIn(
     throw new AppError("auth.invalid_credentials", 401);
   }
 
+  const techConfig = getProdTechnicianConfig(config.password);
   const input = prodPasswordLoginSchema.parse(raw);
   const email = normalizeEmail(input.email);
 
@@ -386,23 +415,55 @@ export async function completeProdPasswordSignIn(
     }
   }
 
-  const emailOk = safeEqualString(email, config.email);
-  const passwordOk = safeEqualString(input.password, config.password);
-  if (!emailOk || !passwordOk) {
-    throw new AppError("auth.invalid_credentials", 401);
+  const isOwnerEmail = safeEqualString(email, config.email);
+  const isTechEmail = safeEqualString(email, techConfig.email);
+
+  if (isOwnerEmail) {
+    const passwordOk = safeEqualString(input.password, config.password);
+    if (!passwordOk) {
+      throw new AppError("auth.invalid_credentials", 401);
+    }
+
+    const existing = await findUserByEmailForLogin(email);
+    if (existing) {
+      await ensureProdDummyMechanic(existing.garageId, existing.id);
+      return existing;
+    }
+
+    const { user } = await createOwnerWithGarage({
+      email,
+      name: config.name,
+      garageName: config.garageName,
+    });
+    await ensureProdDummyMechanic(user.garageId, user.id);
+    return user;
   }
 
-  const existing = await findUserByEmailForLogin(email);
-  if (existing) {
-    return existing;
+  if (isTechEmail) {
+    const passwordOk = safeEqualString(input.password, techConfig.password);
+    if (!passwordOk) {
+      throw new AppError("auth.invalid_credentials", 401);
+    }
+
+    const existingTech = await findUserByEmailForLogin(email);
+    if (existingTech && existingTech.role === "TECHNICIAN") {
+      return existingTech;
+    }
+
+    const owner = await findUserByEmailForLogin(config.email);
+    if (!owner) {
+      throw new AppError("auth.invalid_credentials", 401);
+    }
+
+    return ensureTechnicianInGarage({
+      garageId: owner.garageId,
+      email: techConfig.email,
+      name: techConfig.name,
+      actorId: owner.id,
+    });
   }
 
-  const { user } = await createOwnerWithGarage({
-    email,
-    name: config.name,
-    garageName: config.garageName,
-  });
-  return user;
+  throw new AppError("auth.invalid_credentials", 401);
 }
 
 /** Exported for tests that assert invite accept URLs. */

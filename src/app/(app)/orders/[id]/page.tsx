@@ -17,7 +17,10 @@ import { getOrCreateInspection } from "@/modules/inspections/service";
 import { getLiveLinkStatusForOrder } from "@/modules/live-link/service";
 import { listBaysForSelect } from "@/modules/bays/service";
 import { JobCardDetailPanel } from "@/modules/service-orders/components/job-card-detail-panel";
-import { isJobCardSection } from "@/modules/service-orders/job-card-sections";
+import {
+  clampJobCardSection,
+  jobCardSurfaceForRole,
+} from "@/modules/service-orders/job-card-sections";
 import {
   getOrder,
   getOrderTimeline,
@@ -41,39 +44,11 @@ export default async function OrderEditPage({ params, searchParams }: Props) {
   const tb = await getTranslations("billing");
   const tGst = await getTranslations("gst");
 
-  let order: Awaited<ReturnType<typeof getOrder>>;
-  let timeline: Awaited<ReturnType<typeof getOrderTimeline>>;
-  let inspection: Awaited<ReturnType<typeof getOrCreateInspection>>;
-  let estimate: Awaited<ReturnType<typeof getEstimateForOrder>>;
-  let invoices: Awaited<ReturnType<typeof getInvoicesForOrder>>;
-  let technicians: Awaited<ReturnType<typeof listAssignableTechnicians>>;
-  let bays: { id: string; name: string }[] = [];
-  let garage: Awaited<ReturnType<typeof getGarageBillingProfile>> = null;
-  let liveLinkStatus: Awaited<ReturnType<typeof getLiveLinkStatusForOrder>> = {
-    active: null,
-  };
+  const surface = jobCardSurfaceForRole(session.role);
 
+  let order: Awaited<ReturnType<typeof getOrder>>;
   try {
     order = await getOrder(session, id);
-    [
-      timeline,
-      inspection,
-      estimate,
-      invoices,
-      technicians,
-      bays,
-      garage,
-      liveLinkStatus,
-    ] = await Promise.all([
-      getOrderTimeline(session, id),
-      getOrCreateInspection(session, id),
-      getEstimateForOrder(session, id),
-      getInvoicesForOrder(session, id),
-      listAssignableTechnicians(session),
-      listBaysForSelect(session).catch(() => []),
-      getGarageBillingProfile(session),
-      getLiveLinkStatusForOrder(session, id).catch(() => ({ active: null })),
-    ]);
   } catch (error) {
     if (error instanceof NotFoundError || error instanceof ForbiddenError) {
       notFound();
@@ -88,14 +63,64 @@ export default async function OrderEditPage({ params, searchParams }: Props) {
         order.technicianId === session.userId)) &&
     order.status !== "COMPLETED";
 
-  const canRequestParts =
-    (session.role === "OWNER" || session.role === "MANAGER") &&
-    order.status !== "COMPLETED";
-
   const canBill =
     session.role === "OWNER" ||
     session.role === "MANAGER" ||
     session.role === "ACCOUNTANT";
+
+  let timeline: Awaited<ReturnType<typeof getOrderTimeline>> = [];
+  let inspection: Awaited<ReturnType<typeof getOrCreateInspection>> = null;
+  let estimate: Awaited<ReturnType<typeof getEstimateForOrder>> | null = null;
+  let invoices: Awaited<ReturnType<typeof getInvoicesForOrder>> = [];
+  let technicians: Awaited<ReturnType<typeof listAssignableTechnicians>> = [];
+  let bays: { id: string; name: string }[] = [];
+  let garage: Awaited<ReturnType<typeof getGarageBillingProfile>> = null;
+  let liveLinkStatus: Awaited<ReturnType<typeof getLiveLinkStatusForOrder>> = {
+    active: null,
+  };
+
+  try {
+    if (surface.includeCommercialSections) {
+      [
+        timeline,
+        inspection,
+        estimate,
+        invoices,
+        technicians,
+        bays,
+        garage,
+        liveLinkStatus,
+      ] = await Promise.all([
+        getOrderTimeline(session, id),
+        getOrCreateInspection(session, id),
+        getEstimateForOrder(session, id),
+        getInvoicesForOrder(session, id),
+        listAssignableTechnicians(session),
+        listBaysForSelect(session).catch(() => []),
+        getGarageBillingProfile(session),
+        getLiveLinkStatusForOrder(session, id).catch(() => ({ active: null })),
+      ]);
+    } else {
+      [inspection, technicians, bays] = await Promise.all([
+        getOrCreateInspection(session, id),
+        session.role === "TECHNICIAN"
+          ? Promise.resolve([
+              {
+                id: session.userId,
+                name: session.name,
+                email: session.email,
+              },
+            ])
+          : listAssignableTechnicians(session),
+        listBaysForSelect(session).catch(() => []),
+      ]);
+    }
+  } catch (error) {
+    if (error instanceof NotFoundError || error instanceof ForbiddenError) {
+      notFound();
+    }
+    throw error;
+  }
 
   const billedEstimateLineIds = new Set<string>();
   for (const invoice of invoices) {
@@ -107,7 +132,7 @@ export default async function OrderEditPage({ params, searchParams }: Props) {
   }
 
   const approvedLines =
-    estimate.current?.lines.filter(
+    estimate?.current?.lines.filter(
       (line) => line.approvalState === "APPROVED",
     ) ?? [];
   const unbilledApprovedLines = approvedLines.filter(
@@ -153,9 +178,7 @@ export default async function OrderEditPage({ params, searchParams }: Props) {
     placeLabel = placeCode;
   }
 
-  const initialSection = isJobCardSection(sectionParam)
-    ? sectionParam
-    : "details";
+  const initialSection = clampJobCardSection(sectionParam, surface.sections);
 
   return (
     <main className="w-full max-w-none space-y-4">
@@ -196,14 +219,15 @@ export default async function OrderEditPage({ params, searchParams }: Props) {
             type: line.type,
             description: line.description,
             quantity: line.quantity,
-            unitPricePaise: line.unitPricePaise,
+            unitPricePaise: surface.hidePrices ? 0 : line.unitPricePaise,
+            partId: line.partId,
           })),
         }}
-        timeline={timeline}
+        timeline={surface.includeCommercialSections ? timeline : []}
         technicians={technicians}
         bays={bays}
         canMutate={canMutate}
-        canRequestParts={canRequestParts}
+        surface={surface}
         locale={locale}
         initialSection={initialSection}
         inspectionContent={
@@ -220,43 +244,47 @@ export default async function OrderEditPage({ params, searchParams }: Props) {
           />
         }
         estimateContent={
-          <JobCardEstimateContent
-            orderId={order.id}
-            canEdit={canMutate}
-            data={estimate}
-            liveLinkActive={liveLinkStatus.active}
-            canEditLiveLink={canBill}
-          />
+          surface.includeCommercialSections && estimate ? (
+            <JobCardEstimateContent
+              orderId={order.id}
+              canEdit={canMutate}
+              data={estimate}
+              liveLinkActive={liveLinkStatus.active}
+              canEditLiveLink={canBill}
+            />
+          ) : null
         }
         billingContent={
-          <JobCardBillingContent
-            orderId={order.id}
-            canEdit={canBill}
-            invoices={invoices}
-            hasApprovedEstimateLines={hasApprovedEstimateLines}
-            hasUnbilledApprovedLines={hasUnbilledApprovedLines}
-            defaultPlaceOfSupplyStateCode={order.vehicle.stateCode}
-            liveLinkActive={liveLinkStatus.active}
-            canEditLiveLink={canBill}
-            hasEstimate={Boolean(estimate.current)}
-            preview={{
-              garageName: garage?.name ?? t("title"),
-              garageAddress: garage?.address ?? null,
-              garageGstin: garage?.gstin ?? null,
-              customerName: order.customer.name,
-              customerPhone: order.customer.phone,
-              vehicleRegistration: order.vehicle.registrationNumber,
-              vehicleLabel:
-                `${order.vehicle.make} ${order.vehicle.model}`.trim(),
-              jobLabel: t("detailsTitle"),
-              placeOfSupplyLabel: `${tb("placeOfSupply")}: ${placeLabel}`,
-              approvedLines: approvedPreviewLines,
-              approvedTaxablePaise,
-              approvedTaxPaise,
-              approvedTotalPaise,
-              approvedTaxLabel: te("gstShort"),
-            }}
-          />
+          surface.includeCommercialSections ? (
+            <JobCardBillingContent
+              orderId={order.id}
+              canEdit={canBill}
+              invoices={invoices}
+              hasApprovedEstimateLines={hasApprovedEstimateLines}
+              hasUnbilledApprovedLines={hasUnbilledApprovedLines}
+              defaultPlaceOfSupplyStateCode={order.vehicle.stateCode}
+              liveLinkActive={liveLinkStatus.active}
+              canEditLiveLink={canBill}
+              hasEstimate={Boolean(estimate?.current)}
+              preview={{
+                garageName: garage?.name ?? t("title"),
+                garageAddress: garage?.address ?? null,
+                garageGstin: garage?.gstin ?? null,
+                customerName: order.customer.name,
+                customerPhone: order.customer.phone,
+                vehicleRegistration: order.vehicle.registrationNumber,
+                vehicleLabel:
+                  `${order.vehicle.make} ${order.vehicle.model}`.trim(),
+                jobLabel: t("detailsTitle"),
+                placeOfSupplyLabel: `${tb("placeOfSupply")}: ${placeLabel}`,
+                approvedLines: approvedPreviewLines,
+                approvedTaxablePaise,
+                approvedTaxPaise,
+                approvedTotalPaise,
+                approvedTaxLabel: te("gstShort"),
+              }}
+            />
+          ) : null
         }
       />
     </main>

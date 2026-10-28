@@ -126,13 +126,14 @@ const searchQuery = z
 
 export const PART_SORTS = [
   "newest",
+  "oldest",
   "updated",
   "name_asc",
   "name_desc",
 ] as const;
 export type PartSort = (typeof PART_SORTS)[number];
 
-export const partSortSchema = z.enum(PART_SORTS).default("name_asc");
+export const partSortSchema = z.enum(PART_SORTS).default("newest");
 
 export const partSearchSchema = z.object({
   q: searchQuery,
@@ -176,6 +177,17 @@ export const createPartSchema = z.object({
       return n;
     }),
 });
+
+/** Job-card quick add — name only; SKU and catalogue defaults applied in the service. */
+export const createPartByNameSchema = z.object({
+  name: z
+    .string()
+    .trim()
+    .min(1, { error: "validation.required" })
+    .max(200, { error: "validation.tooLong" }),
+});
+
+export type CreatePartByNameInput = z.input<typeof createPartByNameSchema>;
 
 export const updatePartSchema = createPartSchema.omit({ openingStock: true });
 

@@ -13,29 +13,28 @@ import type {
 } from "@/modules/service-orders/schema";
 
 type Props = {
-  searchParams: Promise<{ technicianId?: string; bay?: string }>;
+  searchParams: Promise<{ technicianId?: string; bayId?: string }>;
 };
 
 export const instant = false;
 
 export default async function WorkshopPage({ searchParams }: Props) {
   const session = await requireSession();
-  const { technicianId: rawTechnicianId, bay: rawBay } = await searchParams;
+  const { technicianId: rawTechnicianId, bayId: rawBayId } =
+    await searchParams;
   const selectedTechnicianId =
     session.role === "TECHNICIAN" ? "" : (rawTechnicianId?.trim() ?? "");
-  const selectedBay = rawBay?.trim() ?? "";
+  const selectedBayId = rawBayId?.trim() ?? "";
 
   const t = await getTranslations("workshop");
 
   const filterOptions = {
     ...(selectedTechnicianId ? { technicianId: selectedTechnicianId } : {}),
+    ...(selectedBayId ? { bayId: selectedBayId } : {}),
   };
 
   const [orders, technicians, bays] = await Promise.all([
-    listOrders(session, {
-      ...filterOptions,
-      ...(selectedBay ? { bay: selectedBay } : {}),
-    }),
+    listOrders(session, filterOptions),
     listBoardTechnicians(session),
     listBaysForSelect(session).catch(() => []),
   ]);
@@ -72,7 +71,7 @@ export default async function WorkshopPage({ searchParams }: Props) {
         technicians={technicians}
         bays={bays}
         selectedTechnicianId={selectedTechnicianId}
-        selectedBay={selectedBay}
+        selectedBayId={selectedBayId}
         canFilterTechnicians={session.role !== "TECHNICIAN"}
         canMutate={canMutate && session.role !== "ACCOUNTANT"}
       />

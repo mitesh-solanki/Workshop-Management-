@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import Link from "next/link";
-import { Package, ShoppingBag } from "lucide-react";
+import { Package, Plus, ShoppingBag } from "lucide-react";
 import { getTranslations } from "next-intl/server";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -8,7 +8,6 @@ import { PageHeader } from "@/components/ui/page-header";
 import { TableSpinner } from "@/components/shared/page-spinner";
 import { requireSession } from "@/lib/session";
 import { ImportModal } from "@/modules/data-import/components/import-modal";
-import { CreatePartModal } from "@/modules/inventory/components/create-part-modal";
 import { InventoryTable } from "@/modules/inventory/components/inventory-table";
 import { listParts } from "@/modules/inventory/service";
 
@@ -46,7 +45,14 @@ export default async function InventoryPage({ searchParams }: Props) {
                 </Link>
               </Button>
             ) : null}
-            {canWrite ? <CreatePartModal /> : null}
+            {canWrite ? (
+              <Button asChild size="md">
+                <Link href="/inventory/new">
+                  <Plus className="size-4" aria-hidden />
+                  {t("add")}
+                </Link>
+              </Button>
+            ) : null}
           </>
         }
       />
@@ -66,7 +72,12 @@ export default async function InventoryPage({ searchParams }: Props) {
                 canWrite && !hasQuery ? (
                   <div className="flex flex-col items-center gap-2 sm:flex-row sm:justify-center">
                     <ImportModal entity="parts" size="sm" />
-                    <CreatePartModal size="sm" />
+                    <Button asChild size="sm">
+                      <Link href="/inventory/new">
+                        <Plus className="size-4" aria-hidden />
+                        {t("add")}
+                      </Link>
+                    </Button>
                   </div>
                 ) : undefined
               }

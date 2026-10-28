@@ -17,9 +17,11 @@ function bayOrderBy(sort: BaySort): Prisma.BayOrderByWithRelationInput[] {
   switch (sort) {
     case "name_asc":
       return [{ name: "asc" }];
+    case "name_desc":
+      return [{ name: "desc" }];
+    case "oldest":
+      return [{ createdAt: "asc" }];
     case "newest":
-      return [{ createdAt: "desc" }];
-    case "sort_asc":
     default:
       return [{ createdAt: "desc" }];
   }

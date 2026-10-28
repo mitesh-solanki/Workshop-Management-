@@ -47,6 +47,8 @@ type CreateProps = {
   defaultOdometer: number | null;
   technicians: TechnicianOption[];
   bays: BayOption[];
+  /** When set, technician field is fixed to this id (technician self-assign). */
+  lockTechnicianId?: string;
   className?: string;
 };
 
@@ -113,6 +115,9 @@ export function ServiceOrderForm(props: Props) {
     }
   }, [state, props.mode, router]);
 
+  const lockTechnicianId =
+    props.mode === "create" ? props.lockTechnicianId : undefined;
+
   const defaults =
     props.mode === "edit"
       ? props.defaults
@@ -121,7 +126,7 @@ export function ServiceOrderForm(props: Props) {
           requestedServices: "",
           odometerIn: props.defaultOdometer,
           expectedCompletion: "",
-          technicianId: "",
+          technicianId: lockTechnicianId ?? "",
           bay: "",
           priority: "NORMAL",
           status: "WAITING" as const,
@@ -286,19 +291,42 @@ export function ServiceOrderForm(props: Props) {
       </div>
       <div className="grid gap-4 sm:grid-cols-2">
         <FormField id="technicianId" label={t("technician")}>
-          <FormSelect
-            id="technicianId"
-            name="technicianId"
-            defaultValue={defaults.technicianId}
-            disabled={readOnly}
-            options={[
-              { value: "", label: t("technicianUnassigned") },
-              ...props.technicians.map((tech) => ({
-                value: tech.id,
-                label: tech.name?.trim() || tech.email,
-              })),
-            ]}
-          />
+          {lockTechnicianId ? (
+            <>
+              <input
+                type="hidden"
+                name="technicianId"
+                value={lockTechnicianId}
+              />
+              <Input
+                id="technicianId"
+                value={
+                  props.technicians.find((tech) => tech.id === lockTechnicianId)
+                    ?.name?.trim() ||
+                  props.technicians.find((tech) => tech.id === lockTechnicianId)
+                    ?.email ||
+                  t("technicianSelf")
+                }
+                disabled
+                readOnly
+                className="h-11 min-h-11"
+              />
+            </>
+          ) : (
+            <FormSelect
+              id="technicianId"
+              name="technicianId"
+              defaultValue={defaults.technicianId}
+              disabled={readOnly}
+              options={[
+                { value: "", label: t("technicianUnassigned") },
+                ...props.technicians.map((tech) => ({
+                  value: tech.id,
+                  label: tech.name?.trim() || tech.email,
+                })),
+              ]}
+            />
+          )}
         </FormField>
         <FormField id="priority" label={t("priority")}>
           <FormSelect

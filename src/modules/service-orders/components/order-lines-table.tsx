@@ -8,14 +8,16 @@ import {
   useState,
   useTransition,
 } from "react";
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Check, Pencil, Trash2, X } from "lucide-react";
 import { useTranslations } from "next-intl";
+import { getPartEditValuesAction } from "@/app/actions/inventory";
 import {
   deleteServiceOrderLineAction,
   updateServiceOrderLineAction,
   type ServiceOrderActionState,
 } from "@/app/actions/service-orders";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -37,6 +39,10 @@ import {
   sanitizeRupeesTyping,
   type Paise,
 } from "@/lib/money";
+import {
+  PartPickerSelect,
+  type PartPickerItem,
+} from "@/modules/inventory/components/part-picker-select";
 import { QuantityStepper } from "@/modules/inventory/components/quantity-stepper";
 import { cn } from "@/lib/utils";
 
@@ -53,7 +59,7 @@ type Props = {
   orderId: string;
   canMutate: boolean;
   lines: Line[];
-  canRequestParts?: boolean;
+  hidePrices?: boolean;
 };
 
 const initial: ServiceOrderActionState = { ok: false };
@@ -115,17 +121,18 @@ function LineStat({
 function OrderLineCard({
   orderId,
   canMutate,
-  canRequestParts,
+  hidePrices,
   line,
 }: {
   orderId: string;
   canMutate: boolean;
-  canRequestParts: boolean;
+  hidePrices: boolean;
   line: Line;
 }) {
   const t = useTranslations("orders");
   const tc = useTranslations("common");
   const ti = useTranslations("inventory");
+  const router = useRouter();
   const [editing, setEditing] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [removing, startRemove] = useTransition();
@@ -141,12 +148,69 @@ function OrderLineCard({
   const [draftPricePaise, setDraftPricePaise] = useState(
     line.unitPricePaise as Paise,
   );
+  const [editPartId, setEditPartId] = useState(line.partId ?? "");
+  const [editDescription, setEditDescription] = useState(line.description);
+  const [applyingPrice, startApplyPrice] = useTransition();
   const liveTotal = multiplyByQuantity(draftPricePaise, draftQty);
+  const isPart = line.type === "PART";
+  const needsPricing =
+    !hidePrices && isPart && line.unitPricePaise === 0 && Boolean(line.partId);
 
   function beginEdit() {
     setDraftQty(line.quantity);
     setDraftPricePaise(line.unitPricePaise as Paise);
+    setEditPartId(line.partId ?? "");
+    setEditDescription(line.description);
     setEditing(true);
+  }
+
+  function handleEditPartChange(nextId: string, part: PartPickerItem | null) {
+    setEditPartId(nextId);
+    if (!part) return;
+    setEditDescription(part.name);
+    if (!hidePrices) {
+      setDraftPricePaise(part.sellingPricePaise as Paise);
+    }
+  }
+
+  function applyInventoryPrice() {
+    if (!line.partId) return;
+    startApplyPrice(async () => {
+      const part = await getPartEditValuesAction(line.partId!);
+      if (!part) {
+        toast.error(tc("notFound"));
+        return;
+      }
+      if (part.sellingPricePaise <= 0) {
+        toast.error(t("inventoryPriceMissing"));
+        return;
+      }
+      if (editing) {
+        setDraftPricePaise(part.sellingPricePaise as Paise);
+        toast.success(t("inventoryPricePrefill"));
+        return;
+      }
+      const formData = new FormData();
+      formData.set("description", line.description);
+      formData.set("quantity", String(line.quantity));
+      formData.set(
+        "unitPriceRupees",
+        paiseToRupeesInput(part.sellingPricePaise),
+      );
+      formData.set("partId", line.partId!);
+      const result = await updateServiceOrderLineAction(
+        orderId,
+        line.id,
+        { ok: false },
+        formData,
+      );
+      if (result.ok) {
+        toast.success(result.message ?? t("inventoryPriceApplied"));
+        router.refresh();
+        return;
+      }
+      toast.error(result.message ?? t("errors.deleteFailed"));
+    });
   }
 
   useEffect(() => {
@@ -182,6 +246,7 @@ function OrderLineCard({
             variant="outline"
             size="icon"
             loading={pending}
+            disabled={isPart && !editPartId}
             className={cn(
               actionBtnClass,
               "text-emerald-700 hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-800",
@@ -206,15 +271,6 @@ function OrderLineCard({
         </>
       ) : (
         <>
-          {canRequestParts && line.type === "PART" && line.partId ? (
-            <Button asChild variant="secondary" size="sm" className="min-h-11">
-              <Link
-                href={`/parts-requests?partId=${line.partId}&serviceOrderLineId=${line.id}`}
-              >
-                {ti("requestPart")}
-              </Link>
-            </Button>
-          ) : null}
           <Button
             type="button"
             variant="outline"
@@ -298,34 +354,66 @@ function OrderLineCard({
           action={formAction}
           className="space-y-3"
         >
-          <div className="grid grid-cols-1 gap-x-5 gap-y-1.5 sm:grid-cols-2 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1.2fr)_auto]">
+          <div
+            className={
+              hidePrices
+                ? "grid grid-cols-1 gap-x-5 gap-y-1.5 sm:grid-cols-2 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_auto]"
+                : "grid grid-cols-1 gap-x-5 gap-y-1.5 sm:grid-cols-2 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1.2fr)_auto]"
+            }
+          >
             <div className="flex min-h-7 flex-wrap items-center gap-2 sm:col-span-2 lg:col-span-1">
               <p className="text-[13px] font-semibold text-slate-600">
-                {t("lineDescription")}
+                {isPart ? ti("part") : t("lineDescription")}
               </p>
               <TypeBadge type={line.type} />
             </div>
             <p className="hidden min-h-7 items-center text-[13px] font-semibold text-slate-600 lg:flex">
               {t("quantity")}
             </p>
-            <p className="hidden min-h-7 items-center text-[13px] font-semibold text-slate-600 lg:flex">
-              {t("unitPrice")}
-            </p>
-            <p className="hidden min-h-7 items-center text-[13px] font-semibold text-slate-600 lg:flex">
-              {t("lineSubtotal")}
-            </p>
+            {!hidePrices ? (
+              <>
+                <p className="hidden min-h-7 items-center text-[13px] font-semibold text-slate-600 lg:flex">
+                  {t("unitPrice")}
+                </p>
+                <p className="hidden min-h-7 items-center text-[13px] font-semibold text-slate-600 lg:flex">
+                  {t("lineSubtotal")}
+                </p>
+              </>
+            ) : null}
             <div className="hidden min-h-7 lg:block" aria-hidden />
 
             <div className="min-w-0 sm:col-span-2 lg:col-span-1">
-              <Input
-                id={`line-desc-${line.id}`}
-                name="description"
-                required
-                maxLength={500}
-                defaultValue={line.description}
-                className={controlClass}
-                aria-label={t("lineDescription")}
-              />
+              {isPart ? (
+                <>
+                  <PartPickerSelect
+                    id={`line-part-${line.id}`}
+                    name="partId"
+                    value={editPartId}
+                    onChange={handleEditPartChange}
+                    quickCreateByName={hidePrices}
+                    clearable={false}
+                    initialLabel={line.description}
+                  />
+                  <input
+                    type="hidden"
+                    name="description"
+                    value={editDescription}
+                  />
+                </>
+              ) : (
+                <>
+                  <Input
+                    id={`line-desc-${line.id}`}
+                    name="description"
+                    required
+                    maxLength={500}
+                    defaultValue={line.description}
+                    className={controlClass}
+                    aria-label={t("lineDescription")}
+                  />
+                  <input type="hidden" name="partId" value="" />
+                </>
+              )}
             </div>
 
             <div className="min-w-0">
@@ -343,51 +431,62 @@ function OrderLineCard({
               />
             </div>
 
-            <div className="min-w-0">
-              <label
-                htmlFor={`line-price-${line.id}`}
-                className="mb-1.5 block text-[13px] font-semibold text-slate-600 lg:hidden"
-              >
-                {t("unitPrice")}
-              </label>
-              <Input
-                id={`line-price-${line.id}`}
+            {hidePrices ? (
+              <input
+                type="hidden"
                 name="unitPriceRupees"
-                type="text"
-                inputMode="decimal"
-                required
-                defaultValue={paiseToRupeesInput(line.unitPricePaise)}
-                className={cn(controlClass, "tabular-nums")}
-                aria-label={t("unitPrice")}
-                onFocus={(event) => {
-                  if (isZeroRupeesInput(event.currentTarget.value)) {
-                    event.currentTarget.select();
-                  }
-                }}
-                onBeforeInput={(event) => {
-                  const data = (event.nativeEvent as InputEvent).data;
-                  if (data == null || data === "") return;
-                  if (!/^[\d.]+$/.test(data)) event.preventDefault();
-                }}
-                onInput={(event) => {
-                  const el = event.currentTarget;
-                  const next = sanitizeRupeesTyping(el.value);
-                  if (el.value !== next) el.value = next;
-                  setDraftPricePaise(
-                    parsePricePaise(next, line.unitPricePaise as Paise),
-                  );
-                }}
+                value={paiseToRupeesInput(line.unitPricePaise)}
               />
-            </div>
+            ) : (
+              <>
+                <div className="min-w-0">
+                  <label
+                    htmlFor={`line-price-${line.id}`}
+                    className="mb-1.5 block text-[13px] font-semibold text-slate-600 lg:hidden"
+                  >
+                    {t("unitPrice")}
+                  </label>
+                  <Input
+                    key={`line-price-${line.id}-${editPartId}`}
+                    id={`line-price-${line.id}`}
+                    name="unitPriceRupees"
+                    type="text"
+                    inputMode="decimal"
+                    required
+                    defaultValue={paiseToRupeesInput(draftPricePaise)}
+                    className={cn(controlClass, "tabular-nums")}
+                    aria-label={t("unitPrice")}
+                    onFocus={(event) => {
+                      if (isZeroRupeesInput(event.currentTarget.value)) {
+                        event.currentTarget.select();
+                      }
+                    }}
+                    onBeforeInput={(event) => {
+                      const data = (event.nativeEvent as InputEvent).data;
+                      if (data == null || data === "") return;
+                      if (!/^[\d.]+$/.test(data)) event.preventDefault();
+                    }}
+                    onInput={(event) => {
+                      const el = event.currentTarget;
+                      const next = sanitizeRupeesTyping(el.value);
+                      if (el.value !== next) el.value = next;
+                      setDraftPricePaise(
+                        parsePricePaise(next, draftPricePaise),
+                      );
+                    }}
+                  />
+                </div>
 
-            <div className="min-w-0">
-              <p className="mb-1 text-[13px] font-semibold text-slate-600 lg:hidden">
-                {t("lineSubtotal")}
-              </p>
-              <p className="flex h-11 min-h-11 items-center text-[15px] font-extrabold tabular-nums text-slate-950">
-                {formatRupees(liveTotal)}
-              </p>
-            </div>
+                <div className="min-w-0">
+                  <p className="mb-1 text-[13px] font-semibold text-slate-600 lg:hidden">
+                    {t("lineSubtotal")}
+                  </p>
+                  <p className="flex h-11 min-h-11 items-center text-[15px] font-extrabold tabular-nums text-slate-950">
+                    {formatRupees(liveTotal)}
+                  </p>
+                </div>
+              </>
+            )}
 
             <div className="flex h-11 min-h-11 items-center justify-start lg:justify-end">
               {actions}
@@ -396,6 +495,21 @@ function OrderLineCard({
 
           {line.type === "PART" ? (
             <p className="text-[13px] text-slate-600">{t("editPartQtyHint")}</p>
+          ) : null}
+          {needsPricing ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant="warning">{t("needsPricing")}</Badge>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                className="min-h-11"
+                loading={applyingPrice}
+                onClick={applyInventoryPrice}
+              >
+                {t("useInventoryPrice")}
+              </Button>
+            </div>
           ) : null}
         </form>
       </div>
@@ -406,14 +520,30 @@ function OrderLineCard({
   return (
     <>
       {deleteDialog}
-      <div className="rounded-[10px] border border-[#e8edf5] bg-[#fafcff] p-3.5 sm:p-4">
-        <div className="grid grid-cols-1 items-center gap-4 sm:grid-cols-2 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1.2fr)_auto] lg:gap-5">
+      <div
+        className={cn(
+          "rounded-[10px] border p-3.5 sm:p-4",
+          needsPricing
+            ? "border-amber-300 bg-amber-50/50"
+            : "border-[#e8edf5] bg-[#fafcff]",
+        )}
+      >
+        <div
+          className={
+            hidePrices
+              ? "grid grid-cols-1 items-center gap-4 sm:grid-cols-2 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_auto] lg:gap-5"
+              : "grid grid-cols-1 items-center gap-4 sm:grid-cols-2 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1.2fr)_auto] lg:gap-5"
+          }
+        >
           <div className="min-w-0 sm:col-span-2 lg:col-span-1">
             <div className="mb-1 flex flex-wrap items-center gap-2">
               <p className="text-[13px] font-semibold text-slate-600">
                 {t("lineDescription")}
               </p>
               <TypeBadge type={line.type} />
+              {needsPricing ? (
+                <Badge variant="warning">{t("needsPricing")}</Badge>
+              ) : null}
             </div>
             <h4 className="text-[15px] font-semibold leading-snug text-slate-900">
               {line.description}
@@ -421,19 +551,37 @@ function OrderLineCard({
           </div>
 
           <LineStat value={String(line.quantity)} label={t("quantity")} />
-          <LineStat
-            value={formatRupees(line.unitPricePaise)}
-            label={t("unitPrice")}
-          />
-          <LineStat
-            value={formatRupees(savedTotal)}
-            label={t("lineSubtotal")}
-            emphasize
-          />
+          {!hidePrices ? (
+            <>
+              <LineStat
+                value={formatRupees(line.unitPricePaise)}
+                label={t("unitPrice")}
+              />
+              <LineStat
+                value={formatRupees(savedTotal)}
+                label={t("lineSubtotal")}
+                emphasize
+              />
+            </>
+          ) : null}
 
           {actions ? (
-            <div className="flex items-center justify-start self-center border-t border-slate-200 pt-3 sm:col-span-2 lg:col-span-1 lg:justify-end lg:border-0 lg:pt-0">
-              {actions}
+            <div className="flex flex-col items-stretch justify-start gap-2 self-center border-t border-slate-200 pt-3 sm:col-span-2 lg:col-span-1 lg:items-end lg:border-0 lg:pt-0">
+              {needsPricing && canMutate ? (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  className="min-h-11 w-full lg:w-auto"
+                  loading={applyingPrice}
+                  onClick={applyInventoryPrice}
+                >
+                  {t("useInventoryPrice")}
+                </Button>
+              ) : null}
+              <div className="flex items-center justify-start lg:justify-end">
+                {actions}
+              </div>
             </div>
           ) : null}
         </div>
@@ -446,7 +594,7 @@ export function OrderLinesTable({
   orderId,
   canMutate,
   lines,
-  canRequestParts = false,
+  hidePrices = false,
 }: Props) {
   return (
     <div className="grid gap-2.5">
@@ -455,7 +603,7 @@ export function OrderLinesTable({
           key={line.id}
           orderId={orderId}
           canMutate={canMutate}
-          canRequestParts={canRequestParts}
+          hidePrices={hidePrices}
           line={line}
         />
       ))}

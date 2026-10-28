@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useRef, useState } from "react";
+import { useActionState, useEffect, useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Plus } from "lucide-react";
@@ -11,6 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
+  DialogBody,
   DialogClose,
   DialogContent,
   DialogDescription,
@@ -24,6 +25,7 @@ import { FormSelect } from "@/components/ui/form-select";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/toast";
+import { finishCreateModalNavigation } from "@/lib/create-modal-navigation";
 import {
   isZeroRupeesInput,
   parseRupeesToPaise,
@@ -85,6 +87,7 @@ export function CreatePurchaseReturnModal({
   const te = useTranslations("errors");
   const tc = useTranslations("common");
   const router = useRouter();
+  const formId = useId();
   const [open, setOpen] = useState(false);
   const [values, setValues] = useState(() =>
     emptyValues(defaultVendorId, defaultPartId, defaultVendorBillId),
@@ -117,7 +120,13 @@ export function CreatePurchaseReturnModal({
           }
           return;
         }
-        router.push(`/vendors/${values.vendorId}?section=returns`);
+        finishCreateModalNavigation({
+          kind: "purchase-return",
+          recordId: createdId,
+          href: `/vendors/${values.vendorId}?section=returns`,
+          router,
+          close: () => setOpen(false),
+        });
       }, 0);
       return () => window.clearTimeout(id);
     }
@@ -204,150 +213,152 @@ export function CreatePurchaseReturnModal({
           <DialogDescription>{t("newSubtitle")}</DialogDescription>
         </DialogHeader>
 
-        <form
-          action={(formData) => {
-            if (!validateClient()) return;
-            formAction(formData);
-          }}
-          className="flex max-h-[min(80vh,40rem)] flex-col gap-4 overflow-y-auto px-5 py-4"
-        >
-          {defaultVendorId ? (
-            <input type="hidden" name="vendorId" value={defaultVendorId} />
-          ) : (
+        <DialogBody className="px-5 py-4">
+          <form
+            id={formId}
+            action={(formData) => {
+              if (!validateClient()) return;
+              formAction(formData);
+            }}
+            className="flex flex-col gap-4"
+          >
+            {defaultVendorId ? (
+              <input type="hidden" name="vendorId" value={defaultVendorId} />
+            ) : (
+              <FormField
+                id="modal-ret-vendor"
+                label={t("vendor")}
+                error={fieldErrors.vendorId}
+              >
+                <FormSelect
+                  id="modal-ret-vendor"
+                  name="vendorId"
+                  required
+                  value={values.vendorId}
+                  onValueChange={(value) => setField("vendorId", value)}
+                  placeholder={t("vendorPlaceholder")}
+                  triggerClassName="h-11 min-h-11"
+                  options={vendors.map((vendor) => ({
+                    value: vendor.id,
+                    label: vendor.name,
+                  }))}
+                />
+              </FormField>
+            )}
             <FormField
-              id="modal-ret-vendor"
-              label={t("vendor")}
-              error={fieldErrors.vendorId}
+              id="modal-ret-part"
+              label={t("part")}
+              error={fieldErrors.partId}
             >
               <FormSelect
-                id="modal-ret-vendor"
-                name="vendorId"
+                id="modal-ret-part"
+                name="partId"
                 required
-                value={values.vendorId}
-                onValueChange={(value) => setField("vendorId", value)}
-                placeholder={t("vendorPlaceholder")}
+                value={values.partId}
+                onValueChange={(value) => setField("partId", value)}
+                placeholder={t("partPlaceholder")}
                 triggerClassName="h-11 min-h-11"
-                options={vendors.map((vendor) => ({
-                  value: vendor.id,
-                  label: vendor.name,
+                options={parts.map((part) => ({
+                  value: part.id,
+                  label: `${part.name} (${part.sku})`,
                 }))}
               />
             </FormField>
-          )}
-          <FormField
-            id="modal-ret-part"
-            label={t("part")}
-            error={fieldErrors.partId}
-          >
-            <FormSelect
-              id="modal-ret-part"
-              name="partId"
-              required
-              value={values.partId}
-              onValueChange={(value) => setField("partId", value)}
-              placeholder={t("partPlaceholder")}
-              triggerClassName="h-11 min-h-11"
-              options={parts.map((part) => ({
-                value: part.id,
-                label: `${part.name} (${part.sku})`,
-              }))}
-            />
-          </FormField>
-          {bills.length > 0 ? (
-            <FormField id="modal-ret-bill" label={t("vendorBill")}>
-              <FormSelect
-                id="modal-ret-bill"
-                name="vendorBillId"
-                value={values.vendorBillId}
-                onValueChange={(value) => setField("vendorBillId", value)}
-                placeholder={t("vendorBillPlaceholder")}
-                triggerClassName="h-11 min-h-11"
-                options={[
-                  { value: "", label: t("vendorBillNone") },
-                  ...bills.map((bill) => ({
-                    value: bill.id,
-                    label: bill.label,
-                  })),
-                ]}
-              />
-            </FormField>
-          ) : null}
-          <div className="grid gap-4 sm:grid-cols-2">
-            <FormField
-              id="modal-ret-qty"
-              label={t("quantity")}
-              error={fieldErrors.quantity}
-            >
-              <Input
+            {bills.length > 0 ? (
+              <FormField id="modal-ret-bill" label={t("vendorBill")}>
+                <FormSelect
+                  id="modal-ret-bill"
+                  name="vendorBillId"
+                  value={values.vendorBillId}
+                  onValueChange={(value) => setField("vendorBillId", value)}
+                  placeholder={t("vendorBillPlaceholder")}
+                  triggerClassName="h-11 min-h-11"
+                  options={[
+                    { value: "", label: t("vendorBillNone") },
+                    ...bills.map((bill) => ({
+                      value: bill.id,
+                      label: bill.label,
+                    })),
+                  ]}
+                />
+              </FormField>
+            ) : null}
+            <div className="grid gap-4 sm:grid-cols-2">
+              <FormField
                 id="modal-ret-qty"
-                name="quantity"
-                type="number"
-                min={1}
-                step={1}
-                required
-                value={values.quantity}
-                onChange={(e) => setField("quantity", e.target.value)}
-                aria-invalid={Boolean(fieldErrors.quantity)}
-                className="h-11 min-h-11"
-              />
-            </FormField>
-            <FormField
-              id="modal-ret-credit"
-              label={t("credit")}
-              error={fieldErrors.credit}
-              hint={tc("unitPriceHint")}
-            >
-              <Input
+                label={t("quantity")}
+                error={fieldErrors.quantity}
+              >
+                <Input
+                  id="modal-ret-qty"
+                  name="quantity"
+                  type="number"
+                  min={1}
+                  step={1}
+                  required
+                  value={values.quantity}
+                  onChange={(e) => setField("quantity", e.target.value)}
+                  aria-invalid={Boolean(fieldErrors.quantity)}
+                  className="h-11 min-h-11"
+                />
+              </FormField>
+              <FormField
                 id="modal-ret-credit"
-                name="credit"
-                type="text"
-                inputMode="decimal"
-                autoComplete="off"
-                required
-                placeholder={t("creditPlaceholder")}
-                value={values.credit}
-                aria-invalid={Boolean(fieldErrors.credit)}
-                className="h-11 min-h-11"
-                onBeforeInput={(event) => {
-                  const native = event.nativeEvent as InputEvent;
-                  const data = native.data;
-                  if (data == null || data === "") return;
-                  if (!/^[\d.]+$/.test(data)) {
-                    event.preventDefault();
+                label={t("credit")}
+                error={fieldErrors.credit}
+                hint={tc("unitPriceHint")}
+              >
+                <Input
+                  id="modal-ret-credit"
+                  name="credit"
+                  type="text"
+                  inputMode="decimal"
+                  autoComplete="off"
+                  required
+                  placeholder={t("creditPlaceholder")}
+                  value={values.credit}
+                  aria-invalid={Boolean(fieldErrors.credit)}
+                  className="h-11 min-h-11"
+                  onBeforeInput={(event) => {
+                    const native = event.nativeEvent as InputEvent;
+                    const data = native.data;
+                    if (data == null || data === "") return;
+                    if (!/^[\d.]+$/.test(data)) {
+                      event.preventDefault();
+                    }
+                  }}
+                  onChange={(e) =>
+                    setField("credit", sanitizeRupeesTyping(e.target.value))
                   }
-                }}
-                onChange={(e) =>
-                  setField("credit", sanitizeRupeesTyping(e.target.value))
-                }
-                onFocus={(event) => {
-                  if (isZeroRupeesInput(event.currentTarget.value)) {
-                    event.currentTarget.select();
-                  }
-                }}
+                  onFocus={(event) => {
+                    if (isZeroRupeesInput(event.currentTarget.value)) {
+                      event.currentTarget.select();
+                    }
+                  }}
+                />
+              </FormField>
+            </div>
+            <FormField id="modal-ret-notes" label={t("notes")}>
+              <Textarea
+                id="modal-ret-notes"
+                name="notes"
+                rows={2}
+                value={values.notes}
+                onChange={(e) => setField("notes", e.target.value)}
               />
             </FormField>
-          </div>
-          <FormField id="modal-ret-notes" label={t("notes")}>
-            <Textarea
-              id="modal-ret-notes"
-              name="notes"
-              rows={2}
-              value={values.notes}
-              onChange={(e) => setField("notes", e.target.value)}
-            />
-          </FormField>
-
-          <DialogFooter className="gap-2 border-t border-border px-0 pt-4 sm:justify-end">
-            <DialogClose asChild>
-              <Button type="button" variant="secondary" size="md">
-                {t("cancel")}
-              </Button>
-            </DialogClose>
-            <Button type="submit" size="md" loading={pending}>
-              {pending ? t("saving") : t("create")}
+          </form>
+        </DialogBody>
+        <DialogFooter className="gap-2 border-t border-border bg-background px-5 py-4 sm:justify-end">
+          <DialogClose asChild>
+            <Button type="button" variant="secondary" size="md">
+              {t("cancel")}
             </Button>
-          </DialogFooter>
-        </form>
+          </DialogClose>
+          <Button type="submit" form={formId} size="md" loading={pending}>
+            {pending ? t("saving") : t("create")}
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

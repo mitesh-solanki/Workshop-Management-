@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useMemo, useRef, useState } from "react";
+import { useActionState, useEffect, useId, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { PackageCheck } from "lucide-react";
@@ -11,6 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
+  DialogBody,
   DialogClose,
   DialogContent,
   DialogDescription,
@@ -48,6 +49,7 @@ export function ReceiveGoodsModal({
 }: Props) {
   const t = useTranslations("purchaseOrders");
   const router = useRouter();
+  const formId = useId();
   const [open, setOpen] = useState(false);
   const boundReceive = useMemo(
     () => receiveGoodsModalAction.bind(null, purchaseOrderId),
@@ -100,83 +102,89 @@ export function ReceiveGoodsModal({
           </DialogDescription>
         </DialogHeader>
 
-        <form
-          key={open ? "recv-open" : "recv-closed"}
-          action={formAction}
-          className="flex max-h-[min(80vh,40rem)] flex-col gap-4 overflow-y-auto px-5 py-5 sm:px-6"
-        >
-          {receivable.length === 0 ? (
-            <p className="text-sm text-muted-foreground">{t("nothingToReceive")}</p>
-          ) : (
-            <>
-              <p className="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2.5 text-sm text-blue-900">
-                {t("receivePartialTip")}
+        <DialogBody className="px-5 py-5 sm:px-6">
+          <form
+            id={formId}
+            key={open ? "recv-open" : "recv-closed"}
+            action={formAction}
+            className="flex flex-col gap-4"
+          >
+            {receivable.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                {t("nothingToReceive")}
               </p>
-              <ul className="space-y-3">
-                {receivable.map((line) => {
-                  const remaining =
-                    line.quantityOrdered - line.quantityReceived;
-                  return (
-                    <li
-                      key={line.id}
-                      className="space-y-3 overflow-hidden rounded-xl border border-border bg-card shadow-xs"
-                    >
-                      <input type="hidden" name="lineId" value={line.id} />
-                      <div className="border-b border-border bg-muted/40 px-4 py-3">
-                        <p className="font-semibold text-foreground">
-                          {line.part.name}
-                        </p>
-                        <p className="text-caption text-muted-foreground">
-                          {line.part.sku} · {t("alreadyReceived", {
-                            received: line.quantityReceived,
-                            ordered: line.quantityOrdered,
-                            unit: line.part.unit,
-                          })}
-                        </p>
-                      </div>
-                      <div className="px-4 pb-4">
-                        <QuantityStepper
-                          id={`recv-qty-${line.id}`}
-                          name="quantity"
-                          label={t("receiveQuantity")}
-                          defaultValue={remaining}
-                          min={0}
-                          hint={t("remaining", { count: remaining })}
-                        />
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
-            </>
-          )}
+            ) : (
+              <>
+                <p className="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2.5 text-sm text-blue-900">
+                  {t("receivePartialTip")}
+                </p>
+                <ul className="space-y-3">
+                  {receivable.map((line) => {
+                    const remaining =
+                      line.quantityOrdered - line.quantityReceived;
+                    return (
+                      <li
+                        key={line.id}
+                        className="space-y-3 overflow-hidden rounded-xl border border-border bg-card shadow-xs"
+                      >
+                        <input type="hidden" name="lineId" value={line.id} />
+                        <div className="border-b border-border bg-muted/40 px-4 py-3">
+                          <p className="font-semibold text-foreground">
+                            {line.part.name}
+                          </p>
+                          <p className="text-caption text-muted-foreground">
+                            {line.part.sku} ·{" "}
+                            {t("alreadyReceived", {
+                              received: line.quantityReceived,
+                              ordered: line.quantityOrdered,
+                              unit: line.part.unit,
+                            })}
+                          </p>
+                        </div>
+                        <div className="px-4 pb-4">
+                          <QuantityStepper
+                            id={`recv-qty-${line.id}`}
+                            name="quantity"
+                            label={t("receiveQuantity")}
+                            defaultValue={remaining}
+                            min={0}
+                            hint={t("remaining", { count: remaining })}
+                          />
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </>
+            )}
 
-          <FormField id="modal-recv-notes" label={t("notes")}>
-            <Textarea
-              id="modal-recv-notes"
-              name="notes"
-              rows={2}
-              placeholder={t("receiveNotesPlaceholder")}
-              className="min-h-18 resize-y"
-            />
-          </FormField>
-
-          <DialogFooter className="sticky bottom-0 gap-2 border-t border-border bg-background px-0 pt-4 sm:justify-end">
-            <DialogClose asChild>
-              <Button type="button" variant="secondary" size="md">
-                {t("cancel")}
-              </Button>
-            </DialogClose>
-            <Button
-              type="submit"
-              size="md"
-              loading={pending}
-              disabled={receivable.length === 0}
-            >
-              {pending ? t("saving") : t("confirmReceive")}
+            <FormField id="modal-recv-notes" label={t("notes")}>
+              <Textarea
+                id="modal-recv-notes"
+                name="notes"
+                rows={2}
+                placeholder={t("receiveNotesPlaceholder")}
+                className="min-h-18 resize-y"
+              />
+            </FormField>
+          </form>
+        </DialogBody>
+        <DialogFooter className="gap-2 border-t border-border bg-background px-5 py-4 sm:justify-end sm:px-6">
+          <DialogClose asChild>
+            <Button type="button" variant="secondary" size="md">
+              {t("cancel")}
             </Button>
-          </DialogFooter>
-        </form>
+          </DialogClose>
+          <Button
+            type="submit"
+            form={formId}
+            size="md"
+            loading={pending}
+            disabled={receivable.length === 0}
+          >
+            {pending ? t("saving") : t("confirmReceive")}
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

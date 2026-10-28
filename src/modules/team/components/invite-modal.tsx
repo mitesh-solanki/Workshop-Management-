@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useRef, useState } from "react";
+import { useActionState, useEffect, useId, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { UserPlus } from "lucide-react";
 import {
@@ -10,6 +10,7 @@ import {
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
+  DialogBody,
   DialogClose,
   DialogContent,
   DialogDescription,
@@ -33,6 +34,7 @@ type InviteRole = (typeof INVITE_ROLES)[number];
 export function InviteModal() {
   const t = useTranslations("team");
   const te = useTranslations("errors");
+  const formId = useId();
   const [open, setOpen] = useState(false);
   const [role, setRole] = useState<InviteRole>("MANAGER");
   const [email, setEmail] = useState("");
@@ -94,101 +96,104 @@ export function InviteModal() {
           {t("inviteMember")}
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
+      <DialogContent className="gap-0 p-0 sm:max-w-md">
+        <DialogHeader className="border-b border-border px-5 py-4 text-left">
           <DialogTitle>{t("inviteTitle")}</DialogTitle>
           <DialogDescription>{t("inviteDescription")}</DialogDescription>
         </DialogHeader>
 
-        <form
-          action={(formData) => {
-            if (!validateClient()) return;
-            formAction(formData);
-          }}
-          className="flex flex-col gap-5"
-        >
-          <FormField
-            id="invite-email"
-            label={t("email")}
-            error={emailError}
+        <DialogBody className="px-5 py-4">
+          <form
+            id={formId}
+            action={(formData) => {
+              if (!validateClient()) return;
+              formAction(formData);
+            }}
+            className="flex flex-col gap-5"
           >
-            <Input
+            <FormField
               id="invite-email"
-              name="email"
-              type="email"
-              required
-              autoComplete="email"
-              placeholder={t("emailPlaceholder")}
-              value={email}
-              onChange={(e) => {
-                setEmail(sanitizeEmailTyping(e.target.value));
-                if (emailError) setEmailError(undefined);
-              }}
-              aria-invalid={Boolean(emailError)}
-              className="h-11 min-h-11"
-            />
-          </FormField>
-
-          <div className="flex flex-col gap-2">
-            <p
-              className="text-sm font-medium text-slate-900"
-              id="invite-role-label"
+              label={t("email")}
+              error={emailError}
             >
-              {t("role")}
-            </p>
-            <input type="hidden" name="role" value={role} />
-            <div
-              role="radiogroup"
-              aria-labelledby="invite-role-label"
-              className="grid grid-cols-3 gap-1 rounded-lg border border-slate-200 bg-slate-50 p-1"
-            >
-              {INVITE_ROLES.map((option) => {
-                const selected = role === option;
-                return (
-                  <button
-                    key={option}
-                    type="button"
-                    role="radio"
-                    aria-checked={selected}
-                    onClick={() => setRole(option)}
-                    className={cn(
-                      "min-h-11 rounded-md px-2 text-caption font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600",
-                      selected
-                        ? "bg-card text-slate-900 shadow-sm"
-                        : "text-slate-600 hover:text-slate-900",
-                    )}
-                  >
-                    {t(`roles.${option}`)}
-                  </button>
-                );
-              })}
-            </div>
-            <p className="text-caption text-slate-500">
-              {t(`roleAccess.${role}`)}
-            </p>
-          </div>
+              <Input
+                id="invite-email"
+                name="email"
+                type="email"
+                required
+                autoComplete="email"
+                placeholder={t("emailPlaceholder")}
+                value={email}
+                onChange={(e) => {
+                  setEmail(sanitizeEmailTyping(e.target.value));
+                  if (emailError) setEmailError(undefined);
+                }}
+                aria-invalid={Boolean(emailError)}
+                className="h-11 min-h-11"
+              />
+            </FormField>
 
-          <DialogFooter className="gap-2 sm:justify-stretch">
-            <DialogClose asChild>
-              <Button
-                type="button"
-                variant="secondary"
-                size="lg"
-                className="w-full sm:flex-1"
+            <div className="flex flex-col gap-2">
+              <p
+                className="text-sm font-medium text-slate-900"
+                id="invite-role-label"
               >
-                {t("close")}
-              </Button>
-            </DialogClose>
+                {t("role")}
+              </p>
+              <input type="hidden" name="role" value={role} />
+              <div
+                role="radiogroup"
+                aria-labelledby="invite-role-label"
+                className="grid grid-cols-3 gap-1 rounded-lg border border-slate-200 bg-slate-50 p-1"
+              >
+                {INVITE_ROLES.map((option) => {
+                  const selected = role === option;
+                  return (
+                    <button
+                      key={option}
+                      type="button"
+                      role="radio"
+                      aria-checked={selected}
+                      onClick={() => setRole(option)}
+                      className={cn(
+                        "min-h-11 rounded-md px-2 text-caption font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600",
+                        selected
+                          ? "bg-card text-slate-900 shadow-sm"
+                          : "text-slate-600 hover:text-slate-900",
+                      )}
+                    >
+                      {t(`roles.${option}`)}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="text-caption text-slate-500">
+                {t(`roleAccess.${role}`)}
+              </p>
+            </div>
+          </form>
+        </DialogBody>
+        <DialogFooter className="gap-2 border-t border-border bg-background px-5 py-4 sm:justify-stretch">
+          <DialogClose asChild>
             <Button
-              type="submit"
-              loading={pending}
+              type="button"
+              variant="secondary"
               size="lg"
               className="w-full sm:flex-1"
             >
-              {pending ? t("inviting") : t("invite")}
+              {t("close")}
             </Button>
-          </DialogFooter>
-        </form>
+          </DialogClose>
+          <Button
+            type="submit"
+            form={formId}
+            loading={pending}
+            size="lg"
+            className="w-full sm:flex-1"
+          >
+            {pending ? t("inviting") : t("invite")}
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

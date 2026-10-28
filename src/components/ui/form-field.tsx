@@ -15,8 +15,11 @@ type FormFieldProps = {
 /**
  * Usage:
  * <FormField id="name" label="Name" error={errors.name}>
- *   <Input id="name" name="name" aria-invalid={!!errors.name} />
+ *   <Input id="name" name="name" />
  * </FormField>
+ *
+ * When `error` is set, the control gets the red border (aria-invalid) and
+ * the red message under the field — same pattern as vendor phone.
  */
 function FormField({
   id,
@@ -28,11 +31,23 @@ function FormField({
 }: FormFieldProps) {
   const hintId = hint ? `${id}-hint` : undefined;
   const errorId = error ? `${id}-error` : undefined;
+  const describedBy = error ? errorId : hintId;
+
+  const control = React.isValidElement<{
+    "aria-invalid"?: boolean | "true" | "false";
+    "aria-describedby"?: string;
+  }>(children)
+    ? React.cloneElement(children, {
+        "aria-invalid": error ? true : children.props["aria-invalid"],
+        "aria-describedby":
+          describedBy ?? children.props["aria-describedby"],
+      })
+    : children;
 
   return (
     <div className={cn("flex flex-col gap-1.5", className)}>
       <Label htmlFor={id}>{label}</Label>
-      {children}
+      {control}
       {error ? (
         <p id={errorId} className="text-caption text-danger" role="alert">
           {error}

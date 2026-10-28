@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useRef, useState } from "react";
+import { useActionState, useEffect, useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Plus } from "lucide-react";
@@ -11,6 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
+  DialogBody,
   DialogClose,
   DialogContent,
   DialogDescription,
@@ -23,6 +24,7 @@ import { FormField } from "@/components/ui/form-field";
 import { FormSelect } from "@/components/ui/form-select";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/toast";
+import { finishCreateModalNavigation } from "@/lib/create-modal-navigation";
 
 const initial: PurchasesActionState = { ok: false };
 
@@ -55,6 +57,7 @@ export function CreatePurchaseOrderModal({
 }: Props) {
   const t = useTranslations("purchaseOrders");
   const router = useRouter();
+  const formId = useId();
   const [open, setOpen] = useState(defaultOpen);
   const [state, formAction, pending] = useActionState(
     createPurchaseOrderModalAction,
@@ -81,8 +84,15 @@ export function CreatePurchaseOrderModal({
         }, 0);
         return () => window.clearTimeout(id);
       }
-      const id = window.setTimeout(() => setOpen(false), 0);
-      router.push(`/purchase-orders/${createdId}`);
+      const id = window.setTimeout(() => {
+        finishCreateModalNavigation({
+          kind: "purchase-order",
+          recordId: createdId,
+          href: `/purchase-orders/${createdId}`,
+          router,
+          close: () => setOpen(false),
+        });
+      }, 0);
       return () => window.clearTimeout(id);
     }
 
@@ -113,84 +123,87 @@ export function CreatePurchaseOrderModal({
           <DialogDescription>{t("newSubtitle")}</DialogDescription>
         </DialogHeader>
 
-        <form
-          action={formAction}
-          className="flex max-h-[min(80vh,40rem)] flex-col gap-4 overflow-y-auto px-5 py-4"
-        >
-          {defaultVendorId ? (
-            <input type="hidden" name="vendorId" value={defaultVendorId} />
-          ) : (
-            <FormField id="modal-po-vendor" label={t("vendor")}>
-              <FormSelect
-                id="modal-po-vendor"
-                name="vendorId"
-                required
-                placeholder={t("vendorPlaceholder")}
-                triggerClassName="h-11 min-h-11"
-                options={vendors.map((vendor) => ({
-                  value: vendor.id,
-                  label: vendor.name,
-                }))}
-              />
-            </FormField>
-          )}
-
-          <fieldset className="space-y-2">
-            <legend className="text-sm font-medium text-foreground">
-              {t("openRequests")}
-            </legend>
-            {openRequests.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                {t("noOpenRequests")}
-              </p>
+        <DialogBody className="px-5 py-4">
+          <form
+            id={formId}
+            action={formAction}
+            className="flex flex-col gap-4"
+          >
+            {defaultVendorId ? (
+              <input type="hidden" name="vendorId" value={defaultVendorId} />
             ) : (
-              <ul className="space-y-2">
-                {openRequests.map((request) => (
-                  <li key={request.id}>
-                    <label className="flex min-h-11 cursor-pointer items-start gap-3 rounded-lg border border-border px-3 py-2.5 hover:bg-muted/40">
-                      <input
-                        type="checkbox"
-                        name="partsRequestIds"
-                        value={request.id}
-                        defaultChecked={preselected.has(request.id)}
-                        className="mt-1 size-4 shrink-0"
-                      />
-                      <span className="min-w-0">
-                        <span className="block font-medium text-foreground">
-                          {request.part.name}
-                        </span>
-                        <span className="block text-caption text-muted-foreground">
-                          {request.part.sku} · {request.quantity}{" "}
-                          {request.part.unit}
-                        </span>
-                      </span>
-                    </label>
-                  </li>
-                ))}
-              </ul>
+              <FormField id="modal-po-vendor" label={t("vendor")}>
+                <FormSelect
+                  id="modal-po-vendor"
+                  name="vendorId"
+                  required
+                  placeholder={t("vendorPlaceholder")}
+                  triggerClassName="h-11 min-h-11"
+                  options={vendors.map((vendor) => ({
+                    value: vendor.id,
+                    label: vendor.name,
+                  }))}
+                />
+              </FormField>
             )}
-          </fieldset>
 
-          <FormField id="modal-po-notes" label={t("notes")}>
-            <Textarea id="modal-po-notes" name="notes" rows={2} />
-          </FormField>
+            <fieldset className="space-y-2">
+              <legend className="text-sm font-medium text-foreground">
+                {t("openRequests")}
+              </legend>
+              {openRequests.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  {t("noOpenRequests")}
+                </p>
+              ) : (
+                <ul className="space-y-2">
+                  {openRequests.map((request) => (
+                    <li key={request.id}>
+                      <label className="flex min-h-11 cursor-pointer items-start gap-3 rounded-lg border border-border px-3 py-2.5 hover:bg-muted/40">
+                        <input
+                          type="checkbox"
+                          name="partsRequestIds"
+                          value={request.id}
+                          defaultChecked={preselected.has(request.id)}
+                          className="mt-1 size-4 shrink-0"
+                        />
+                        <span className="min-w-0">
+                          <span className="block font-medium text-foreground">
+                            {request.part.name}
+                          </span>
+                          <span className="block text-caption text-muted-foreground">
+                            {request.part.sku} · {request.quantity}{" "}
+                            {request.part.unit}
+                          </span>
+                        </span>
+                      </label>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </fieldset>
 
-          <DialogFooter className="gap-2 border-t border-border px-0 pt-4 sm:justify-end">
-            <DialogClose asChild>
-              <Button type="button" variant="secondary" size="md">
-                {t("cancel")}
-              </Button>
-            </DialogClose>
-            <Button
-              type="submit"
-              size="md"
-              loading={pending}
-              disabled={openRequests.length === 0}
-            >
-              {pending ? t("saving") : t("create")}
+            <FormField id="modal-po-notes" label={t("notes")}>
+              <Textarea id="modal-po-notes" name="notes" rows={2} />
+            </FormField>
+          </form>
+        </DialogBody>
+        <DialogFooter className="gap-2 border-t border-border bg-background px-5 py-4 sm:justify-end">
+          <DialogClose asChild>
+            <Button type="button" variant="secondary" size="md">
+              {t("cancel")}
             </Button>
-          </DialogFooter>
-        </form>
+          </DialogClose>
+          <Button
+            type="submit"
+            form={formId}
+            size="md"
+            loading={pending}
+            disabled={openRequests.length === 0}
+          >
+            {pending ? t("saving") : t("create")}
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

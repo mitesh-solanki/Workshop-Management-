@@ -4,9 +4,13 @@
 
 Provide an option to create parts directly from the Job Card, assign a vendor, and mark them as added stock.
 
+When adding a part from the Job Card, list zero-stock parts as well (stock is over). The owner or technician must still be able to select and add those parts from the same flow.
+
+Typical workshop case: stock for a part is finished, so the garage sends someone to a nearby or related shop to bring it. From the same Job Card part-adding screen, the user enters everything needed for that part (including vendor and that it is being added to stock). If a technician does this, they enter everything except price.
+
 Allow users to upload the bill while creating parts. In this case, the stock quantity should be incremented automatically.
 
-If a technician adds a part that already exists in the inventory or creates a new part that is not yet available, its price must be reset to 0, without affecting previous Job Cards or any other existing records.
+If a technician adds a part that already exists in the inventory, a zero-stock part, or creates a new part that is not yet available, its price must be reset to 0, without affecting previous Job Cards or any other existing records. The owner can set or correct the price later.
 
 ## 2. Quotation and Live Link
 

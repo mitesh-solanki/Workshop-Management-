@@ -20,7 +20,7 @@ import {
   type RefObject,
 } from "react";
 import { createPortal } from "react-dom";
-import { Check, ChevronDown, Search, X } from "lucide-react";
+import { Check, ChevronDown, Plus, Search, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export type SearchableSelectOption = {
@@ -52,9 +52,18 @@ type BaseProps = {
   /** For remote: do not call onQueryChange until query length reaches this (default 2). */
   minQueryLength?: number;
   onQueryChange?: (query: string) => void;
+  /** Fired when the menu opens or closes (e.g. load a browse list on open). */
+  onOpenChange?: (open: boolean) => void;
   onLoadMore?: () => void;
   hasMore?: boolean;
   noun?: string;
+  /**
+   * When the menu has no matches and the query is non-empty, show this action
+   * and allow Enter to create from the typed text (e.g. Add "{name}").
+   */
+  createFromQueryLabel?: (query: string) => string;
+  onCreateFromQuery?: (query: string) => void;
+  creatingFromQuery?: boolean;
 };
 
 type SingleProps = BaseProps & {
@@ -113,9 +122,13 @@ export function SearchableSelect(props: SearchableSelectProps) {
     clearable = true,
     className,
     onQueryChange,
+    onOpenChange,
     onLoadMore,
     hasMore = false,
     noun = "selected",
+    createFromQueryLabel,
+    onCreateFromQuery,
+    creatingFromQuery = false,
   } = props;
 
   const selectedValues = useMemo(() => {
@@ -156,7 +169,8 @@ export function SearchableSelect(props: SearchableSelectProps) {
       return `${selectedValues.length} ${noun}`;
     }
     const value = props.value;
-    return options.find((o) => o.value === value)?.label ?? value;
+    if (!value) return "";
+    return options.find((o) => o.value === value)?.label ?? "";
   }, [multiple, noun, options, props, selectedValues]);
 
   function closeMenu() {
@@ -207,6 +221,12 @@ export function SearchableSelect(props: SearchableSelectProps) {
         root.style.overflow = prevOverflow;
       };
     }
+  }, [open]);
+
+  const onOpenChangeRef = useRef(onOpenChange);
+  onOpenChangeRef.current = onOpenChange;
+  useEffect(() => {
+    onOpenChangeRef.current?.(open);
   }, [open]);
 
   useEffect(() => {
@@ -466,6 +486,27 @@ export function SearchableSelect(props: SearchableSelectProps) {
               {loading ? loadingLabel : "Scroll to load more"}
             </p>
           ) : null}
+          {onCreateFromQuery &&
+          createFromQueryLabel &&
+          queryTrim.length > 0 &&
+          !loading ? (
+            <button
+              type="button"
+              disabled={creatingFromQuery}
+              onClick={() => onCreateFromQuery(queryTrim)}
+              className={cn(
+                "flex w-full items-center gap-2 border-t border-border px-3 py-2.5 text-left text-sm font-medium text-blue-700 hover:bg-blue-50 disabled:opacity-60",
+                filtered.length === 0 && "border-t-0",
+              )}
+            >
+              <Plus className="size-4 shrink-0" strokeWidth={2.5} aria-hidden />
+              <span className="min-w-0 flex-1 truncate">
+                {creatingFromQuery
+                  ? loadingLabel
+                  : createFromQueryLabel(queryTrim)}
+              </span>
+            </button>
+          ) : null}
         </div>
       </div>
     ) : null;
@@ -539,8 +580,20 @@ export function SearchableSelect(props: SearchableSelectProps) {
                 e.preventDefault();
                 closeMenu();
                 inputRef.current?.blur();
+                return;
               }
-              if (e.key === "Enter") e.preventDefault();
+              if (e.key === "Enter") {
+                e.preventDefault();
+                if (
+                  filtered.length === 0 &&
+                  queryTrim.length > 0 &&
+                  onCreateFromQuery &&
+                  !creatingFromQuery &&
+                  !loading
+                ) {
+                  onCreateFromQuery(queryTrim);
+                }
+              }
             }}
             className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed"
             autoComplete="off"

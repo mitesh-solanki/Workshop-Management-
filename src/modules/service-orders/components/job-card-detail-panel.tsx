@@ -4,6 +4,7 @@ import { useCallback, type ReactNode } from "react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { usePageDetailLabel } from "@/components/page-chrome";
+import { Badge } from "@/components/ui/badge";
 import type { ServiceOrderStatus } from "@/lib/service-order-status";
 import { JobCardSectionJumpProvider } from "@/modules/service-orders/components/job-card-section-jump";
 import { JobCardSectionNav } from "@/modules/service-orders/components/job-card-section-nav";
@@ -14,7 +15,11 @@ import {
   datetimeLocalFromOrder,
   ServiceOrderForm,
 } from "@/modules/service-orders/components/service-order-form";
-import type { JobCardSection } from "@/modules/service-orders/job-card-sections";
+import {
+  FULL_JOB_CARD_SURFACE,
+  type JobCardSection,
+  type JobCardSurface,
+} from "@/modules/service-orders/job-card-sections";
 import type { ServiceOrderStatusValue } from "@/modules/service-orders/schema";
 import {
   jobCardSectionDomId,
@@ -74,21 +79,16 @@ type Props = {
   technicians: TechnicianOption[];
   bays: BayOption[];
   canMutate: boolean;
-  canRequestParts?: boolean;
+  /**
+   * Role surface. Defaults to full Owner/Manager card.
+   * Pass TECHNICIAN_JOB_CARD_SURFACE for technicians only.
+   */
+  surface?: JobCardSurface;
   locale: string;
   initialSection?: JobCardSection;
   inspectionContent: ReactNode;
   estimateContent: ReactNode;
   billingContent: ReactNode;
-};
-
-const SECTION_NUMBERS: Record<JobCardSection, string> = {
-  details: "01",
-  inspection: "02",
-  lines: "03",
-  estimate: "04",
-  billing: "05",
-  timeline: "06",
 };
 
 const SECTION_BODY_CLASS = "space-y-5";
@@ -138,7 +138,7 @@ export function JobCardDetailPanel({
   technicians,
   bays,
   canMutate,
-  canRequestParts = false,
+  surface = FULL_JOB_CARD_SURFACE,
   locale,
   initialSection = "details",
   inspectionContent,
@@ -151,11 +151,22 @@ export function JobCardDetailPanel({
   const te = useTranslations("estimates");
   const tb = useTranslations("billing");
   usePageDetailLabel(order.vehicle.registrationNumber);
+  const sections = surface.sections;
+  const hidePrices = surface.hidePrices;
+  const showCommercial = surface.includeCommercialSections;
   const { activeSection, scrollToSection } = useJobCardSections({
     initialSection,
     syncUrl: true,
     mode: "tabs",
+    sections,
   });
+
+  const sectionNumbers = Object.fromEntries(
+    sections.map((id, index) => [
+      id,
+      String(index + 1).padStart(2, "0"),
+    ]),
+  ) as Record<JobCardSection, string>;
 
   const onSectionChange = useCallback(
     (section: JobCardSection) => {
@@ -165,6 +176,15 @@ export function JobCardDetailPanel({
   );
 
   const labourCount = order.lines.filter((line) => line.type === "LABOUR").length;
+  const needsPricing =
+    !hidePrices &&
+    order.status !== "COMPLETED" &&
+    order.lines.some(
+      (line) =>
+        line.type === "PART" &&
+        line.unitPricePaise === 0 &&
+        Boolean(line.partId),
+    );
   const techLabel =
     order.technician?.name?.trim() ||
     order.technician?.email ||
@@ -218,9 +238,14 @@ export function JobCardDetailPanel({
               ))}
             </p>
           </div>
-          <span className="inline-flex min-h-9 items-center rounded-full border border-[#c9d8ff] bg-[#e8efff] px-3 py-1.5 text-[13px] font-extrabold text-[#1f5eff]">
-            {t(`statuses.${order.status}`)}
-          </span>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            {needsPricing ? (
+              <Badge variant="warning">{t("needsPricing")}</Badge>
+            ) : null}
+            <span className="inline-flex min-h-9 items-center rounded-full border border-[#c9d8ff] bg-[#e8efff] px-3 py-1.5 text-[13px] font-extrabold text-[#1f5eff]">
+              {t(`statuses.${order.status}`)}
+            </span>
+          </div>
         </header>
 
         <div className="flex w-full flex-col gap-4 lg:flex-row lg:items-start">
@@ -231,6 +256,7 @@ export function JobCardDetailPanel({
             <JobCardSectionNav
               section={activeSection}
               onSectionChange={onSectionChange}
+              sections={sections}
             />
           </aside>
 
@@ -241,7 +267,7 @@ export function JobCardDetailPanel({
             >
               <div className="flex items-start gap-3 border-b border-[#d7deea] bg-[#f8fafc] px-4 py-4 sm:px-5">
                 <span className="grid size-9 shrink-0 place-items-center rounded-[10px] bg-[#e8efff] text-[13px] font-black text-[#1f5eff]">
-                  {SECTION_NUMBERS[activeSection]}
+                  {sectionNumbers[activeSection] ?? "01"}
                 </span>
                 <div className="min-w-0 flex-1 pt-0.5">
                   <h2
@@ -308,6 +334,11 @@ export function JobCardDetailPanel({
                         })}
                       </small>
                     </div>
+                    {needsPricing ? (
+                      <p className="rounded-[10px] border border-amber-200 bg-amber-50 px-3 py-2 text-[13px] text-amber-950">
+                        {t("needsPricingHint")}
+                      </p>
+                    ) : null}
 
                     {order.lines.length === 0 ? (
                       <p className="rounded-[10px] border border-dashed border-slate-300 bg-slate-50/50 px-4 py-6 text-[14px] text-slate-600">
@@ -317,7 +348,7 @@ export function JobCardDetailPanel({
                       <OrderLinesTable
                         orderId={order.id}
                         canMutate={canMutate}
-                        canRequestParts={canRequestParts}
+                        hidePrices={hidePrices}
                         lines={order.lines}
                       />
                     )}
@@ -333,94 +364,103 @@ export function JobCardDetailPanel({
                           </small>
                         </div>
                         <div className="rounded-[10px] border border-[#e8edf5] bg-[#fafcff] p-4 sm:p-5">
-                          <OrderLineForm orderId={order.id} />
+                          <OrderLineForm
+                            orderId={order.id}
+                            hidePrices={hidePrices}
+                          />
                         </div>
                       </div>
                     ) : null}
                   </div>
                 </SectionPanel>
 
-                <SectionPanel id="estimate" open={activeSection === "estimate"}>
-                  {estimateContent}
-                </SectionPanel>
+                {showCommercial ? (
+                  <SectionPanel id="estimate" open={activeSection === "estimate"}>
+                    {estimateContent}
+                  </SectionPanel>
+                ) : null}
 
-                <SectionPanel id="billing" open={activeSection === "billing"}>
-                  {billingContent}
-                </SectionPanel>
+                {showCommercial ? (
+                  <SectionPanel id="billing" open={activeSection === "billing"}>
+                    {billingContent}
+                  </SectionPanel>
+                ) : null}
 
-                <SectionPanel id="timeline" open={activeSection === "timeline"}>
-                  <div className={SECTION_BODY_CLASS}>
-                    <OrderTimeline
-                      events={timeline.map((event) => ({
-                        ...event,
-                        createdAt: asDate(event.createdAt) ?? new Date(0),
-                      }))}
-                      emptyLabel={t("timelineEmpty")}
-                      formatActor={(actor) =>
-                        actor
-                          ? actor.name?.trim() || actor.email
-                          : t("timelineUnknownActor")
-                      }
-                      formatWhen={(date) =>
-                        formatDateTime(date, locale, tc("notSet"))
-                      }
-                      formatEvent={(event) => {
-                        const meta =
-                          event.meta && typeof event.meta === "object"
-                            ? (event.meta as Record<string, unknown>)
-                            : {};
-                        if (event.action === "service_order.status_changed") {
-                          const to =
-                            typeof meta.to === "string" ? meta.to : null;
-                          if (meta.created === true && to) {
-                            return t("timelineCreated", {
-                              status: t(
-                                `statuses.${to as ServiceOrderStatusValue}`,
-                              ),
-                            });
+                {showCommercial ? (
+                  <SectionPanel id="timeline" open={activeSection === "timeline"}>
+                    <div className={SECTION_BODY_CLASS}>
+                      <OrderTimeline
+                        events={timeline.map((event) => ({
+                          ...event,
+                          createdAt: asDate(event.createdAt) ?? new Date(0),
+                        }))}
+                        emptyLabel={t("timelineEmpty")}
+                        formatActor={(actor) =>
+                          actor
+                            ? actor.name?.trim() || actor.email
+                            : t("timelineUnknownActor")
+                        }
+                        formatWhen={(date) =>
+                          formatDateTime(date, locale, tc("notSet"))
+                        }
+                        formatEvent={(event) => {
+                          const meta =
+                            event.meta && typeof event.meta === "object"
+                              ? (event.meta as Record<string, unknown>)
+                              : {};
+                          if (event.action === "service_order.status_changed") {
+                            const to =
+                              typeof meta.to === "string" ? meta.to : null;
+                            if (meta.created === true && to) {
+                              return t("timelineCreated", {
+                                status: t(
+                                  `statuses.${to as ServiceOrderStatusValue}`,
+                                ),
+                              });
+                            }
+                            const from =
+                              typeof meta.from === "string" ? meta.from : null;
+                            if (from && to) {
+                              return t("timelineStatusChanged", {
+                                from: t(
+                                  `statuses.${from as ServiceOrderStatusValue}`,
+                                ),
+                                to: t(
+                                  `statuses.${to as ServiceOrderStatusValue}`,
+                                ),
+                              });
+                            }
                           }
-                          const from =
-                            typeof meta.from === "string" ? meta.from : null;
-                          if (from && to) {
-                            return t("timelineStatusChanged", {
-                              from: t(
-                                `statuses.${from as ServiceOrderStatusValue}`,
-                              ),
-                              to: t(
-                                `statuses.${to as ServiceOrderStatusValue}`,
-                              ),
-                            });
+                          if (event.action === "service_order.line_added") {
+                            const description =
+                              typeof meta.description === "string"
+                                ? meta.description
+                                : t("lineDescription");
+                            return t("timelineLineAdded", { description });
                           }
-                        }
-                        if (event.action === "service_order.line_added") {
-                          const description =
-                            typeof meta.description === "string"
-                              ? meta.description
-                              : t("lineDescription");
-                          return t("timelineLineAdded", { description });
-                        }
-                        if (event.action === "service_order.line_updated") {
-                          const description =
-                            typeof meta.description === "string"
-                              ? meta.description
-                              : t("lineDescription");
-                          return t("timelineLineUpdated", { description });
-                        }
-                        if (event.action === "service_order.line_removed") {
-                          const description =
-                            typeof meta.description === "string"
-                              ? meta.description
-                              : t("lineDescription");
-                          return t("timelineLineRemoved", { description });
-                        }
-                        if (event.action === "service_order.updated") {
-                          return t("timelineUpdated");
-                        }
-                        return event.action;
-                      }}
-                    />
-                  </div>
-                </SectionPanel>
+                          if (event.action === "service_order.line_updated") {
+                            const description =
+                              typeof meta.description === "string"
+                                ? meta.description
+                                : t("lineDescription");
+                            return t("timelineLineUpdated", { description });
+                          }
+                          if (event.action === "service_order.line_removed") {
+                            const description =
+                              typeof meta.description === "string"
+                                ? meta.description
+                                : t("lineDescription");
+                            return t("timelineLineRemoved", { description });
+                          }
+                          if (event.action === "service_order.updated") {
+                            return t("timelineUpdated");
+                          }
+                          return event.action;
+                        }}
+                      />
+                    </div>
+                  </SectionPanel>
+                ) : null}
               </div>
             </section>
           </div>

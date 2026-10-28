@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useMemo, useRef, useState } from "react";
+import { useActionState, useEffect, useId, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Pencil } from "lucide-react";
@@ -11,6 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
+  DialogBody,
   DialogClose,
   DialogContent,
   DialogDescription,
@@ -71,6 +72,7 @@ export function EditVendorModal({ vendor, trigger }: Props) {
   const t = useTranslations("vendors");
   const te = useTranslations("errors");
   const router = useRouter();
+  const formId = useId();
   const [open, setOpen] = useState(false);
   const [values, setValues] = useState<FormValues>(() => toForm(vendor));
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -167,140 +169,142 @@ export function EditVendorModal({ vendor, trigger }: Props) {
         )}
       </DialogTrigger>
       <DialogContent className="gap-0 p-0 sm:max-w-2xl">
-        <DialogHeader className="border-b border-border px-5 py-4 text-left">
+        <DialogHeader className="border-b border-border px-5 py-4 pr-12 text-left">
           <DialogTitle>{t("editTitle")}</DialogTitle>
           <DialogDescription>{vendor.name}</DialogDescription>
         </DialogHeader>
 
-        <form
-          action={(formData) => {
-            if (!validateClient()) return;
-            formAction(formData);
-          }}
-          className="flex flex-col gap-4 px-5 py-4"
-        >
-          <p className="text-caption text-muted-foreground">
-            {t("contactRequiredHint")}
-          </p>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <FormField
-              id={`edit-vendor-name-${vendor.id}`}
-              label={t("nameRequired")}
-              error={fieldErrors.name}
-            >
-              <Input
-                id={`edit-vendor-name-${vendor.id}`}
-                name="name"
-                value={values.name}
-                onChange={(e) => setField("name", e.target.value)}
-                required
-                autoComplete="organization"
-                autoFocus
-                placeholder={t("namePlaceholder")}
-                aria-invalid={Boolean(fieldErrors.name)}
-                className="h-11 min-h-11"
-              />
-            </FormField>
-            <FormField
-              id={`edit-vendor-phone-${vendor.id}`}
-              label={t("phone")}
-              error={fieldErrors.phone}
-            >
-              <Input
-                id={`edit-vendor-phone-${vendor.id}`}
-                name="phone"
-                type="tel"
-                inputMode="tel"
-                autoComplete="tel"
-                value={values.phone}
-                onChange={(e) =>
-                  setField("phone", sanitizePhoneTyping(e.target.value))
-                }
-                placeholder={t("phonePlaceholder")}
-                aria-invalid={Boolean(fieldErrors.phone)}
-                className="h-11 min-h-11"
-              />
-            </FormField>
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <FormField
-              id={`edit-vendor-email-${vendor.id}`}
-              label={t("email")}
-              error={fieldErrors.email}
-            >
-              <Input
-                id={`edit-vendor-email-${vendor.id}`}
-                name="email"
-                type="email"
-                autoComplete="email"
-                value={values.email}
-                onChange={(e) =>
-                  setField("email", sanitizeEmailTyping(e.target.value))
-                }
-                placeholder={t("emailPlaceholder")}
-                aria-invalid={Boolean(fieldErrors.email)}
-                className="h-11 min-h-11"
-              />
-            </FormField>
-            <FormField
-              id={`edit-vendor-gstin-${vendor.id}`}
-              label={t("gstin")}
-              error={fieldErrors.gstin}
-            >
-              <Input
-                id={`edit-vendor-gstin-${vendor.id}`}
-                name="gstin"
-                value={values.gstin}
-                onChange={(e) =>
-                  setField(
-                    "gstin",
-                    e.target.value.toUpperCase().replace(/[^0-9A-Z]/g, "").slice(0, 15),
-                  )
-                }
-                placeholder={t("gstinPlaceholder")}
-                autoCapitalize="characters"
-                spellCheck={false}
-                maxLength={15}
-                aria-invalid={Boolean(fieldErrors.gstin)}
-                className="h-11 min-h-11 uppercase"
-              />
-            </FormField>
-          </div>
-          <FormField
-            id={`edit-vendor-address-${vendor.id}`}
-            label={t("address")}
+        <DialogBody className="px-5 py-4">
+          <form
+            id={formId}
+            action={(formData) => {
+              if (!validateClient()) return;
+              formAction(formData);
+            }}
+            className="flex flex-col gap-4"
           >
-            <Textarea
+            <p className="text-caption text-muted-foreground">
+              {t("contactRequiredHint")}
+            </p>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <FormField
+                id={`edit-vendor-name-${vendor.id}`}
+                label={t("nameRequired")}
+                error={fieldErrors.name}
+              >
+                <Input
+                  id={`edit-vendor-name-${vendor.id}`}
+                  name="name"
+                  value={values.name}
+                  onChange={(e) => setField("name", e.target.value)}
+                  required
+                  autoComplete="organization"
+                  autoFocus
+                  placeholder={t("namePlaceholder")}
+                  aria-invalid={Boolean(fieldErrors.name)}
+                  className="h-11 min-h-11"
+                />
+              </FormField>
+              <FormField
+                id={`edit-vendor-phone-${vendor.id}`}
+                label={t("phone")}
+                error={fieldErrors.phone}
+              >
+                <Input
+                  id={`edit-vendor-phone-${vendor.id}`}
+                  name="phone"
+                  type="tel"
+                  inputMode="tel"
+                  autoComplete="tel"
+                  value={values.phone}
+                  onChange={(e) =>
+                    setField("phone", sanitizePhoneTyping(e.target.value))
+                  }
+                  placeholder={t("phonePlaceholder")}
+                  aria-invalid={Boolean(fieldErrors.phone)}
+                  className="h-11 min-h-11"
+                />
+              </FormField>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <FormField
+                id={`edit-vendor-email-${vendor.id}`}
+                label={t("email")}
+                error={fieldErrors.email}
+              >
+                <Input
+                  id={`edit-vendor-email-${vendor.id}`}
+                  name="email"
+                  type="email"
+                  autoComplete="email"
+                  value={values.email}
+                  onChange={(e) =>
+                    setField("email", sanitizeEmailTyping(e.target.value))
+                  }
+                  placeholder={t("emailPlaceholder")}
+                  aria-invalid={Boolean(fieldErrors.email)}
+                  className="h-11 min-h-11"
+                />
+              </FormField>
+              <FormField
+                id={`edit-vendor-gstin-${vendor.id}`}
+                label={t("gstin")}
+                error={fieldErrors.gstin}
+              >
+                <Input
+                  id={`edit-vendor-gstin-${vendor.id}`}
+                  name="gstin"
+                  value={values.gstin}
+                  onChange={(e) =>
+                    setField(
+                      "gstin",
+                      e.target.value.toUpperCase().replace(/[^0-9A-Z]/g, "").slice(0, 15),
+                    )
+                  }
+                  placeholder={t("gstinPlaceholder")}
+                  autoCapitalize="characters"
+                  spellCheck={false}
+                  maxLength={15}
+                  aria-invalid={Boolean(fieldErrors.gstin)}
+                  className="h-11 min-h-11 uppercase"
+                />
+              </FormField>
+            </div>
+            <FormField
               id={`edit-vendor-address-${vendor.id}`}
-              name="address"
-              rows={2}
-              value={values.address}
-              onChange={(e) => setField("address", e.target.value)}
-              placeholder={t("addressPlaceholder")}
-            />
-          </FormField>
-          <FormField id={`edit-vendor-notes-${vendor.id}`} label={t("notes")}>
-            <Textarea
-              id={`edit-vendor-notes-${vendor.id}`}
-              name="notes"
-              rows={2}
-              value={values.notes}
-              onChange={(e) => setField("notes", e.target.value)}
-              placeholder={t("notesPlaceholder")}
-            />
-          </FormField>
-
-          <DialogFooter className="gap-2 border-t border-border px-0 pt-4 sm:justify-end">
-            <DialogClose asChild>
-              <Button type="button" variant="secondary" size="md">
-                {t("cancel")}
-              </Button>
-            </DialogClose>
-            <Button type="submit" size="md" loading={pending}>
-              {pending ? t("saving") : t("save")}
+              label={t("address")}
+            >
+              <Textarea
+                id={`edit-vendor-address-${vendor.id}`}
+                name="address"
+                rows={2}
+                value={values.address}
+                onChange={(e) => setField("address", e.target.value)}
+                placeholder={t("addressPlaceholder")}
+              />
+            </FormField>
+            <FormField id={`edit-vendor-notes-${vendor.id}`} label={t("notes")}>
+              <Textarea
+                id={`edit-vendor-notes-${vendor.id}`}
+                name="notes"
+                rows={2}
+                value={values.notes}
+                onChange={(e) => setField("notes", e.target.value)}
+                placeholder={t("notesPlaceholder")}
+              />
+            </FormField>
+          </form>
+        </DialogBody>
+        <DialogFooter className="gap-2 border-t border-border bg-background px-5 py-4 sm:justify-end">
+          <DialogClose asChild>
+            <Button type="button" variant="secondary" size="md">
+              {t("cancel")}
             </Button>
-          </DialogFooter>
-        </form>
+          </DialogClose>
+          <Button type="submit" form={formId} size="md" loading={pending}>
+            {pending ? t("saving") : t("save")}
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

@@ -40,6 +40,8 @@ export type InvoicePdfLabels = {
     OTHER: string;
   };
   notes: string;
+  warranties: string;
+  warrantyExpires: string;
   authorisedSignatory: string;
   thankYou: string;
   /** Explicit non-claim: this is not an e-invoice. */
@@ -85,6 +87,8 @@ const LABELS: Record<PdfLocale, Omit<InvoicePdfLabels, "locale">> = {
       OTHER: "Other",
     },
     notes: "Customer note",
+    warranties: "Warranty",
+    warrantyExpires: "Expires",
     authorisedSignatory: "Authorised signatory",
     thankYou: "Thank you for using our service.",
     notEInvoice:
@@ -128,6 +132,8 @@ const LABELS: Record<PdfLocale, Omit<InvoicePdfLabels, "locale">> = {
       OTHER: "अन्य",
     },
     notes: "ग्राहक नोट",
+    warranties: "वारंटी",
+    warrantyExpires: "समाप्ति",
     authorisedSignatory: "अधिकृत हस्ताक्षरकर्ता",
     thankYou: "हमारी सेवा का उपयोग करने के लिए धन्यवाद।",
     notEInvoice:
@@ -171,6 +177,8 @@ const LABELS: Record<PdfLocale, Omit<InvoicePdfLabels, "locale">> = {
       OTHER: "અન્ય",
     },
     notes: "ગ્રાહક નોંધ",
+    warranties: "વોરંટી",
+    warrantyExpires: "સમાપ્તિ",
     authorisedSignatory: "અધિકૃત હસ્તાક્ષરકર્તા",
     thankYou: "અમારી સેવાનો ઉપયોગ કરવા બદલ આભાર.",
     notEInvoice:

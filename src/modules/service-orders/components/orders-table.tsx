@@ -1,7 +1,7 @@
 "use client";
 
 import { useLocale, useTranslations } from "next-intl";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { CalendarClock, Car, ClipboardList, User } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { DataTable, type ColumnDef } from "@/components/ui/data-table";
@@ -37,6 +37,7 @@ export type OrderTableRow = {
 type OrdersTableProps = {
   orders: OrderTableRow[];
   canWrite?: boolean;
+  showNeedsPricing?: boolean;
   emptyAction?: React.ReactNode;
 };
 
@@ -72,6 +73,7 @@ function isOverdue(value: Date | string | null): boolean {
 export function OrdersTable({
   orders,
   canWrite = false,
+  showNeedsPricing = false,
   emptyAction,
 }: OrdersTableProps) {
   const t = useTranslations("orders");
@@ -90,17 +92,21 @@ export function OrdersTable({
     [t],
   );
 
-  const statusFilterOptions = useMemo(
-    () => [
+  const statusFilterOptions = useMemo(() => {
+    const options: { value: string; label: string }[] = [
       { value: "", label: t("filters.all") },
+    ];
+    if (showNeedsPricing) {
+      options.push({ value: "NEEDS_PRICING", label: t("needsPricing") });
+    }
+    options.push(
       ...SERVICE_ORDER_STATUSES.map((status) => ({
         value: status,
         label: t(`statuses.${status}`),
       })),
-      { value: "NEEDS_PRICING", label: t("needsPricing") },
-    ],
-    [t],
-  );
+    );
+    return options;
+  }, [t, showNeedsPricing]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -212,7 +218,7 @@ export function OrdersTable({
               status={row.original.status}
               label={t(`statuses.${row.original.status}`)}
             />
-            {row.original.needsPricing ? (
+            {showNeedsPricing && row.original.needsPricing ? (
               <Badge variant="warning">{t("needsPricing")}</Badge>
             ) : null}
           </div>
@@ -232,8 +238,14 @@ export function OrdersTable({
         ),
       },
     ],
-    [t, canWrite, locale],
+    [t, canWrite, locale, showNeedsPricing],
   );
+
+  useEffect(() => {
+    if (!showNeedsPricing && statusFilter === "NEEDS_PRICING") {
+      setStatusFilter("");
+    }
+  }, [showNeedsPricing, statusFilter]);
 
   const hasQuery = Boolean(query.trim());
   const hasStatusFilter = Boolean(statusFilter);
@@ -314,7 +326,7 @@ export function OrdersTable({
                   status={order.status}
                   label={t(`statuses.${order.status}`)}
                 />
-                {order.needsPricing ? (
+                {showNeedsPricing && order.needsPricing ? (
                   <Badge variant="warning">{t("needsPricing")}</Badge>
                 ) : null}
               </div>

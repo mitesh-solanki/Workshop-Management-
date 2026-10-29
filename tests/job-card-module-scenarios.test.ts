@@ -452,7 +452,7 @@ describe("job card module — full scenarios", () => {
     expect(await getPartStock(garageId, partId)).toBe(2);
   });
 
-  it("Agree depletes stock; Disagree restores; delete of approved part blocked", async () => {
+  it("Agree depletes stock; approved job-card labour can still be deleted", async () => {
     if (!ready) return;
 
     const estimate = await prisma.estimate.create({
@@ -525,18 +525,8 @@ describe("job card module — full scenarios", () => {
     expect(agreeLabour.ok).toBe(true);
     expect(await getPartStock(garageId, partId)).toBe(1);
 
-    const blockedDelete = await deleteServiceOrderLine(garageId, {
-      lineId: partLineId,
-      serviceOrderId: orderId,
-      actorId: userId,
-    });
-    expect(blockedDelete).toEqual({
-      ok: false,
-      reason: "APPROVED_ON_ESTIMATE",
-    });
-
-    // Labour can still be deleted from job card even if estimate-approved
-    // (guard is PART-only). Keep labour for totals continuity — delete a fresh one.
+    // Keep the approved part held for the next concurrency test. Disposable
+    // labour still deletes (cascades its estimate line).
     const moreLabour = await createServiceOrderLine(garageId, {
       serviceOrderId: orderId,
       type: "LABOUR",

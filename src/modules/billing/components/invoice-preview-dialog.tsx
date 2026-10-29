@@ -20,6 +20,11 @@ export type InvoicePreviewLine = {
   totalPaise: number;
 };
 
+export type InvoicePreviewWarranty = {
+  partName: string;
+  expiresAtLabel: string;
+};
+
 export type InvoicePreviewData = {
   heading: string;
   invoiceNumber: string | null;
@@ -35,6 +40,7 @@ export type InvoicePreviewData = {
   jobLabel: string;
   placeOfSupplyLabel: string;
   notes: string | null;
+  warranties?: InvoicePreviewWarranty[];
   lines: InvoicePreviewLine[];
   taxablePaise: number;
   taxLabel: string;
@@ -208,10 +214,27 @@ export function InvoicePreviewDialog({
                       <p className="mt-1 text-[#617187]">{data.notes.trim()}</p>
                     </>
                   ) : null}
+                  {data.warranties && data.warranties.length > 0 ? (
+                    <div className={data.notes?.trim() ? "mt-4" : undefined}>
+                      <b className="font-semibold">{t("paperWarranty")}</b>
+                      <ul className="mt-1 space-y-1 text-[#617187]">
+                        {data.warranties.map((row) => (
+                          <li key={`${row.partName}-${row.expiresAtLabel}`}>
+                            {row.partName}
+                            {" · "}
+                            {t("paperWarrantyExpires", {
+                              date: row.expiresAtLabel,
+                            })}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
                   {data.isPreview ? (
                     <p
                       className={
-                        data.notes?.trim()
+                        data.notes?.trim() ||
+                        (data.warranties && data.warranties.length > 0)
                           ? "mt-[30px] text-[10px] text-[#9ba7b5]"
                           : "text-[10px] text-[#9ba7b5]"
                       }
@@ -221,7 +244,8 @@ export function InvoicePreviewDialog({
                   ) : (
                     <p
                       className={
-                        data.notes?.trim()
+                        data.notes?.trim() ||
+                        (data.warranties && data.warranties.length > 0)
                           ? "mt-[30px] text-[10px] text-[#9ba7b5]"
                           : "text-[10px] text-[#9ba7b5]"
                       }

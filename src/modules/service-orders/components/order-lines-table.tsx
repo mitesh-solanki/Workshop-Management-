@@ -40,6 +40,10 @@ import {
   type Paise,
 } from "@/lib/money";
 import {
+  CreatePartModal,
+  type CreatedPartSummary,
+} from "@/modules/inventory/components/create-part-modal";
+import {
   PartPickerSelect,
   type PartPickerItem,
 } from "@/modules/inventory/components/part-picker-select";
@@ -53,6 +57,8 @@ type Line = {
   quantity: number;
   unitPricePaise: number;
   partId?: string | null;
+  /** Catalogue selling price; Needs Pricing only when this is also 0. */
+  catalogueSellingPricePaise?: number | null;
 };
 
 type Props = {
@@ -150,11 +156,18 @@ function OrderLineCard({
   );
   const [editPartId, setEditPartId] = useState(line.partId ?? "");
   const [editDescription, setEditDescription] = useState(line.description);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [createInitialName, setCreateInitialName] = useState("");
   const [applyingPrice, startApplyPrice] = useTransition();
   const liveTotal = multiplyByQuantity(draftPricePaise, draftQty);
   const isPart = line.type === "PART";
+  const cataloguePrice = line.catalogueSellingPricePaise ?? 0;
   const needsPricing =
-    !hidePrices && isPart && line.unitPricePaise === 0 && Boolean(line.partId);
+    !hidePrices &&
+    isPart &&
+    line.unitPricePaise === 0 &&
+    Boolean(line.partId) &&
+    cataloguePrice <= 0;
 
   function beginEdit() {
     setDraftQty(line.quantity);
@@ -171,6 +184,21 @@ function OrderLineCard({
     if (!hidePrices) {
       setDraftPricePaise(part.sellingPricePaise as Paise);
     }
+  }
+
+  function openCreatePartModal(name: string) {
+    setCreateInitialName(name.trim());
+    setCreateOpen(true);
+  }
+
+  function handlePartCreated(part: CreatedPartSummary) {
+    setEditPartId(part.id);
+    setEditDescription(part.name);
+    if (!hidePrices) {
+      setDraftPricePaise(0 as Paise);
+    }
+    setCreateOpen(false);
+    setCreateInitialName("");
   }
 
   function applyInventoryPrice() {
@@ -390,7 +418,7 @@ function OrderLineCard({
                     name="partId"
                     value={editPartId}
                     onChange={handleEditPartChange}
-                    quickCreateByName={hidePrices}
+                    onCreateFromQuery={openCreatePartModal}
                     clearable={false}
                     initialLabel={line.description}
                   />
@@ -512,6 +540,19 @@ function OrderLineCard({
             </div>
           ) : null}
         </form>
+        <CreatePartModal
+          trigger={null}
+          open={createOpen}
+          onOpenChange={(next) => {
+            setCreateOpen(next);
+            if (!next) setCreateInitialName("");
+          }}
+          navigateOnSuccess={false}
+          shopReceive={!hidePrices}
+          nameOnly={hidePrices}
+          initialName={createInitialName}
+          onCreated={handlePartCreated}
+        />
       </div>
       </>
     );

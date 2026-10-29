@@ -14,6 +14,7 @@ import type {
 } from "@/modules/estimates/schema";
 import type { getEstimateForOrder } from "@/modules/estimates/service";
 import { LiveLinkStaffPanel } from "@/modules/live-link/components/live-link-staff-panel";
+import { JobCardSectionJumpButton } from "@/modules/service-orders/components/job-card-section-jump";
 
 type EstimateData = Awaited<ReturnType<typeof getEstimateForOrder>>;
 
@@ -35,6 +36,10 @@ export async function JobCardEstimateContent({
   const t = await getTranslations("estimates");
   const { current, revisions, order } = data;
   const previewLines = order.lines;
+  const pricedPreviewLines = previewLines.filter(
+    (line) => line.unitPricePaise > 0,
+  );
+  const unpricedPreviewCount = previewLines.length - pricedPreviewLines.length;
 
   const approvedCount =
     current?.lines.filter((line) => line.approvalState === "APPROVED").length ??
@@ -42,6 +47,13 @@ export async function JobCardEstimateContent({
   const pendingCount =
     current?.lines.filter((line) => line.approvalState === "PENDING").length ??
     0;
+
+  const askPermission = current?.askPermission ?? false;
+  const showLiveLink =
+    Boolean(current) &&
+    (askPermission
+      ? current?.permissionVia === "LIVE_LINK"
+      : false);
 
   return (
     <div className="space-y-5">
@@ -70,6 +82,7 @@ export async function JobCardEstimateContent({
                       line.type === "PART" || line.type === "LABOUR"
                         ? line.type
                         : "LABOUR";
+                    const missingPrice = line.unitPricePaise <= 0;
                     const lineTotal = multiplyByQuantity(
                       line.unitPricePaise,
                       line.quantity,
@@ -95,15 +108,23 @@ export async function JobCardEstimateContent({
                           </p>
                         </div>
                         <div className="shrink-0 text-right">
-                          <p className="text-[12px] tabular-nums text-slate-500">
-                            {t("emptyPreviewQtyPrice", {
-                              quantity: line.quantity,
-                              price: formatRupees(line.unitPricePaise),
-                            })}
-                          </p>
-                          <p className="text-[14px] font-semibold tabular-nums text-slate-900">
-                            {formatRupees(lineTotal)}
-                          </p>
+                          {missingPrice ? (
+                            <p className="text-[13px] font-medium text-amber-700">
+                              {t("priceNotAdded")}
+                            </p>
+                          ) : (
+                            <>
+                              <p className="text-[12px] tabular-nums text-slate-500">
+                                {t("emptyPreviewQtyPrice", {
+                                  quantity: line.quantity,
+                                  price: formatRupees(line.unitPricePaise),
+                                })}
+                              </p>
+                              <p className="text-[14px] font-semibold tabular-nums text-slate-900">
+                                {formatRupees(lineTotal)}
+                              </p>
+                            </>
+                          )}
                         </div>
                       </li>
                     );
@@ -117,55 +138,88 @@ export async function JobCardEstimateContent({
               <p className="text-[13px] font-medium text-slate-800">
                 {t("emptyCreateLead")}
               </p>
-              <CreateEstimateForm orderId={orderId} mode="create" />
+              <CreateEstimateForm
+                orderId={orderId}
+                mode="create"
+                pricedLineCount={pricedPreviewLines.length}
+                unpricedLineCount={unpricedPreviewCount}
+              />
             </div>
           ) : null}
         </section>
       ) : (
         <>
-          <LiveLinkStaffPanel
-            orderId={orderId}
-            active={liveLinkActive}
-            canEdit={canEditLiveLink}
-            variant="embed"
-          />
+          {showLiveLink ? (
+            <LiveLinkStaffPanel
+              orderId={orderId}
+              active={liveLinkActive}
+              canEdit={canEditLiveLink}
+              variant="embed"
+            />
+          ) : null}
 
-          <div className="flex flex-wrap items-start justify-between gap-2">
-            <div className="rounded-[11px] border border-slate-300 bg-blue-50/70 px-4 py-3.5">
-              <strong className="text-[13px] font-semibold text-slate-900">
-                {t("permissionHowTitle")}
-              </strong>
-              <p className="mt-1 text-[12px] leading-relaxed text-slate-600">
-                {t("permissionHowBody")}
-              </p>
+          {!askPermission ? (
+            <div className="flex flex-wrap items-start justify-between gap-3 rounded-[11px] border border-emerald-200 bg-emerald-50/70 px-4 py-3.5">
+              <div className="min-w-0">
+                <strong className="text-[13px] font-semibold text-emerald-950">
+                  {t("readyToBillTitle")}
+                </strong>
+                <p className="mt-1 text-[12px] leading-relaxed text-emerald-900/80">
+                  {t("readyToBillBody")}
+                </p>
+              </div>
+              <JobCardSectionJumpButton
+                section="billing"
+                variant="default"
+                className="bg-blue-600 text-white hover:bg-blue-700 hover:text-white"
+              >
+                {t("goToBilling")}
+              </JobCardSectionJumpButton>
             </div>
-            <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-[12px] font-extrabold whitespace-nowrap text-emerald-800">
-              {t("permissionCount", {
-                agreed: approvedCount,
-                waiting: pendingCount,
-              })}
-            </span>
-          </div>
+          ) : (
+            <>
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div className="rounded-[11px] border border-slate-300 bg-blue-50/70 px-4 py-3.5">
+                  <strong className="text-[13px] font-semibold text-slate-900">
+                    {t("permissionHowTitle")}
+                  </strong>
+                  <p className="mt-1 text-[12px] leading-relaxed text-slate-600">
+                    {current.permissionVia === "LIVE_LINK"
+                      ? t("permissionHowBodyLiveLink")
+                      : t("permissionHowBody")}
+                  </p>
+                </div>
+                <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-[12px] font-extrabold whitespace-nowrap text-emerald-800">
+                  {t("permissionCount", {
+                    agreed: approvedCount,
+                    waiting: pendingCount,
+                  })}
+                </span>
+              </div>
 
-          <div className="flex flex-wrap gap-4 text-[13px] text-slate-600">
-            <span>
-              <i className="mr-1.5 inline-block size-2 rounded-full bg-emerald-600" />
-              {t("permissionLegendAgreed")}
-            </span>
-            <span>
-              <i className="mr-1.5 inline-block size-2 rounded-full bg-amber-500" />
-              {t("permissionLegendWaiting")}
-            </span>
-            <span>
-              <i className="mr-1.5 inline-block size-2 rounded-full bg-red-500" />
-              {t("permissionLegendRejected")}
-            </span>
-          </div>
+              <div className="flex flex-wrap gap-4 text-[13px] text-slate-600">
+                <span>
+                  <i className="mr-1.5 inline-block size-2 rounded-full bg-emerald-600" />
+                  {t("permissionLegendAgreed")}
+                </span>
+                <span>
+                  <i className="mr-1.5 inline-block size-2 rounded-full bg-amber-500" />
+                  {t("permissionLegendWaiting")}
+                </span>
+                <span>
+                  <i className="mr-1.5 inline-block size-2 rounded-full bg-red-500" />
+                  {t("permissionLegendRejected")}
+                </span>
+              </div>
+            </>
+          )}
 
           <div>
             <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
               <h3 className="text-[15px] font-semibold text-slate-900">
-                {t("permissionListTitle")}
+                {askPermission
+                  ? t("permissionListTitle")
+                  : t("pricedLinesTitle")}
               </h3>
               <p className="text-[12px] text-slate-500">
                 {t("revisionLabel", { number: current.revisionNumber })}
@@ -177,7 +231,7 @@ export async function JobCardEstimateContent({
 
             {current.lines.length === 0 ? (
               <p className="text-sm text-slate-600">{t("linesEmpty")}</p>
-            ) : (
+            ) : askPermission ? (
               <ul className="grid gap-3">
                 {current.lines.map((line, index) => {
                   const amounts = computeLineGst(line);
@@ -206,6 +260,52 @@ export async function JobCardEstimateContent({
                         partId: linkedPartId,
                       }}
                     />
+                  );
+                })}
+              </ul>
+            ) : (
+              <ul className="divide-y divide-slate-200/80 overflow-hidden rounded-[10px] border border-slate-200 bg-white">
+                {current.lines.map((line) => {
+                  const typeKey =
+                    line.type === "PART" || line.type === "LABOUR"
+                      ? line.type
+                      : "LABOUR";
+                  const amounts = computeLineGst(line);
+                  return (
+                    <li
+                      key={line.id}
+                      className="flex flex-wrap items-center justify-between gap-3 px-3.5 py-3"
+                    >
+                      <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+                        <span
+                          className={cn(
+                            "inline-flex shrink-0 rounded-md border px-2 py-0.5 text-[11px] font-semibold",
+                            typeKey === "PART"
+                              ? "border-blue-200 bg-blue-50 text-blue-800"
+                              : "border-orange-200 bg-orange-50 text-orange-800",
+                          )}
+                        >
+                          {t(`lineTypes.${typeKey}`)}
+                        </span>
+                        <p className="min-w-0 truncate text-[14px] font-medium text-slate-900">
+                          {line.description}
+                        </p>
+                        <span className="inline-flex shrink-0 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-800">
+                          {t("readyToBillBadge")}
+                        </span>
+                      </div>
+                      <div className="shrink-0 text-right">
+                        <p className="text-[12px] tabular-nums text-slate-500">
+                          {t("emptyPreviewQtyPrice", {
+                            quantity: line.quantity,
+                            price: formatRupees(line.unitPricePaise),
+                          })}
+                        </p>
+                        <p className="text-[14px] font-semibold tabular-nums text-slate-900">
+                          {formatRupees(amounts.totalPaise)}
+                        </p>
+                      </div>
+                    </li>
                   );
                 })}
               </ul>
@@ -249,13 +349,19 @@ export async function JobCardEstimateContent({
 
           {canEdit ? (
             <div className="space-y-3 border-t border-slate-300 pt-5">
-              <EstimateLineForm orderId={orderId} />
-              <p className="rounded-lg border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-[13px] leading-relaxed text-amber-950">
-                {t("excludedFromBillNote")}
-              </p>
+              <EstimateLineForm
+                orderId={orderId}
+                askPermission={askPermission}
+              />
+              {askPermission ? (
+                <p className="rounded-lg border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-[13px] leading-relaxed text-amber-950">
+                  {t("excludedFromBillNote")}
+                </p>
+              ) : null}
             </div>
-          ) : current.totals.pending.totalPaise > 0 ||
-            current.totals.rejected.totalPaise > 0 ? (
+          ) : askPermission &&
+            (current.totals.pending.totalPaise > 0 ||
+              current.totals.rejected.totalPaise > 0) ? (
             <p className="rounded-lg border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-[13px] leading-relaxed text-amber-950">
               {t("excludedFromBillNote")}
             </p>
@@ -275,61 +381,66 @@ export async function JobCardEstimateContent({
             </section>
           ) : null}
 
-          <SmoothHistoryPanel title={t("approvalHistory")} hint={t("seeEarlier")}>
-            {current.approvals.length === 0 ? (
-              <p className="px-4 py-3 text-sm text-slate-600">
-                {t("approvalHistoryEmpty")}
-              </p>
-            ) : (
-              <ul>
-                {current.approvals.map((entry) => {
-                  const line = current.lines.find(
-                    (candidate) => candidate.id === entry.estimateLineId,
-                  );
-                  const actor =
-                    entry.recordedBy?.name?.trim() ||
-                    entry.recordedBy?.email ||
-                    t("unknownActor");
-                  return (
-                    <li
-                      key={entry.id}
-                      className="border-b border-slate-300 px-4 py-3.5 text-[12px] last:border-b-0"
-                    >
-                      <div className="flex flex-wrap items-start justify-between gap-2">
-                        <b className="font-semibold text-slate-900">
-                          {line?.description ?? t("lineDescription")}
-                        </b>
-                        <span className="text-slate-400">
-                          {entry.createdAt.toLocaleString()}
-                        </span>
-                      </div>
-                      <p className="mt-1.5 text-slate-600">
-                        {`${
-                          entry.fromState
-                            ? t("historyChange", {
-                                from: t(
-                                  `approvalStates.${entry.fromState as EstimateApprovalStateValue}`,
-                                ),
-                                to: t(
+          {askPermission ? (
+            <SmoothHistoryPanel
+              title={t("approvalHistory")}
+              hint={t("seeEarlier")}
+            >
+              {current.approvals.length === 0 ? (
+                <p className="px-4 py-3 text-sm text-slate-600">
+                  {t("approvalHistoryEmpty")}
+                </p>
+              ) : (
+                <ul>
+                  {current.approvals.map((entry) => {
+                    const line = current.lines.find(
+                      (candidate) => candidate.id === entry.estimateLineId,
+                    );
+                    const actor =
+                      entry.recordedBy?.name?.trim() ||
+                      entry.recordedBy?.email ||
+                      t("unknownActor");
+                    return (
+                      <li
+                        key={entry.id}
+                        className="border-b border-slate-300 px-4 py-3.5 text-[12px] last:border-b-0"
+                      >
+                        <div className="flex flex-wrap items-start justify-between gap-2">
+                          <b className="font-semibold text-slate-900">
+                            {line?.description ?? t("lineDescription")}
+                          </b>
+                          <span className="text-slate-400">
+                            {entry.createdAt.toLocaleString()}
+                          </span>
+                        </div>
+                        <p className="mt-1.5 text-slate-600">
+                          {`${
+                            entry.fromState
+                              ? t("historyChange", {
+                                  from: t(
+                                    `approvalStates.${entry.fromState as EstimateApprovalStateValue}`,
+                                  ),
+                                  to: t(
+                                    `approvalStates.${entry.toState as EstimateApprovalStateValue}`,
+                                  ),
+                                })
+                              : t(
                                   `approvalStates.${entry.toState as EstimateApprovalStateValue}`,
-                                ),
-                              })
-                            : t(
-                                `approvalStates.${entry.toState as EstimateApprovalStateValue}`,
-                              )
-                        } · ${t(
-                          `approvalMethods.${entry.method as EstimateApprovalMethodValue}`,
-                        )} · ${actor}`}
-                      </p>
-                      {entry.note ? (
-                        <p className="mt-1 text-slate-500">{entry.note}</p>
-                      ) : null}
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </SmoothHistoryPanel>
+                                )
+                          } · ${t(
+                            `approvalMethods.${entry.method as EstimateApprovalMethodValue}`,
+                          )} · ${actor}`}
+                        </p>
+                        {entry.note ? (
+                          <p className="mt-1 text-slate-500">{entry.note}</p>
+                        ) : null}
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </SmoothHistoryPanel>
+          ) : null}
         </>
       )}
 

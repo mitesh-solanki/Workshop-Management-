@@ -54,6 +54,8 @@ type Props = {
   disabled?: boolean;
   lines: ShopReceiveLine[];
   onLinesChange: (lines: ShopReceiveLine[]) => void;
+  /** Line keys that need a vendor — red error under the vendor field. */
+  vendorErrorKeys?: string[];
 };
 
 function newLine(): ShopReceiveLine {
@@ -70,6 +72,7 @@ export function ShopReceiveFields({
   disabled = false,
   lines,
   onLinesChange,
+  vendorErrorKeys = [],
 }: Props) {
   const t = useTranslations("inventory");
   const tv = useTranslations("vendors");
@@ -85,9 +88,12 @@ export function ShopReceiveFields({
   >({});
   const [previewUrls, setPreviewUrls] = useState<Record<string, string>>({});
   const [pendingVendor, startVendorTransition] = useTransition();
-  const [expandedKeys, setExpandedKeys] = useState<Set<string>>(
-    () => new Set(lines[0]?.key ? [lines[0].key] : []),
+  const [expandedByKey, setExpandedByKey] = useState<Record<string, boolean>>(
+    () =>
+      Object.fromEntries(lines.map((line) => [line.key, true] as const)),
   );
+  const linesRef = useRef(lines);
+  linesRef.current = lines;
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const previewUrlsRef = useRef<Record<string, string>>({});
   const newVendorPanelRef = useRef<HTMLDivElement | null>(null);
@@ -101,6 +107,17 @@ export function ShopReceiveFields({
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (vendorErrorKeys.length === 0) return;
+    setExpandedByKey((prev) => {
+      const next = { ...prev };
+      for (const key of vendorErrorKeys) {
+        next[key] = true;
+      }
+      return next;
+    });
+  }, [vendorErrorKeys]);
 
   useEffect(() => {
     return () => {
@@ -140,15 +157,24 @@ export function ShopReceiveFields({
   }, [lines]);
 
   useEffect(() => {
-    const keep = new Set(lines.map((line) => line.key));
-    setExpandedKeys((prev) => {
+    setExpandedByKey((prev) => {
+      const next: Record<string, boolean> = {};
       let changed = false;
-      const next = new Set<string>();
-      for (const key of prev) {
-        if (keep.has(key)) next.add(key);
-        else changed = true;
+      for (const line of lines) {
+        if (prev[line.key] === undefined) {
+          next[line.key] = true;
+          changed = true;
+        } else {
+          next[line.key] = prev[line.key]!;
+        }
       }
-      return changed ? next : prev;
+      for (const key of Object.keys(prev)) {
+        if (!(key in next)) changed = true;
+      }
+      if (!changed && Object.keys(prev).length === Object.keys(next).length) {
+        return prev;
+      }
+      return next;
     });
   }, [lines]);
 
@@ -177,40 +203,42 @@ export function ShopReceiveFields({
 
   function updateLine(key: string, patch: Partial<ShopReceiveLine>) {
     onLinesChange(
-      lines.map((line) => (line.key === key ? { ...line, ...patch } : line)),
+      linesRef.current.map((line) =>
+        line.key === key ? { ...line, ...patch } : line,
+      ),
+    );
+    setExpandedByKey((prev) =>
+      prev[key] ? prev : { ...prev, [key]: true },
     );
   }
 
   function addLine() {
     const line = newLine();
-    onLinesChange([...lines, line]);
-    setExpandedKeys((prev) => new Set(prev).add(line.key));
+    onLinesChange([...linesRef.current, line]);
+    setExpandedByKey((prev) => ({ ...prev, [line.key]: true }));
     setAddingVendor(false);
   }
 
   function toggleExpanded(key: string) {
-    setExpandedKeys((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
+    setExpandedByKey((prev) => {
+      const currentlyOpen = prev[key] !== false;
+      return { ...prev, [key]: !currentlyOpen };
     });
   }
 
   function removeLine(key: string) {
-    if (lines.length <= 1) {
+    if (linesRef.current.length <= 1) {
       const reset = newLine();
       onLinesChange([reset]);
-      setExpandedKeys(new Set());
+      setExpandedByKey({ [reset.key]: true });
       return;
     }
-    const next = lines.filter((line) => line.key !== key);
-    onLinesChange(next);
-    setExpandedKeys((prev) => {
-      if (!prev.has(key)) return prev;
-      const nextKeys = new Set(prev);
-      nextKeys.delete(key);
-      return nextKeys;
+    onLinesChange(linesRef.current.filter((line) => line.key !== key));
+    setExpandedByKey((prev) => {
+      if (!(key in prev)) return prev;
+      const next = { ...prev };
+      delete next[key];
+      return next;
     });
   }
 
@@ -308,12 +336,14 @@ export function ShopReceiveFields({
           ? prev
           : [created, ...prev.filter((row) => row.id !== created.id)],
       );
+      const openKey = Object.entries(expandedByKey).find(
+        ([key, open]) => open && linesRef.current.some((line) => line.key === key),
+      )?.[0];
       const targetKey =
-        [...expandedKeys].find((key) => lines.some((line) => line.key === key)) ??
-        lines[lines.length - 1]?.key;
+        openKey ?? linesRef.current[linesRef.current.length - 1]?.key;
       if (targetKey) {
         updateLine(targetKey, { vendorId: created.id });
-        setExpandedKeys((prev) => new Set(prev).add(targetKey));
+        setExpandedByKey((prev) => ({ ...prev, [targetKey]: true }));
       }
       setAddingVendor(false);
       setVendorDraft(EMPTY_VENDOR);
@@ -346,20 +376,25 @@ export function ShopReceiveFields({
         </button>
       </div>
 
-      <div className="grid gap-2 md:grid-cols-2">
+      <div className="grid items-start gap-2 md:grid-cols-2">
         {lines.map((line, index) => {
-          const expanded = expandedKeys.has(line.key);
+          const expanded = expandedByKey[line.key] !== false;
           const name = vendorName(line);
           const hasVendor = Boolean(name);
+          const vendorError = vendorErrorKeys.includes(line.key)
+            ? t("shopVendorRequired")
+            : undefined;
 
           return (
             <div
               key={line.key}
               className={cn(
-                "overflow-hidden rounded-xl border bg-card shadow-xs transition-[border-color,box-shadow] duration-300 ease-out",
-                expanded
-                  ? "border-blue-200 ring-1 ring-blue-100"
-                  : "border-border hover:border-slate-300",
+                "h-fit self-start rounded-xl border bg-card shadow-xs transition-[border-color,box-shadow] duration-300 ease-out",
+                vendorError
+                  ? "border-red-300 ring-1 ring-red-200"
+                  : expanded
+                    ? "border-blue-200 ring-1 ring-blue-100"
+                    : "border-border hover:border-slate-300",
               )}
             >
               <div className="flex items-stretch">
@@ -422,143 +457,141 @@ export function ShopReceiveFields({
                 ) : null}
               </div>
 
-              <div
-                className={cn(
-                  "grid transition-[grid-template-rows] duration-300 ease-out",
-                  expanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
-                )}
-              >
-                <div className="min-h-0 overflow-hidden">
-                  <div className="space-y-3 border-t border-border bg-slate-50/60 px-3 py-3">
-                    <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_8rem]">
-                      <FormField
+              {expanded ? (
+                <div
+                  className="space-y-3 border-t border-border bg-slate-50/60 px-3 py-3"
+                  onClick={(event) => event.stopPropagation()}
+                  onKeyDown={(event) => event.stopPropagation()}
+                >
+                  <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_8rem]">
+                    <FormField
+                      id={`${idPrefix}-vendor-${line.key}`}
+                      label={t("vendor")}
+                      error={vendorError}
+                    >
+                      <SearchableSelect
                         id={`${idPrefix}-vendor-${line.key}`}
-                        label={t("vendor")}
-                      >
-                        <SearchableSelect
-                          id={`${idPrefix}-vendor-${line.key}`}
-                          name={`shopVendorId_${index}`}
-                          value={line.vendorId}
-                          onChange={(next) => {
-                            setExpandedKeys((prev) => new Set(prev).add(line.key));
-                            updateLine(line.key, { vendorId: next });
-                          }}
-                          clearable
-                          filter="remote"
-                          minQueryLength={0}
-                          onQueryChange={(q) =>
+                        name={`shopVendorId_${index}`}
+                        value={line.vendorId}
+                        onChange={(next) => {
+                          updateLine(line.key, { vendorId: next });
+                        }}
+                        clearable
+                        filter="remote"
+                        minQueryLength={0}
+                        onQueryChange={(q) =>
+                          setVendorQueries((prev) => ({
+                            ...prev,
+                            [line.key]: q,
+                          }))
+                        }
+                        onOpenChange={(next) => {
+                          if (next) {
+                            setExpandedByKey((prev) => ({
+                              ...prev,
+                              [line.key]: true,
+                            }));
                             setVendorQueries((prev) => ({
                               ...prev,
-                              [line.key]: q,
-                            }))
+                              [line.key]: "",
+                            }));
                           }
-                          onOpenChange={(next) => {
-                            if (next) {
-                              setExpandedKeys((prev) =>
-                                new Set(prev).add(line.key),
-                              );
-                              setVendorQueries((prev) => ({
-                                ...prev,
-                                [line.key]: "",
-                              }));
-                            }
-                          }}
-                          placeholder={t("boughtFromPlaceholder")}
-                          searchPlaceholder={t("boughtFromPlaceholder")}
-                          emptyLabel={t("noVendorsHint")}
-                          disabled={busy}
-                          options={optionsForLine(line)}
-                        />
-                      </FormField>
-
-                      <QuantityStepper
-                        id={`${idPrefix}-qty-${line.key}`}
-                        name={`shopQty_${index}`}
-                        label={t("qtyFromShop")}
-                        defaultValue={line.quantity}
-                        min={1}
-                        onValueChange={(quantity) =>
-                          updateLine(line.key, { quantity })
-                        }
-                      />
-                    </div>
-
-                    <FormField
-                      id={`${idPrefix}-bill-${line.key}`}
-                      label={t("shopBillPhoto")}
-                      hint={t("shopBillPhotoHint")}
-                    >
-                      <input
-                        ref={(el) => {
-                          fileInputRefs.current[line.key] = el;
                         }}
-                        id={`${idPrefix}-bill-${line.key}`}
-                        type="file"
-                        accept="image/jpeg,image/png,image/webp,application/pdf"
-                        capture="environment"
-                        className="hidden"
+                        placeholder={t("boughtFromPlaceholder")}
+                        searchPlaceholder={t("boughtFromPlaceholder")}
+                        emptyLabel={t("noVendorsHint")}
                         disabled={busy}
-                        onChange={(event) => {
-                          updateLine(line.key, {
-                            file: event.target.files?.[0] ?? null,
-                          });
-                        }}
+                        options={optionsForLine(line)}
                       />
-                      <div className="flex flex-col items-start gap-2">
-                        {line.file ? (
-                          <div className="relative size-16 shrink-0 overflow-hidden rounded-md border border-slate-200 bg-white sm:size-20">
-                            {previewUrls[line.key] ? (
-                              // eslint-disable-next-line @next/next/no-img-element
-                              <img
-                                src={previewUrls[line.key]}
-                                alt={line.file.name}
-                                className="size-full object-cover"
-                              />
-                            ) : (
-                              <div className="flex size-full items-center justify-center px-1 text-center text-[10px] leading-tight text-slate-600">
-                                {line.file.name}
-                              </div>
-                            )}
-                            <button
-                              type="button"
-                              disabled={busy}
-                              aria-label={t("shopBillClear")}
-                              className="absolute top-0.5 right-0.5 flex size-5 items-center justify-center rounded-full bg-slate-900/80 text-white"
-                              onClick={() => {
-                                updateLine(line.key, { file: null });
-                                const input = fileInputRefs.current[line.key];
-                                if (input) input.value = "";
-                              }}
-                            >
-                              <X className="size-3" aria-hidden />
-                            </button>
-                          </div>
-                        ) : null}
-                        <Button
-                          type="button"
-                          variant="secondary"
-                          size="md"
-                          disabled={busy}
-                          className="h-11 min-h-11 shrink-0"
-                          onClick={() =>
-                            fileInputRefs.current[line.key]?.click()
-                          }
-                        >
-                          <Upload className="size-4" aria-hidden />
-                          {line.file ? t("shopBillChange") : t("shopBillChoose")}
-                        </Button>
-                      </div>
                     </FormField>
+
+                    <QuantityStepper
+                      id={`${idPrefix}-qty-${line.key}`}
+                      name={`shopQty_${index}`}
+                      label={t("qtyFromShop")}
+                      defaultValue={line.quantity}
+                      min={1}
+                      onValueChange={(quantity) =>
+                        updateLine(line.key, { quantity })
+                      }
+                    />
                   </div>
+
+                  <FormField
+                    id={`${idPrefix}-bill-${line.key}`}
+                    label={t("shopBillPhoto")}
+                    hint={t("shopBillPhotoHint")}
+                  >
+                    <input
+                      ref={(el) => {
+                        fileInputRefs.current[line.key] = el;
+                      }}
+                      id={`${idPrefix}-bill-${line.key}`}
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp,application/pdf"
+                      capture="environment"
+                      className="hidden"
+                      disabled={busy}
+                      onChange={(event) => {
+                        updateLine(line.key, {
+                          file: event.target.files?.[0] ?? null,
+                        });
+                      }}
+                    />
+                    <div className="flex flex-col items-start gap-2">
+                      {line.file ? (
+                        <div className="relative size-16 shrink-0 overflow-hidden rounded-md border border-slate-200 bg-white sm:size-20">
+                          {previewUrls[line.key] ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={previewUrls[line.key]}
+                              alt={line.file.name}
+                              className="size-full object-cover"
+                            />
+                          ) : (
+                            <div className="flex size-full items-center justify-center px-1 text-center text-[10px] leading-tight text-slate-600">
+                              {line.file.name}
+                            </div>
+                          )}
+                          <button
+                            type="button"
+                            disabled={busy}
+                            aria-label={t("shopBillClear")}
+                            className="absolute top-0.5 right-0.5 flex size-5 items-center justify-center rounded-full bg-slate-900/80 text-white"
+                            onClick={() => {
+                              updateLine(line.key, { file: null });
+                              const input = fileInputRefs.current[line.key];
+                              if (input) input.value = "";
+                            }}
+                          >
+                            <X className="size-3" aria-hidden />
+                          </button>
+                        </div>
+                      ) : null}
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="md"
+                        disabled={busy}
+                        className="h-11 min-h-11 shrink-0"
+                        onClick={() =>
+                          fileInputRefs.current[line.key]?.click()
+                        }
+                      >
+                        <Upload className="size-4" aria-hidden />
+                        {line.file ? t("shopBillChange") : t("shopBillChoose")}
+                      </Button>
+                    </div>
+                  </FormField>
                 </div>
-              </div>
+              ) : null}
             </div>
           );
         })}
       </div>
 
       <div className="flex w-full justify-center">
-        <p className="text-center text-sm text-slate-600">
+        <p className="text-center text-sm text-slate-600 mt-2 flex">
           <span className="mr-1">{t("vendorMissingFromList")}</span>
           <button
             type="button"

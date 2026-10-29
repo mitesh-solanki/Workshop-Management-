@@ -35,7 +35,11 @@ const APP_ERROR_MESSAGE_KEYS: Record<string, readonly [string, string]> = {
   STATUS_CONFLICT: ["orders", "errors.statusConflict"],
   "orders.line_approved_on_estimate": [
     "orders",
-    "errors.lineApprovedOnEstimate",
+    "errors.lineOnFinalizedInvoice",
+  ],
+  "orders.line_on_finalized_invoice": [
+    "orders",
+    "errors.lineOnFinalizedInvoice",
   ],
   "inventory.insufficient_stock": ["inventory", "errors.insufficientStock"],
   "inventory.sku_exists": ["inventory", "errors.skuExists"],
@@ -52,6 +56,10 @@ const APP_ERROR_MESSAGE_KEYS: Record<string, readonly [string, string]> = {
   "import.invalid_mode": ["dataImport", "errors.invalidMode"],
   ESTIMATE_SUPERSEDED: ["estimates", "errors.estimateSuperseded"],
   ESTIMATE_LINE_BILLED: ["estimates", "errors.lineBilled"],
+  ESTIMATE_NO_SOURCES: ["estimates", "errors.noSources"],
+  ESTIMATE_NO_PRICED_SOURCES: ["estimates", "errors.noPricedSources"],
+  ESTIMATE_EXISTS: ["estimates", "errors.estimateExists"],
+  ESTIMATE_CREATE_FAILED: ["estimates", "errors.createFailed"],
   "billing.garage_gstin_required": ["billing", "errors.garageGstinRequired"],
   "billing.estimate_missing": ["billing", "errors.estimateMissing"],
   "billing.estimate_superseded": ["billing", "errors.estimateSuperseded"],
@@ -121,6 +129,29 @@ const APP_ERROR_MESSAGE_KEYS: Record<string, readonly [string, string]> = {
     "errors.billAttachmentTooLarge",
   ],
   STORAGE_NOT_CONFIGURED: ["vendorBills", "errors.storageNotConfigured"],
+  "warranties.battery_photo_required": [
+    "warranties",
+    "errors.batteryPhotoRequired",
+  ],
+  "warranties.battery_expiry_required": [
+    "warranties",
+    "errors.batteryExpiryRequired",
+  ],
+  "warranties.battery_details_required": ["warranties", "finalizeBlocked"],
+  "warranties.empty_document": ["warranties", "errors.emptyDocument"],
+  "warranties.line_not_found": ["warranties", "errors.lineNotFound"],
+  "warranties.locked_on_finalized_invoice": [
+    "warranties",
+    "errors.lockedOnFinalizedInvoice",
+  ],
+  "warranties.storage_not_configured": [
+    "warranties",
+    "errors.storageNotConfigured",
+  ],
+  "warranties.finalize_requires_draft_first": [
+    "warranties",
+    "errors.finalizeRequiresDraftFirst",
+  ],
   "live.wrong_token": ["liveLink", "errors.wrong_token"],
   "live.expired": ["liveLink", "errors.expired"],
   "live.revoked": ["liveLink", "errors.revoked"],

@@ -7,6 +7,12 @@ import type {
   ServiceOrderStatus,
 } from "@prisma/client";
 import { prisma } from "@/lib/db";
+import {
+  applyApprovedPartStock,
+  EstimateStockTxError,
+  findLinkedPartLine,
+  removeDraftInvoiceLinesForEstimateLine,
+} from "@/modules/estimates/repo";
 import { applyStockMovement } from "@/modules/inventory/repo";
 import {
   SERVICE_ORDER_STATUSES,
@@ -82,11 +88,15 @@ const orderListSelect = {
     },
   },
   lines: {
-    where: { type: "PART" as const, unitPricePaise: 0 },
+    where: {
+      type: "PART" as const,
+      unitPricePaise: 0,
+      OR: [{ partId: null }, { part: { sellingPricePaise: { lte: 0 } } }],
+    },
     select: { id: true },
     take: 1,
   },
-} as const;
+} satisfies Prisma.ServiceOrderSelect;
 
 export async function listTechniciansInGarage(garageId: string) {
   return prisma.user.findMany({
@@ -242,11 +252,66 @@ export async function findServiceOrderById(
     select: {
       ...orderListSelect,
       lines: {
-        select: lineSelect,
+        select: {
+          ...lineSelect,
+          part: { select: { sellingPricePaise: true } },
+        },
         orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
       },
     },
   });
+}
+
+/** Fill ₹0 part lines from catalogue selling price when inventory already has one. */
+export async function applyCataloguePricesToUnpricedPartLines(
+  garageId: string,
+  serviceOrderId: string,
+  actorId: string,
+): Promise<number> {
+  const lines = await prisma.serviceOrderLine.findMany({
+    where: {
+      garageId,
+      serviceOrderId,
+      type: "PART",
+      unitPricePaise: 0,
+      partId: { not: null },
+    },
+    select: {
+      id: true,
+      part: { select: { sellingPricePaise: true } },
+    },
+  });
+
+  const toUpdate = lines.filter(
+    (line) => (line.part?.sellingPricePaise ?? 0) > 0,
+  );
+  if (toUpdate.length === 0) {
+    return 0;
+  }
+
+  await prisma.$transaction(async (tx) => {
+    for (const line of toUpdate) {
+      await tx.serviceOrderLine.update({
+        where: { id: line.id },
+        data: { unitPricePaise: line.part!.sellingPricePaise },
+      });
+    }
+    await tx.auditLog.create({
+      data: {
+        garageId,
+        actorId,
+        action: "service_order.catalogue_prices_applied",
+        entity: "ServiceOrder",
+        entityId: serviceOrderId,
+        meta: {
+          lineIds: toUpdate.map((line) => line.id),
+          count: toUpdate.length,
+        } satisfies Prisma.InputJsonValue,
+      },
+    });
+  });
+
+  return toUpdate.length;
 }
 
 export async function createServiceOrder(
@@ -617,7 +682,7 @@ export async function updateServiceOrderLine(
 
 export type DeleteServiceOrderLineResult =
   | { ok: true }
-  | { ok: false; reason: "NOT_FOUND" | "APPROVED_ON_ESTIMATE" };
+  | { ok: false; reason: "NOT_FOUND" | "BILLED_ON_FINALIZED_INVOICE" };
 
 export async function deleteServiceOrderLine(
   garageId: string,
@@ -641,22 +706,75 @@ export async function deleteServiceOrderLine(
         throw new StockLineTxError("NOT_FOUND");
       }
 
-      if (existing.type === "PART") {
-        const approvedEstimateLine = await tx.estimateLine.findFirst({
+      // Cascade current-estimate lines (any approval). Draft invoice lines go
+      // with them; only a finalized bill blocks delete.
+      const linkedEstimateLines = await tx.estimateLine.findMany({
+        where: {
+          garageId,
+          sourceOrderLineId: existing.id,
+          estimate: {
+            serviceOrderId: data.serviceOrderId,
+            supersededAt: null,
+          },
+        },
+        select: {
+          id: true,
+          estimateId: true,
+          type: true,
+          description: true,
+          quantity: true,
+          approvalState: true,
+          sourceOrderLineId: true,
+          sourceSuggestedRepairId: true,
+        },
+      });
+
+      for (const estLine of linkedEstimateLines) {
+        const billed = await tx.invoiceLine.count({
           where: {
             garageId,
-            sourceOrderLineId: existing.id,
-            approvalState: "APPROVED",
-            estimate: {
-              serviceOrderId: data.serviceOrderId,
-              supersededAt: null,
-            },
+            estimateLineId: estLine.id,
+            invoice: { status: "FINALIZED" },
           },
-          select: { id: true },
         });
-        if (approvedEstimateLine) {
-          throw new StockLineTxError("APPROVED_ON_ESTIMATE");
+        if (billed > 0) {
+          throw new StockLineTxError("BILLED_ON_FINALIZED_INVOICE");
         }
+
+        if (estLine.approvalState === "APPROVED") {
+          const linked = await findLinkedPartLine(tx, garageId, estLine);
+          if (linked) {
+            await applyApprovedPartStock(tx, garageId, {
+              partId: linked.partId,
+              serviceOrderId: data.serviceOrderId,
+              serviceOrderLineId: linked.serviceOrderLineId,
+              quantity: estLine.quantity,
+              type: "IN",
+              actorId: data.actorId,
+              note: `Job-card line removed ${data.serviceOrderId} (estimate line ${estLine.id})`,
+            });
+          }
+        }
+
+        await removeDraftInvoiceLinesForEstimateLine(tx, garageId, estLine.id);
+
+        await tx.estimateLine.delete({ where: { id: estLine.id } });
+
+        await tx.auditLog.create({
+          data: {
+            garageId,
+            actorId: data.actorId,
+            action: "estimate.line_removed",
+            entity: "EstimateLine",
+            entityId: estLine.id,
+            meta: {
+              serviceOrderId: data.serviceOrderId,
+              estimateId: estLine.estimateId,
+              description: estLine.description,
+              cascadedFromOrderLineId: existing.id,
+            } satisfies Prisma.InputJsonValue,
+          },
+        });
       }
 
       await tx.serviceOrderLine.delete({ where: { id: existing.id } });
@@ -683,9 +801,12 @@ export async function deleteServiceOrderLine(
     return { ok: true };
   } catch (error) {
     if (error instanceof StockLineTxError) {
-      if (error.reason === "APPROVED_ON_ESTIMATE") {
-        return { ok: false, reason: "APPROVED_ON_ESTIMATE" };
+      if (error.reason === "BILLED_ON_FINALIZED_INVOICE") {
+        return { ok: false, reason: "BILLED_ON_FINALIZED_INVOICE" };
       }
+      return { ok: false, reason: "NOT_FOUND" };
+    }
+    if (error instanceof EstimateStockTxError) {
       return { ok: false, reason: "NOT_FOUND" };
     }
     throw error;
@@ -693,9 +814,11 @@ export async function deleteServiceOrderLine(
 }
 
 class StockLineTxError extends Error {
-  readonly reason: "NOT_FOUND" | "PART_NOT_FOUND" | "APPROVED_ON_ESTIMATE";
+  readonly reason: "NOT_FOUND" | "PART_NOT_FOUND" | "BILLED_ON_FINALIZED_INVOICE";
 
-  constructor(reason: "NOT_FOUND" | "PART_NOT_FOUND" | "APPROVED_ON_ESTIMATE") {
+  constructor(
+    reason: "NOT_FOUND" | "PART_NOT_FOUND" | "BILLED_ON_FINALIZED_INVOICE",
+  ) {
     super(reason);
     this.name = "StockLineTxError";
     this.reason = reason;

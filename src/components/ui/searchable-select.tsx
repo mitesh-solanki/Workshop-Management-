@@ -8,8 +8,9 @@
  * - filter "local" (filter options in the menu) | "remote" (parent searches; trigger is the input)
  * - remote: type minQueryLength chars before results are expected
  *
- * Menu portals into the nearest dialog/sheet content when present so Radix
- * focus trap / aria-hidden do not block the nested search input.
+ * Menu portals to document.body with position:fixed so dialog overflow /
+ * zoom does not stretch a white card behind the list. Dialog/sheet keep
+ * the menu open via searchable-select outside-interaction guards.
  */
 
 import {
@@ -42,6 +43,8 @@ type BaseProps = {
   loading?: boolean;
   clearable?: boolean;
   className?: string;
+  "aria-invalid"?: boolean | "true" | "false";
+  "aria-describedby"?: string;
   /** local = filter options client-side. remote = parent owns results via onQueryChange. */
   filter?: "local" | "remote";
   /**
@@ -83,8 +86,6 @@ type MultipleProps = BaseProps & {
 export type SearchableSelectProps = SingleProps | MultipleProps;
 
 const OPEN_EVENT = "wm-searchable-select-open";
-const LAYER_SELECTOR =
-  "[data-slot='dialog-content'], [data-slot='sheet-content']";
 
 function matchesOption(opt: SearchableSelectOption, q: string) {
   return (
@@ -92,12 +93,6 @@ function matchesOption(opt: SearchableSelectOption, q: string) {
     opt.value.toLowerCase().includes(q) ||
     Boolean(opt.keywords?.toLowerCase().includes(q))
   );
-}
-
-function getPortalRoot(anchor: HTMLElement | null): HTMLElement {
-  if (!anchor || typeof document === "undefined") return document.body;
-  const layer = anchor.closest(LAYER_SELECTOR);
-  return (layer as HTMLElement | null) ?? document.body;
 }
 
 export function SearchableSelect(props: SearchableSelectProps) {
@@ -130,6 +125,12 @@ export function SearchableSelect(props: SearchableSelectProps) {
     onCreateFromQuery,
     creatingFromQuery = false,
   } = props;
+  const invalid =
+    props["aria-invalid"] === true || props["aria-invalid"] === "true";
+  const describedBy = props["aria-describedby"];
+  const triggerInvalidClass = invalid
+    ? "border-red-500 focus-within:border-red-500 focus-within:ring-red-500/25 focus-visible:border-red-500 focus-visible:ring-red-500/25"
+    : undefined;
 
   const selectedValues = useMemo(() => {
     if (multiple) return props.values;
@@ -211,16 +212,9 @@ export function SearchableSelect(props: SearchableSelectProps) {
       setPortalRoot(null);
       return;
     }
-    const root = getPortalRoot(containerRef.current);
-    setPortalRoot(root);
-
-    if (root !== document.body) {
-      const prevOverflow = root.style.overflow;
-      root.style.overflow = "visible";
-      return () => {
-        root.style.overflow = prevOverflow;
-      };
-    }
+    // Always portal to body with fixed coords. Portaling into dialog + overflow
+    // visible stretches the modal card behind the menu.
+    setPortalRoot(document.body);
   }, [open]);
 
   const onOpenChangeRef = useRef(onOpenChange);
@@ -244,43 +238,23 @@ export function SearchableSelect(props: SearchableSelectProps) {
   useEffect(() => {
     if (!open || !portalRoot) return;
     const trigger = triggerRef.current;
-    const container = containerRef.current;
     if (!trigger) return;
 
     const updatePosition = () => {
-      const rect = (container ?? trigger).getBoundingClientRect();
-      const rootRect =
-        portalRoot === document.body
-          ? {
-              top: 0,
-              left: 0,
-              bottom: window.innerHeight,
-              right: window.innerWidth,
-              width: window.innerWidth,
-              height: window.innerHeight,
-            }
-          : portalRoot.getBoundingClientRect();
+      const rect = trigger.getBoundingClientRect();
+      if (rect.width < 8) return;
       const gap = 6;
       const maxMenu = Math.min(280, window.innerHeight * 0.6);
-      const spaceBelow = Math.min(
-        window.innerHeight - rect.bottom - gap,
-        rootRect.bottom - rect.bottom - gap,
-      );
-      const spaceAbove = Math.min(rect.top - gap, rect.top - rootRect.top - gap);
+      const spaceBelow = window.innerHeight - rect.bottom - gap;
+      const spaceAbove = rect.top - gap;
       const placeAbove = spaceBelow < 140 && spaceAbove > spaceBelow;
-      const preferredWidth = Math.max(rect.width, 176);
-      const maxRight = rootRect.right - 8;
-      const leftViewport = Math.min(
-        rect.left,
-        Math.max(rootRect.left + 8, maxRight - preferredWidth),
-      );
-      const left = leftViewport - rootRect.left;
-      const width = Math.min(preferredWidth, maxRight - leftViewport);
+      const width = rect.width;
+      const left = rect.left;
 
       if (placeAbove) {
         setDropdownPos({
           top: undefined,
-          bottom: rootRect.bottom - rect.top + gap,
+          bottom: window.innerHeight - rect.top + gap,
           left,
           width,
           maxHeight: Math.min(maxMenu, Math.max(spaceAbove, 80)),
@@ -289,7 +263,7 @@ export function SearchableSelect(props: SearchableSelectProps) {
       }
 
       setDropdownPos({
-        top: rect.bottom - rootRect.top + gap,
+        top: rect.bottom + gap,
         bottom: undefined,
         left,
         width,
@@ -298,9 +272,22 @@ export function SearchableSelect(props: SearchableSelectProps) {
     };
 
     updatePosition();
+    const raf1 = requestAnimationFrame(() => {
+      updatePosition();
+      requestAnimationFrame(updatePosition);
+    });
+    const settleTimer = window.setTimeout(updatePosition, 220);
+    const resizeObserver =
+      typeof ResizeObserver !== "undefined"
+        ? new ResizeObserver(() => updatePosition())
+        : null;
+    resizeObserver?.observe(trigger);
     window.addEventListener("resize", updatePosition);
     window.addEventListener("scroll", updatePosition, true);
     return () => {
+      cancelAnimationFrame(raf1);
+      window.clearTimeout(settleTimer);
+      resizeObserver?.disconnect();
       window.removeEventListener("resize", updatePosition);
       window.removeEventListener("scroll", updatePosition, true);
     };
@@ -396,23 +383,21 @@ export function SearchableSelect(props: SearchableSelectProps) {
     !(requireSearch && queryTrim.length === 0) &&
     !(inputTrigger && queryTrim.length < minQueryLength);
 
-  const menuInLayer = portalRoot != null && portalRoot !== document.body;
-
   const menu =
     showMenu && portalRoot ? (
       <div
         ref={dropdownRef}
         data-slot="searchable-select-dropdown"
-        className={cn(
-          "pointer-events-auto z-10020 overflow-hidden rounded-lg border border-border bg-card shadow-lg",
-          menuInLayer ? "absolute" : "fixed",
-        )}
+        className="pointer-events-auto fixed z-10020 overflow-hidden rounded-lg border border-border bg-card shadow-lg"
         style={{
           top: dropdownPos.top,
           bottom: dropdownPos.bottom,
           left: dropdownPos.left,
           width: dropdownPos.width,
+          minWidth: dropdownPos.width,
+          maxWidth: dropdownPos.width,
           maxHeight: dropdownPos.maxHeight,
+          boxSizing: "border-box",
         }}
         onWheel={(e) => e.stopPropagation()}
         onTouchMove={(e) => e.stopPropagation()}
@@ -493,7 +478,11 @@ export function SearchableSelect(props: SearchableSelectProps) {
             <button
               type="button"
               disabled={creatingFromQuery}
-              onClick={() => onCreateFromQuery(queryTrim)}
+              onClick={() => {
+                const name = queryTrim;
+                closeMenu();
+                onCreateFromQuery(name);
+              }}
               className={cn(
                 "flex w-full items-center gap-2 border-t border-border px-3 py-2.5 text-left text-sm font-medium text-blue-700 hover:bg-blue-50 disabled:opacity-60",
                 filtered.length === 0 && "border-t-0",
@@ -543,8 +532,11 @@ export function SearchableSelect(props: SearchableSelectProps) {
           id={id}
           className={cn(
             "flex h-11 min-h-11 w-full items-center justify-between rounded-md border border-input bg-card px-3 text-left text-sm shadow-xs outline-none transition focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/30",
+            triggerInvalidClass,
             disabled && "pointer-events-none opacity-50",
           )}
+          aria-invalid={invalid || undefined}
+          aria-describedby={describedBy}
           onClick={() => {
             if (disabled) return;
             if (!open) {
@@ -564,6 +556,8 @@ export function SearchableSelect(props: SearchableSelectProps) {
             disabled={disabled}
             value={fieldValue}
             placeholder={fieldPlaceholder}
+            aria-invalid={invalid || undefined}
+            aria-describedby={describedBy}
             onChange={(e) => {
               setQuery(e.target.value);
               if (!open) setOpen(true);
@@ -591,7 +585,9 @@ export function SearchableSelect(props: SearchableSelectProps) {
                   !creatingFromQuery &&
                   !loading
                 ) {
-                  onCreateFromQuery(queryTrim);
+                  const name = queryTrim;
+                  closeMenu();
+                  onCreateFromQuery(name);
                 }
               }
             }}
@@ -634,12 +630,15 @@ export function SearchableSelect(props: SearchableSelectProps) {
         id={id}
         type="button"
         disabled={disabled}
+        aria-invalid={invalid || undefined}
+        aria-describedby={describedBy}
         onClick={() => {
           if (disabled) return;
           setOpen((prev) => !prev);
         }}
         className={cn(
           "flex h-11 min-h-11 w-full items-center justify-between gap-2 rounded-md border border-input bg-card px-3 text-left text-sm shadow-xs outline-none transition focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/30 disabled:pointer-events-none disabled:opacity-50",
+          triggerInvalidClass,
         )}
       >
         <span

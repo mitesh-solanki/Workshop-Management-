@@ -31,9 +31,13 @@ const fieldControlClass =
 
 type Props = {
   orderId: string;
+  askPermission?: boolean;
 };
 
-export function EstimateLineForm({ orderId }: Props) {
+export function EstimateLineForm({
+  orderId,
+  askPermission = true,
+}: Props) {
   const t = useTranslations("estimates");
   const to = useTranslations("orders");
   const ti = useTranslations("inventory");
@@ -183,7 +187,11 @@ export function EstimateLineForm({ orderId }: Props) {
           </Button>
         </div>
 
-        <p className="text-[13px] text-slate-500">{t("newWorkWaitingHint")}</p>
+        <p className="text-[13px] text-slate-500">
+          {askPermission
+            ? t("newWorkWaitingHint")
+            : t("newWorkReadyHint")}
+        </p>
 
         {state.message && !state.ok ? (
           <p className="text-[13px] text-danger" role="status">

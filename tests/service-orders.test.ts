@@ -670,16 +670,16 @@ describe("listCustomerServiceHistory", () => {
   });
 });
 
-describe("removeOrderLine approved estimate guard", () => {
-  it("blocks deleting a part line approved on the current estimate", async () => {
+describe("removeOrderLine finalized invoice guard", () => {
+  it("blocks deleting a part line on a finalized invoice", async () => {
     vi.mocked(findServiceOrderById).mockResolvedValue(sampleOrder());
     vi.mocked(deleteServiceOrderLine).mockResolvedValue({
       ok: false,
-      reason: "APPROVED_ON_ESTIMATE",
+      reason: "BILLED_ON_FINALIZED_INVOICE",
     });
 
     await expect(removeOrderLine(ownerA, "order-1", "sol-1")).rejects.toMatchObject({
-      code: "orders.line_approved_on_estimate",
+      code: "orders.line_on_finalized_invoice",
     } satisfies Partial<AppError>);
   });
 });

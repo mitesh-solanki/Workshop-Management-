@@ -4,6 +4,7 @@ import type {
   EstimateApprovalMethod,
   EstimateLineApprovalState,
   EstimateLineType,
+  EstimatePermissionVia,
   Prisma,
 } from "@prisma/client";
 import { prisma } from "@/lib/db";
@@ -157,6 +158,8 @@ const estimateSelect = {
   serviceOrderId: true,
   revisionNumber: true,
   notes: true,
+  askPermission: true,
+  permissionVia: true,
   supersededAt: true,
   createdById: true,
   createdAt: true,
@@ -264,10 +267,17 @@ export async function createEstimateWithLines(
     serviceOrderId: string;
     revisionNumber: number;
     notes: string | null;
+    askPermission?: boolean;
+    permissionVia?: EstimatePermissionVia | null;
     createdById: string;
     lines: EstimateLineCreateInput[];
     /** When creating a revision, supersede this estimate id. */
     supersedeEstimateId?: string;
+    /**
+     * Apply stock OUT + approval history for lines created as APPROVED.
+     * Only for first create with askPermission=false — not revisions.
+     */
+    bootstrapApprovedLines?: boolean;
   },
 ) {
   return prisma.$transaction(async (tx) => {
@@ -285,12 +295,19 @@ export async function createEstimateWithLines(
       }
     }
 
+    const askPermission = data.askPermission ?? false;
+    const permissionVia = askPermission
+      ? (data.permissionVia ?? null)
+      : null;
+
     const estimate = await tx.estimate.create({
       data: {
         garageId,
         serviceOrderId: data.serviceOrderId,
         revisionNumber: data.revisionNumber,
         notes: data.notes,
+        askPermission,
+        permissionVia,
         createdById: data.createdById,
         lines: {
           create: data.lines.map((line) => ({
@@ -311,6 +328,40 @@ export async function createEstimateWithLines(
       select: estimateSelect,
     });
 
+    if (data.bootstrapApprovedLines) {
+      for (const line of estimate.lines) {
+        if (line.approvalState !== "APPROVED") {
+          continue;
+        }
+
+        const linked = await findLinkedPartLine(tx, garageId, line);
+        if (linked) {
+          await applyApprovedPartStock(tx, garageId, {
+            partId: linked.partId,
+            serviceOrderId: data.serviceOrderId,
+            serviceOrderLineId: linked.serviceOrderLineId,
+            quantity: line.quantity,
+            type: "OUT",
+            actorId: data.createdById,
+            note: `Estimate auto-approved ${data.serviceOrderId} (line ${line.id})`,
+          });
+        }
+
+        await tx.estimateApproval.create({
+          data: {
+            garageId,
+            estimateId: estimate.id,
+            estimateLineId: line.id,
+            fromState: null,
+            toState: "APPROVED",
+            method: "MANUAL",
+            recordedById: data.createdById,
+            note: "Customer permission not required",
+          },
+        });
+      }
+    }
+
     await tx.auditLog.create({
       data: {
         garageId,
@@ -324,12 +375,17 @@ export async function createEstimateWithLines(
           serviceOrderId: data.serviceOrderId,
           revisionNumber: data.revisionNumber,
           lineCount: data.lines.length,
+          askPermission,
+          permissionVia,
           supersededEstimateId: data.supersedeEstimateId ?? null,
         } satisfies Prisma.InputJsonValue,
       },
     });
 
-    return estimate;
+    return tx.estimate.findFirst({
+      where: { id: estimate.id, garageId },
+      select: estimateSelect,
+    });
   });
 }
 
@@ -439,6 +495,9 @@ export async function addEstimateLine(
     gstRatePercent: number;
     hsnOrSac: string;
     actorId: string;
+    sourceOrderLineId?: string | null;
+    /** When true (no-permission estimate), create as APPROVED and move stock. */
+    autoApprove?: boolean;
   },
 ) {
   return prisma.$transaction(async (tx) => {
@@ -448,7 +507,7 @@ export async function addEstimateLine(
         garageId,
         supersededAt: null,
       },
-      select: { id: true },
+      select: { id: true, askPermission: true },
     });
     if (!estimate) {
       return null;
@@ -459,6 +518,10 @@ export async function addEstimateLine(
       _max: { sortOrder: true },
     });
     const sortOrder = (maxSort._max.sortOrder ?? -1) + 1;
+    const autoApprove = data.autoApprove ?? !estimate.askPermission;
+    const approvalState: EstimateLineApprovalState = autoApprove
+      ? "APPROVED"
+      : "PENDING";
 
     const line = await tx.estimateLine.create({
       data: {
@@ -470,11 +533,39 @@ export async function addEstimateLine(
         unitPricePaise: data.unitPricePaise,
         gstRatePercent: data.gstRatePercent,
         hsnOrSac: data.hsnOrSac,
-        approvalState: "PENDING",
+        approvalState,
+        sourceOrderLineId: data.sourceOrderLineId ?? null,
         sortOrder,
       },
       select: lineSelect,
     });
+
+    if (autoApprove) {
+      const linked = await findLinkedPartLine(tx, garageId, line);
+      if (linked) {
+        await applyApprovedPartStock(tx, garageId, {
+          partId: linked.partId,
+          serviceOrderId: data.serviceOrderId,
+          serviceOrderLineId: linked.serviceOrderLineId,
+          quantity: line.quantity,
+          type: "OUT",
+          actorId: data.actorId,
+          note: `Estimate auto-approved ${data.serviceOrderId} (line ${line.id})`,
+        });
+      }
+      await tx.estimateApproval.create({
+        data: {
+          garageId,
+          estimateId: data.estimateId,
+          estimateLineId: line.id,
+          fromState: null,
+          toState: "APPROVED",
+          method: "MANUAL",
+          recordedById: data.actorId,
+          note: "Customer permission not required",
+        },
+      });
+    }
 
     await tx.auditLog.create({
       data: {
@@ -492,12 +583,62 @@ export async function addEstimateLine(
           unitPricePaise: data.unitPricePaise,
           gstRatePercent: data.gstRatePercent,
           hsnOrSac: data.hsnOrSac,
+          approvalState,
         } satisfies Prisma.InputJsonValue,
       },
     });
 
     return line;
   });
+}
+
+export async function removeDraftInvoiceLinesForEstimateLine(
+  tx: Prisma.TransactionClient,
+  garageId: string,
+  estimateLineId: string,
+) {
+  const draftLines = await tx.invoiceLine.findMany({
+    where: {
+      garageId,
+      estimateLineId,
+      invoice: { status: "DRAFT" },
+    },
+    select: { id: true, invoiceId: true },
+  });
+  if (draftLines.length === 0) {
+    return;
+  }
+
+  const invoiceIds = [...new Set(draftLines.map((line) => line.invoiceId))];
+  await tx.invoiceLine.deleteMany({
+    where: {
+      id: { in: draftLines.map((line) => line.id) },
+      garageId,
+    },
+  });
+
+  for (const invoiceId of invoiceIds) {
+    const remaining = await tx.invoiceLine.findMany({
+      where: { invoiceId, garageId },
+      select: {
+        taxablePaise: true,
+        cgstPaise: true,
+        sgstPaise: true,
+        igstPaise: true,
+        totalPaise: true,
+      },
+    });
+    await tx.invoice.update({
+      where: { id: invoiceId },
+      data: {
+        taxablePaise: remaining.reduce((sum, line) => sum + line.taxablePaise, 0),
+        cgstPaise: remaining.reduce((sum, line) => sum + line.cgstPaise, 0),
+        sgstPaise: remaining.reduce((sum, line) => sum + line.sgstPaise, 0),
+        igstPaise: remaining.reduce((sum, line) => sum + line.igstPaise, 0),
+        totalPaise: remaining.reduce((sum, line) => sum + line.totalPaise, 0),
+      },
+    });
+  }
 }
 
 export async function deleteEstimateLine(
@@ -551,6 +692,8 @@ export async function deleteEstimateLine(
           });
         }
       }
+
+      await removeDraftInvoiceLinesForEstimateLine(tx, garageId, existing.id);
 
       const removed = await tx.estimateLine.deleteMany({
         where: {

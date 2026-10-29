@@ -12,6 +12,7 @@ import {
   finalizeInvoice,
   recordInvoicePayment,
   recordInvoiceRefund,
+  remakeDraftInvoice,
 } from "@/modules/billing/service";
 import type {
   CreditNoteReasonValue,
@@ -21,6 +22,8 @@ import type {
 export type BillingActionState = {
   ok: boolean;
   message?: string;
+  /** Stable AppError.code when the action failed (for client scroll/highlight). */
+  code?: string;
 };
 
 function revalidateBilling(orderId: string) {
@@ -70,6 +73,7 @@ export async function finalizeInvoiceAction(
     return {
       ok: false,
       message: await translateError(error),
+      code: error instanceof AppError ? error.code : undefined,
     };
   }
 }
@@ -103,8 +107,7 @@ export async function remakeDraftInvoiceAction(
     const session = await requireSession();
     const placeRaw = String(formData.get("placeOfSupplyStateCode") ?? "").trim();
     const notes = String(formData.get("notes") ?? "");
-    await deleteDraftInvoice(session, { invoiceId });
-    await createInvoiceFromApprovedEstimate(session, orderId, {
+    await remakeDraftInvoice(session, orderId, invoiceId, {
       ...(placeRaw.length === 2
         ? { placeOfSupplyStateCode: placeRaw }
         : {}),

@@ -21,6 +21,8 @@ import type {
 export type EstimateActionState = {
   ok: boolean;
   message?: string;
+  askPermission?: boolean;
+  permissionVia?: "MANUAL" | "LIVE_LINK" | null;
 };
 
 function revalidateEstimate(orderId: string) {
@@ -35,15 +37,28 @@ export async function createEstimateAction(
 ): Promise<EstimateActionState> {
   try {
     const session = await requireSession();
-    await createEstimateFromSources(session, orderId, {
+    const askPermissionRaw = String(formData.get("askPermission") ?? "no");
+    const permissionViaRaw = String(formData.get("permissionVia") ?? "");
+    const permissionVia =
+      permissionViaRaw === "MANUAL" || permissionViaRaw === "LIVE_LINK"
+        ? permissionViaRaw
+        : null;
+    const estimate = await createEstimateFromSources(session, orderId, {
       notes: String(formData.get("notes") ?? ""),
+      askPermission: askPermissionRaw,
+      permissionVia,
     });
     revalidateEstimate(orderId);
-    return { ok: true, message: "estimateCreated" };
+    return {
+      ok: true,
+      message: "estimateCreated",
+      askPermission: estimate.askPermission,
+      permissionVia: estimate.permissionVia,
+    };
   } catch (error) {
     return {
       ok: false,
-      message: error instanceof AppError ? error.message : "Something went wrong",
+      message: await translateError(error),
     };
   }
 }

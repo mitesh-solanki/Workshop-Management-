@@ -137,13 +137,14 @@ export async function createPartShopReceiveAction(
       parseRupeesToPaise(String(formData.get("purchasePriceRupees") ?? "0")) ??
       0;
 
-    if (shopLines.length > 0) {
-      if (shopLines.some((line) => !line.vendorId || line.quantity <= 0)) {
-        return { ok: false, message: t("shopLineIncomplete") };
-      }
-      if (purchasePaise <= 0) {
-        return { ok: false, message: t("purchaseRequiredForStock") };
-      }
+    if (shopLines.length === 0) {
+      return { ok: false, message: t("shopVendorRequired") };
+    }
+    if (shopLines.some((line) => !line.vendorId || line.quantity <= 0)) {
+      return { ok: false, message: t("shopLineIncomplete") };
+    }
+    if (purchasePaise <= 0) {
+      return { ok: false, message: t("purchaseRequiredForStock") };
     }
 
     const part = await createPartRecord(session, {
@@ -523,6 +524,32 @@ export async function createPartByNameAction(name: string): Promise<{
         sellingPricePaise: 0,
         quantityOnHand: 0,
       },
+    };
+  } catch (error) {
+    return { ok: false, message: await translateError(error) };
+  }
+}
+
+/** Name-only create for the Create Part modal (technician job card). */
+export async function createPartByNameModalAction(
+  _prev: InventoryActionState,
+  formData: FormData,
+): Promise<InventoryActionState> {
+  const t = await getTranslations("inventory");
+  try {
+    const session = await requireSession();
+    const part = await createPartByNameRecord(session, {
+      name: String(formData.get("name") ?? ""),
+    });
+    revalidatePath("/inventory");
+    revalidatePath("/orders");
+    return {
+      ok: true,
+      message: t("createdByName"),
+      partId: part.id,
+      partName: part.name,
+      partSku: part.sku,
+      partUnit: part.unit,
     };
   } catch (error) {
     return { ok: false, message: await translateError(error) };

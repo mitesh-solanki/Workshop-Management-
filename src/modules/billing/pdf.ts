@@ -60,6 +60,8 @@ export type InvoicePdfInput = {
   payments: InvoicePdfPayment[];
   creditNotes: InvoicePdfCreditNote[];
   notes: string | null;
+  /** Only rows with an expiry — omitted entirely when empty. */
+  warranties?: Array<{ partName: string; expiresAt: Date }>;
 };
 
 const PAGE = {
@@ -642,6 +644,29 @@ export async function generateInvoicePdf(
         doc.text(message, PAGE.margin, remarkBottom, { width: remarkW });
         remarkBottom = doc.y + 3;
       }
+    }
+    remarkBottom += 6;
+  }
+
+  const warrantyRows = (input.warranties ?? []).filter((row) =>
+    Boolean(row.partName.trim() && row.expiresAt),
+  );
+  if (warrantyRows.length > 0) {
+    setBoldFont(doc, fontPath, 8);
+    doc.fillColor(COLORS.text).text(labels.warranties, PAGE.margin, remarkBottom, {
+      width: remarkW,
+    });
+    remarkBottom = doc.y + 3;
+    setBodyFont(doc, fontPath, 7.5);
+    doc.fillColor(COLORS.metaBody);
+    for (const row of warrantyRows) {
+      doc.text(
+        `${row.partName.trim()}  ·  ${labels.warrantyExpires} ${dateLabel(row.expiresAt)}`,
+        PAGE.margin,
+        remarkBottom,
+        { width: remarkW },
+      );
+      remarkBottom = doc.y + 2;
     }
     remarkBottom += 6;
   }

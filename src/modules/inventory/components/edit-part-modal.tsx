@@ -111,6 +111,7 @@ export function EditPartModal({
   const onSavedRef = useRef(onSaved);
   onSavedRef.current = onSaved;
   const [shopLines, setShopLines] = useState(createEmptyShopReceiveLines);
+  const [vendorErrorKeys, setVendorErrorKeys] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
   const pendingFilesRef = useRef<Array<File | null>>([]);
 
@@ -124,6 +125,12 @@ export function EditPartModal({
   function handleShopLinesChange(lines: ShopReceiveLine[]) {
     setShopLines(lines);
     pendingFilesRef.current = shopReceiveFilesForUpload(lines);
+    setVendorErrorKeys((prev) =>
+      prev.filter((key) => {
+        const line = lines.find((row) => row.key === key);
+        return line ? !line.vendorId.trim() : false;
+      }),
+    );
   }
 
   const useShopReceive = resetPrices || shopReceive;
@@ -251,6 +258,21 @@ export function EditPartModal({
             key={formKey}
             action={formAction}
             className="flex flex-col gap-4"
+            onSubmit={(event) => {
+              if (!useShopReceive) {
+                setVendorErrorKeys([]);
+                return;
+              }
+              const missing = shopLines
+                .filter((line) => !line.vendorId.trim())
+                .map((line) => line.key);
+              if (missing.length > 0) {
+                event.preventDefault();
+                setVendorErrorKeys(missing);
+                return;
+              }
+              setVendorErrorKeys([]);
+            }}
           >
             <EditPartNameField
               key={formKey}
@@ -344,6 +366,7 @@ export function EditPartModal({
                   disabled={busy}
                   lines={shopLines}
                   onLinesChange={handleShopLinesChange}
+                  vendorErrorKeys={vendorErrorKeys}
                 />
               </>
             ) : (

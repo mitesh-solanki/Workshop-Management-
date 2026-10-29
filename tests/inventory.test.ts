@@ -6,8 +6,7 @@ import {
   isLowStock,
   quantityChangeForMovement,
   signedAdjustmentQuantity,
-  sumStock,
-} from "@/modules/inventory/stock";
+  sumStock } from "@/modules/inventory/stock";
 import { skuFromPartName } from "@/modules/inventory/sku-from-name";
 
 vi.mock("@/modules/inventory/repo", () => ({
@@ -35,8 +34,7 @@ vi.mock("@/modules/inventory/repo", () => ({
     }
   },
   findDirectSaleById: vi.fn(),
-  listDirectSales: vi.fn(),
-}));
+  listDirectSales: vi.fn() }));
 
 import {
   applyStockMovement,
@@ -47,8 +45,7 @@ import {
   findPartById,
   findPartBySku,
   listLowStockParts,
-  searchPartsCatalogPage,
-} from "@/modules/inventory/repo";
+  searchPartsCatalogPage } from "@/modules/inventory/repo";
 import { parseDirectSaleFormData } from "@/modules/inventory/direct-sale-form-data";
 import {
   createDirectSaleRecord,
@@ -59,8 +56,7 @@ import {
   getPartForGarageId,
   listPartsForCatalogSearchPage,
   recordStockAdjustment,
-  recordStockOut,
-} from "@/modules/inventory/service";
+  recordStockOut } from "@/modules/inventory/service";
 
 const garageA = "garage-a";
 const garageB = "garage-b";
@@ -68,20 +64,17 @@ const garageB = "garage-b";
 const ownerA: RoleSession = {
   userId: "owner-a",
   garageId: garageA,
-  role: "OWNER",
-};
+  role: "OWNER" };
 
 const technicianA: RoleSession = {
   userId: "tech-a",
   garageId: garageA,
-  role: "TECHNICIAN",
-};
+  role: "TECHNICIAN" };
 
 const accountantA: RoleSession = {
   userId: "acct-a",
   garageId: garageA,
-  role: "ACCOUNTANT",
-};
+  role: "ACCOUNTANT" };
 
 describe("stock math", () => {
   it("sums signed quantity changes as current stock", () => {
@@ -105,20 +98,18 @@ describe("stock math", () => {
     expect(signedAdjustmentQuantity(3)).toBe(3);
   });
 
-  it("blocks negative stock unless the garage allows it", () => {
+  it("blocks stock changes that would go below zero", () => {
     const blocked = assertStockChangeAllowed({
       currentStock: 2,
       quantityChange: -3,
-      allowNegativeStock: false,
     });
     expect(blocked).toEqual({ ok: false, resultingStock: -1 });
 
     const allowed = assertStockChangeAllowed({
       currentStock: 2,
-      quantityChange: -3,
-      allowNegativeStock: true,
+      quantityChange: -2,
     });
-    expect(allowed).toEqual({ ok: true, resultingStock: -1 });
+    expect(allowed).toEqual({ ok: true, resultingStock: 0 });
   });
 
   it("flags low stock at or below the threshold", () => {
@@ -137,18 +128,15 @@ describe("inventory service stock guards", () => {
     vi.mocked(applyStockMovement).mockResolvedValue({
       ok: false,
       reason: "INSUFFICIENT_STOCK",
-      resultingStock: -1,
-    });
+      resultingStock: -1 });
 
     await expect(
       recordStockOut(ownerA, {
         partId: "part-1",
         quantity: 5,
-        note: null,
-      }),
+        note: null }),
     ).rejects.toMatchObject({
-      code: "inventory.insufficient_stock",
-    } satisfies Partial<AppError>);
+      code: "inventory.insufficient_stock" } satisfies Partial<AppError>);
   });
 
   it("allows stock out when repo succeeds", async () => {
@@ -158,16 +146,13 @@ describe("inventory service stock guards", () => {
         id: "m1",
         type: "OUT",
         quantityChange: -2,
-        partId: "part-1",
-      },
-      resultingStock: 3,
-    });
+        partId: "part-1" },
+      resultingStock: 3 });
 
     const result = await recordStockOut(ownerA, {
       partId: "part-1",
       quantity: 2,
-      note: "manual",
-    });
+      note: "manual" });
 
     expect(result.ok).toBe(true);
     expect(applyStockMovement).toHaveBeenCalledWith(
@@ -175,8 +160,7 @@ describe("inventory service stock guards", () => {
       expect.objectContaining({
         partId: "part-1",
         type: "OUT",
-        quantity: 2,
-      }),
+        quantity: 2 }),
     );
   });
 
@@ -184,18 +168,15 @@ describe("inventory service stock guards", () => {
     vi.mocked(applyStockMovement).mockResolvedValue({
       ok: false,
       reason: "INSUFFICIENT_STOCK",
-      resultingStock: -2,
-    });
+      resultingStock: -2 });
 
     await expect(
       recordStockAdjustment(ownerA, {
         partId: "part-1",
         quantityChange: -5,
-        note: "count",
-      }),
+        note: "count" }),
     ).rejects.toMatchObject({
-      code: "inventory.insufficient_stock",
-    } satisfies Partial<AppError>);
+      code: "inventory.insufficient_stock" } satisfies Partial<AppError>);
   });
 
   it("rejects cross-garage part reads", async () => {
@@ -219,11 +200,9 @@ describe("inventory service stock guards", () => {
         gstRatePercent: "18",
         hsn: "87089900",
         lowStockLevel: "2",
-        openingStock: "0",
-      }),
+        openingStock: "0" }),
     ).rejects.toMatchObject({
-      code: "inventory.sku_exists",
-    } satisfies Partial<AppError>);
+      code: "inventory.sku_exists" } satisfies Partial<AppError>);
   });
 
   it("blocks technicians from reading low-stock alerts", async () => {
@@ -242,12 +221,10 @@ describe("inventory service stock guards", () => {
           sku: "PAD-1",
           unit: "pcs",
           sellingPricePaise: 50000,
-          quantityOnHand: 2,
-        },
+          quantityOnHand: 2 },
       ],
       nextOffset: 1,
-      hasMore: false,
-    });
+      hasMore: false });
 
     const page = await listPartsForCatalogSearchPage(technicianA, { q: "pad" });
     expect(page.items).toHaveLength(1);
@@ -269,12 +246,10 @@ describe("inventory service stock guards", () => {
       lowStockLevel: 0,
       quantityOnHand: 0,
       createdAt: new Date(),
-      updatedAt: new Date(),
-    });
+      updatedAt: new Date() });
 
     const part = await createPartByNameRecord(technicianA, {
-      name: "Brake shoe",
-    });
+      name: "Brake shoe" });
 
     expect(part.sku).toBe("BRAKE-SHOE");
     expect(createPart).toHaveBeenCalledWith(
@@ -284,8 +259,7 @@ describe("inventory service stock guards", () => {
         purchasePricePaise: 0,
         sellingPricePaise: 0,
         openingStock: 0,
-        actorId: "tech-a",
-      }),
+        actorId: "tech-a" }),
     );
   });
 
@@ -300,8 +274,7 @@ describe("inventory service stock guards", () => {
         gstRatePercent: "18",
         hsn: "87089900",
         lowStockLevel: "2",
-        openingStock: "0",
-      }),
+        openingStock: "0" }),
     ).rejects.toBeInstanceOf(ForbiddenError);
   });
 
@@ -319,13 +292,11 @@ describe("inventory service stock guards", () => {
       lowStockLevel: 1,
       createdAt: new Date(),
       updatedAt: new Date(),
-      quantityOnHand: 4,
-    });
+      quantityOnHand: 4 });
     vi.mocked(countPartLinkedRecords).mockResolvedValue(2);
 
     await expect(deletePartRecord(ownerA, "part-1")).rejects.toMatchObject({
-      code: "inventory.part_in_use",
-    } satisfies Partial<AppError>);
+      code: "inventory.part_in_use" } satisfies Partial<AppError>);
     expect(deletePartById).not.toHaveBeenCalled();
   });
 
@@ -343,19 +314,16 @@ describe("inventory service stock guards", () => {
       lowStockLevel: 1,
       createdAt: new Date(),
       updatedAt: new Date(),
-      quantityOnHand: 0,
-    });
+      quantityOnHand: 0 });
     vi.mocked(countPartLinkedRecords).mockResolvedValue(0);
     vi.mocked(deletePartById).mockResolvedValue({ id: "part-2" });
 
     await expect(deletePartRecord(ownerA, "part-2")).resolves.toEqual({
-      id: "part-2",
-    });
+      id: "part-2" });
     expect(deletePartById).toHaveBeenCalledWith(garageA, "part-2", {
       actorId: ownerA.userId,
       name: "Filter",
-      sku: "FLT-1",
-    });
+      sku: "FLT-1" });
   });
 
   it("forbids technicians from deleting parts", async () => {
@@ -388,8 +356,7 @@ describe("direct sale form and multi-line create", () => {
       lines: [
         { partId: "part-a", quantity: "2", unitPricePaise: "100" },
         { partId: "part-b", quantity: "1", unitPricePaise: "50.50" },
-      ],
-    });
+      ] });
   });
 
   it("parses optional walk-in name from FormData", () => {
@@ -405,8 +372,7 @@ describe("direct sale form and multi-line create", () => {
       customerId: "",
       walkInName: "Ravi",
       notes: "",
-      lines: [{ partId: "part-a", quantity: "1", unitPricePaise: "10" }],
-    });
+      lines: [{ partId: "part-a", quantity: "1", unitPricePaise: "10" }] });
   });
 
   it("creates a multi-line sale with customer via the service", async () => {
@@ -424,8 +390,7 @@ describe("direct sale form and multi-line create", () => {
         lowStockLevel: 1,
         createdAt: new Date(),
         updatedAt: new Date(),
-        quantityOnHand: 20,
-      })
+        quantityOnHand: 20 })
       .mockResolvedValueOnce({
         id: "part-b",
         garageId: garageA,
@@ -439,8 +404,7 @@ describe("direct sale form and multi-line create", () => {
         lowStockLevel: 1,
         createdAt: new Date(),
         updatedAt: new Date(),
-        quantityOnHand: 5,
-      });
+        quantityOnHand: 5 });
     vi.mocked(createDirectSale).mockResolvedValue({ saleId: "sale-1" });
 
     const result = await createDirectSaleRecord(accountantA, {
@@ -449,8 +413,7 @@ describe("direct sale form and multi-line create", () => {
       lines: [
         { partId: "part-a", quantity: "2", unitPricePaise: "100" },
         { partId: "part-b", quantity: "1", unitPricePaise: "50.50" },
-      ],
-    });
+      ] });
 
     expect(result).toEqual({ saleId: "sale-1" });
     expect(createDirectSale).toHaveBeenCalledWith(
@@ -466,17 +429,14 @@ describe("direct sale form and multi-line create", () => {
             quantity: 2,
             unitPricePaise: 10000,
             gstRatePercent: 18,
-            hsn: "2710",
-          },
+            hsn: "2710" },
           {
             partId: "part-b",
             quantity: 1,
             unitPricePaise: 5050,
             gstRatePercent: 28,
-            hsn: "8421",
-          },
-        ],
-      }),
+            hsn: "8421" },
+        ] }),
     );
   });
 });
@@ -503,15 +463,12 @@ describe("concurrent stock does not oversell", () => {
       try {
         const check = assertStockChangeAllowed({
           currentStock: onHand,
-          quantityChange: -qty,
-          allowNegativeStock: false,
-        });
+          quantityChange: -qty });
         if (!check.ok) {
           return {
             ok: false,
             reason: "INSUFFICIENT_STOCK",
-            resultingStock: check.resultingStock,
-          };
+            resultingStock: check.resultingStock };
         }
         onHand = check.resultingStock;
         return { ok: true, resultingStock: onHand };
@@ -528,8 +485,7 @@ describe("concurrent stock does not oversell", () => {
     expect(failures).toHaveLength(1);
     expect(onHand).toBe(4);
     expect(failures[0]).toMatchObject({
-      reason: "INSUFFICIENT_STOCK",
-    });
+      reason: "INSUFFICIENT_STOCK" });
   });
 
   it("allows both outs when combined quantity fits", async () => {
@@ -546,9 +502,7 @@ describe("concurrent stock does not oversell", () => {
       try {
         const check = assertStockChangeAllowed({
           currentStock: onHand,
-          quantityChange: -qty,
-          allowNegativeStock: false,
-        });
+          quantityChange: -qty });
         if (!check.ok) {
           return check;
         }

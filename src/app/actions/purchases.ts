@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { getTranslations } from "next-intl/server";
+import { AppError } from "@/lib/errors";
 import { translateError } from "@/lib/translate-error";
 import { requireSession } from "@/lib/session";
 import {
@@ -21,7 +22,26 @@ export type PurchasesActionState = {
   ok: boolean;
   message?: string;
   id?: string;
+  stockPartId?: string;
 };
+
+async function failPurchasesAction(
+  error: unknown,
+): Promise<PurchasesActionState> {
+  const message = await translateError(error);
+  if (
+    error instanceof AppError &&
+    error.code === "inventory.insufficient_stock"
+  ) {
+    const stockPartId = String(error.params?.partId ?? "").trim();
+    return {
+      ok: false,
+      message,
+      ...(stockPartId ? { stockPartId } : {}),
+    };
+  }
+  return { ok: false, message };
+}
 
 export async function createPartsRequestModalAction(
   _prev: PurchasesActionState,
@@ -228,6 +248,6 @@ export async function createPurchaseReturnModalAction(
     revalidatePath(`/vendors/${row.vendorId}`);
     return { ok: true, message: t("created"), id: row.id };
   } catch (error) {
-    return { ok: false, message: await translateError(error) };
+    return failPurchasesAction(error);
   }
 }

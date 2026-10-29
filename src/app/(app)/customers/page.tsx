@@ -1,9 +1,11 @@
 import { Suspense } from "react";
+import { redirect } from "next/navigation";
 import { Users } from "lucide-react";
 import { getTranslations } from "next-intl/server";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
 import { TableSpinner } from "@/components/shared/page-spinner";
+import { homePathForRole } from "@/lib/rbac";
 import { requireSession } from "@/lib/session";
 import { CreateCustomerModal } from "@/modules/customers/components/create-customer-modal";
 import { CustomersTable } from "@/modules/customers/components/customers-table";
@@ -23,6 +25,9 @@ export const instant = false;
 
 export default async function CustomersPage({ searchParams }: Props) {
   const session = await requireSession();
+  if (session.role === "TECHNICIAN") {
+    redirect(homePathForRole(session.role));
+  }
   const params = await searchParams;
   const t = await getTranslations("customers");
   const result = await listCustomers(session, {
@@ -32,10 +37,8 @@ export default async function CustomersPage({ searchParams }: Props) {
     pageSize: params.pageSize,
   });
   const canWrite =
-    session.role === "OWNER" ||
-    session.role === "MANAGER" ||
-    session.role === "TECHNICIAN";
-  const canImport = session.role === "OWNER" || session.role === "MANAGER";
+    session.role === "OWNER" || session.role === "MANAGER";
+  const canImport = canWrite;
   const hasQuery = Boolean(params.q?.trim());
 
   return (

@@ -183,6 +183,8 @@ export async function loadLiveOrderSnapshot(
       select: {
         id: true,
         revisionNumber: true,
+        askPermission: true,
+        permissionVia: true,
         lines: {
           select: {
             id: true,
@@ -245,11 +247,14 @@ export async function findEstimateLineForLive(
       id: true,
       estimateId: true,
       approvalState: true,
+      description: true,
       estimate: {
         select: {
           id: true,
           serviceOrderId: true,
           supersededAt: true,
+          askPermission: true,
+          permissionVia: true,
         },
       },
     },
@@ -267,7 +272,12 @@ export async function recordOnlineLineApproval(
   },
 ): Promise<
   | { ok: true; approval: { id: string } }
-  | { ok: false; reason: "CONFLICT" | "INSUFFICIENT_STOCK" | "PART_NOT_FOUND" }
+  | {
+      ok: false;
+      reason: "CONFLICT" | "INSUFFICIENT_STOCK" | "PART_NOT_FOUND";
+      partName?: string;
+      partId?: string;
+    }
 > {
   try {
     const approval = await prisma.$transaction(async (tx) => {
@@ -372,7 +382,12 @@ export async function recordOnlineLineApproval(
     return { ok: true, approval: { id: approval.id } };
   } catch (error) {
     if (error instanceof EstimateStockTxError) {
-      return { ok: false, reason: error.reason };
+      return {
+        ok: false,
+        reason: error.reason,
+        partName: error.partName,
+        partId: error.partId,
+      };
     }
     throw error;
   }

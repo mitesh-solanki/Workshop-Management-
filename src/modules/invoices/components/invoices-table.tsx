@@ -1,10 +1,12 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useTransition } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import { FileText } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { DataTable, type ColumnDef } from "@/components/ui/data-table";
+import { ListFiltersResetButton } from "@/components/ui/list-filters-reset-button";
 import { formatRupees } from "@/lib/money";
 import { InvoiceRowActions } from "@/modules/invoices/components/invoice-row-actions";
 import { InvoiceSearch } from "@/modules/invoices/components/invoice-search";
@@ -48,7 +50,16 @@ export function InvoicesTable({
   empty,
 }: InvoicesTableProps) {
   const t = useTranslations("invoices");
+  const tc = useTranslations("common");
   const locale = useLocale();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const [pending, startTransition] = useTransition();
+  const filtersActive =
+    Boolean(searchParams.get("q")?.trim()) ||
+    Boolean(searchParams.get("status")) ||
+    (searchParams.get("sort") != null &&
+      searchParams.get("sort") !== "newest");
 
   const dateFmt = useMemo(
     () =>
@@ -161,6 +172,15 @@ export function InvoicesTable({
           <div className="flex flex-wrap items-center justify-end gap-2">
             <InvoiceStatusFilter />
             <InvoiceSortMenu />
+            <ListFiltersResetButton
+              label={tc("resetFilters")}
+              disabled={!filtersActive || pending}
+              onReset={() => {
+                startTransition(() => {
+                  router.replace("/invoices");
+                });
+              }}
+            />
           </div>
         </div>
       }

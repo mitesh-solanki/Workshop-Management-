@@ -12,6 +12,7 @@ import { FormField } from "@/components/ui/form-field";
 import { FormSelect } from "@/components/ui/form-select";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { cn } from "@/lib/utils";
+import { BaySearchSelect } from "@/modules/bays/components/bay-search-select";
 import {
   BOARD_STATUSES,
   canTransitionStatus,
@@ -25,6 +26,7 @@ export type BoardOrder = {
   id: string;
   status: ServiceOrderStatusValue;
   priority: ServiceOrderPriorityValue;
+  createdAt: Date | string;
   expectedCompletion: Date | string | null;
   bay: string | null;
   vehicle: { registrationNumber: string };
@@ -216,10 +218,12 @@ export function WorkshopBoard({
     });
   }
 
+  const showFilters = canFilterTechnicians || bays.length > 0;
+
   return (
-    <div className="space-y-3">
-      {(canFilterTechnicians || bays.length > 0) && (
-        <div className="flex flex-row flex-wrap items-center justify-end gap-2.5 rounded-xl border border-slate-200 bg-card px-3 py-2.5 sm:gap-3">
+    <div className="overflow-hidden rounded-xl border border-slate-200 bg-card">
+      {showFilters ? (
+        <div className="flex flex-row flex-wrap items-center gap-2.5 border-b border-slate-300 px-3 py-3 sm:gap-3">
           {canFilterTechnicians ? (
             <FormSelect
               id="board-technician"
@@ -240,117 +244,117 @@ export function WorkshopBoard({
           ) : null}
 
           {bays.length > 0 ? (
-            <FormSelect
+            <BaySearchSelect
               id="board-bay"
               value={selectedBayId}
-              onValueChange={(bayId) => pushFilters({ bayId })}
-              options={[
-                { value: "", label: t("filterAllBays") },
-                ...bays.map((bay) => ({
-                  value: bay.id,
-                  label: bay.name,
-                })),
-              ]}
-              className={boardFilterSelectClass}
-              triggerClassName={boardSelectTriggerClass}
+              onChange={(bayId) => pushFilters({ bayId })}
+              bays={bays}
+              valueKey="id"
+              emptyOptionLabel={t("filterAllBays")}
+              className={cn(boardFilterSelectClass, boardSelectTriggerClass)}
+              placeholder={t("filterAllBays")}
+              searchPlaceholder={to("baySearchPlaceholder")}
+              emptyLabel={to("bayEmptyOptions")}
             />
           ) : null}
         </div>
-      )}
-
-      {error ? (
-        <p className="text-sm text-danger" role="status">
-          {error}
-        </p>
-      ) : null}
-      {pending ? (
-        <p className="text-sm text-slate-600" role="status">
-          {t("moving")}
-        </p>
       ) : null}
 
-      {orders.length === 0 ? (
-        <EmptyState
-          icon={ClipboardList}
-          title={t("emptyTitle")}
-          description={t("empty")}
-          action={
-            <Button asChild variant="secondary" size="md">
-              <Link href="/orders">{to("title")}</Link>
-            </Button>
-          }
-        />
-      ) : (
-        <>
-          <div className="space-y-3 lg:hidden">
-            <FormField id="board-column" label={t("columnSwitcher")}>
-              <FormSelect
-                id="board-column"
-                value={mobileStatus}
-                onValueChange={(value) =>
-                  setMobileStatus(value as ServiceOrderStatusValue)
-                }
-                options={BOARD_STATUSES.map((status) => ({
-                  value: status,
-                  label: `${to(`statuses.${status}`)} (${byStatus[status].length})`,
-                }))}
-                triggerClassName={boardSelectTriggerClass}
-              />
-            </FormField>
-            <BoardColumn
-              status={mobileStatus}
-              orders={byStatus[mobileStatus]}
-              canMutate={canMutate}
-              draggingId={draggingId}
-              isDropTarget={false}
-              canAcceptOrder={() => false}
-              getDraggingId={() => draggingIdRef.current}
-              onDragStart={beginDrag}
-              onDragEnd={clearDrag}
-              onDropStatus={() => undefined}
-              onMove={moveOrder}
-              showMoveButtons
-            />
-          </div>
+      <div className="space-y-3 p-3 pb-5 sm:p-4 sm:pb-6">
+        {error ? (
+          <p className="text-sm text-danger" role="status">
+            {error}
+          </p>
+        ) : null}
+        {pending ? (
+          <p className="text-sm text-slate-600" role="status">
+            {t("moving")}
+          </p>
+        ) : null}
 
-          <div className="hidden min-w-0 gap-2 lg:grid lg:grid-cols-3 xl:grid-cols-6">
-            {BOARD_STATUSES.map((status) => {
-              const acceptDrop = Boolean(
-                draggingOrder &&
-                  canTransitionStatus(draggingOrder.status, status),
-              );
-              return (
-                <BoardColumn
-                  key={status}
-                  status={status}
-                  orders={byStatus[status]}
-                  canMutate={canMutate}
-                  draggingId={draggingId}
-                  isDropTarget={dropTarget === status && acceptDrop}
-                  canAcceptOrder={(orderId) => {
-                    const order = orders.find((item) => item.id === orderId);
-                    return Boolean(
-                      order && canTransitionStatus(order.status, status),
-                    );
-                  }}
-                  getDraggingId={() => draggingIdRef.current}
-                  onDragStart={beginDrag}
-                  onDragEnd={clearDrag}
-                  onDropStatus={(orderId) => moveOrder(orderId, status)}
-                  onDragOverColumn={() => setDropTarget(status)}
-                  onDragLeaveColumn={() =>
-                    setDropTarget((current) =>
-                      current === status ? null : current,
-                    )
+        {orders.length === 0 ? (
+          <EmptyState
+            icon={ClipboardList}
+            title={t("emptyTitle")}
+            description={t("empty")}
+            action={
+              <Button asChild variant="secondary" size="md">
+                <Link href="/orders">{to("title")}</Link>
+              </Button>
+            }
+          />
+        ) : (
+          <>
+            <div className="space-y-3 lg:hidden">
+              <FormField id="board-column" label={t("columnSwitcher")}>
+                <FormSelect
+                  id="board-column"
+                  value={mobileStatus}
+                  onValueChange={(value) =>
+                    setMobileStatus(value as ServiceOrderStatusValue)
                   }
-                  onMove={moveOrder}
-                  showMoveButtons={false}
+                  options={BOARD_STATUSES.map((status) => ({
+                    value: status,
+                    label: `${to(`statuses.${status}`)} (${byStatus[status].length})`,
+                  }))}
+                  triggerClassName={boardSelectTriggerClass}
                 />
-              );
-            })}
-          </div>
-        </>
-      )}
+              </FormField>
+              <BoardColumn
+                status={mobileStatus}
+                orders={byStatus[mobileStatus]}
+                canMutate={canMutate}
+                draggingId={draggingId}
+                isDropTarget={false}
+                canAcceptOrder={() => false}
+                getDraggingId={() => draggingIdRef.current}
+                onDragStart={beginDrag}
+                onDragEnd={clearDrag}
+                onDropStatus={() => undefined}
+                onMove={moveOrder}
+                showMoveButtons
+              />
+            </div>
+
+            <div className="hidden min-w-0 gap-2 lg:grid lg:grid-cols-3 xl:grid-cols-6">
+              {BOARD_STATUSES.map((status) => {
+                const acceptDrop = Boolean(
+                  draggingOrder &&
+                    canTransitionStatus(draggingOrder.status, status),
+                );
+                return (
+                  <BoardColumn
+                    key={status}
+                    status={status}
+                    orders={byStatus[status]}
+                    canMutate={canMutate}
+                    draggingId={draggingId}
+                    isDropTarget={dropTarget === status && acceptDrop}
+                    canAcceptOrder={(orderId) => {
+                      const order = orders.find((item) => item.id === orderId);
+                      return Boolean(
+                        order && canTransitionStatus(order.status, status),
+                      );
+                    }}
+                    getDraggingId={() => draggingIdRef.current}
+                    onDragStart={beginDrag}
+                    onDragEnd={clearDrag}
+                    onDropStatus={(orderId) => moveOrder(orderId, status)}
+                    onDragOverColumn={() => setDropTarget(status)}
+                    onDragLeaveColumn={() =>
+                      setDropTarget((current) =>
+                        current === status ? null : current,
+                      )
+                    }
+                    onMove={moveOrder}
+                    showMoveButtons={false}
+                  />
+                );
+              })}
+            </div>
+          </>
+        )}
+      </div>
     </div>
   );
 }
@@ -541,6 +545,9 @@ function BoardCard({
             ? techLabel(order.technician)
             : to("technicianUnassigned")
         }`}
+      </p>
+      <p className="mt-0.5 truncate text-caption text-slate-500">
+        {`${t("createdLabel")}: ${formatDue(order.createdAt, t("dueNone"))}`}
       </p>
       <p
         className={cn(

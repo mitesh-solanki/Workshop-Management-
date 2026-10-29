@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useId, useRef, useState } from "react";
+import { useActionState, useEffect, useId, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -51,6 +51,12 @@ type Props =
   | { mode: "create" }
   | { mode: "edit"; part: PartPageFormValues };
 
+function vendorQtyTotal(lines: ShopReceiveLine[]) {
+  return lines
+    .filter((line) => line.vendorId.trim())
+    .reduce((sum, line) => sum + Math.max(0, line.quantity), 0);
+}
+
 export function PartPageForm(props: Props) {
   const t = useTranslations("inventory");
   const tvb = useTranslations("vendorBills");
@@ -65,19 +71,20 @@ export function PartPageForm(props: Props) {
   const [state, formAction, pending] = useActionState(boundSave, initial);
   const handled = useRef<string | null>(null);
   const [shopLines, setShopLines] = useState(createEmptyShopReceiveLines);
-  const [vendorErrorKeys, setVendorErrorKeys] = useState<string[]>([]);
+  const [manualStock, setManualStock] = useState(0);
   const [uploading, setUploading] = useState(false);
   const pendingFilesRef = useRef<Array<File | null>>([]);
+
+  const vendorStockQty = useMemo(() => vendorQtyTotal(shopLines), [shopLines]);
+  const stockFromVendors = vendorStockQty > 0;
 
   function handleShopLinesChange(lines: ShopReceiveLine[]) {
     setShopLines(lines);
     pendingFilesRef.current = shopReceiveFilesForUpload(lines);
-    setVendorErrorKeys((prev) =>
-      prev.filter((key) => {
-        const line = lines.find((row) => row.key === key);
-        return line ? !line.vendorId.trim() : false;
-      }),
-    );
+    const nextVendorQty = vendorQtyTotal(lines);
+    if (nextVendorQty > 0) {
+      setManualStock(nextVendorQty);
+    }
   }
 
   useEffect(() => {
@@ -94,7 +101,8 @@ export function PartPageForm(props: Props) {
       state.vendorBillIds ?? (state.vendorBillId ? [state.vendorBillId] : []);
     const files = pendingFilesRef.current;
 
-    let cancelled = false;
+    // Do not cancel on effect cleanup — Strict Mode remount would skip the
+    // bill upload and leave "No file" on Bought From.
     void (async () => {
       const pairs = billIds
         .map((vendorBillId, index) => ({
@@ -116,34 +124,33 @@ export function PartPageForm(props: Props) {
               uploadFailedMessage: tvb("uploadFailed"),
             });
           }
-          if (!cancelled) toast.success(state.message);
+          toast.success(state.message);
         } catch (err) {
           const reason =
             err instanceof Error ? err.message : tvb("uploadFailed");
-          if (!cancelled) {
-            toast.error(t("shopReceiveUploadFailed", { reason }));
-          }
+          toast.error(t("shopReceiveUploadFailed", { reason }));
         } finally {
-          if (!cancelled) setUploading(false);
+          setUploading(false);
         }
-      } else if (!cancelled) {
+      } else {
         toast.success(state.message);
       }
 
-      if (cancelled) return;
       pendingFilesRef.current = [];
+      setShopLines(createEmptyShopReceiveLines());
+      setManualStock(0);
       router.push(`/inventory/${partId}`);
       router.refresh();
     })();
-
-    return () => {
-      cancelled = true;
-    };
   }, [state, router, t, tvb]);
 
   const busy = pending || uploading;
   const cancelHref = isEdit ? `/inventory/${part!.id}` : "/inventory";
   const idPrefix = isEdit ? `edit-part-${part!.id}` : "new-part";
+  const displayUnit = part?.unit ?? "pcs";
+  const afterSaveStock = isEdit
+    ? part!.quantityOnHand + vendorStockQty
+    : vendorStockQty;
 
   return (
     <div className="space-y-6 pb-24 lg:pb-28">
@@ -151,21 +158,6 @@ export function PartPageForm(props: Props) {
         id={formId}
         action={formAction}
         className="grid gap-6 rounded-xl border border-border bg-card p-4 shadow-xs sm:p-6 lg:grid-cols-3"
-        onSubmit={(event) => {
-          if (isEdit) {
-            setVendorErrorKeys([]);
-            return;
-          }
-          const missing = shopLines
-            .filter((line) => !line.vendorId.trim())
-            .map((line) => line.key);
-          if (missing.length > 0) {
-            event.preventDefault();
-            setVendorErrorKeys(missing);
-            return;
-          }
-          setVendorErrorKeys([]);
-        }}
       >
         <div className="lg:col-span-3">
           <NameSkuFields
@@ -243,6 +235,14 @@ export function PartPageForm(props: Props) {
           <FormField
             id={`${idPrefix}-current-stock`}
             label={t("openingStock")}
+            hint={
+              vendorStockQty > 0
+                ? t("stockAfterReceive", {
+                    count: afterSaveStock,
+                    unit: displayUnit,
+                  })
+                : undefined
+            }
           >
             <Input
               id={`${idPrefix}-current-stock`}
@@ -254,8 +254,31 @@ export function PartPageForm(props: Props) {
               className="h-11 min-h-11"
             />
           </FormField>
+        ) : stockFromVendors ? (
+          <>
+            <input type="hidden" name="openingStock" value="0" />
+            <QuantityStepper
+              key={`auto-stock-${vendorStockQty}`}
+              id={`${idPrefix}-openingStock`}
+              name="openingStockDisplay"
+              label={t("openingStock")}
+              defaultValue={vendorStockQty}
+              min={0}
+              disabled
+              hint={t("openingStockFromVendorsHint")}
+            />
+          </>
         ) : (
-          <input type="hidden" name="openingStock" value="0" />
+          <QuantityStepper
+            key="manual-stock"
+            id={`${idPrefix}-openingStock`}
+            name="openingStock"
+            label={t("openingStock")}
+            defaultValue={manualStock}
+            min={0}
+            hint={t("openingStockHint")}
+            onValueChange={setManualStock}
+          />
         )}
 
         <div className="lg:col-span-3">
@@ -264,7 +287,6 @@ export function PartPageForm(props: Props) {
             disabled={busy}
             lines={shopLines}
             onLinesChange={handleShopLinesChange}
-            vendorErrorKeys={vendorErrorKeys}
           />
         </div>
       </form>

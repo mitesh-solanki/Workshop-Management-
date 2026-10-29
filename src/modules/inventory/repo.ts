@@ -39,16 +39,6 @@ const movementSelect = {
   createdAt: true,
 } as const;
 
-export async function findGarageStockSettings(
-  garageId: string,
-  db: DbClient = prisma,
-) {
-  return db.garage.findFirst({
-    where: { id: garageId },
-    select: { id: true, allowNegativeStock: true },
-  });
-}
-
 function partOrderBy(
   sort: "newest" | "oldest" | "updated" | "name_asc" | "name_desc",
 ) {
@@ -374,17 +364,18 @@ export async function lockPartAndGetStock(
   tx: Prisma.TransactionClient,
   garageId: string,
   partId: string,
-): Promise<{ partId: string; quantityOnHand: number } | null> {
-  const locked = await tx.$queryRaw<Array<{ id: string }>>`
-    SELECT id FROM "Part"
+): Promise<{ partId: string; name: string; quantityOnHand: number } | null> {
+  const locked = await tx.$queryRaw<Array<{ id: string; name: string }>>`
+    SELECT id, name FROM "Part"
     WHERE id = ${partId} AND "garageId" = ${garageId}
     FOR UPDATE
   `;
   if (locked.length === 0) {
     return null;
   }
+  const row = locked[0]!;
   const quantityOnHand = await getPartStock(garageId, partId, tx);
-  return { partId, quantityOnHand };
+  return { partId, name: row.name, quantityOnHand };
 }
 
 export async function listLowStockParts(garageId: string) {
@@ -628,7 +619,13 @@ export type StockMutationResult =
       };
       resultingStock: number;
     }
-  | { ok: false; reason: "PART_NOT_FOUND" | "INSUFFICIENT_STOCK"; resultingStock?: number };
+  | {
+      ok: false;
+      reason: "PART_NOT_FOUND" | "INSUFFICIENT_STOCK";
+      resultingStock?: number;
+      partName?: string;
+      partId?: string;
+    };
 
 /**
  * Append a stock movement under a Part row lock. Rejects negative resulting
@@ -659,9 +656,6 @@ export async function applyStockMovement(
       return { ok: false, reason: "PART_NOT_FOUND" };
     }
 
-    const garage = await findGarageStockSettings(garageId, tx);
-    const allowNegativeStock = garage?.allowNegativeStock ?? false;
-
     const quantityChange =
       data.type === "ADJUSTMENT"
         ? data.quantity
@@ -670,13 +664,14 @@ export async function applyStockMovement(
     const check = assertStockChangeAllowed({
       currentStock: locked.quantityOnHand,
       quantityChange,
-      allowNegativeStock,
     });
     if (!check.ok) {
       return {
         ok: false,
         reason: "INSUFFICIENT_STOCK",
         resultingStock: check.resultingStock,
+        partName: locked.name,
+        partId: locked.partId,
       };
     }
 
@@ -743,6 +738,7 @@ export class DirectSaleTxError extends Error {
     | "CUSTOMER_NOT_FOUND"
     | "SALE_NOT_FOUND";
   readonly partId?: string;
+  readonly partName?: string;
 
   constructor(
     reason:
@@ -751,11 +747,13 @@ export class DirectSaleTxError extends Error {
       | "CUSTOMER_NOT_FOUND"
       | "SALE_NOT_FOUND",
     partId?: string,
+    partName?: string,
   ) {
     super(reason);
     this.name = "DirectSaleTxError";
     this.reason = reason;
     this.partId = partId;
+    this.partName = partName;
   }
 }
 
@@ -804,6 +802,7 @@ export async function createDirectSale(
           where: { id: lineInput.partId, garageId },
           select: {
             id: true,
+            name: true,
             gstRatePercent: true,
             hsn: true,
             sellingPricePaise: true,
@@ -842,7 +841,11 @@ export async function createDirectSale(
         );
 
         if (!stock.ok) {
-          throw new DirectSaleTxError(stock.reason, part.id);
+          throw new DirectSaleTxError(
+            stock.reason,
+            part.id,
+            stock.partName ?? part.name,
+          );
         }
       }
 
@@ -927,7 +930,11 @@ export async function updateDirectSale(
         tx,
       );
       if (!stock.ok) {
-        throw new DirectSaleTxError(stock.reason, line.partId);
+        throw new DirectSaleTxError(
+          stock.reason,
+          line.partId,
+          stock.partName,
+        );
       }
     }
 
@@ -948,7 +955,7 @@ export async function updateDirectSale(
       const lineInput = data.lines[i]!;
       const part = await tx.part.findFirst({
         where: { id: lineInput.partId, garageId },
-        select: { id: true },
+        select: { id: true, name: true },
       });
       if (!part) {
         throw new DirectSaleTxError("PART_NOT_FOUND", lineInput.partId);
@@ -982,7 +989,11 @@ export async function updateDirectSale(
         tx,
       );
       if (!stock.ok) {
-        throw new DirectSaleTxError(stock.reason, part.id);
+        throw new DirectSaleTxError(
+          stock.reason,
+          part.id,
+          stock.partName ?? part.name,
+        );
       }
     }
 
@@ -1039,7 +1050,11 @@ export async function deleteDirectSale(
         tx,
       );
       if (!stock.ok) {
-        throw new DirectSaleTxError(stock.reason, line.partId);
+        throw new DirectSaleTxError(
+          stock.reason,
+          line.partId,
+          stock.partName,
+        );
       }
     }
 

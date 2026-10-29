@@ -3,21 +3,17 @@ import { ForbiddenError } from "@/lib/errors";
 import { requireRole, type RoleSession } from "@/lib/rbac";
 
 vi.mock("@/lib/audit", () => ({
-  writeAuditLog: vi.fn().mockResolvedValue(undefined),
-}));
+  writeAuditLog: vi.fn().mockResolvedValue(undefined) }));
 
 vi.mock("@/lib/otp", () => ({
-  hashToken: vi.fn((token: string) => `hash:${token}`),
-}));
+  hashToken: vi.fn((token: string) => `hash:${token}`) }));
 
 vi.mock("@/modules/auth/repo", () => ({
-  findUserByEmailForLogin: vi.fn(),
-}));
+  findUserByEmailForLogin: vi.fn() }));
 
 vi.mock("@/modules/settings/repo", () => ({
   findGarageById: vi.fn(),
-  updateGarageById: vi.fn(),
-}));
+  updateGarageById: vi.fn() }));
 
 vi.mock("@/modules/team/repo", () => ({
   findUserInGarage: vi.fn(),
@@ -28,21 +24,18 @@ vi.mock("@/modules/team/repo", () => ({
   refreshInviteToken: vi.fn(),
   deleteInviteInGarage: vi.fn(),
   updateUserRoleInGarage: vi.fn(),
-  deleteUserInGarage: vi.fn(),
-}));
+  deleteUserInGarage: vi.fn() }));
 
 import { writeAuditLog } from "@/lib/audit";
 import {
   findGarageById,
-  updateGarageById,
-} from "@/modules/settings/repo";
+  updateGarageById } from "@/modules/settings/repo";
 import { findUserInGarage } from "@/modules/team/repo";
 import {
   getGarageSettings,
   getGarageSettingsForGarageId,
   updateGarageSettings,
-  updateGarageSettingsForGarageId,
-} from "@/modules/settings/service";
+  updateGarageSettingsForGarageId } from "@/modules/settings/service";
 import { getTeamMemberForGarage } from "@/modules/team/service";
 
 const garageA = "garage-a";
@@ -53,16 +46,14 @@ const ownerA: RoleSession & { email: string; name: string } = {
   garageId: garageA,
   role: "OWNER",
   email: "owner-a@example.com",
-  name: "Owner A",
-};
+  name: "Owner A" };
 
 const ownerB: RoleSession & { email: string; name: string } = {
   userId: "user-b",
   garageId: garageB,
   role: "OWNER",
   email: "owner-b@example.com",
-  name: "Owner B",
-};
+  name: "Owner B" };
 
 describe("garage isolation", () => {
   beforeEach(() => {
@@ -75,9 +66,7 @@ describe("garage isolation", () => {
       name: "Alpha Motors",
       address: null,
       gstin: null,
-      allowNegativeStock: false,
-      updatedAt: new Date(),
-    });
+      updatedAt: new Date() });
 
     const garage = await getGarageSettings(ownerA);
 
@@ -100,17 +89,13 @@ describe("garage isolation", () => {
       name: "Alpha Updated",
       address: "Ring Road",
       gstin: "24AAAAA0000A1Z5",
-      allowNegativeStock: false,
-      updatedAt: new Date(),
-    });
+      updatedAt: new Date() });
 
     await expect(
       updateGarageSettingsForGarageId(ownerA, garageB, {
         name: "Hacked Name",
         address: "Elsewhere",
-        gstin: "24AAAAA0000A1Z5",
-        allowNegativeStock: false,
-      }),
+        gstin: "24AAAAA0000A1Z5" }),
     ).rejects.toBeInstanceOf(ForbiddenError);
 
     expect(updateGarageById).not.toHaveBeenCalled();
@@ -123,23 +108,17 @@ describe("garage isolation", () => {
       name: "Alpha Updated",
       address: "Ring Road",
       gstin: "24AAAAA0000A1Z5",
-      allowNegativeStock: true,
-      updatedAt: new Date(),
-    });
+      updatedAt: new Date() });
 
     const updated = await updateGarageSettings(ownerA, {
       name: "Alpha Updated",
       address: "Ring Road",
-      gstin: "24AAAAA0000A1Z5",
-      allowNegativeStock: true,
-    });
+      gstin: "24AAAAA0000A1Z5" });
 
     expect(updateGarageById).toHaveBeenCalledWith(garageA, {
       name: "Alpha Updated",
       address: "Ring Road",
-      gstin: "24AAAAA0000A1Z5",
-      allowNegativeStock: true,
-    });
+      gstin: "24AAAAA0000A1Z5" });
     expect(updateGarageById).not.toHaveBeenCalledWith(
       garageB,
       expect.anything(),
@@ -164,8 +143,7 @@ describe("garage isolation", () => {
       email: "tech@example.com",
       name: "Tech",
       role: "TECHNICIAN",
-      garageId: garageA,
-    });
+      garageId: garageA });
 
     const member = await getTeamMemberForGarage(ownerA, garageA, "tech-a");
 
@@ -182,8 +160,7 @@ describe("requireRole", () => {
   it("blocks roles outside the allow-list", () => {
     const technician = {
       ...ownerA,
-      role: "TECHNICIAN" as const,
-    };
+      role: "TECHNICIAN" as const };
     expect(() => requireRole(technician, ["OWNER"])).toThrow(ForbiddenError);
   });
 });

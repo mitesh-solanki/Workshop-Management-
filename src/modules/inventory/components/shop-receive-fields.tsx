@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
-import { ChevronDown, ImageIcon, Plus, Trash2, Upload, X } from "lucide-react";
+import { FileText, Plus, Trash2, Upload, X } from "lucide-react";
 import {
   createVendorModalAction,
   getVendorOptionsAction,
@@ -11,6 +11,14 @@ import { Button } from "@/components/ui/button";
 import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
 import { SearchableSelect } from "@/components/ui/searchable-select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/toast";
 import {
@@ -21,6 +29,8 @@ import {
 } from "@/lib/contact";
 import { cn } from "@/lib/utils";
 import { QuantityStepper } from "@/modules/inventory/components/quantity-stepper";
+import { shopReceiveFilesForUpload as filesForUpload } from "@/modules/inventory/shop-receive";
+import { CreateVendorModal } from "@/modules/vendors/components/create-vendor-modal";
 
 export type ShopReceiveVendor = { id: string; name: string };
 
@@ -56,6 +66,12 @@ type Props = {
   onLinesChange: (lines: ShopReceiveLine[]) => void;
   /** Line keys that need a vendor — red error under the vendor field. */
   vendorErrorKeys?: string[];
+  /**
+   * How to create a vendor not yet in the list.
+   * Use `inline` inside an already-open dialog (no nested modal).
+   * Use `modal` on full inventory pages.
+   */
+  vendorCreateMode?: "inline" | "modal";
 };
 
 function newLine(): ShopReceiveLine {
@@ -67,36 +83,75 @@ function newLine(): ShopReceiveLine {
   };
 }
 
+/** Keep the target above the fixed FormActionBar (and similar sticky footers). */
+function scrollIntoViewClearOfStickyFooter(el: HTMLElement) {
+  const bar = document.querySelector("[data-slot='form-action-bar']");
+  const barHeight =
+    bar instanceof HTMLElement ? bar.getBoundingClientRect().height : 0;
+  const gap = 16;
+  const rect = el.getBoundingClientRect();
+  const viewportBottom = window.innerHeight - barHeight - gap;
+  if (rect.bottom > viewportBottom) {
+    window.scrollBy({
+      top: rect.bottom - viewportBottom,
+      behavior: "smooth",
+    });
+    return;
+  }
+  if (rect.top < gap) {
+    window.scrollBy({ top: rect.top - gap, behavior: "smooth" });
+  }
+}
+
 export function ShopReceiveFields({
   idPrefix,
   disabled = false,
   lines,
   onLinesChange,
   vendorErrorKeys = [],
+  vendorCreateMode = "modal",
 }: Props) {
   const t = useTranslations("inventory");
   const tv = useTranslations("vendors");
   const te = useTranslations("errors");
+  const inlineVendorCreate = vendorCreateMode === "inline";
   const [vendors, setVendors] = useState<ShopReceiveVendor[]>([]);
   const [vendorQueries, setVendorQueries] = useState<Record<string, string>>(
     {},
   );
   const [addingVendor, setAddingVendor] = useState(false);
+  const [vendorModalOpen, setVendorModalOpen] = useState(false);
+  const [vendorInitialName, setVendorInitialName] = useState("");
   const [vendorDraft, setVendorDraft] = useState<VendorDraft>(EMPTY_VENDOR);
   const [vendorFieldErrors, setVendorFieldErrors] = useState<
     Record<string, string>
   >({});
+  const [createForLineKey, setCreateForLineKey] = useState<string | null>(null);
+  const [highlightedLineKey, setHighlightedLineKey] = useState<string | null>(
+    null,
+  );
   const [previewUrls, setPreviewUrls] = useState<Record<string, string>>({});
   const [pendingVendor, startVendorTransition] = useTransition();
-  const [expandedByKey, setExpandedByKey] = useState<Record<string, boolean>>(
-    () =>
-      Object.fromEntries(lines.map((line) => [line.key, true] as const)),
-  );
   const linesRef = useRef(lines);
   linesRef.current = lines;
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const previewUrlsRef = useRef<Record<string, string>>({});
+  const rowRefs = useRef<Record<string, HTMLElement | null>>({});
   const newVendorPanelRef = useRef<HTMLDivElement | null>(null);
+  const highlightClearTimerRef = useRef<number | null>(null);
+
+  function flashHighlight(lineKey: string) {
+    if (highlightClearTimerRef.current != null) {
+      window.clearTimeout(highlightClearTimerRef.current);
+    }
+    setHighlightedLineKey(lineKey);
+    highlightClearTimerRef.current = window.setTimeout(() => {
+      setHighlightedLineKey((current) =>
+        current === lineKey ? null : current,
+      );
+      highlightClearTimerRef.current = null;
+    }, 2500);
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -109,22 +164,14 @@ export function ShopReceiveFields({
   }, []);
 
   useEffect(() => {
-    if (vendorErrorKeys.length === 0) return;
-    setExpandedByKey((prev) => {
-      const next = { ...prev };
-      for (const key of vendorErrorKeys) {
-        next[key] = true;
-      }
-      return next;
-    });
-  }, [vendorErrorKeys]);
-
-  useEffect(() => {
     return () => {
       for (const url of Object.values(previewUrlsRef.current)) {
         URL.revokeObjectURL(url);
       }
       previewUrlsRef.current = {};
+      if (highlightClearTimerRef.current != null) {
+        window.clearTimeout(highlightClearTimerRef.current);
+      }
     };
   }, []);
 
@@ -157,35 +204,10 @@ export function ShopReceiveFields({
   }, [lines]);
 
   useEffect(() => {
-    setExpandedByKey((prev) => {
-      const next: Record<string, boolean> = {};
-      let changed = false;
-      for (const line of lines) {
-        if (prev[line.key] === undefined) {
-          next[line.key] = true;
-          changed = true;
-        } else {
-          next[line.key] = prev[line.key]!;
-        }
-      }
-      for (const key of Object.keys(prev)) {
-        if (!(key in next)) changed = true;
-      }
-      if (!changed && Object.keys(prev).length === Object.keys(next).length) {
-        return prev;
-      }
-      return next;
-    });
-  }, [lines]);
-
-  useEffect(() => {
-    if (!addingVendor) return;
+    if (!inlineVendorCreate || !addingVendor) return;
     const scrollIn = () => {
-      newVendorPanelRef.current?.scrollIntoView({
-        behavior: "smooth",
-        block: "start",
-        inline: "nearest",
-      });
+      const panel = newVendorPanelRef.current;
+      if (panel) scrollIntoViewClearOfStickyFooter(panel);
     };
     const early = window.setTimeout(scrollIn, 40);
     const afterOpen = window.setTimeout(scrollIn, 320);
@@ -197,7 +219,18 @@ export function ShopReceiveFields({
       window.clearTimeout(afterOpen);
       window.clearTimeout(focusName);
     };
-  }, [addingVendor, idPrefix]);
+  }, [addingVendor, idPrefix, inlineVendorCreate]);
+
+  useEffect(() => {
+    if (vendorErrorKeys.length === 0) return;
+    const firstKey = vendorErrorKeys[0];
+    if (!firstKey) return;
+    window.setTimeout(() => {
+      const row = rowRefs.current[firstKey];
+      if (row) scrollIntoViewClearOfStickyFooter(row);
+      document.getElementById(`${idPrefix}-vendor-${firstKey}`)?.focus();
+    }, 50);
+  }, [vendorErrorKeys, idPrefix]);
 
   const busy = disabled || pendingVendor;
 
@@ -207,60 +240,67 @@ export function ShopReceiveFields({
         line.key === key ? { ...line, ...patch } : line,
       ),
     );
-    setExpandedByKey((prev) =>
-      prev[key] ? prev : { ...prev, [key]: true },
-    );
+    if (patch.vendorId !== undefined && key === highlightedLineKey) {
+      setHighlightedLineKey(null);
+    }
   }
 
   function addLine() {
     const line = newLine();
     onLinesChange([...linesRef.current, line]);
-    setExpandedByKey((prev) => ({ ...prev, [line.key]: true }));
+    flashHighlight(line.key);
     setAddingVendor(false);
-  }
-
-  function toggleExpanded(key: string) {
-    setExpandedByKey((prev) => {
-      const currentlyOpen = prev[key] !== false;
-      return { ...prev, [key]: !currentlyOpen };
-    });
+    window.setTimeout(() => {
+      const row = rowRefs.current[line.key];
+      if (row) scrollIntoViewClearOfStickyFooter(row);
+      document.getElementById(`${idPrefix}-vendor-${line.key}`)?.focus();
+    }, 80);
   }
 
   function removeLine(key: string) {
     if (linesRef.current.length <= 1) {
       const reset = newLine();
       onLinesChange([reset]);
-      setExpandedByKey({ [reset.key]: true });
+      flashHighlight(reset.key);
       return;
     }
     onLinesChange(linesRef.current.filter((line) => line.key !== key));
-    setExpandedByKey((prev) => {
-      if (!(key in prev)) return prev;
-      const next = { ...prev };
-      delete next[key];
-      return next;
-    });
+    if (highlightedLineKey === key) setHighlightedLineKey(null);
+    if (createForLineKey === key) {
+      setCreateForLineKey(null);
+    }
   }
 
-  function optionsForLine(line: ShopReceiveLine) {
-    const q = (vendorQueries[line.key] ?? "").trim().toLowerCase();
-    const matched = q
-      ? vendors.filter((vendor) => vendor.name.toLowerCase().includes(q))
-      : vendors;
-    const selected = vendors.find((vendor) => vendor.id === line.vendorId);
-    const rows =
-      selected && !matched.some((vendor) => vendor.id === selected.id)
-        ? [selected, ...matched]
-        : matched;
-    return rows.map((vendor) => ({
-      value: vendor.id,
-      label: vendor.name,
-      keywords: vendor.name,
-    }));
+  function closeNewVendorForm() {
+    setAddingVendor(false);
+    setCreateForLineKey(null);
+    setVendorDraft(EMPTY_VENDOR);
+    setVendorFieldErrors({});
   }
 
-  function vendorName(line: ShopReceiveLine) {
-    return vendors.find((vendor) => vendor.id === line.vendorId)?.name ?? "";
+  function assignCreatedVendor(created: { id: string; name: string }) {
+    setVendors((prev) =>
+      prev.some((row) => row.id === created.id)
+        ? prev
+        : [created, ...prev.filter((row) => row.id !== created.id)],
+    );
+    const targetKey =
+      createForLineKey ?? linesRef.current[linesRef.current.length - 1]?.key;
+    if (targetKey) {
+      updateLine(targetKey, { vendorId: created.id });
+    }
+  }
+
+  function openCreateVendor(lineKey: string, name: string) {
+    setCreateForLineKey(lineKey || null);
+    if (inlineVendorCreate) {
+      setVendorDraft({ ...EMPTY_VENDOR, name: name.trim() });
+      setVendorFieldErrors({});
+      setAddingVendor(true);
+      return;
+    }
+    setVendorInitialName(name.trim());
+    setVendorModalOpen(true);
   }
 
   function setVendorField<K extends keyof VendorDraft>(
@@ -327,34 +367,247 @@ export function ShopReceiveFields({
         toast.error(result.message ?? tv("error"));
         return;
       }
-      const created = {
+      assignCreatedVendor({
         id: result.vendorId,
         name: vendorDraft.name.trim(),
-      };
-      setVendors((prev) =>
-        prev.some((row) => row.id === created.id)
-          ? prev
-          : [created, ...prev.filter((row) => row.id !== created.id)],
-      );
-      const openKey = Object.entries(expandedByKey).find(
-        ([key, open]) => open && linesRef.current.some((line) => line.key === key),
-      )?.[0];
-      const targetKey =
-        openKey ?? linesRef.current[linesRef.current.length - 1]?.key;
-      if (targetKey) {
-        updateLine(targetKey, { vendorId: created.id });
-        setExpandedByKey((prev) => ({ ...prev, [targetKey]: true }));
-      }
-      setAddingVendor(false);
-      setVendorDraft(EMPTY_VENDOR);
-      setVendorFieldErrors({});
+      });
+      closeNewVendorForm();
       toast.success(result.message);
     });
+  }
+
+  function optionsForLine(line: ShopReceiveLine) {
+    const q = (vendorQueries[line.key] ?? "").trim().toLowerCase();
+    const matched = q
+      ? vendors.filter((vendor) => vendor.name.toLowerCase().includes(q))
+      : vendors;
+    const selected = vendors.find((vendor) => vendor.id === line.vendorId);
+    const rows =
+      selected && !matched.some((vendor) => vendor.id === selected.id)
+        ? [selected, ...matched]
+        : matched;
+    return rows.map((vendor) => ({
+      value: vendor.id,
+      label: vendor.name,
+      keywords: vendor.name,
+    }));
+  }
+
+  function renderVendorSelect(
+    line: ShopReceiveLine,
+    index: number,
+    showLabel: boolean,
+  ) {
+    const vendorError = vendorErrorKeys.includes(line.key)
+      ? t("shopVendorRequired")
+      : undefined;
+    const select = (
+      <SearchableSelect
+        id={`${idPrefix}-vendor-${line.key}`}
+        value={line.vendorId}
+        onChange={(next) => {
+          updateLine(line.key, { vendorId: next });
+        }}
+        clearable
+        filter="remote"
+        minQueryLength={0}
+        onQueryChange={(q) =>
+          setVendorQueries((prev) => ({
+            ...prev,
+            [line.key]: q,
+          }))
+        }
+        placeholder={t("boughtFromPlaceholder")}
+        searchPlaceholder={t("boughtFromPlaceholder")}
+        emptyLabel={t("emptyVendorSearchQuickCreate")}
+        disabled={busy}
+        options={optionsForLine(line)}
+        createFromQueryLabel={(query) =>
+          t("quickAddVendor", { name: query })
+        }
+        onCreateFromQuery={(query) => {
+          openCreateVendor(line.key, query);
+        }}
+      />
+    );
+    if (!showLabel) {
+      return (
+        <div className="min-w-0 space-y-1">
+          {select}
+          {vendorError ? (
+            <p className="text-caption text-danger" role="alert">
+              {vendorError}
+            </p>
+          ) : null}
+        </div>
+      );
+    }
+    return (
+      <FormField
+        id={`${idPrefix}-vendor-${line.key}`}
+        label={t("vendor")}
+        error={vendorError}
+      >
+        {select}
+      </FormField>
+    );
+  }
+
+  function renderQty(line: ShopReceiveLine, showLabel: boolean) {
+    return (
+      <QuantityStepper
+        id={`${idPrefix}-qty-${line.key}`}
+        label={t("qtyFromShop")}
+        defaultValue={line.quantity}
+        min={1}
+        hideLabel={!showLabel}
+        onValueChange={(quantity) => updateLine(line.key, { quantity })}
+      />
+    );
+  }
+
+  function clearBill(lineKey: string) {
+    updateLine(lineKey, { file: null });
+    const input = fileInputRefs.current[lineKey];
+    if (input) input.value = "";
+  }
+
+  function billFileKind(file: File): "image" | "pdf" | "file" {
+    if (file.type.startsWith("image/")) return "image";
+    if (
+      file.type === "application/pdf" ||
+      file.name.toLowerCase().endsWith(".pdf")
+    ) {
+      return "pdf";
+    }
+    return "file";
+  }
+
+  function renderBill(line: ShopReceiveLine, showLabel: boolean) {
+    const kind = line.file ? billFileKind(line.file) : null;
+    const isImage = kind === "image" && Boolean(previewUrls[line.key]);
+    const control = (
+      <>
+        <input
+          ref={(el) => {
+            fileInputRefs.current[line.key] = el;
+          }}
+          id={`${idPrefix}-bill-${line.key}`}
+          type="file"
+          accept="image/jpeg,image/png,image/webp,application/pdf"
+          capture="environment"
+          className="hidden"
+          disabled={busy}
+          onChange={(event) => {
+            updateLine(line.key, {
+              file: event.target.files?.[0] ?? null,
+            });
+          }}
+        />
+        {line.file ? (
+          <div className="relative inline-flex max-w-full items-center">
+            {isImage ? (
+              <div className="relative size-11 shrink-0 rounded-lg border border-slate-200 bg-white shadow-xs">
+                <div className="size-full overflow-hidden rounded-lg">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={previewUrls[line.key]}
+                    alt={line.file.name}
+                    className="size-full object-cover"
+                  />
+                </div>
+              </div>
+            ) : (
+              <div
+                className="inline-flex h-11 max-w-[11rem] items-center gap-2 rounded-lg border border-blue-200 bg-blue-50/70 px-2.5 shadow-xs"
+                title={line.file.name}
+              >
+                <span className="inline-flex size-8 shrink-0 items-center justify-center rounded-md bg-blue-100 text-blue-700">
+                  <FileText className="size-4" aria-hidden />
+                </span>
+                <span className="min-w-0">
+                  <span className="block truncate text-xs font-semibold text-slate-800">
+                    {kind === "pdf" ? t("shopBillPdf") : t("shopBillFile")}
+                  </span>
+                  <span className="block truncate text-[10px] text-slate-500">
+                    {line.file.name}
+                  </span>
+                </span>
+              </div>
+            )}
+            <button
+              type="button"
+              disabled={busy}
+              aria-label={t("shopBillClear")}
+              title={t("shopBillClear")}
+              className="absolute -top-1.5 -right-1.5 z-10 flex size-5 items-center justify-center rounded-full bg-slate-900 text-white shadow-sm hover:bg-slate-800"
+              onClick={() => clearBill(line.key)}
+            >
+              <X className="size-3" aria-hidden />
+            </button>
+          </div>
+        ) : (
+          <Button
+            type="button"
+            variant="secondary"
+            size="md"
+            disabled={busy}
+            className="h-11 min-h-11 shrink-0 rounded-lg"
+            onClick={() => fileInputRefs.current[line.key]?.click()}
+          >
+            <Upload className="size-4" aria-hidden />
+            {t("shopBillChoose")}
+          </Button>
+        )}
+      </>
+    );
+    if (!showLabel) {
+      return <div className="min-w-0">{control}</div>;
+    }
+    return (
+      <FormField
+        id={`${idPrefix}-bill-${line.key}`}
+        label={t("shopBillPhoto")}
+        hint={line.file ? undefined : t("shopBillPhotoHint")}
+      >
+        {control}
+      </FormField>
+    );
+  }
+
+  function renderRemove(line: ShopReceiveLine) {
+    return (
+      <Button
+        type="button"
+        variant="outline"
+        size="icon"
+        className="size-11 min-h-11 min-w-11 text-red-600 hover:border-red-300 hover:bg-red-50 hover:text-red-700"
+        disabled={busy || lines.length <= 1}
+        aria-label={t("removeShopLine")}
+        onClick={() => removeLine(line.key)}
+      >
+        <Trash2 className="size-4" aria-hidden />
+      </Button>
+    );
   }
 
   return (
     <div className="space-y-3">
       <input type="hidden" name="shopLineCount" value={lines.length} />
+      {lines.map((line, index) => (
+        <span key={`shop-submit-${line.key}`} className="hidden">
+          <input
+            type="hidden"
+            name={`shopVendorId_${index}`}
+            value={line.vendorId}
+          />
+          <input
+            type="hidden"
+            name={`shopQty_${index}`}
+            value={Number.isFinite(line.quantity) ? line.quantity : 0}
+          />
+        </span>
+      ))}
 
       <div className="flex flex-col gap-2 border-t border-border pt-4 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
         <div className="min-w-0 space-y-1">
@@ -376,387 +629,313 @@ export function ShopReceiveFields({
         </button>
       </div>
 
-      <div className="grid items-start gap-2 md:grid-cols-2">
+      <ul className="space-y-3 md:hidden">
         {lines.map((line, index) => {
-          const expanded = expandedByKey[line.key] !== false;
-          const name = vendorName(line);
-          const hasVendor = Boolean(name);
-          const vendorError = vendorErrorKeys.includes(line.key)
-            ? t("shopVendorRequired")
-            : undefined;
-
+          const highlighted = highlightedLineKey === line.key;
           return (
-            <div
+            <li
               key={line.key}
+              ref={(el) => {
+                rowRefs.current[line.key] = el;
+              }}
               className={cn(
-                "h-fit self-start rounded-xl border bg-card shadow-xs transition-[border-color,box-shadow] duration-300 ease-out",
-                vendorError
+                "scroll-mb-28 rounded-xl border bg-card p-3.5 shadow-xs",
+                vendorErrorKeys.includes(line.key)
                   ? "border-red-300 ring-1 ring-red-200"
-                  : expanded
-                    ? "border-blue-200 ring-1 ring-blue-100"
-                    : "border-border hover:border-slate-300",
+                  : highlighted
+                    ? "border-blue-400 ring-2 ring-blue-200"
+                    : "border-border",
               )}
             >
-              <div className="flex items-stretch">
-                <button
-                  type="button"
-                  className="flex min-h-11 min-w-0 flex-1 items-center gap-3 px-3 py-2 text-left"
-                  disabled={busy}
-                  aria-expanded={expanded}
-                  aria-label={expanded ? t("collapseShop") : t("expandShop")}
-                  onClick={() => toggleExpanded(line.key)}
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <span className="text-sm font-semibold text-slate-800">
+                  {t("shopLineLabel", { number: index + 1 })}
+                  {highlighted ? (
+                    <span className="ml-2 text-xs font-medium text-blue-700">
+                      {t("shopNewRowHint")}
+                    </span>
+                  ) : null}
+                </span>
+                {renderRemove(line)}
+              </div>
+              <div className="space-y-3">
+                {renderVendorSelect(line, index, true)}
+                {renderQty(line, true)}
+                {renderBill(line, true)}
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+
+      <div className="hidden rounded-xl border border-border md:block">
+        <Table className="overflow-visible">
+          <TableHeader className="rounded-t-xl bg-slate-100 [&_tr]:border-border">
+            <TableRow className="hover:bg-transparent">
+              <TableHead className="w-10 rounded-tl-xl text-slate-700">
+                #
+              </TableHead>
+              <TableHead className="min-w-[14rem] text-slate-700">
+                {t("vendor")}
+              </TableHead>
+              <TableHead className="w-40 text-slate-700">
+                {t("qtyFromShop")}
+              </TableHead>
+              <TableHead className="min-w-[8rem] text-slate-700">
+                {t("shopBillPhoto")}
+              </TableHead>
+              <TableHead className="w-[1%] rounded-tr-xl text-right text-slate-700">
+                <span className="sr-only">{t("removeShopLine")}</span>
+              </TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {lines.map((line, index) => {
+              const highlighted = highlightedLineKey === line.key;
+              const hasError = vendorErrorKeys.includes(line.key);
+              const isLast = index === lines.length - 1;
+              return (
+                <TableRow
+                  key={line.key}
+                  ref={(el) => {
+                    rowRefs.current[line.key] = el;
+                  }}
+                  className={cn(
+                    "scroll-mb-28",
+                    hasError && "bg-red-50/50",
+                    highlighted && !hasError && "bg-blue-50",
+                    highlighted &&
+                      !hasError &&
+                      "border-l-4 border-l-blue-500",
+                  )}
                 >
-                  <span
+                  <TableCell
                     className={cn(
-                      "inline-flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold transition-colors duration-300",
-                      expanded
-                        ? "bg-blue-600 text-white"
-                        : "bg-slate-100 text-slate-700",
+                      "align-middle py-2.5 tabular-nums text-slate-600",
+                      isLast && "rounded-bl-xl",
                     )}
                   >
                     {index + 1}
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-medium text-foreground">
-                      {hasVendor ? name : t("shopLineLabel", { number: index + 1 })}
-                    </span>
-                    {hasVendor ? (
-                      <span className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                        <span>
-                          {t("shopCollapsedQty", { count: line.quantity })}
-                        </span>
-                        {line.file ? (
-                          <span className="inline-flex items-center gap-1 text-blue-700">
-                            <ImageIcon className="size-3" aria-hidden />
-                            {t("shopBillAttached")}
-                          </span>
-                        ) : null}
-                      </span>
-                    ) : null}
-                  </span>
-                  <ChevronDown
+                  </TableCell>
+                  <TableCell className="align-middle whitespace-normal py-2.5">
+                    {renderVendorSelect(line, index, false)}
+                  </TableCell>
+                  <TableCell className="align-middle whitespace-normal py-2.5">
+                    {renderQty(line, false)}
+                  </TableCell>
+                  <TableCell className="align-middle whitespace-normal py-2.5">
+                    {renderBill(line, false)}
+                  </TableCell>
+                  <TableCell
                     className={cn(
-                      "size-4 shrink-0 text-slate-500 transition-transform duration-300 ease-out",
-                      expanded && "rotate-180",
+                      "align-middle py-2.5 text-right",
+                      isLast && "rounded-br-xl",
                     )}
-                    aria-hidden
-                  />
-                </button>
-                {lines.length > 1 ? (
-                  <button
-                    type="button"
-                    className="inline-flex w-11 shrink-0 items-stretch self-stretch justify-center border-l border-border text-red-600 hover:bg-red-50 hover:text-red-700 disabled:opacity-50"
-                    aria-label={t("removeShopLine")}
-                    disabled={busy}
-                    onClick={() => removeLine(line.key)}
                   >
-                    <span className="inline-flex flex-1 items-center justify-center">
-                      <Trash2 className="size-4" aria-hidden />
-                    </span>
-                  </button>
-                ) : null}
-              </div>
-
-              {expanded ? (
-                <div
-                  className="space-y-3 border-t border-border bg-slate-50/60 px-3 py-3"
-                  onClick={(event) => event.stopPropagation()}
-                  onKeyDown={(event) => event.stopPropagation()}
-                >
-                  <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_8rem]">
-                    <FormField
-                      id={`${idPrefix}-vendor-${line.key}`}
-                      label={t("vendor")}
-                      error={vendorError}
-                    >
-                      <SearchableSelect
-                        id={`${idPrefix}-vendor-${line.key}`}
-                        name={`shopVendorId_${index}`}
-                        value={line.vendorId}
-                        onChange={(next) => {
-                          updateLine(line.key, { vendorId: next });
-                        }}
-                        clearable
-                        filter="remote"
-                        minQueryLength={0}
-                        onQueryChange={(q) =>
-                          setVendorQueries((prev) => ({
-                            ...prev,
-                            [line.key]: q,
-                          }))
-                        }
-                        onOpenChange={(next) => {
-                          if (next) {
-                            setExpandedByKey((prev) => ({
-                              ...prev,
-                              [line.key]: true,
-                            }));
-                            setVendorQueries((prev) => ({
-                              ...prev,
-                              [line.key]: "",
-                            }));
-                          }
-                        }}
-                        placeholder={t("boughtFromPlaceholder")}
-                        searchPlaceholder={t("boughtFromPlaceholder")}
-                        emptyLabel={t("noVendorsHint")}
-                        disabled={busy}
-                        options={optionsForLine(line)}
-                      />
-                    </FormField>
-
-                    <QuantityStepper
-                      id={`${idPrefix}-qty-${line.key}`}
-                      name={`shopQty_${index}`}
-                      label={t("qtyFromShop")}
-                      defaultValue={line.quantity}
-                      min={1}
-                      onValueChange={(quantity) =>
-                        updateLine(line.key, { quantity })
-                      }
-                    />
-                  </div>
-
-                  <FormField
-                    id={`${idPrefix}-bill-${line.key}`}
-                    label={t("shopBillPhoto")}
-                    hint={t("shopBillPhotoHint")}
-                  >
-                    <input
-                      ref={(el) => {
-                        fileInputRefs.current[line.key] = el;
-                      }}
-                      id={`${idPrefix}-bill-${line.key}`}
-                      type="file"
-                      accept="image/jpeg,image/png,image/webp,application/pdf"
-                      capture="environment"
-                      className="hidden"
-                      disabled={busy}
-                      onChange={(event) => {
-                        updateLine(line.key, {
-                          file: event.target.files?.[0] ?? null,
-                        });
-                      }}
-                    />
-                    <div className="flex flex-col items-start gap-2">
-                      {line.file ? (
-                        <div className="relative size-16 shrink-0 overflow-hidden rounded-md border border-slate-200 bg-white sm:size-20">
-                          {previewUrls[line.key] ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img
-                              src={previewUrls[line.key]}
-                              alt={line.file.name}
-                              className="size-full object-cover"
-                            />
-                          ) : (
-                            <div className="flex size-full items-center justify-center px-1 text-center text-[10px] leading-tight text-slate-600">
-                              {line.file.name}
-                            </div>
-                          )}
-                          <button
-                            type="button"
-                            disabled={busy}
-                            aria-label={t("shopBillClear")}
-                            className="absolute top-0.5 right-0.5 flex size-5 items-center justify-center rounded-full bg-slate-900/80 text-white"
-                            onClick={() => {
-                              updateLine(line.key, { file: null });
-                              const input = fileInputRefs.current[line.key];
-                              if (input) input.value = "";
-                            }}
-                          >
-                            <X className="size-3" aria-hidden />
-                          </button>
-                        </div>
-                      ) : null}
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        size="md"
-                        disabled={busy}
-                        className="h-11 min-h-11 shrink-0"
-                        onClick={() =>
-                          fileInputRefs.current[line.key]?.click()
-                        }
-                      >
-                        <Upload className="size-4" aria-hidden />
-                        {line.file ? t("shopBillChange") : t("shopBillChoose")}
-                      </Button>
-                    </div>
-                  </FormField>
-                </div>
-              ) : null}
-            </div>
-          );
-        })}
+                    {renderRemove(line)}
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
       </div>
 
-      <div className="flex w-full justify-center">
-        <p className="text-center text-sm text-slate-600 mt-2 flex">
-          <span className="mr-1">{t("vendorMissingFromList")}</span>
-          <button
-            type="button"
-            className="inline-flex items-center gap-1 font-medium text-blue-700 hover:text-blue-800 hover:underline"
-            onClick={() => {
-              setAddingVendor((prev) => {
-                const next = !prev;
-                if (!next) {
-                  setVendorDraft(EMPTY_VENDOR);
-                  setVendorFieldErrors({});
+      {inlineVendorCreate ? (
+        <>
+        <div className="flex w-full justify-center">
+          <p className="text-center text-sm text-slate-600">
+            <span className="mr-1">{t("vendorMissingFromList")}</span>
+            <button
+              type="button"
+              className="inline-flex items-center gap-1 font-medium text-blue-700 hover:text-blue-800 hover:underline"
+              onClick={() => {
+                if (addingVendor) {
+                  closeNewVendorForm();
+                  return;
                 }
-                return next;
-              });
-            }}
-            disabled={busy}
-          >
-            <Plus className="size-3.5" strokeWidth={2.5} aria-hidden />
-            {t("createNewVendor")}
-          </button>
-        </p>
-      </div>
-
-      <div
-        ref={newVendorPanelRef}
-        className={cn(
-          "grid transition-[grid-template-rows] duration-300 ease-out",
-          addingVendor ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
-        )}
-      >
-        <div className="min-h-0 overflow-hidden">
-          <div className="space-y-3 rounded-xl border border-border bg-card p-3 shadow-xs">
-            <p className="text-caption text-muted-foreground">
-              {tv("contactRequiredHint")}
-            </p>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <FormField
-                id={`${idPrefix}-new-vendor-name`}
-                label={tv("nameRequired")}
-                error={vendorFieldErrors.name}
-              >
-                <Input
+                const targetKey =
+                  highlightedLineKey ??
+                  linesRef.current[linesRef.current.length - 1]?.key ??
+                  null;
+                openCreateVendor(targetKey ?? "", "");
+              }}
+              disabled={busy}
+            >
+              <Plus className="size-3.5" strokeWidth={2.5} aria-hidden />
+              {t("createNewVendor")}
+            </button>
+          </p>
+        </div>
+        <div
+          ref={newVendorPanelRef}
+          className={cn(
+            "grid transition-[grid-template-rows] duration-300 ease-out",
+            addingVendor ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
+          )}
+        >
+          <div className="min-h-0 overflow-hidden">
+            <div className="space-y-3 rounded-xl border border-border bg-card p-3 shadow-xs">
+              <p className="text-caption text-muted-foreground">
+                {tv("contactRequiredHint")}
+              </p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <FormField
                   id={`${idPrefix}-new-vendor-name`}
-                  value={vendorDraft.name}
-                  onChange={(e) => setVendorField("name", e.target.value)}
-                  className="h-11 min-h-11"
-                  disabled={busy}
-                  placeholder={tv("namePlaceholder")}
-                  aria-invalid={Boolean(vendorFieldErrors.name)}
-                />
-              </FormField>
-              <FormField
-                id={`${idPrefix}-new-vendor-phone`}
-                label={tv("phone")}
-                error={vendorFieldErrors.phone}
-              >
-                <Input
+                  label={tv("nameRequired")}
+                  error={vendorFieldErrors.name}
+                >
+                  <Input
+                    id={`${idPrefix}-new-vendor-name`}
+                    value={vendorDraft.name}
+                    onChange={(e) => setVendorField("name", e.target.value)}
+                    className="h-11 min-h-11"
+                    disabled={busy}
+                    placeholder={tv("namePlaceholder")}
+                    aria-invalid={Boolean(vendorFieldErrors.name)}
+                  />
+                </FormField>
+                <FormField
                   id={`${idPrefix}-new-vendor-phone`}
-                  type="tel"
-                  inputMode="tel"
-                  value={vendorDraft.phone}
-                  onChange={(e) =>
-                    setVendorField("phone", sanitizePhoneTyping(e.target.value))
-                  }
-                  className="h-11 min-h-11"
-                  disabled={busy}
-                  placeholder={tv("phonePlaceholder")}
-                  aria-invalid={Boolean(vendorFieldErrors.phone)}
-                />
-              </FormField>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <FormField
-                id={`${idPrefix}-new-vendor-email`}
-                label={tv("email")}
-                error={vendorFieldErrors.email}
-              >
-                <Input
+                  label={tv("phone")}
+                  error={vendorFieldErrors.phone}
+                >
+                  <Input
+                    id={`${idPrefix}-new-vendor-phone`}
+                    type="tel"
+                    inputMode="tel"
+                    value={vendorDraft.phone}
+                    onChange={(e) =>
+                      setVendorField(
+                        "phone",
+                        sanitizePhoneTyping(e.target.value),
+                      )
+                    }
+                    className="h-11 min-h-11"
+                    disabled={busy}
+                    placeholder={tv("phonePlaceholder")}
+                    aria-invalid={Boolean(vendorFieldErrors.phone)}
+                  />
+                </FormField>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <FormField
                   id={`${idPrefix}-new-vendor-email`}
-                  type="email"
-                  value={vendorDraft.email}
-                  onChange={(e) =>
-                    setVendorField("email", sanitizeEmailTyping(e.target.value))
-                  }
+                  label={tv("email")}
+                  error={vendorFieldErrors.email}
+                >
+                  <Input
+                    id={`${idPrefix}-new-vendor-email`}
+                    type="email"
+                    value={vendorDraft.email}
+                    onChange={(e) =>
+                      setVendorField(
+                        "email",
+                        sanitizeEmailTyping(e.target.value),
+                      )
+                    }
+                    className="h-11 min-h-11"
+                    disabled={busy}
+                    placeholder={tv("emailPlaceholder")}
+                    aria-invalid={Boolean(vendorFieldErrors.email)}
+                  />
+                </FormField>
+                <FormField
+                  id={`${idPrefix}-new-vendor-gstin`}
+                  label={tv("gstin")}
+                  error={vendorFieldErrors.gstin}
+                >
+                  <Input
+                    id={`${idPrefix}-new-vendor-gstin`}
+                    value={vendorDraft.gstin}
+                    onChange={(e) =>
+                      setVendorField(
+                        "gstin",
+                        e.target.value
+                          .toUpperCase()
+                          .replace(/[^0-9A-Z]/g, "")
+                          .slice(0, 15),
+                      )
+                    }
+                    className="h-11 min-h-11 uppercase"
+                    disabled={busy}
+                    placeholder={tv("gstinPlaceholder")}
+                    maxLength={15}
+                    autoCapitalize="characters"
+                    spellCheck={false}
+                    aria-invalid={Boolean(vendorFieldErrors.gstin)}
+                  />
+                </FormField>
+              </div>
+              <FormField
+                id={`${idPrefix}-new-vendor-address`}
+                label={tv("address")}
+              >
+                <Textarea
+                  id={`${idPrefix}-new-vendor-address`}
+                  rows={2}
+                  value={vendorDraft.address}
+                  onChange={(e) => setVendorField("address", e.target.value)}
+                  disabled={busy}
+                  placeholder={tv("addressPlaceholder")}
+                />
+              </FormField>
+              <FormField id={`${idPrefix}-new-vendor-notes`} label={tv("notes")}>
+                <Textarea
+                  id={`${idPrefix}-new-vendor-notes`}
+                  rows={2}
+                  value={vendorDraft.notes}
+                  onChange={(e) => setVendorField("notes", e.target.value)}
+                  disabled={busy}
+                  placeholder={tv("notesPlaceholder")}
+                />
+              </FormField>
+              <div className="flex flex-wrap justify-end gap-2">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="md"
                   className="h-11 min-h-11"
                   disabled={busy}
-                  placeholder={tv("emailPlaceholder")}
-                  aria-invalid={Boolean(vendorFieldErrors.email)}
-                />
-              </FormField>
-              <FormField
-                id={`${idPrefix}-new-vendor-gstin`}
-                label={tv("gstin")}
-                error={vendorFieldErrors.gstin}
-              >
-                <Input
-                  id={`${idPrefix}-new-vendor-gstin`}
-                  value={vendorDraft.gstin}
-                  onChange={(e) =>
-                    setVendorField(
-                      "gstin",
-                      e.target.value
-                        .toUpperCase()
-                        .replace(/[^0-9A-Z]/g, "")
-                        .slice(0, 15),
-                    )
-                  }
-                  className="h-11 min-h-11 uppercase"
+                  onClick={closeNewVendorForm}
+                >
+                  {tv("cancel")}
+                </Button>
+                <Button
+                  type="button"
+                  size="md"
+                  className="h-11 min-h-11"
+                  loading={pendingVendor}
                   disabled={busy}
-                  placeholder={tv("gstinPlaceholder")}
-                  maxLength={15}
-                  autoCapitalize="characters"
-                  spellCheck={false}
-                  aria-invalid={Boolean(vendorFieldErrors.gstin)}
-                />
-              </FormField>
-            </div>
-            <FormField id={`${idPrefix}-new-vendor-address`} label={tv("address")}>
-              <Textarea
-                id={`${idPrefix}-new-vendor-address`}
-                rows={2}
-                value={vendorDraft.address}
-                onChange={(e) => setVendorField("address", e.target.value)}
-                disabled={busy}
-                placeholder={tv("addressPlaceholder")}
-              />
-            </FormField>
-            <FormField id={`${idPrefix}-new-vendor-notes`} label={tv("notes")}>
-              <Textarea
-                id={`${idPrefix}-new-vendor-notes`}
-                rows={2}
-                value={vendorDraft.notes}
-                onChange={(e) => setVendorField("notes", e.target.value)}
-                disabled={busy}
-                placeholder={tv("notesPlaceholder")}
-              />
-            </FormField>
-            <div className="flex flex-wrap justify-end gap-2">
-              <Button
-                type="button"
-                variant="secondary"
-                size="md"
-                className="h-11 min-h-11"
-                disabled={busy}
-                onClick={() => {
-                  setAddingVendor(false);
-                  setVendorDraft(EMPTY_VENDOR);
-                  setVendorFieldErrors({});
-                }}
-              >
-                {tv("cancel")}
-              </Button>
-              <Button
-                type="button"
-                size="md"
-                className="h-11 min-h-11"
-                loading={pendingVendor}
-                disabled={busy}
-                onClick={saveNewVendor}
-              >
-                {tv("create")}
-              </Button>
+                  onClick={saveNewVendor}
+                >
+                  {tv("create")}
+                </Button>
+              </div>
             </div>
           </div>
         </div>
-      </div>
+        </>
+      ) : (
+        <CreateVendorModal
+          trigger={null}
+          open={vendorModalOpen}
+          onOpenChange={(next) => {
+            setVendorModalOpen(next);
+            if (!next) {
+              setCreateForLineKey(null);
+              setVendorInitialName("");
+            }
+          }}
+          initialName={vendorInitialName}
+          navigateOnSuccess={false}
+          onCreated={(created) => {
+            assignCreatedVendor(created);
+            setCreateForLineKey(null);
+            setVendorInitialName("");
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -765,11 +944,8 @@ export function createEmptyShopReceiveLines(): ShopReceiveLine[] {
   return [newLine()];
 }
 
-/** Files in the same order as shop lines that have vendor + qty (for post-save upload). */
 export function shopReceiveFilesForUpload(
   lines: ShopReceiveLine[],
 ): Array<File | null> {
-  return lines
-    .filter((line) => line.vendorId.trim() && line.quantity > 0)
-    .map((line) => line.file);
+  return filesForUpload(lines);
 }

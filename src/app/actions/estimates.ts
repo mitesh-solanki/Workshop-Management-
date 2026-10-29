@@ -6,6 +6,7 @@ import { requireSession } from "@/lib/session";
 import { translateError } from "@/lib/translate-error";
 import {
   addManualEstimateLine,
+  agreeAllPendingEstimateLines,
   createEstimateFromSources,
   createEstimateRevision,
   removeEstimateLine,
@@ -23,11 +24,29 @@ export type EstimateActionState = {
   message?: string;
   askPermission?: boolean;
   permissionVia?: "MANUAL" | "LIVE_LINK" | null;
+  /** When set, UI can link to `/inventory/{stockPartId}`. */
+  stockPartId?: string;
 };
 
 function revalidateEstimate(orderId: string) {
   revalidatePath(`/orders/${orderId}`);
   revalidatePath(`/orders/${orderId}/estimate`);
+}
+
+async function failEstimateAction(error: unknown): Promise<EstimateActionState> {
+  const message = await translateError(error);
+  if (
+    error instanceof AppError &&
+    error.code === "inventory.insufficient_stock"
+  ) {
+    const stockPartId = String(error.params?.partId ?? "").trim();
+    return {
+      ok: false,
+      message,
+      ...(stockPartId ? { stockPartId } : {}),
+    };
+  }
+  return { ok: false, message };
 }
 
 export async function createEstimateAction(
@@ -56,10 +75,7 @@ export async function createEstimateAction(
       permissionVia: estimate.permissionVia,
     };
   } catch (error) {
-    return {
-      ok: false,
-      message: await translateError(error),
-    };
+    return failEstimateAction(error);
   }
 }
 
@@ -76,10 +92,7 @@ export async function createEstimateRevisionAction(
     revalidateEstimate(orderId);
     return { ok: true, message: "revisionCreated" };
   } catch (error) {
-    return {
-      ok: false,
-      message: error instanceof AppError ? error.message : "Something went wrong",
-    };
+    return failEstimateAction(error);
   }
 }
 
@@ -102,10 +115,7 @@ export async function addEstimateLineAction(
     revalidateEstimate(orderId);
     return { ok: true, message: "lineAdded" };
   } catch (error) {
-    return {
-      ok: false,
-      message: error instanceof AppError ? error.message : "Something went wrong",
-    };
+    return failEstimateAction(error);
   }
 }
 
@@ -129,10 +139,23 @@ export async function setLineApprovalAction(
     revalidateEstimate(orderId);
     return { ok: true, message: "approvalSaved" };
   } catch (error) {
+    return failEstimateAction(error);
+  }
+}
+
+export async function agreeAllPendingLinesAction(
+  orderId: string,
+): Promise<EstimateActionState> {
+  try {
+    const session = await requireSession();
+    const result = await agreeAllPendingEstimateLines(session, orderId);
+    revalidateEstimate(orderId);
     return {
-      ok: false,
-      message: error instanceof AppError ? error.message : "Something went wrong",
+      ok: true,
+      message: result.count > 0 ? "agreeAllSaved" : "approvalSaved",
     };
+  } catch (error) {
+    return failEstimateAction(error);
   }
 }
 
@@ -146,10 +169,7 @@ export async function deleteEstimateLineAction(
     revalidateEstimate(orderId);
     return { ok: true, message: "lineRemoved" };
   } catch (error) {
-    return {
-      ok: false,
-      message: await translateError(error),
-    };
+    return failEstimateAction(error);
   }
 }
 
@@ -176,9 +196,6 @@ export async function savePermissionLineAction(
     revalidateEstimate(orderId);
     return { ok: true, message: "approvalSaved" };
   } catch (error) {
-    return {
-      ok: false,
-      message: error instanceof AppError ? error.message : "Something went wrong",
-    };
+    return failEstimateAction(error);
   }
 }

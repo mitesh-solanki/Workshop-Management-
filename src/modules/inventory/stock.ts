@@ -46,15 +46,14 @@ export function sumStock(
 
 /**
  * Whether applying `quantityChange` to `currentStock` is allowed.
- * Returns the resulting stock when allowed.
+ * Stock may never go below zero.
  */
 export function assertStockChangeAllowed(input: {
   currentStock: number;
   quantityChange: number;
-  allowNegativeStock: boolean;
 }): { ok: true; resultingStock: number } | { ok: false; resultingStock: number } {
   const resultingStock = input.currentStock + input.quantityChange;
-  if (resultingStock < 0 && !input.allowNegativeStock) {
+  if (resultingStock < 0) {
     return { ok: false, resultingStock };
   }
   return { ok: true, resultingStock };

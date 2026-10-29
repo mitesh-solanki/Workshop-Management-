@@ -37,6 +37,7 @@ import {
   shopReceiveFilesForUpload,
   type ShopReceiveLine,
 } from "@/modules/inventory/components/shop-receive-fields";
+import { shopReceiveRequiredVendorErrorKeys } from "@/modules/inventory/shop-receive";
 import { uploadVendorBillAttachmentFile } from "@/modules/purchases/components/upload-vendor-bill-attachment";
 
 const initial: InventoryActionState = { ok: false };
@@ -125,12 +126,14 @@ export function EditPartModal({
   function handleShopLinesChange(lines: ShopReceiveLine[]) {
     setShopLines(lines);
     pendingFilesRef.current = shopReceiveFilesForUpload(lines);
-    setVendorErrorKeys((prev) =>
-      prev.filter((key) => {
-        const line = lines.find((row) => row.key === key);
-        return line ? !line.vendorId.trim() : false;
-      }),
-    );
+    // Once any vendor is chosen, clear empty-row errors.
+    if (lines.some((line) => line.vendorId.trim())) {
+      setVendorErrorKeys([]);
+    } else {
+      setVendorErrorKeys((prev) =>
+        prev.filter((key) => lines.some((row) => row.key === key)),
+      );
+    }
   }
 
   const useShopReceive = resetPrices || shopReceive;
@@ -263,12 +266,10 @@ export function EditPartModal({
                 setVendorErrorKeys([]);
                 return;
               }
-              const missing = shopLines
-                .filter((line) => !line.vendorId.trim())
-                .map((line) => line.key);
-              if (missing.length > 0) {
+              const errorKeys = shopReceiveRequiredVendorErrorKeys(shopLines);
+              if (errorKeys.length > 0) {
                 event.preventDefault();
-                setVendorErrorKeys(missing);
+                setVendorErrorKeys(errorKeys);
                 return;
               }
               setVendorErrorKeys([]);
@@ -350,6 +351,21 @@ export function EditPartModal({
                 <FormField
                   id={`edit-current-stock-${part.id}`}
                   label={t("openingStock")}
+                  hint={
+                    shopLines.some((line) => line.vendorId.trim())
+                      ? t("stockAfterReceive", {
+                          count:
+                            part.quantityOnHand +
+                            shopLines
+                              .filter((line) => line.vendorId.trim())
+                              .reduce(
+                                (sum, line) => sum + Math.max(0, line.quantity),
+                                0,
+                              ),
+                          unit: part.unit,
+                        })
+                      : undefined
+                  }
                 >
                   <Input
                     id={`edit-current-stock-${part.id}`}
@@ -367,6 +383,7 @@ export function EditPartModal({
                   lines={shopLines}
                   onLinesChange={handleShopLinesChange}
                   vendorErrorKeys={vendorErrorKeys}
+                  vendorCreateMode="inline"
                 />
               </>
             ) : (

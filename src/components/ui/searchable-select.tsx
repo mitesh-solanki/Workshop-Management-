@@ -33,6 +33,8 @@ export type SearchableSelectOption = {
 type BaseProps = {
   id?: string;
   name?: string;
+  /** Associate hidden submit inputs with an external form. */
+  form?: string;
   options: readonly SearchableSelectOption[];
   placeholder?: string;
   searchPlaceholder?: string;
@@ -106,6 +108,7 @@ export function SearchableSelect(props: SearchableSelectProps) {
   const {
     id,
     name,
+    form,
     options,
     placeholder = "Select…",
     searchPlaceholder = remote ? "Type to search…" : "Search…",
@@ -506,10 +509,15 @@ export function SearchableSelect(props: SearchableSelectProps) {
     name && !disabled ? (
       multiple ? (
         selectedValues.map((v) => (
-          <input key={v} type="hidden" name={name} value={v} />
+          <input key={v} type="hidden" name={name} value={v} form={form} />
         ))
       ) : (
-        <input type="hidden" name={name} value={props.value} />
+        <input
+          type="hidden"
+          name={name}
+          value={props.value}
+          form={form}
+        />
       )
     ) : null;
 

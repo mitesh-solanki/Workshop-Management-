@@ -12,11 +12,19 @@ import { applyStockMovement } from "@/modules/inventory/repo";
 
 class EstimateStockTxError extends Error {
   readonly reason: "INSUFFICIENT_STOCK" | "PART_NOT_FOUND";
+  readonly partName?: string;
+  readonly partId?: string;
 
-  constructor(reason: "INSUFFICIENT_STOCK" | "PART_NOT_FOUND") {
+  constructor(
+    reason: "INSUFFICIENT_STOCK" | "PART_NOT_FOUND",
+    partName?: string,
+    partId?: string,
+  ) {
     super(reason);
     this.name = "EstimateStockTxError";
     this.reason = reason;
+    this.partName = partName;
+    this.partId = partId;
   }
 }
 
@@ -110,7 +118,11 @@ export async function applyApprovedPartStock(
     tx,
   );
   if (!stock.ok) {
-    throw new EstimateStockTxError(stock.reason);
+    throw new EstimateStockTxError(
+      stock.reason,
+      stock.reason === "INSUFFICIENT_STOCK" ? stock.partName : undefined,
+      stock.reason === "INSUFFICIENT_STOCK" ? stock.partId : undefined,
+    );
   }
 }
 
@@ -650,9 +662,8 @@ export async function deleteEstimateLine(
     description: string;
     actorId: string;
   },
-): Promise<"ok" | "not_found" | "billed" | "insufficient_stock"> {
-  try {
-    return await prisma.$transaction(async (tx) => {
+): Promise<"ok" | "not_found" | "billed"> {
+  return prisma.$transaction(async (tx) => {
       // Draft invoices are editable snapshots. Only finalized invoice lines
       // lock their source estimate lines against deletion.
       const billed = await tx.invoiceLine.count({
@@ -722,13 +733,7 @@ export async function deleteEstimateLine(
       });
 
       return "ok";
-    });
-  } catch (error) {
-    if (error instanceof EstimateStockTxError) {
-      return "insufficient_stock";
-    }
-    throw error;
-  }
+  });
 }
 
 export type RecordLineApprovalResult =
@@ -769,7 +774,12 @@ export type RecordLineApprovalResult =
         } | null;
       };
     }
-  | { ok: false; reason: "CONFLICT" | "INSUFFICIENT_STOCK" | "PART_NOT_FOUND" };
+  | {
+      ok: false;
+      reason: "CONFLICT" | "INSUFFICIENT_STOCK" | "PART_NOT_FOUND";
+      partName?: string;
+      partId?: string;
+    };
 
 export async function recordLineApproval(
   garageId: string,
@@ -883,7 +893,12 @@ export async function recordLineApproval(
     return result;
   } catch (error) {
     if (error instanceof EstimateStockTxError) {
-      return { ok: false, reason: error.reason };
+      return {
+        ok: false,
+        reason: error.reason,
+        partName: error.partName,
+        partId: error.partId,
+      };
     }
     throw error;
   }

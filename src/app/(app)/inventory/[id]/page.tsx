@@ -82,6 +82,9 @@ export default async function PartDetailPage({ params }: Props) {
           quantityChange: m.quantityChange,
           note: m.note,
           createdAt: m.createdAt,
+          vendorBillId: m.vendorBillId,
+          billFileName: m.billFileName,
+          billDownloadUrl: m.billDownloadUrl,
         }))}
         partsRequests={partsRequests.map((request) => ({
           id: request.id,

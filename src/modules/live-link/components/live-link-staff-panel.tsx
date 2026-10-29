@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
-import { ChevronDown, Copy } from "lucide-react";
+import { ArrowUpRight, ChevronDown, Copy } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -51,8 +51,8 @@ type Props = {
   orderId: string;
   active: { id: string; expiresAt: Date | string } | null;
   canEdit: boolean;
-  /** Compact card for estimate / billing sections (same one link). */
-  variant?: "full" | "embed";
+  /** Compact card for estimate; header bar for billing (owner/staff). */
+  variant?: "full" | "embed" | "header";
 };
 
 export function LiveLinkStaffPanel({
@@ -66,6 +66,7 @@ export function LiveLinkStaffPanel({
   const locale = useLocale();
   const router = useRouter();
   const embed = variant === "embed";
+  const header = variant === "header";
   const [savedUrl, setSavedUrl] = useState<string | null>(null);
   const [expiresAt, setExpiresAt] = useState<string | null>(null);
   const [createPending, startCreate] = useTransition();
@@ -153,9 +154,27 @@ export function LiveLinkStaffPanel({
     }
   }
 
-  const expirySelectId = embed
-    ? `expiresInHours-embed-${orderId}`
-    : `expiresInHours-${orderId}`;
+  const expirySelectId = header
+    ? `expiresInHours-header-${orderId}`
+    : embed
+      ? `expiresInHours-embed-${orderId}`
+      : `expiresInHours-${orderId}`;
+
+  if (header) {
+    if (!displayUrl) return null;
+
+    return (
+      <a
+        href={displayUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="inline-flex min-h-9 shrink-0 items-center gap-1 rounded-lg border border-blue-200 bg-white px-2.5 py-1.5 text-sm font-semibold text-blue-800 transition-colors hover:border-blue-300 hover:bg-blue-50 hover:text-blue-950"
+      >
+        {t("openLiveLink")}
+        <ArrowUpRight className="size-4 shrink-0" aria-hidden />
+      </a>
+    );
+  }
 
   const body = (
     <>

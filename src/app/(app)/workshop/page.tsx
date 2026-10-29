@@ -48,6 +48,7 @@ export default async function WorkshopPage({ searchParams }: Props) {
     id: order.id,
     status: order.status as ServiceOrderStatusValue,
     priority: order.priority as ServiceOrderPriorityValue,
+    createdAt: order.createdAt,
     expectedCompletion: order.expectedCompletion,
     bay: order.bay,
     vehicle: { registrationNumber: order.vehicle.registrationNumber },

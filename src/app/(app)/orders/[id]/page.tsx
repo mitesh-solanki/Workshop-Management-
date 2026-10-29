@@ -138,7 +138,6 @@ export default async function OrderEditPage({ params, searchParams }: Props) {
   const unbilledApprovedLines = approvedLines.filter(
     (line) => !billedEstimateLineIds.has(line.id),
   );
-  const hasApprovedEstimateLines = approvedLines.length > 0;
   const hasUnbilledApprovedLines = unbilledApprovedLines.length > 0;
 
   const approvedPreviewLines = unbilledApprovedLines.map((line) => {
@@ -148,6 +147,7 @@ export default async function OrderEditPage({ params, searchParams }: Props) {
     return {
       id: line.id,
       description: line.description,
+      type: typeKey,
       typeLabel: te(`lineTypes.${typeKey}`),
       quantity: line.quantity,
       unitPricePaise: line.unitPricePaise,
@@ -247,6 +247,16 @@ export default async function OrderEditPage({ params, searchParams }: Props) {
             }
           />
         }
+        liveLink={
+          surface.includeCommercialSections
+            ? {
+                active: liveLinkStatus.active,
+                canEdit: canBill,
+                // Only when a live link already exists (URL shown client-side).
+                showInBillingHeader: Boolean(liveLinkStatus.active),
+              }
+            : undefined
+        }
         estimateContent={
           surface.includeCommercialSections && estimate ? (
             <JobCardEstimateContent
@@ -265,12 +275,8 @@ export default async function OrderEditPage({ params, searchParams }: Props) {
               vehicleId={order.vehicleId}
               canEdit={canBill}
               invoices={invoices}
-              hasApprovedEstimateLines={hasApprovedEstimateLines}
               hasUnbilledApprovedLines={hasUnbilledApprovedLines}
               defaultPlaceOfSupplyStateCode={order.vehicle.stateCode}
-              liveLinkActive={liveLinkStatus.active}
-              canEditLiveLink={canBill}
-              hasEstimate={Boolean(estimate?.current)}
               preview={{
                 garageName: garage?.name ?? t("title"),
                 garageAddress: garage?.address ?? null,

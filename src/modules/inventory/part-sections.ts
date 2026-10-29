@@ -1,4 +1,10 @@
-export const PART_SECTIONS = ["details", "stock", "requests", "history"] as const;
+export const PART_SECTIONS = [
+  "details",
+  "stock",
+  "boughtFrom",
+  "requests",
+  "history",
+] as const;
 
 export type PartSection = (typeof PART_SECTIONS)[number];
 

@@ -1,5 +1,7 @@
+import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 import { PageHeader } from "@/components/ui/page-header";
+import { homePathForRole } from "@/lib/rbac";
 import { requireSession } from "@/lib/session";
 import { GarageSettingsForm } from "@/modules/settings/components/garage-settings-form";
 import { getGarageSettings } from "@/modules/settings/service";
@@ -8,6 +10,9 @@ export const instant = false;
 
 export default async function SettingsPage() {
   const session = await requireSession();
+  if (session.role === "TECHNICIAN" || session.role === "ACCOUNTANT") {
+    redirect(homePathForRole(session.role));
+  }
   const garage = await getGarageSettings(session);
   const t = await getTranslations("settings");
   const canEdit = session.role === "OWNER" || session.role === "MANAGER";
@@ -16,7 +21,7 @@ export default async function SettingsPage() {
     <main className="space-y-6">
       <PageHeader title={t("title")} description={t("subtitle")} />
       <GarageSettingsForm
-        key={`${garage.name}|${garage.address ?? ""}|${garage.gstin ?? ""}|${garage.allowNegativeStock}`}
+        key={`${garage.name}|${garage.address ?? ""}|${garage.gstin ?? ""}`}
         garage={garage}
         canEdit={canEdit}
       />

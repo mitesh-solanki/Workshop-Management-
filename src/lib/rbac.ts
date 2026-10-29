@@ -16,3 +16,11 @@ export function requireRole<T extends RoleSession>(
   }
   return session;
 }
+
+/** Post-login / home route — technicians land on the workshop board. */
+export function homePathForRole(role: Role): string {
+  if (role === "TECHNICIAN") {
+    return "/workshop";
+  }
+  return "/dashboard";
+}

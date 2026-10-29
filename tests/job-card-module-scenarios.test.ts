@@ -14,8 +14,7 @@ import { getPartStock } from "@/modules/inventory/repo";
 import {
   canTransitionStatus,
   STATUS_TRANSITIONS,
-  type ServiceOrderStatusValue,
-} from "@/modules/service-orders/schema";
+  type ServiceOrderStatusValue } from "@/modules/service-orders/schema";
 import {
   createServiceOrder,
   createServiceOrderLine,
@@ -26,8 +25,7 @@ import {
   listServiceOrders,
   updateServiceOrderDetails,
   updateServiceOrderLine,
-  updateServiceOrderStatus,
-} from "@/modules/service-orders/repo";
+  updateServiceOrderStatus } from "@/modules/service-orders/repo";
 
 if (!process.env.DATABASE_URL) {
   process.env.DATABASE_URL =
@@ -78,20 +76,14 @@ describe("job card module — full scenarios", () => {
 
     const garage = await prisma.garage.create({
       data: {
-        name: `JC module ${suffix}`,
-        allowNegativeStock: false,
-      },
-      select: { id: true },
-    });
+        name: `JC module ${suffix}` },
+      select: { id: true } });
     garageId = garage.id;
 
     const otherGarage = await prisma.garage.create({
       data: {
-        name: `JC other ${suffix}`,
-        allowNegativeStock: false,
-      },
-      select: { id: true },
-    });
+        name: `JC other ${suffix}` },
+      select: { id: true } });
     otherGarageId = otherGarage.id;
 
     const user = await prisma.user.create({
@@ -99,10 +91,8 @@ describe("job card module — full scenarios", () => {
         email: `jc-mod-${suffix}@example.com`,
         name: "JC Module Tester",
         role: "OWNER",
-        garageId,
-      },
-      select: { id: true },
-    });
+        garageId },
+      select: { id: true } });
     userId = user.id;
 
     const tech = await prisma.user.create({
@@ -110,16 +100,13 @@ describe("job card module — full scenarios", () => {
         email: `jc-tech-${suffix}@example.com`,
         name: "Tech One",
         role: "TECHNICIAN",
-        garageId,
-      },
-      select: { id: true },
-    });
+        garageId },
+      select: { id: true } });
     technicianId = tech.id;
 
     const customer = await prisma.customer.create({
       data: { garageId, name: "Cust", phone: "9222222222" },
-      select: { id: true },
-    });
+      select: { id: true } });
     customerId = customer.id;
 
     const vehicle = await prisma.vehicle.create({
@@ -130,10 +117,8 @@ describe("job card module — full scenarios", () => {
         make: "Honda",
         model: "City",
         stateCode: "24",
-        odometer: 10_000,
-      },
-      select: { id: true },
-    });
+        odometer: 10_000 },
+      select: { id: true } });
     vehicleId = vehicle.id;
 
     const vehicleB = await prisma.vehicle.create({
@@ -143,10 +128,8 @@ describe("job card module — full scenarios", () => {
         registrationNumber: `GJ01JN${suffix.slice(-4)}`.toUpperCase(),
         make: "Honda",
         model: "Amaze",
-        stateCode: "24",
-      },
-      select: { id: true },
-    });
+        stateCode: "24" },
+      select: { id: true } });
     vehicleBId = vehicleB.id;
 
     const part = await prisma.part.create({
@@ -159,10 +142,8 @@ describe("job card module — full scenarios", () => {
         sellingPricePaise: 12_000,
         gstRatePercent: 18,
         hsn: "84212300",
-        lowStockLevel: 1,
-      },
-      select: { id: true },
-    });
+        lowStockLevel: 1 },
+      select: { id: true } });
     partId = part.id;
 
     await prisma.stockMovement.create({
@@ -172,16 +153,13 @@ describe("job card module — full scenarios", () => {
         type: "IN",
         quantityChange: 2,
         note: "seed two filters",
-        createdById: userId,
-      },
-    });
+        createdById: userId } });
   });
 
   afterAll(async () => {
     if (!ready) return;
     await prisma.garage.deleteMany({
-      where: { id: { in: [garageId, otherGarageId] } },
-    });
+      where: { id: { in: [garageId, otherGarageId] } } });
     await prisma.$disconnect();
   });
 
@@ -198,8 +176,7 @@ describe("job card module — full scenarios", () => {
       technicianId,
       bay: "Bay 1",
       priority: "HIGH",
-      actorId: userId,
-    });
+      actorId: userId });
 
     orderId = order.id;
     expect(order.status).toBe("WAITING");
@@ -211,8 +188,7 @@ describe("job card module — full scenarios", () => {
 
     const vehicle = await prisma.vehicle.findFirst({
       where: { id: vehicleId, garageId },
-      select: { odometer: true },
-    });
+      select: { odometer: true } });
     expect(vehicle?.odometer).toBe(12_500);
 
     const audits = await listServiceOrderAuditLogs(garageId, orderId);
@@ -233,8 +209,7 @@ describe("job card module — full scenarios", () => {
       bay: "Bay 2",
       priority: "URGENT",
       vehicleId,
-      actorId: userId,
-    });
+      actorId: userId });
 
     expect(updated).not.toBeNull();
     expect(updated!.complaint).toBe("Engine oil leak + filter");
@@ -245,8 +220,7 @@ describe("job card module — full scenarios", () => {
 
     const vehicle = await prisma.vehicle.findFirst({
       where: { id: vehicleId, garageId },
-      select: { odometer: true },
-    });
+      select: { odometer: true } });
     expect(vehicle?.odometer).toBe(12_600);
   });
 
@@ -288,8 +262,7 @@ describe("job card module — full scenarios", () => {
       const moved = await updateServiceOrderStatus(garageId, orderId, {
         from,
         to,
-        actorId: userId,
-      });
+        actorId: userId });
       expect(moved).not.toBeNull();
       // Re-read after the transaction commits (repo find inside tx can be stale).
       const confirmed = await findServiceOrderById(garageId, orderId);
@@ -301,8 +274,7 @@ describe("job card module — full scenarios", () => {
     const conflict = await updateServiceOrderStatus(garageId, orderId, {
       from: "WAITING",
       to: "INSPECTION",
-      actorId: userId,
-    });
+      actorId: userId });
     expect(conflict).toBeNull();
 
     const current = await findServiceOrderById(garageId, orderId);
@@ -321,8 +293,7 @@ describe("job card module — full scenarios", () => {
       quantity: 1,
       unitPricePaise: 5_000,
       partId: null,
-      actorId: userId,
-    });
+      actorId: userId });
     expect(labour.ok).toBe(true);
     if (labour.ok) labourLineId = labour.line.id;
 
@@ -333,8 +304,7 @@ describe("job card module — full scenarios", () => {
       quantity: 1,
       unitPricePaise: 12_000,
       partId,
-      actorId: userId,
-    });
+      actorId: userId });
     expect(partLine.ok).toBe(true);
     if (partLine.ok) partLineId = partLine.line.id;
 
@@ -345,8 +315,7 @@ describe("job card module — full scenarios", () => {
       quantity: 1,
       unitPricePaise: 1_000,
       partId: "does-not-exist",
-      actorId: userId,
-    });
+      actorId: userId });
     expect(missingPart).toEqual({ ok: false, reason: "PART_NOT_FOUND" });
 
     expect(await getPartStock(garageId, partId)).toBe(2);
@@ -364,8 +333,7 @@ describe("job card module — full scenarios", () => {
       description: "Oil change labour (revised)",
       quantity: 2,
       unitPricePaise: 4_500,
-      actorId: userId,
-    });
+      actorId: userId });
     expect(labourUpdated.ok).toBe(true);
     if (labourUpdated.ok) {
       expect(labourUpdated.line.quantity).toBe(2);
@@ -381,8 +349,7 @@ describe("job card module — full scenarios", () => {
       description: "Oil Filter",
       quantity: 1,
       unitPricePaise: 15_000,
-      actorId: userId,
-    });
+      actorId: userId });
     expect(partUpdated.ok).toBe(true);
 
     // Updating lines still does not touch stock.
@@ -393,14 +360,12 @@ describe("job card module — full scenarios", () => {
         quantity: 2,
         unitPricePaise: 4_500,
         gstRatePercent: 18,
-        approvalState: "PENDING",
-      },
+        approvalState: "PENDING" },
       {
         quantity: 1,
         unitPricePaise: 15_000,
         gstRatePercent: 18,
-        approvalState: "PENDING",
-      },
+        approvalState: "PENDING" },
     ]);
     // taxable: 9000 + 15000 = 24000; GST: 1620 + 2700 = 4320
     expect(totals.all.taxablePaise).toBe(24_000);
@@ -418,16 +383,14 @@ describe("job card module — full scenarios", () => {
       quantity: 1,
       unitPricePaise: 1_000,
       partId: null,
-      actorId: userId,
-    });
+      actorId: userId });
     expect(extraLabour.ok).toBe(true);
     if (!extraLabour.ok) return;
 
     const removedLabour = await deleteServiceOrderLine(garageId, {
       lineId: extraLabour.line.id,
       serviceOrderId: orderId,
-      actorId: userId,
-    });
+      actorId: userId });
     expect(removedLabour).toEqual({ ok: true });
 
     const freePart = await createServiceOrderLine(garageId, {
@@ -437,8 +400,7 @@ describe("job card module — full scenarios", () => {
       quantity: 1,
       unitPricePaise: 12_000,
       partId,
-      actorId: userId,
-    });
+      actorId: userId });
     expect(freePart.ok).toBe(true);
     if (!freePart.ok) return;
     freePartLineId = freePart.line.id;
@@ -446,8 +408,7 @@ describe("job card module — full scenarios", () => {
     const removedPart = await deleteServiceOrderLine(garageId, {
       lineId: freePartLineId,
       serviceOrderId: orderId,
-      actorId: userId,
-    });
+      actorId: userId });
     expect(removedPart).toEqual({ ok: true });
     expect(await getPartStock(garageId, partId)).toBe(2);
   });
@@ -473,8 +434,7 @@ describe("job card module — full scenarios", () => {
               hsnOrSac: "84212300",
               approvalState: "PENDING",
               sourceOrderLineId: partLineId,
-              sortOrder: 0,
-            },
+              sortOrder: 0 },
             {
               garageId,
               type: "LABOUR",
@@ -485,16 +445,11 @@ describe("job card module — full scenarios", () => {
               hsnOrSac: "998714",
               approvalState: "PENDING",
               sourceOrderLineId: labourLineId,
-              sortOrder: 1,
-            },
-          ],
-        },
-      },
+              sortOrder: 1 },
+          ] } },
       select: {
         id: true,
-        lines: { select: { id: true, type: true } },
-      },
-    });
+        lines: { select: { id: true, type: true } } } });
     estimateId = estimate.id;
     estimatePartLineId = estimate.lines.find((l) => l.type === "PART")!.id;
     const labourEstId = estimate.lines.find((l) => l.type === "LABOUR")!.id;
@@ -507,8 +462,7 @@ describe("job card module — full scenarios", () => {
       toState: "APPROVED",
       method: "MANUAL",
       note: null,
-      recordedById: userId,
-    });
+      recordedById: userId });
     expect(agreePart.ok).toBe(true);
     expect(await getPartStock(garageId, partId)).toBe(1);
 
@@ -520,8 +474,7 @@ describe("job card module — full scenarios", () => {
       toState: "APPROVED",
       method: "MANUAL",
       note: null,
-      recordedById: userId,
-    });
+      recordedById: userId });
     expect(agreeLabour.ok).toBe(true);
     expect(await getPartStock(garageId, partId)).toBe(1);
 
@@ -534,16 +487,14 @@ describe("job card module — full scenarios", () => {
       quantity: 1,
       unitPricePaise: 500,
       partId: null,
-      actorId: userId,
-    });
+      actorId: userId });
     expect(moreLabour.ok).toBe(true);
     if (moreLabour.ok) {
       expect(
         await deleteServiceOrderLine(garageId, {
           lineId: moreLabour.line.id,
           serviceOrderId: orderId,
-          actorId: userId,
-        }),
+          actorId: userId }),
       ).toEqual({ ok: true });
     }
   });
@@ -561,8 +512,7 @@ describe("job card module — full scenarios", () => {
       technicianId: null,
       bay: null,
       priority: "NORMAL",
-      actorId: userId,
-    });
+      actorId: userId });
     orderBId = orderB.id;
 
     const partB = await createServiceOrderLine(garageId, {
@@ -572,8 +522,7 @@ describe("job card module — full scenarios", () => {
       quantity: 2,
       unitPricePaise: 12_000,
       partId,
-      actorId: userId,
-    });
+      actorId: userId });
     expect(partB.ok).toBe(true);
     if (!partB.ok) return;
 
@@ -597,12 +546,8 @@ describe("job card module — full scenarios", () => {
             hsnOrSac: "84212300",
             approvalState: "PENDING",
             sourceOrderLineId: partB.line.id,
-            sortOrder: 0,
-          },
-        },
-      },
-      select: { id: true, lines: { select: { id: true } } },
-    });
+            sortOrder: 0 } } },
+      select: { id: true, lines: { select: { id: true } } } });
     estimateBId = estimateB.id;
     estimateBPartLineId = estimateB.lines[0]!.id;
 
@@ -614,8 +559,7 @@ describe("job card module — full scenarios", () => {
       toState: "APPROVED",
       method: "MANUAL",
       note: null,
-      recordedById: userId,
-    });
+      recordedById: userId });
     expect(blocked).toEqual({ ok: false, reason: "INSUFFICIENT_STOCK" });
     expect(await getPartStock(garageId, partId)).toBe(1);
   });
@@ -631,8 +575,7 @@ describe("job card module — full scenarios", () => {
       toState: "REJECTED",
       method: "MANUAL",
       note: "Customer changed mind",
-      recordedById: userId,
-    });
+      recordedById: userId });
     expect(disagreed.ok).toBe(true);
     expect(await getPartStock(garageId, partId)).toBe(2);
 
@@ -640,8 +583,7 @@ describe("job card module — full scenarios", () => {
     const canDelete = await deleteServiceOrderLine(garageId, {
       lineId: partLineId,
       serviceOrderId: orderId,
-      actorId: userId,
-    });
+      actorId: userId });
     expect(canDelete).toEqual({ ok: true });
 
     // Re-add part on A for listing continuity not required; job B takes stock.
@@ -653,8 +595,7 @@ describe("job card module — full scenarios", () => {
       toState: "APPROVED",
       method: "MANUAL",
       note: null,
-      recordedById: userId,
-    });
+      recordedById: userId });
     expect(approvedB.ok).toBe(true);
     expect(await getPartStock(garageId, partId)).toBe(0);
   });
@@ -684,16 +625,14 @@ describe("job card module — full scenarios", () => {
         bay: null,
         priority: "LOW",
         vehicleId,
-        actorId: userId,
-      },
+        actorId: userId },
     );
     expect(otherUpdate).toBeNull();
 
     const otherStatus = await updateServiceOrderStatus(otherGarageId, orderId, {
       from: "IN_PROGRESS",
       to: "READY",
-      actorId: userId,
-    });
+      actorId: userId });
     expect(otherStatus).toBeNull();
 
     const otherLine = await createServiceOrderLine(otherGarageId, {
@@ -703,8 +642,7 @@ describe("job card module — full scenarios", () => {
       quantity: 1,
       unitPricePaise: 100,
       partId: null,
-      actorId: userId,
-    });
+      actorId: userId });
     // Line create does not verify order garage match beyond FK — if it succeeds
     // the line would be wrong-garage. Assert either fail or no line on our order
     // under our garage filter.
@@ -744,8 +682,7 @@ describe("job card module — full scenarios", () => {
       actorId: userId,
       vehicleId: vehicleBId,
       customerId,
-      registrationNumber: "DEL",
-    });
+      registrationNumber: "DEL" });
     expect(deleted).not.toBeNull();
     expect(await findServiceOrderById(garageId, orderBId)).toBeNull();
     expect(await getPartStock(garageId, partId)).toBe(2);
@@ -755,8 +692,7 @@ describe("job card module — full scenarios", () => {
       actorId: userId,
       vehicleId,
       customerId,
-      registrationNumber: "X",
-    });
+      registrationNumber: "X" });
     expect(crossDelete).toBeNull();
     expect(await findServiceOrderById(garageId, orderId)).not.toBeNull();
   });

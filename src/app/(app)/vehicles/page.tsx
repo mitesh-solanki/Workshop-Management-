@@ -1,11 +1,13 @@
 import { Suspense } from "react";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { Car } from "lucide-react";
 import { getTranslations } from "next-intl/server";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
 import { TableSpinner } from "@/components/shared/page-spinner";
+import { homePathForRole } from "@/lib/rbac";
 import { requireSession } from "@/lib/session";
 import { listCustomers } from "@/modules/customers/service";
 import { ImportModal } from "@/modules/data-import/components/import-modal";
@@ -26,6 +28,9 @@ export const instant = false;
 
 export default async function VehiclesPage({ searchParams }: Props) {
   const session = await requireSession();
+  if (session.role === "TECHNICIAN") {
+    redirect(homePathForRole(session.role));
+  }
   const params = await searchParams;
   const t = await getTranslations("vehicles");
   const [result, customers] = await Promise.all([
@@ -38,10 +43,8 @@ export default async function VehiclesPage({ searchParams }: Props) {
     listCustomers(session, { pageSize: 50, sort: "newest" }),
   ]);
   const canWrite =
-    session.role === "OWNER" ||
-    session.role === "MANAGER" ||
-    session.role === "TECHNICIAN";
-  const canImport = session.role === "OWNER" || session.role === "MANAGER";
+    session.role === "OWNER" || session.role === "MANAGER";
+  const canImport = canWrite;
   const hasQuery = Boolean(params.q?.trim());
   const customerOptions = customers.items.map((c) => ({
     id: c.id,

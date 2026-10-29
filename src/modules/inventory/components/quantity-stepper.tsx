@@ -8,7 +8,8 @@ import { cn } from "@/lib/utils";
 
 type Props = {
   id?: string;
-  name: string;
+  /** When omitted, nothing is submitted (parent owns the form field). */
+  name?: string;
   label: string;
   defaultValue?: number;
   min?: number;
@@ -21,8 +22,12 @@ type Props = {
   hideLabel?: boolean;
   /** Compact single border-box for table / tight rows. */
   compact?: boolean;
+  /** Associate the hidden submit input with an external form. */
+  form?: string;
   /** Called whenever the quantity changes (stepper or typed). */
   onValueChange?: (value: number) => void;
+  /** Locks stepper when stock is calculated from vendors. */
+  disabled?: boolean;
 };
 
 /**
@@ -40,7 +45,9 @@ export function QuantityStepper({
   hint,
   hideLabel = false,
   compact = false,
+  form,
   onValueChange,
+  disabled = false,
 }: Props) {
   const t = useTranslations("inventory");
   const autoId = useId();
@@ -55,11 +62,13 @@ export function QuantityStepper({
   }
 
   function commit(next: number) {
+    if (disabled) return;
     setValue(next);
     if (Number.isFinite(next)) onValueChange?.(next);
   }
 
   function bump(delta: number) {
+    if (disabled) return;
     setValue((prev) => {
       const next = clamp(prev + delta);
       if (Number.isFinite(next)) onValueChange?.(next);
@@ -68,6 +77,7 @@ export function QuantityStepper({
   }
 
   function onInputChange(raw: string) {
+    if (disabled) return;
     if (raw === "" || raw === "-") {
       setValue(Number.NaN);
       return;
@@ -92,7 +102,10 @@ export function QuantityStepper({
   const sideW = compact ? "w-8" : "w-10";
   const iconSize = compact ? "size-3.5" : "size-4";
   const sideBtnClass = cn(
-    "inline-flex shrink-0 items-center justify-center bg-muted text-muted-foreground transition-colors hover:bg-blue-50 hover:text-blue-700 active:bg-blue-100",
+    "inline-flex shrink-0 items-center justify-center bg-muted text-muted-foreground transition-colors",
+    !disabled &&
+      "hover:bg-blue-50 hover:text-blue-700 active:bg-blue-100",
+    disabled && "cursor-not-allowed opacity-60",
     sideW,
     height,
   );
@@ -105,12 +118,14 @@ export function QuantityStepper({
           "inline-flex max-w-full items-stretch overflow-hidden rounded-md border border-input bg-card shadow-xs",
           compact ? "w-[7.5rem]" : "w-[9.5rem]",
           height,
+          disabled && "bg-muted/40",
         )}
       >
         <button
           type="button"
           className={sideBtnClass}
           aria-label={t("decreaseQty")}
+          disabled={disabled}
           onClick={() => bump(-step)}
         >
           <Minus className={iconSize} aria-hidden strokeWidth={2.5} />
@@ -122,12 +137,15 @@ export function QuantityStepper({
           value={display}
           min={resolvedMin}
           step={step}
+          disabled={disabled}
+          readOnly={disabled}
           onChange={(e) => onInputChange(e.target.value)}
           onBlur={onBlur}
           className={cn(
             "min-w-0 flex-1 border-0 bg-card px-1 text-center text-sm font-medium tabular-nums text-foreground outline-none focus-visible:bg-muted/40",
             "[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none",
             height,
+            disabled && "cursor-not-allowed bg-transparent",
           )}
           aria-label={label}
         />
@@ -135,12 +153,15 @@ export function QuantityStepper({
           type="button"
           className={sideBtnClass}
           aria-label={t("increaseQty")}
+          disabled={disabled}
           onClick={() => bump(step)}
         >
           <Plus className={iconSize} aria-hidden strokeWidth={2.5} />
         </button>
       </div>
-      <input type="hidden" name={name} value={submitValue} />
+      {disabled || !name ? null : (
+        <input type="hidden" name={name} value={submitValue} form={form} />
+      )}
       {hint ? (
         <p className="text-xs text-muted-foreground">{hint}</p>
       ) : null}

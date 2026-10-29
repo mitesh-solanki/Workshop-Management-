@@ -25,6 +25,7 @@ import { FormSelect } from "@/components/ui/form-select";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/toast";
+import { toastStockError } from "@/components/ui/toast-stock-error";
 import { finishCreateModalNavigation } from "@/lib/create-modal-navigation";
 import {
   isZeroRupeesInput,
@@ -86,6 +87,7 @@ export function CreatePurchaseReturnModal({
   const t = useTranslations("purchaseReturns");
   const te = useTranslations("errors");
   const tc = useTranslations("common");
+  const ti = useTranslations("inventory");
   const router = useRouter();
   const formId = useId();
   const [open, setOpen] = useState(false);
@@ -131,7 +133,10 @@ export function CreatePurchaseReturnModal({
       return () => window.clearTimeout(id);
     }
 
-    toast.error(state.message);
+    toastStockError(state.message, {
+      stockPartId: state.stockPartId,
+      viewStockLabel: ti("errors.viewStock"),
+    });
   }, [
     state,
     router,
@@ -140,6 +145,7 @@ export function CreatePurchaseReturnModal({
     defaultPartId,
     defaultVendorBillId,
     values.vendorId,
+    ti,
   ]);
 
   function setField<K extends keyof FormValues>(key: K, value: FormValues[K]) {

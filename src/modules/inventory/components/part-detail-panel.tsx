@@ -14,6 +14,7 @@ import {
   Package,
   PackagePlus,
   Pencil,
+  Store,
   TriangleAlert,
   type LucideIcon,
 } from "lucide-react";
@@ -26,6 +27,14 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription } from "@/components/ui/card";
 import { ListCard, ListCardGroup } from "@/components/ui/list-card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import {
   sectionDomId,
   useSectionScrollSpy,
@@ -52,6 +61,9 @@ type MovementRow = {
   quantityChange: number;
   note: string | null;
   createdAt: Date | string;
+  vendorBillId?: string | null;
+  billFileName?: string | null;
+  billDownloadUrl?: string | null;
 };
 
 type PartsRequestRow = {
@@ -175,8 +187,21 @@ export function PartDetailPanel({
     () =>
       (canManageRequests
         ? PART_SECTIONS
-        : PART_SECTIONS.filter((id) => id !== "requests")) as readonly PartSection[],
+        : PART_SECTIONS.filter(
+            (id) => id !== "requests",
+          )) as readonly PartSection[],
     [canManageRequests],
+  );
+
+  const boughtFromRows = useMemo(
+    () =>
+      movements.filter(
+        (m) =>
+          m.type === "IN" &&
+          m.quantityChange > 0 &&
+          m.note !== "Opening stock",
+      ),
+    [movements],
   );
 
   const { activeSection, scrollToSection, setSectionRef } =
@@ -224,6 +249,11 @@ export function PartDetailPanel({
   const navItems = [
     { id: "details" as const, label: t("details"), icon: NotebookPen },
     { id: "stock" as const, label: t("stockSection"), icon: Package },
+    {
+      id: "boughtFrom" as const,
+      label: t("boughtFromSection"),
+      icon: Store,
+    },
     ...(canManageRequests
       ? [
           {
@@ -403,6 +433,153 @@ export function PartDetailPanel({
                 </p>
               )}
             </div>
+          </SectionBlock>
+
+          <SectionBlock
+            id={sectionDomId(PART_SECTION_ID_PREFIX, "boughtFrom")}
+            title={t("boughtFromSection")}
+            subtitle={t("boughtFromSectionHint")}
+            sectionRef={setSectionRef("boughtFrom")}
+          >
+            {boughtFromRows.length === 0 ? (
+              <div className="flex flex-col items-center justify-center gap-3 px-5 py-12 text-center sm:px-6">
+                <span className="flex size-10 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+                  <Store className="size-5" aria-hidden />
+                </span>
+                <div className="space-y-1">
+                  <p className="text-body font-medium text-slate-900">
+                    {t("boughtFromEmptyTitle")}
+                  </p>
+                  <p className="text-body text-slate-500">
+                    {t("boughtFromEmptyDescription")}
+                  </p>
+                </div>
+                {canWrite ? (
+                  <Button asChild size="md">
+                    <Link href={`/inventory/${part.id}/edit`}>
+                      {t("boughtFromAddStock")}
+                    </Link>
+                  </Button>
+                ) : null}
+              </div>
+            ) : (
+              <>
+                <ul className="divide-y divide-border md:hidden">
+                  {boughtFromRows.map((m) => {
+                    const when =
+                      m.createdAt instanceof Date
+                        ? m.createdAt
+                        : new Date(m.createdAt);
+                    return (
+                      <li
+                        key={m.id}
+                        className="space-y-1.5 px-5 py-3.5 text-body sm:px-6"
+                      >
+                        <p className="font-medium text-slate-900">
+                          {m.note?.trim()
+                            ? m.note
+                            : t("boughtFromUnknownVendor")}
+                        </p>
+                        <div className="flex flex-wrap items-baseline justify-between gap-2 text-slate-500">
+                          <span className="tabular-nums">
+                            {t("stockCount", {
+                              count: m.quantityChange,
+                              unit: unitLabel,
+                            })}
+                          </span>
+                          <time
+                            dateTime={when.toISOString()}
+                            className="text-caption"
+                          >
+                            {dateFmt.format(when)}
+                          </time>
+                        </div>
+                        {m.billDownloadUrl ? (
+                          <a
+                            href={m.billDownloadUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            download={m.billFileName ?? undefined}
+                            className="inline-block text-sm font-medium text-blue-700 underline-offset-4 hover:underline"
+                          >
+                            {t("boughtFromDownloadBill")}
+                          </a>
+                        ) : (
+                          <p className="text-sm text-slate-400">
+                            {t("boughtFromNoBillFile")}
+                          </p>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+                <div className="hidden overflow-x-auto md:block">
+                  <Table className="table-fixed">
+                    <TableHeader className="bg-slate-50 [&_tr]:border-border">
+                      <TableRow className="hover:bg-transparent">
+                        <TableHead className="w-[28%] text-slate-700">
+                          {t("vendor")}
+                        </TableHead>
+                        <TableHead className="w-[18%] text-slate-700">
+                          {t("quantity")}
+                        </TableHead>
+                        <TableHead className="w-[34%] text-slate-700">
+                          {t("columns.date")}
+                        </TableHead>
+                        <TableHead className="w-[20%] text-right text-slate-700">
+                          {t("boughtFromBillColumn")}
+                        </TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {boughtFromRows.map((m) => {
+                        const when =
+                          m.createdAt instanceof Date
+                            ? m.createdAt
+                            : new Date(m.createdAt);
+                        return (
+                          <TableRow key={m.id}>
+                            <TableCell className="truncate font-medium text-slate-900">
+                              {m.note?.trim()
+                                ? m.note
+                                : t("boughtFromUnknownVendor")}
+                            </TableCell>
+                            <TableCell className="tabular-nums text-slate-700">
+                              {t("stockCount", {
+                                count: m.quantityChange,
+                                unit: unitLabel,
+                              })}
+                            </TableCell>
+                            <TableCell className="text-slate-500">
+                              <time dateTime={when.toISOString()}>
+                                {dateFmt.format(when)}
+                              </time>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              {m.billDownloadUrl ? (
+                                <a
+                                  href={m.billDownloadUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  download={m.billFileName ?? undefined}
+                                  className="font-medium text-blue-700 underline-offset-4 hover:underline"
+                                >
+                                  {t("boughtFromDownloadBill")}
+                                </a>
+                              ) : (
+                                <span className="text-slate-400">
+                                  {t("boughtFromNoBillFile")}
+                                </span>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+              </>
+            )}
           </SectionBlock>
 
           {canManageRequests ? (

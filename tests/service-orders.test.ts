@@ -338,53 +338,50 @@ describe("role limits", () => {
     expect(createServiceOrderLine).not.toHaveBeenCalled();
   });
 
-  it("lets technicians create orders assigned to themselves", async () => {
-    vi.mocked(findVehicleById).mockResolvedValue(sampleVehicle);
-    vi.mocked(findTechnicianInGarage).mockResolvedValue({
-      id: "tech-a",
-      name: "Ravi",
-      email: "ravi@example.com",
-      role: "TECHNICIAN",
-    });
-    vi.mocked(createServiceOrder).mockResolvedValue(
-      sampleOrder({ technicianId: "tech-a" }),
-    );
-
-    await createOrder(techA, {
-      vehicleId: "veh-1",
-      complaint: "Noise",
-      requestedServices: null,
-      odometerIn: null,
-      expectedCompletion: null,
-      technicianId: null,
-      bay: null,
-      priority: "NORMAL",
-    });
-
-    expect(createServiceOrder).toHaveBeenCalledWith(
-      garageA,
-      expect.objectContaining({
-        technicianId: "tech-a",
-        actorId: "tech-a",
+  it("blocks technicians from creating job cards", async () => {
+    await expect(
+      createOrder(techA, {
+        vehicleId: "veh-1",
+        complaint: "Noise",
+        requestedServices: null,
+        odometerIn: null,
+        expectedCompletion: null,
+        technicianId: null,
+        bay: null,
+        priority: "NORMAL",
       }),
-    );
+    ).rejects.toBeInstanceOf(ForbiddenError);
+    expect(createServiceOrder).not.toHaveBeenCalled();
   });
 
-  it("forces technician labour/part lines to zero price without changing owner pricing", async () => {
+  it("blocks technician labour lines; zeros price on technician parts; owner keeps labour pricing", async () => {
     vi.mocked(findServiceOrderById).mockResolvedValue(
       sampleOrder({ technicianId: "tech-a" }),
     );
+
+    await expect(
+      addOrderLine(techA, "order-1", {
+        type: "LABOUR",
+        description: "Pad change",
+        quantity: 1,
+        unitPricePaise: "999",
+        partId: null,
+      }),
+    ).rejects.toMatchObject({
+      code: "orders.technician_parts_only",
+    } satisfies Partial<AppError>);
+
     vi.mocked(createServiceOrderLine).mockResolvedValue({
       ok: true,
       line: {
         id: "line-1",
         garageId: garageA,
         serviceOrderId: "order-1",
-        type: "LABOUR",
-        description: "Pad change",
-        quantity: 1,
+        type: "PART",
+        description: "Brake Pad",
+        quantity: 2,
         unitPricePaise: 0,
-        partId: null,
+        partId: "part-1",
         sortOrder: 0,
         createdAt: new Date("2026-01-01T00:00:00.000Z"),
         updatedAt: new Date("2026-01-01T00:00:00.000Z"),
@@ -392,16 +389,18 @@ describe("role limits", () => {
     });
 
     await addOrderLine(techA, "order-1", {
-      type: "LABOUR",
-      description: "Pad change",
-      quantity: 1,
+      type: "PART",
+      description: "Brake Pad",
+      quantity: 2,
       unitPricePaise: "999",
-      partId: null,
+      partId: "part-1",
     });
 
     expect(createServiceOrderLine).toHaveBeenCalledWith(
       garageA,
       expect.objectContaining({
+        type: "PART",
+        quantity: 2,
         unitPricePaise: 0,
         actorId: "tech-a",
       }),
@@ -429,7 +428,7 @@ describe("role limits", () => {
     await addOrderLine(ownerA, "order-1", {
       type: "LABOUR",
       description: "Pad change",
-      quantity: 1,
+      quantity: 5,
       unitPricePaise: "999",
       partId: null,
     });
@@ -437,6 +436,8 @@ describe("role limits", () => {
     expect(createServiceOrderLine).toHaveBeenCalledWith(
       garageA,
       expect.objectContaining({
+        type: "LABOUR",
+        quantity: 1,
         unitPricePaise: 99900,
         actorId: "owner-a",
       }),

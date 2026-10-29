@@ -10,6 +10,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { authCopy } from "@/lib/auth-copy";
+import { homePathForRole } from "@/lib/rbac";
 import { getOptionalSession } from "@/lib/session";
 import { isProdPasswordLoginEnabled } from "@/modules/auth/service";
 
@@ -18,7 +19,7 @@ export const instant = false;
 export default async function LoginPage() {
   const session = await getOptionalSession();
   if (session) {
-    redirect("/dashboard");
+    redirect(homePathForRole(session.role));
   }
 
   const passwordLoginEnabled = isProdPasswordLoginEnabled();

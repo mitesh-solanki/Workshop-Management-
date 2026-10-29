@@ -27,6 +27,8 @@ type SidebarUserCardProps = {
   email: string;
   roleLabel: string;
   collapsed?: boolean;
+  /** Hide Garage Settings / profile for mechanics. */
+  showProfileLink?: boolean;
 };
 
 export function SidebarUserCard({
@@ -34,6 +36,7 @@ export function SidebarUserCard({
   email,
   roleLabel,
   collapsed: _collapsed = false,
+  showProfileLink = true,
 }: SidebarUserCardProps) {
   const t = useTranslations("nav");
   const tLang = useTranslations("language");
@@ -71,13 +74,17 @@ export function SidebarUserCard({
           <p className="truncate text-sm font-medium">{name}</p>
           <p className="truncate text-caption text-muted-foreground">{email}</p>
         </DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem asChild>
-          <Link href="/settings" className="cursor-pointer">
-            <User className="size-4" aria-hidden />
-            {t("profile")}
-          </Link>
-        </DropdownMenuItem>
+        {showProfileLink ? (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem asChild>
+              <Link href="/settings" className="cursor-pointer">
+                <User className="size-4" aria-hidden />
+                {t("profile")}
+              </Link>
+            </DropdownMenuItem>
+          </>
+        ) : null}
         <DropdownMenuSeparator />
         <DropdownMenuLabel className="text-caption text-muted-foreground">
           {t("language")}

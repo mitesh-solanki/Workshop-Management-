@@ -25,6 +25,7 @@ import {
 import { FormField } from "@/components/ui/form-field";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/toast";
+import { toastStockError } from "@/components/ui/toast-stock-error";
 import { QuantityStepper } from "@/modules/inventory/components/quantity-stepper";
 
 const initial: InventoryActionState = { ok: false };
@@ -53,7 +54,10 @@ export function AddStockDialog({ partId, unitLabel }: StockDialogProps) {
       const id = window.setTimeout(() => setOpen(false), 0);
       return () => window.clearTimeout(id);
     }
-    toast.error(state.message);
+    toastStockError(state.message, {
+      stockPartId: state.stockPartId,
+      viewStockLabel: t("errors.viewStock"),
+    });
   }, [state, t, router]);
 
   return (
@@ -132,7 +136,10 @@ export function RemoveStockDialog({
       const id = window.setTimeout(() => setOpen(false), 0);
       return () => window.clearTimeout(id);
     }
-    toast.error(state.message);
+    toastStockError(state.message, {
+      stockPartId: state.stockPartId,
+      viewStockLabel: t("errors.viewStock"),
+    });
   }, [state, t, router]);
 
   return (
@@ -223,7 +230,10 @@ export function CorrectStockDialog({
       const id = window.setTimeout(() => setOpen(false), 0);
       return () => window.clearTimeout(id);
     }
-    toast.error(state.message);
+    toastStockError(state.message, {
+      stockPartId: state.stockPartId,
+      viewStockLabel: t("errors.viewStock"),
+    });
   }, [state, t, router]);
 
   const quantityChange = counted - onHand;

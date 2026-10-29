@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { Eye, Pencil, Trash2 } from "lucide-react";
+import { Eye, Trash2 } from "lucide-react";
 import { deleteServiceOrderAction } from "@/app/actions/service-orders";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,10 @@ type Props = {
   customerId: string;
   label: string;
   canWrite: boolean;
+  /** Owner / manager only — technicians never see delete. */
+  canDelete?: boolean;
+  /** Completed cards are view-only (no edit). */
+  status?: string;
   /** On the job-card hub, only show delete (view/edit are redundant). */
   mode?: "row" | "delete-only" | "view-delete";
   /** Where to go after a successful delete. Defaults to staying put + refresh. */
@@ -26,6 +30,8 @@ export function JobCardRowActions({
   customerId,
   label,
   canWrite,
+  canDelete = false,
+  status,
   mode = "row",
   redirectTo,
 }: Props) {
@@ -34,7 +40,15 @@ export function JobCardRowActions({
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   const showView = mode === "row" || mode === "view-delete";
-  const showEdit = mode === "row";
+  const showDelete = canDelete;
+  const isCompleted = status === "COMPLETED";
+  /** One eye control: open details for work, or read-only when completed. */
+  const viewHref =
+    mode === "row" && canWrite && !isCompleted
+      ? `/orders/${orderId}?section=details`
+      : `/orders/${orderId}`;
+  const viewLabel =
+    mode === "row" && canWrite && !isCompleted ? t("edit") : t("view");
 
   function onConfirmDelete() {
     startTransition(async () => {
@@ -53,7 +67,11 @@ export function JobCardRowActions({
     });
   }
 
-  if (mode === "delete-only" && !canWrite) {
+  if (mode === "delete-only" && !showDelete) {
+    return null;
+  }
+
+  if (!showView && !showDelete) {
     return null;
   }
 
@@ -67,22 +85,12 @@ export function JobCardRowActions({
       >
         {showView ? (
           <Button asChild variant="outline" size="icon-sm">
-            <Link href={`/orders/${orderId}`} aria-label={t("view")}>
+            <Link href={viewHref} aria-label={viewLabel}>
               <Eye className="size-4" aria-hidden />
             </Link>
           </Button>
         ) : null}
-        {showEdit && canWrite ? (
-          <Button asChild variant="outline" size="icon-sm">
-            <Link
-              href={`/orders/${orderId}?section=details`}
-              aria-label={t("edit")}
-            >
-              <Pencil className="size-4" aria-hidden />
-            </Link>
-          </Button>
-        ) : null}
-        {canWrite ? (
+        {showDelete ? (
           <Button
             type="button"
             variant="outline"
@@ -97,18 +105,20 @@ export function JobCardRowActions({
         ) : null}
       </div>
 
-      <ConfirmDialog
-        open={deleteOpen}
-        onOpenChange={(open) => {
-          if (!open && !pending) setDeleteOpen(false);
-        }}
-        title={t("deleteTitle")}
-        description={t("deleteConfirm", { label })}
-        confirmLabel={t("delete")}
-        variant="danger"
-        loading={pending && deleteOpen}
-        onConfirm={onConfirmDelete}
-      />
+      {showDelete ? (
+        <ConfirmDialog
+          open={deleteOpen}
+          onOpenChange={(open) => {
+            if (!open && !pending) setDeleteOpen(false);
+          }}
+          title={t("deleteTitle")}
+          description={t("deleteConfirm", { label })}
+          confirmLabel={t("delete")}
+          variant="danger"
+          loading={pending && deleteOpen}
+          onConfirm={onConfirmDelete}
+        />
+      ) : null}
     </>
   );
 }

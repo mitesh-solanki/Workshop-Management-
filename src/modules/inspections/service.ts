@@ -257,6 +257,8 @@ export async function createMediaUploadUrl(
   return {
     uploadUrl: signed.uploadUrl,
     storageKey: signed.storageKey,
+    method: signed.method,
+    fields: signed.fields,
     contentType: input.contentType,
     kind: input.kind,
     inspectionItemId: item.id,

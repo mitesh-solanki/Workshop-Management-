@@ -6,6 +6,7 @@ import { useTranslations } from "next-intl";
 import { usePageDetailLabel } from "@/components/page-chrome";
 import { Badge } from "@/components/ui/badge";
 import type { ServiceOrderStatus } from "@/lib/service-order-status";
+import { LiveLinkStaffPanel } from "@/modules/live-link/components/live-link-staff-panel";
 import { JobCardSectionJumpProvider } from "@/modules/service-orders/components/job-card-section-jump";
 import { JobCardSectionNav } from "@/modules/service-orders/components/job-card-section-nav";
 import { OrderLineForm } from "@/modules/service-orders/components/order-line-form";
@@ -90,6 +91,12 @@ type Props = {
   inspectionContent: ReactNode;
   estimateContent: ReactNode;
   billingContent: ReactNode;
+  /** Owner/staff: live link controls in Customer bill header after estimate exists. */
+  liveLink?: {
+    active: { id: string; expiresAt: Date | string } | null;
+    canEdit: boolean;
+    showInBillingHeader: boolean;
+  };
 };
 
 const SECTION_BODY_CLASS = "space-y-5";
@@ -145,6 +152,7 @@ export function JobCardDetailPanel({
   inspectionContent,
   estimateContent,
   billingContent,
+  liveLink,
 }: Props) {
   const t = useTranslations("orders");
   const tc = useTranslations("customers");
@@ -176,7 +184,11 @@ export function JobCardDetailPanel({
     [scrollToSection],
   );
 
+  const visibleLines = hidePrices
+    ? order.lines.filter((line) => line.type === "PART")
+    : order.lines;
   const labourCount = order.lines.filter((line) => line.type === "LABOUR").length;
+  const partCount = order.lines.filter((line) => line.type === "PART").length;
   const needsPricing =
     !hidePrices &&
     order.status !== "COMPLETED" &&
@@ -192,12 +204,11 @@ export function JobCardDetailPanel({
     order.technician?.email ||
     t("technicianUnassigned");
   const vehicleLabel = `${order.vehicle.make} ${order.vehicle.model}`.trim();
-  const metaParts = [
-    order.customer.name,
-    vehicleLabel,
-    order.bay || null,
-    techLabel,
-  ].filter(Boolean);
+  const metaParts = hidePrices
+    ? [vehicleLabel, order.bay || null].filter(Boolean)
+    : [order.customer.name, vehicleLabel, order.bay || null, techLabel].filter(
+        Boolean,
+      );
 
   const sectionTitles: Record<JobCardSection, string> = {
     details: t("details"),
@@ -226,18 +237,31 @@ export function JobCardDetailPanel({
               {order.vehicle.registrationNumber}
             </h1>
             <p className="mt-1 truncate text-[14px] text-[#5c6b7e]">
-              <Link
-                href={`/customers/${order.customerId}`}
-                className="font-medium text-[#1f5eff] underline-offset-4 hover:underline"
-              >
-                {order.customer.name}
-              </Link>
-              {metaParts.slice(1).map((part) => (
-                <span key={String(part)}>
-                  <span className="text-slate-300"> · </span>
-                  {part}
-                </span>
-              ))}
+              {hidePrices ? (
+                metaParts.map((part, index) => (
+                  <span key={String(part)}>
+                    {index > 0 ? (
+                      <span className="text-slate-300"> · </span>
+                    ) : null}
+                    {part}
+                  </span>
+                ))
+              ) : (
+                <>
+                  <Link
+                    href={`/customers/${order.customerId}`}
+                    className="font-medium text-[#1f5eff] underline-offset-4 hover:underline"
+                  >
+                    {order.customer.name}
+                  </Link>
+                  {metaParts.slice(1).map((part) => (
+                    <span key={String(part)}>
+                      <span className="text-slate-300"> · </span>
+                      {part}
+                    </span>
+                  ))}
+                </>
+              )}
             </p>
           </div>
           <div className="flex flex-wrap items-center justify-end gap-2">
@@ -267,23 +291,34 @@ export function JobCardDetailPanel({
               aria-labelledby="job-card-active-section-title"
               className="min-w-0 overflow-hidden rounded-[14px] border border-[#d7deea] bg-white shadow-[0_3px_17px_rgba(36,58,99,0.06)]"
             >
-              <div className="flex items-start gap-3 border-b border-[#d7deea] bg-[#f8fafc] px-4 py-4 sm:px-5">
-                <span className="grid size-9 shrink-0 place-items-center rounded-[10px] bg-[#e8efff] text-[13px] font-black text-[#1f5eff]">
-                  {sectionNumbers[activeSection] ?? "01"}
-                </span>
-                <div className="min-w-0 flex-1 pt-0.5">
-                  <h2
-                    id="job-card-active-section-title"
-                    className="text-[17px] font-semibold tracking-tight text-[#152238]"
-                  >
-                    {sectionTitles[activeSection]}
-                  </h2>
-                  {sectionSubtitles[activeSection] ? (
-                    <p className="mt-1 text-[13px] text-[#5c6b7e]">
-                      {sectionSubtitles[activeSection]}
-                    </p>
-                  ) : null}
+              <div className="flex flex-col gap-3 border-b border-[#d7deea] bg-[#f8fafc] px-4 py-4 sm:flex-row sm:items-start sm:gap-4 sm:px-5">
+                <div className="flex min-w-0 flex-1 items-start gap-3">
+                  <span className="grid size-9 shrink-0 place-items-center rounded-[10px] bg-[#e8efff] text-[13px] font-black text-[#1f5eff]">
+                    {sectionNumbers[activeSection] ?? "01"}
+                  </span>
+                  <div className="min-w-0 flex-1 pt-0.5">
+                    <h2
+                      id="job-card-active-section-title"
+                      className="text-[17px] font-semibold tracking-tight text-[#152238]"
+                    >
+                      {sectionTitles[activeSection]}
+                    </h2>
+                    {sectionSubtitles[activeSection] ? (
+                      <p className="mt-1 text-[13px] text-[#5c6b7e]">
+                        {sectionSubtitles[activeSection]}
+                      </p>
+                    ) : null}
+                  </div>
                 </div>
+                {activeSection === "billing" &&
+                liveLink?.showInBillingHeader ? (
+                  <LiveLinkStaffPanel
+                    orderId={order.id}
+                    active={liveLink.active}
+                    canEdit={liveLink.canEdit}
+                    variant="header"
+                  />
+                ) : null}
               </div>
 
               <div className="min-w-0 px-4 py-5 sm:px-5">
@@ -295,6 +330,7 @@ export function JobCardDetailPanel({
                       technicians={technicians}
                       bays={bays}
                       canEdit={canMutate}
+                      technicianFieldsOnly={hidePrices}
                       locked={{
                         customerName: order.customer.name,
                         registrationNumber: order.vehicle.registrationNumber,
@@ -324,38 +360,73 @@ export function JobCardDetailPanel({
                 </SectionPanel>
 
                 <SectionPanel id="lines" open={activeSection === "lines"}>
-                  <div className={SECTION_BODY_CLASS}>
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <strong className="text-[14px] font-semibold text-slate-900">
-                        {t("linesAdded")}
-                      </strong>
-                      <small className="text-[13px] text-slate-500">
-                        {t("labourPartsCount", {
-                          labour: labourCount,
-                          parts: order.lines.length - labourCount,
-                        })}
-                      </small>
-                    </div>
-                    {needsPricing ? (
-                      <p className="rounded-[10px] border border-amber-200 bg-amber-50 px-3 py-2 text-[13px] text-amber-950">
-                        {t("needsPricingHint")}
-                      </p>
+                  <div
+                    className={
+                      hidePrices
+                        ? `${SECTION_BODY_CLASS} max-w-xl`
+                        : SECTION_BODY_CLASS
+                    }
+                  >
+                    {canMutate && hidePrices ? (
+                      <div className="space-y-3">
+                        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                          <strong className="text-[14px] font-semibold text-slate-900">
+                            {t("addSparePart")}
+                          </strong>
+                          <small className="text-[13px] text-slate-500">
+                            {t("addSparePartHint")}
+                          </small>
+                        </div>
+                        <div className="rounded-[10px] border border-[#e8edf5] bg-[#fafcff] p-3.5 sm:p-4">
+                          <OrderLineForm
+                            orderId={order.id}
+                            hidePrices={hidePrices}
+                          />
+                        </div>
+                      </div>
                     ) : null}
 
-                    {order.lines.length === 0 ? (
-                      <p className="rounded-[10px] border border-dashed border-slate-300 bg-slate-50/50 px-4 py-6 text-[14px] text-slate-600">
-                        {t("linesEmpty")}
-                      </p>
-                    ) : (
-                      <OrderLinesTable
-                        orderId={order.id}
-                        canMutate={canMutate}
-                        hidePrices={hidePrices}
-                        lines={order.lines}
-                      />
-                    )}
+                    <div
+                      className={
+                        canMutate && hidePrices
+                          ? "space-y-3 border-t border-slate-300 pt-5"
+                          : "space-y-3"
+                      }
+                    >
+                      <div className="flex flex-wrap items-baseline gap-2">
+                        <strong className="text-[14px] font-semibold text-slate-900">
+                          {t("linesAdded")}
+                        </strong>
+                        <small className="text-[13px] text-slate-500">
+                          {hidePrices
+                            ? t("partsCount", { count: partCount })
+                            : t("labourPartsCount", {
+                                labour: labourCount,
+                                parts: partCount,
+                              })}
+                        </small>
+                      </div>
+                      {needsPricing ? (
+                        <p className="rounded-[10px] border border-amber-200 bg-amber-50 px-3 py-2 text-[13px] text-amber-950">
+                          {t("needsPricingHint")}
+                        </p>
+                      ) : null}
 
-                    {canMutate ? (
+                      {visibleLines.length === 0 ? (
+                        <p className="rounded-[10px] border border-dashed border-slate-300 bg-slate-50/50 px-4 py-6 text-[14px] text-slate-600">
+                          {hidePrices ? t("partsEmpty") : t("linesEmpty")}
+                        </p>
+                      ) : (
+                        <OrderLinesTable
+                          orderId={order.id}
+                          canMutate={canMutate}
+                          hidePrices={hidePrices}
+                          lines={order.lines}
+                        />
+                      )}
+                    </div>
+
+                    {canMutate && !hidePrices ? (
                       <div className="space-y-3 border-t border-slate-300 pt-5">
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <strong className="text-[14px] font-semibold text-slate-900">

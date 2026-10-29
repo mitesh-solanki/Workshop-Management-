@@ -3,10 +3,15 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
+import { AppError } from "@/lib/errors";
 import { multiplyByQuantity, parseRupeesToPaise, paiseToRupeesInput } from "@/lib/money";
 import { translateError } from "@/lib/translate-error";
 import { requireSession } from "@/lib/session";
 import { parseDirectSaleFormData } from "@/modules/inventory/direct-sale-form-data";
+import {
+  parseShopReceiveLines,
+  withShopReceiveBillId,
+} from "@/modules/inventory/shop-receive";
 import {
   createDirectSaleRecord,
   createPartByNameRecord,
@@ -24,6 +29,7 @@ import {
   updatePartRecord,
 } from "@/modules/inventory/service";
 import { createVendorBillRecord } from "@/modules/purchases/service";
+import { getVendor } from "@/modules/vendors/service";
 
 export type InventoryActionState = {
   ok: boolean;
@@ -36,31 +42,26 @@ export type InventoryActionState = {
   vendorBillId?: string;
   /** One id per shop line that created a bill (same order as filled lines). */
   vendorBillIds?: string[];
+  /** When set, UI can link to `/inventory/{stockPartId}`. */
+  stockPartId?: string;
 };
 
-function parseShopReceiveLines(formData: FormData): Array<{
-  vendorId: string;
-  quantity: number;
-}> {
-  const countRaw = String(formData.get("shopLineCount") ?? "0").trim();
-  const count = Number(countRaw);
-  if (!Number.isFinite(count) || count <= 0) {
-    return [];
+async function failInventoryAction(
+  error: unknown,
+): Promise<InventoryActionState> {
+  const message = await translateError(error);
+  if (
+    error instanceof AppError &&
+    error.code === "inventory.insufficient_stock"
+  ) {
+    const stockPartId = String(error.params?.partId ?? "").trim();
+    return {
+      ok: false,
+      message,
+      ...(stockPartId ? { stockPartId } : {}),
+    };
   }
-  const lines: Array<{ vendorId: string; quantity: number }> = [];
-  for (let i = 0; i < count; i += 1) {
-    const vendorId = String(formData.get(`shopVendorId_${i}`) ?? "").trim();
-    if (!vendorId) {
-      continue;
-    }
-    const qtyRaw = String(formData.get(`shopQty_${i}`) ?? "").trim();
-    const quantity = qtyRaw === "" ? 0 : Number(qtyRaw);
-    lines.push({
-      vendorId,
-      quantity: Number.isFinite(quantity) ? quantity : 0,
-    });
-  }
-  return lines;
+  return { ok: false, message };
 }
 
 function parsePartForm(formData: FormData) {
@@ -137,28 +138,38 @@ export async function createPartShopReceiveAction(
       parseRupeesToPaise(String(formData.get("purchasePriceRupees") ?? "0")) ??
       0;
 
-    if (shopLines.length === 0) {
-      return { ok: false, message: t("shopVendorRequired") };
-    }
-    if (shopLines.some((line) => !line.vendorId || line.quantity <= 0)) {
-      return { ok: false, message: t("shopLineIncomplete") };
-    }
-    if (purchasePaise <= 0) {
-      return { ok: false, message: t("purchaseRequiredForStock") };
+    if (shopLines.length > 0) {
+      if (shopLines.some((line) => !line.vendorId || line.quantity <= 0)) {
+        return { ok: false, message: t("shopLineIncomplete") };
+      }
+      if (purchasePaise <= 0) {
+        return { ok: false, message: t("purchaseRequiredForStock") };
+      }
     }
 
     const part = await createPartRecord(session, {
       ...parsed,
-      openingStock: "0",
+      // Vendors drive stock-in below; otherwise use the Current Stock field.
+      openingStock: shopLines.length > 0 ? "0" : parsed.openingStock,
     });
+
+    if (shopLines.length === 0) {
+      revalidatePath("/inventory");
+      revalidatePath("/dashboard");
+      revalidatePath("/vendors");
+      return {
+        ok: true,
+        message: t("created"),
+        partId: part.id,
+        partName: part.name,
+        partSku: part.sku,
+        partUnit: part.unit,
+      };
+    }
 
     const vendorBillIds: string[] = [];
     for (const line of shopLines) {
-      await recordStockIn(session, {
-        partId: part.id,
-        quantity: String(line.quantity),
-        note: String(formData.get("addStockNote") ?? ""),
-      });
+      const vendor = await getVendor(session, line.vendorId);
       const billAmountPaise = multiplyByQuantity(purchasePaise, line.quantity);
       const bill = await createVendorBillRecord(session, {
         vendorId: line.vendorId,
@@ -167,6 +178,14 @@ export async function createPartShopReceiveAction(
         billDate: "",
         amountPaise: paiseToRupeesInput(billAmountPaise),
         notes: t("shopReceiveBillNote", { name: part.name }),
+      });
+      await recordStockIn(session, {
+        partId: part.id,
+        quantity: String(line.quantity),
+        note: withShopReceiveBillId(
+          t("shopReceiveStockNote", { vendor: vendor.name }),
+          bill.id,
+        ),
       });
       vendorBillIds.push(bill.id);
       revalidatePath(`/vendors/${line.vendorId}`);
@@ -272,11 +291,7 @@ export async function savePartShopReceiveAction(
 
       const vendorBillIds: string[] = [];
       for (const line of shopLines) {
-        await recordStockIn(session, {
-          partId,
-          quantity: String(line.quantity),
-          note: String(formData.get("addStockNote") ?? ""),
-        });
+        const vendor = await getVendor(session, line.vendorId);
         const billAmountPaise = multiplyByQuantity(
           purchasePaise,
           line.quantity,
@@ -288,6 +303,14 @@ export async function savePartShopReceiveAction(
           billDate: "",
           amountPaise: paiseToRupeesInput(billAmountPaise),
           notes: t("shopReceiveBillNote", { name: part.name }),
+        });
+        await recordStockIn(session, {
+          partId,
+          quantity: String(line.quantity),
+          note: withShopReceiveBillId(
+            t("shopReceiveStockNote", { vendor: vendor.name }),
+            bill.id,
+          ),
         });
         vendorBillIds.push(bill.id);
         revalidatePath(`/vendors/${line.vendorId}`);
@@ -347,7 +370,7 @@ export async function stockInAction(
     revalidatePath("/dashboard");
     return { ok: true, message: "stockInOk" };
   } catch (error) {
-    return { ok: false, message: await translateError(error) };
+    return failInventoryAction(error);
   }
 }
 
@@ -368,7 +391,7 @@ export async function stockOutAction(
     revalidatePath("/dashboard");
     return { ok: true, message: "stockOutOk" };
   } catch (error) {
-    return { ok: false, message: await translateError(error) };
+    return failInventoryAction(error);
   }
 }
 
@@ -389,7 +412,7 @@ export async function stockAdjustAction(
     revalidatePath("/dashboard");
     return { ok: true, message: "stockAdjustOk" };
   } catch (error) {
-    return { ok: false, message: await translateError(error) };
+    return failInventoryAction(error);
   }
 }
 
@@ -402,7 +425,7 @@ export async function createDirectSaleAction(
     const payload = parseDirectSaleFormData(formData);
     await createDirectSaleRecord(session, payload);
   } catch (error) {
-    return { ok: false, message: await translateError(error) };
+    return failInventoryAction(error);
   }
 
   revalidatePath("/inventory");
@@ -425,7 +448,7 @@ export async function createDirectSaleModalAction(
     revalidatePath("/dashboard");
     return { ok: true, message: t("saleCreated"), saleId: result.saleId };
   } catch (error) {
-    return { ok: false, message: await translateError(error) };
+    return failInventoryAction(error);
   }
 }
 
@@ -446,7 +469,7 @@ export async function updateDirectSaleModalAction(
     revalidatePath("/dashboard");
     return { ok: true, message: t("saleUpdated"), saleId: result.saleId };
   } catch (error) {
-    return { ok: false, message: await translateError(error) };
+    return failInventoryAction(error);
   }
 }
 
@@ -462,7 +485,7 @@ export async function deleteDirectSaleAction(
     revalidatePath("/dashboard");
     return { ok: true, message: t("saleDeleted") };
   } catch (error) {
-    return { ok: false, message: await translateError(error) };
+    return failInventoryAction(error);
   }
 }
 

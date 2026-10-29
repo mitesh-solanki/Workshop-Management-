@@ -1,10 +1,10 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import {
   AlertTriangle,
   CheckCircle2,
   ClipboardList,
   Clock,
-  Kanban,
   Package,
   PackageSearch,
   Plus,
@@ -21,6 +21,7 @@ import {
   SERVICE_ORDER_STATUSES,
   type ServiceOrderStatus,
 } from "@/lib/service-order-status";
+import { homePathForRole } from "@/lib/rbac";
 import { requireSession } from "@/lib/session";
 import { LowStockAlertList } from "@/modules/inventory/components/low-stock-alert-list";
 import { getLowStockAlerts } from "@/modules/inventory/service";
@@ -54,24 +55,23 @@ const STATUS_ICON = {
 
 export default async function DashboardPage() {
   const session = await requireSession();
+  if (session.role === "TECHNICIAN") {
+    redirect(homePathForRole(session.role));
+  }
   const garage = await getGarageSettings(session);
   const locale = await getLocale();
   const t = await getTranslations("dashboard");
-  const tn = await getTranslations("nav");
   const ti = await getTranslations("inventory");
   const tStatus = await getTranslations("orders.statuses");
 
   const displayName = session.name ?? session.email;
-  const isTechnician = session.role === "TECHNICIAN";
   const isAccountant = session.role === "ACCOUNTANT";
   const canCreateWorkshop =
     session.role === "OWNER" || session.role === "MANAGER";
-  const canManageStock =
-    session.role === "OWNER" || session.role === "MANAGER";
+  const canManageStock = canCreateWorkshop;
   const showOrderStats = !isAccountant;
-  const showLowStock = !isTechnician;
 
-  const lowStock = showLowStock ? await getLowStockAlerts(session) : [];
+  const lowStock = await getLowStockAlerts(session);
   const [orderCounts, todayOrders] = showOrderStats
     ? await Promise.all([
         getDashboardOrderCounts(session),
@@ -122,21 +122,6 @@ export default async function DashboardPage() {
               </Link>
             </Button>
           </div>
-        ) : isTechnician ? (
-          <div className="flex flex-wrap justify-center gap-2 sm:justify-end">
-            <Button asChild variant="secondary" size="md">
-              <Link href="/workshop">
-                <Kanban className="size-4" aria-hidden />
-                {tn("workshop")}
-              </Link>
-            </Button>
-            <Button asChild size="md">
-              <Link href="/orders">
-                <ClipboardList className="size-4" aria-hidden />
-                {t("viewOrders")}
-              </Link>
-            </Button>
-          </div>
         ) : null}
       </header>
 
@@ -150,7 +135,7 @@ export default async function DashboardPage() {
               id="orders-by-status-heading"
               className="text-section-title text-slate-900"
             >
-              {isTechnician ? t("myOrdersByStatus") : t("ordersByStatus")}
+              {t("ordersByStatus")}
             </h2>
           </div>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
@@ -182,24 +167,20 @@ export default async function DashboardPage() {
 
       <section
         className={
-          showLowStock ? "grid gap-6 lg:grid-cols-2" : "grid gap-6"
+          showOrderStats ? "grid gap-6 lg:grid-cols-2" : "grid gap-6"
         }
       >
         {showOrderStats ? (
           <div className="space-y-3">
             <h2 className="text-section-title text-slate-900">
-              {isTechnician ? t("myDueToday") : t("dueToday")}
+              {t("dueToday")}
             </h2>
             {todayOrders.length === 0 ? (
               <EmptyState
                 compact
                 icon={ClipboardList}
                 title={t("dueTodayEmptyTitle")}
-                description={
-                  isTechnician
-                    ? t("dueTodayEmptyTechnician")
-                    : t("dueTodayEmptyDescription")
-                }
+                description={t("dueTodayEmptyDescription")}
                 action={
                   canCreateWorkshop ? (
                     <Button asChild size="sm">
@@ -221,39 +202,37 @@ export default async function DashboardPage() {
           </div>
         ) : null}
 
-        {showLowStock ? (
-          <div className="space-y-3">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="flex flex-wrap items-center gap-2">
-                <h2 className="text-section-title text-slate-900">
-                  {t("lowStock")}
-                </h2>
-                {lowStock.length > 0 ? (
-                  <Badge variant="warning">{lowStock.length}</Badge>
-                ) : null}
-              </div>
-              {canManageStock ? (
-                <Button asChild size="sm">
-                  <Link href="/inventory">{ti("title")}</Link>
-                </Button>
+        <div className="space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-section-title text-slate-900">
+                {t("lowStock")}
+              </h2>
+              {lowStock.length > 0 ? (
+                <Badge variant="warning">{lowStock.length}</Badge>
               ) : null}
             </div>
-            {lowStock.length === 0 ? (
-              <EmptyState
-                compact
-                icon={Package}
-                title={t("lowStockEmptyTitle")}
-                description={t("lowStockEmptyDescription")}
-              />
-            ) : (
-              <LowStockAlertList
-                parts={lowStock}
-                canRequest={canManageStock}
-                requestLabel={t("requestPart")}
-              />
-            )}
+            {canManageStock ? (
+              <Button asChild size="sm">
+                <Link href="/inventory">{ti("title")}</Link>
+              </Button>
+            ) : null}
           </div>
-        ) : null}
+          {lowStock.length === 0 ? (
+            <EmptyState
+              compact
+              icon={Package}
+              title={t("lowStockEmptyTitle")}
+              description={t("lowStockEmptyDescription")}
+            />
+          ) : (
+            <LowStockAlertList
+              parts={lowStock}
+              canRequest={canManageStock}
+              requestLabel={t("requestPart")}
+            />
+          )}
+        </div>
       </section>
     </main>
   );

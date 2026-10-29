@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { FormSelect } from "@/components/ui/form-select";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/toast";
+import { toastStockError } from "@/components/ui/toast-stock-error";
 import {
   isZeroRupeesInput,
   paiseToRupeesInput,
@@ -108,9 +109,12 @@ export function LineApprovalForm({
       );
       onSaved?.();
     } else {
-      toast.error(state.message);
+      toastStockError(state.message, {
+        stockPartId: state.stockPartId,
+        viewStockLabel: ti("errors.viewStock"),
+      });
     }
-  }, [state, onSaved, t]);
+  }, [state, onSaved, t, ti]);
 
   const descriptionValue =
     lineType === "PART" && selectedPart
@@ -147,7 +151,10 @@ export function LineApprovalForm({
         return;
       }
       setSelectedState(previous);
-      toast.error(result.message ?? t("errors.lineBilled"));
+      toastStockError(result.message ?? t("errors.lineBilled"), {
+        stockPartId: result.stockPartId,
+        viewStockLabel: ti("errors.viewStock"),
+      });
     });
   }
 
@@ -311,6 +318,17 @@ export function LineApprovalForm({
       {state.message && !state.ok ? (
         <p className="text-[13px] text-danger" role="status">
           {state.message}
+          {state.stockPartId ? (
+            <>
+              {" "}
+              <a
+                href={`/inventory/${state.stockPartId}`}
+                className="font-semibold underline underline-offset-2"
+              >
+                {ti("errors.viewStock")}
+              </a>
+            </>
+          ) : null}
         </p>
       ) : null}
     </form>

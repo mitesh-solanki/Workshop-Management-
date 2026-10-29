@@ -1,15 +1,12 @@
 "use client";
 
-import { useActionState, useId, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
-import { useLocale, useTranslations } from "next-intl";
-import { Building2, Check, FileText, Languages, Package } from "lucide-react";
+import { useActionState, useId, useState } from "react";
+import { useTranslations } from "next-intl";
+import { Building2 } from "lucide-react";
 import {
   updateGarageSettingsAction,
   type SettingsActionState,
 } from "@/app/actions/settings";
-import { setLocale } from "@/app/actions/locale";
-import { locales, type Locale } from "@/i18n/config";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -38,7 +35,6 @@ type Props = {
     name: string;
     address: string | null;
     gstin: string | null;
-    allowNegativeStock: boolean;
   };
   canEdit: boolean;
 };
@@ -49,50 +45,49 @@ type SectionShellProps = {
   title: string;
   description: string;
   children: React.ReactNode;
+  footer?: React.ReactNode;
 };
 
-/** Vercel / shadcn settings row: title left, fields right on desktop. */
 function SettingsSection({
   icon,
   titleId,
   title,
   description,
   children,
+  footer,
 }: SectionShellProps) {
   return (
     <Card className="gap-0 overflow-hidden py-0">
-      <div className="grid lg:grid-cols-[minmax(0,15rem)_minmax(0,1fr)]">
-        <CardHeader className="border-b border-slate-100 bg-slate-50/80 lg:border-r lg:border-b-0">
-          <div className="flex items-start gap-3">
-            <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-teal-50 text-teal-700 ring-1 ring-teal-100">
-              {icon}
-            </span>
-            <div className="min-w-0 space-y-1">
-              <CardTitle id={titleId}>{title}</CardTitle>
-              <CardDescription>{description}</CardDescription>
-            </div>
-          </div>
-        </CardHeader>
-        <CardBody className="flex flex-col gap-4 py-5">{children}</CardBody>
-      </div>
+      <CardHeader className="flex flex-row items-center gap-2.5 space-y-0 border-b border-slate-100 bg-slate-50/70 px-4 py-2.5 [.border-b]:pb-2.5">
+        <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-teal-50 text-teal-700 ring-1 ring-teal-100">
+          {icon}
+        </span>
+        <div className="min-w-0">
+          <CardTitle id={titleId} className="text-sm font-semibold leading-tight">
+            {title}
+          </CardTitle>
+          <CardDescription className="text-xs leading-snug">
+            {description}
+          </CardDescription>
+        </div>
+      </CardHeader>
+      <CardBody className="flex flex-col gap-3 px-4 py-3.5">{children}</CardBody>
+      {footer ? (
+        <CardFooter className="justify-end gap-2 border-t border-slate-100 px-4 py-3">
+          {footer}
+        </CardFooter>
+      ) : null}
     </Card>
   );
 }
 
 export function GarageSettingsForm({ garage, canEdit }: Props) {
   const t = useTranslations("settings");
-  const tLang = useTranslations("language");
   const tGst = useTranslations("gst");
-  const locale = useLocale() as Locale;
-  const router = useRouter();
   const formId = useId();
-  const [localePending, startLocaleTransition] = useTransition();
   const [name, setName] = useState(garage.name);
   const [address, setAddress] = useState(garage.address ?? "");
   const [gstin, setGstin] = useState(garage.gstin ?? "");
-  const [allowNegativeStock, setAllowNegativeStock] = useState(
-    garage.allowNegativeStock,
-  );
   const [state, formAction, pending] = useActionState(
     updateGarageSettingsAction,
     initial,
@@ -102,8 +97,7 @@ export function GarageSettingsForm({ garage, canEdit }: Props) {
     canEdit &&
     (name.trim() !== garage.name ||
       address.trim() !== (garage.address ?? "") ||
-      normalizeGstin(gstin) !== normalizeGstin(garage.gstin ?? "") ||
-      allowNegativeStock !== garage.allowNegativeStock);
+      normalizeGstin(gstin) !== normalizeGstin(garage.gstin ?? ""));
 
   const gstinNormalized = normalizeGstin(gstin);
   const gstinEmpty = gstinNormalized.length === 0;
@@ -120,249 +114,138 @@ export function GarageSettingsForm({ garage, canEdit }: Props) {
     setName(garage.name);
     setAddress(garage.address ?? "");
     setGstin(garage.gstin ?? "");
-    setAllowNegativeStock(garage.allowNegativeStock);
   }
 
   const saveDisabled = !dirty || Boolean(gstinLiveError) || !canEdit;
 
   return (
-    <div className="relative space-y-6 pb-24">
-      <form id={formId} action={formAction} className="min-w-0 max-w-3xl space-y-6">
+    <div className="space-y-4">
+      <form id={formId} action={formAction} className="min-w-0 max-w-2xl">
+        {!canEdit ? (
+          <p className="mb-3 text-sm text-slate-600">{t("readOnly")}</p>
+        ) : null}
+
         <SettingsSection
-          icon={<Building2 className="size-5" aria-hidden />}
+          icon={<Building2 className="size-4" aria-hidden />}
           titleId={`${formId}-garage-title`}
           title={t("sections.garageTitle")}
           description={t("sections.garageDescription")}
+          footer={
+            canEdit ? (
+              <>
+                {dirty ? (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="md"
+                    onClick={discard}
+                  >
+                    {t("discard")}
+                  </Button>
+                ) : null}
+                <Button
+                  type="submit"
+                  size="md"
+                  disabled={saveDisabled}
+                  loading={pending}
+                >
+                  {pending ? t("saving") : t("save")}
+                </Button>
+              </>
+            ) : undefined
+          }
         >
-          <FormField id="name" label={t("garageName")}>
-            <Input
-              id="name"
-              name="name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              required
-              disabled={!canEdit}
-              className="h-11"
-            />
-          </FormField>
-          <FormField id="address" label={t("address")}>
-            <Textarea
-              id="address"
-              name="address"
-              value={address}
-              onChange={(e) => setAddress(e.target.value)}
-              rows={3}
-              disabled={!canEdit}
-            />
-          </FormField>
-          {!canEdit ? (
-            <p className="text-body text-slate-600">{t("readOnly")}</p>
-          ) : null}
-        </SettingsSection>
-
-        <SettingsSection
-          icon={<FileText className="size-5" aria-hidden />}
-          titleId={`${formId}-invoice-title`}
-          title={t("sections.invoiceTitle")}
-          description={t("sections.invoiceDescription")}
-        >
-          <FormField
-            id="gstin"
-            label={t("gstin")}
-            hint={canEdit && !gstinLiveError ? t("gstinHint") : undefined}
-            error={
-              gstinLiveError ??
-              (!state.ok && state.message ? state.message : undefined)
-            }
-          >
-            <Input
-              id="gstin"
-              name="gstin"
-              value={gstin}
-              onChange={(e) => setGstin(e.target.value.toUpperCase())}
-              disabled={!canEdit}
-              autoCapitalize="characters"
-              spellCheck={false}
-              maxLength={15}
-              aria-invalid={Boolean(gstinLiveError)}
-              className={cn(
-                "h-11 font-mono tracking-wide",
-                gstinValid && !gstinEmpty && "border-success/40",
-              )}
-            />
-          </FormField>
-
-          <div className="flex flex-col gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="min-w-0">
-              <p className="text-caption font-medium text-slate-500">
-                {t("stateCodeLabel")}
+          <div className="grid gap-3 sm:grid-cols-2">
+            <FormField id="name" label={t("garageName")} className="sm:col-span-2">
+              <Input
+                id="name"
+                name="name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                required
+                disabled={!canEdit}
+                className="h-10"
+              />
+            </FormField>
+            <FormField id="address" label={t("address")} className="sm:col-span-2">
+              <Textarea
+                id="address"
+                name="address"
+                value={address}
+                onChange={(e) => setAddress(e.target.value)}
+                rows={2}
+                disabled={!canEdit}
+              />
+            </FormField>
+            <div className="sm:col-span-2 border-t border-slate-100 pt-3">
+              <p className="text-xs font-semibold text-slate-800">
+                {t("sections.invoiceTitle")}
               </p>
-              <p className="text-body text-slate-900">
-                {stateCode
-                  ? t("stateCodeValue", {
-                      code: stateCode,
-                      name: stateName ?? t("stateCodeUnknown"),
-                    })
-                  : t("stateCodeEmpty")}
+              <p className="text-xs text-slate-600">
+                {t("sections.invoiceDescription")}
               </p>
             </div>
+            <FormField
+              id="gstin"
+              label={t("gstin")}
+              error={
+                gstinLiveError ??
+                (!state.ok && state.message ? state.message : undefined)
+              }
+              className="sm:col-span-2"
+            >
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                <Input
+                  id="gstin"
+                  name="gstin"
+                  value={gstin}
+                  onChange={(e) => setGstin(e.target.value.toUpperCase())}
+                  disabled={!canEdit}
+                  autoCapitalize="characters"
+                  spellCheck={false}
+                  maxLength={15}
+                  aria-invalid={Boolean(gstinLiveError)}
+                  className={cn(
+                    "h-10 font-mono tracking-wide sm:min-w-0 sm:flex-1",
+                    gstinValid && !gstinEmpty && "border-success/40",
+                  )}
+                />
+                <div className="flex min-h-10 items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 sm:max-w-56 sm:shrink-0">
+                  <span className="text-xs font-medium text-slate-500">
+                    {t("stateCodeLabel")}
+                  </span>
+                  {stateCode ? (
+                    <Badge
+                      variant="secondary"
+                      className="border-0 bg-teal-50 px-2 py-0.5 font-mono text-teal-800"
+                    >
+                      {stateCode}
+                    </Badge>
+                  ) : (
+                    <span className="truncate text-xs text-slate-500">
+                      {t("stateCodeEmpty")}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </FormField>
             {stateCode ? (
-              <Badge
-                variant="secondary"
-                className="w-fit border-0 bg-teal-50 px-2.5 py-1 font-mono text-teal-800"
-              >
-                {stateCode}
-              </Badge>
+              <p className="text-xs text-slate-600 sm:col-span-2">
+                {t("stateCodeValue", {
+                  code: stateCode,
+                  name: stateName ?? t("stateCodeUnknown"),
+                })}
+              </p>
             ) : null}
           </div>
-
-          {!canEdit ? (
-            <p className="text-body text-slate-600">{t("readOnly")}</p>
-          ) : null}
         </SettingsSection>
-
-        <SettingsSection
-          icon={<Package className="size-5" aria-hidden />}
-          titleId={`${formId}-stock-title`}
-          title={t("sections.stockTitle")}
-          description={t("sections.stockDescription")}
-        >
-          <label className="flex min-h-12 cursor-pointer items-start gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
-            <input
-              type="checkbox"
-              name="allowNegativeStock"
-              checked={allowNegativeStock}
-              onChange={(e) => setAllowNegativeStock(e.target.checked)}
-              disabled={!canEdit}
-              className="mt-1 size-4 accent-teal-700"
-            />
-            <span className="min-w-0 space-y-1">
-              <span className="block text-sm font-medium text-slate-900">
-                {t("allowNegativeStock")}
-              </span>
-              <span className="block text-sm text-slate-600">
-                {t("allowNegativeStockHint")}
-              </span>
-            </span>
-          </label>
-          {!canEdit ? (
-            <p className="text-body text-slate-600">{t("readOnly")}</p>
-          ) : null}
-        </SettingsSection>
-
-        <SettingsSection
-          icon={<Languages className="size-5" aria-hidden />}
-          titleId={`${formId}-language-title`}
-          title={t("sections.languageTitle")}
-          description={t("sections.languageDescription")}
-        >
-          <p className="text-body text-slate-600">{t("languageHint")}</p>
-          <div
-            role="radiogroup"
-            aria-label={tLang("label")}
-            className="overflow-hidden rounded-xl border border-slate-200"
-          >
-            {locales.map((code, index) => {
-              const selected = code === locale;
-              return (
-                <button
-                  key={code}
-                  type="button"
-                  role="radio"
-                  aria-checked={selected}
-                  disabled={localePending}
-                  onClick={() => {
-                    if (selected) return;
-                    startLocaleTransition(async () => {
-                      await setLocale(code);
-                      router.refresh();
-                    });
-                  }}
-                  className={cn(
-                    "flex min-h-12 w-full items-center justify-between gap-3 px-4 py-3 text-left text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-teal-600",
-                    index > 0 && "border-t border-slate-200",
-                    selected
-                      ? "bg-teal-50 text-teal-950"
-                      : "bg-card text-slate-800 hover:bg-slate-50",
-                    localePending && "opacity-70",
-                  )}
-                >
-                  <span>{tLang(code)}</span>
-                  {selected ? (
-                    <Check
-                      className="size-4 shrink-0 text-teal-700"
-                      aria-hidden
-                    />
-                  ) : null}
-                </button>
-              );
-            })}
-          </div>
-        </SettingsSection>
-
-        {canEdit ? (
-          <Card className="gap-0 py-0">
-            <CardFooter className="justify-end gap-2 py-4">
-              {dirty ? (
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="md"
-                  onClick={discard}
-                >
-                  {t("discard")}
-                </Button>
-              ) : null}
-              <Button
-                type="submit"
-                loading={pending}
-                size="md"
-                disabled={saveDisabled}
-              >
-                {pending ? t("saving") : t("save")}
-              </Button>
-            </CardFooter>
-          </Card>
-        ) : null}
 
         {state.ok && state.message ? (
-          <p className="text-body text-success" role="status">
+          <p className="mt-3 text-body text-success" role="status">
             {state.message}
           </p>
         ) : null}
       </form>
-
-      {dirty ? (
-        <div
-          className="fixed inset-x-0 bottom-16 z-40 border-t border-amber-200 bg-amber-50 px-[34px] py-3 shadow-lg lg:bottom-0"
-          role="status"
-        >
-          <div className="flex w-full max-w-[1600px] flex-wrap items-center justify-between gap-3">
-            <p className="text-body font-medium text-amber-950">
-              {t("unsavedChanges")}
-            </p>
-            <div className="flex flex-wrap gap-2">
-              <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                onClick={discard}
-              >
-                {t("discard")}
-              </Button>
-              <Button
-                type="submit"
-                form={formId}
-                size="sm"
-                disabled={saveDisabled}
-                loading={pending}
-              >
-                {pending ? t("saving") : t("save")}
-              </Button>
-            </div>
-          </div>
-        </div>
-      ) : null}
     </div>
   );
 }

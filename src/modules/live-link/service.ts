@@ -2,6 +2,7 @@ import "server-only";
 
 import { randomBytes } from "node:crypto";
 import { AppError, NotFoundError } from "@/lib/errors";
+import { insufficientStockError } from "@/modules/inventory/insufficient-stock-error";
 import { getAppUrl } from "@/lib/email/env";
 import { hashToken } from "@/lib/otp";
 import {
@@ -57,6 +58,8 @@ export type PublicLiveView = {
   }>;
   estimate: {
     revisionNumber: number;
+    /** Customer may Agree / Disagree on pending lines via this page. */
+    canCustomerApprove: boolean;
     lines: Array<{
       id: string;
       type: string;
@@ -256,6 +259,9 @@ export async function getPublicLiveView(
   const estimate = snapshot.estimate
     ? {
         revisionNumber: snapshot.estimate.revisionNumber,
+        canCustomerApprove:
+          snapshot.estimate.askPermission &&
+          snapshot.estimate.permissionVia === "LIVE_LINK",
         lines: snapshot.estimate.lines.map((line) => {
           const gst = computeLineGst({
             unitPricePaise: line.unitPricePaise,
@@ -340,6 +346,12 @@ export async function approveEstimateLineViaLiveLink(
   if (line.estimate.supersededAt != null) {
     throw new AppError("ESTIMATE_SUPERSEDED");
   }
+  if (
+    !line.estimate.askPermission ||
+    line.estimate.permissionVia !== "LIVE_LINK"
+  ) {
+    throw new AppError("errors.forbidden", 403);
+  }
   if (line.approvalState !== "PENDING") {
     throw new AppError("APPROVAL_UNCHANGED");
   }
@@ -353,7 +365,10 @@ export async function approveEstimateLineViaLiveLink(
   });
   if (!result.ok) {
     if (result.reason === "INSUFFICIENT_STOCK") {
-      throw new AppError("inventory.insufficient_stock", 409);
+      throw insufficientStockError(
+        result.partName ?? line.description,
+        result.partId,
+      );
     }
     if (result.reason === "PART_NOT_FOUND") {
       throw new NotFoundError();

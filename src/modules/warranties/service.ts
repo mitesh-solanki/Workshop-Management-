@@ -27,6 +27,7 @@ import {
   createManualWarranty,
   deleteWarrantyById,
   findWarrantyById,
+  findWarrantyByInvoiceLine,
   listWarrantiesForCustomer,
   listWarrantiesForInvoice,
   listWarrantiesForVehicle,
@@ -113,6 +114,8 @@ export async function requestWarrantyUploadUrl(
     return {
       uploadUrl: signed.uploadUrl,
       storageKey: signed.storageKey,
+      method: signed.method,
+      fields: signed.fields,
     };
   } catch (error) {
     if (error instanceof AppError && error.code === "STORAGE_NOT_CONFIGURED") {
@@ -175,6 +178,12 @@ export async function saveInvoiceLineWarranty(
   // Partial saves are allowed (autosave while filling). Finalize still
   // requires battery photo + expiry via assertBatteryWarrantiesCompleteForInvoice.
 
+  const previous = await findWarrantyByInvoiceLine(
+    session.garageId,
+    line.id,
+  );
+  const previousStorageKey = previous?.storageKey ?? null;
+
   const saved = await upsertInvoiceLineWarranty({
     garageId: session.garageId,
     vehicleId: order.vehicleId,
@@ -189,6 +198,14 @@ export async function saveInvoiceLineWarranty(
     fileName: storageKey ? (input.fileName ?? null) : null,
     createdById: session.userId,
   });
+
+  if (previousStorageKey && previousStorageKey !== storageKey) {
+    try {
+      await deleteStoredObject(previousStorageKey);
+    } catch {
+      // DB row is updated; storage cleanup is best-effort.
+    }
+  }
 
   return withDownloadUrl(saved);
 }

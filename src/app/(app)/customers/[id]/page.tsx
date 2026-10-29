@@ -1,8 +1,9 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { ChevronLeft } from "lucide-react";
 import { getLocale, getTranslations } from "next-intl/server";
 import { NotFoundError } from "@/lib/errors";
+import { homePathForRole } from "@/lib/rbac";
 import { requireSession } from "@/lib/session";
 import { CustomerDetailPanel } from "@/modules/customers/components/customer-detail-panel";
 import { getCustomer } from "@/modules/customers/service";
@@ -17,6 +18,9 @@ export const instant = false;
 
 export default async function CustomerDetailPage({ params }: Props) {
   const session = await requireSession();
+  if (session.role === "TECHNICIAN") {
+    redirect(homePathForRole(session.role));
+  }
   const { id } = await params;
   const locale = await getLocale();
   const t = await getTranslations("customers");
@@ -37,13 +41,9 @@ export default async function CustomerDetailPage({ params }: Props) {
   ]);
 
   const canWrite =
-    session.role === "OWNER" ||
-    session.role === "MANAGER" ||
-    session.role === "TECHNICIAN";
-  const canCreateOrder =
-    session.role === "OWNER" ||
-    session.role === "MANAGER" ||
-    session.role === "TECHNICIAN";
+    session.role === "OWNER" || session.role === "MANAGER";
+  const canCreateOrder = canWrite;
+  const canDeleteOrder = canWrite;
   const canWriteWarranty =
     canWrite || session.role === "ACCOUNTANT";
 
@@ -82,6 +82,7 @@ export default async function CustomerDetailPage({ params }: Props) {
         canWrite={canWrite}
         canWriteWarranty={canWriteWarranty}
         canCreateOrder={canCreateOrder}
+        canDeleteOrder={canDeleteOrder}
         locale={locale}
       />
     </main>

@@ -2,15 +2,22 @@
 
 import { AuthError } from "next-auth";
 import { redirect } from "next/navigation";
-import { signIn, signOut } from "@/lib/auth";
+import { auth, signIn, signOut } from "@/lib/auth";
 import { authCopy } from "@/lib/auth-copy";
 import { getClientIp } from "@/lib/client-ip";
+import { homePathForRole } from "@/lib/rbac";
 import { translateAuthError } from "@/lib/translate-auth-error";
 import {
   requestInviteOtp,
   requestLoginOtp,
   requestSignupOtp,
 } from "@/modules/auth/service";
+
+async function redirectAfterLogin(): Promise<never> {
+  const session = await auth();
+  const role = session?.user?.role;
+  redirect(role ? homePathForRole(role) : "/dashboard");
+}
 
 export type AuthActionState = {
   ok: boolean;
@@ -118,7 +125,7 @@ export async function verifyOtpAction(
     };
   }
 
-  redirect("/dashboard");
+  return redirectAfterLogin();
 }
 
 export async function loginWithPasswordAction(
@@ -153,7 +160,7 @@ export async function loginWithPasswordAction(
     };
   }
 
-  redirect("/dashboard");
+  return redirectAfterLogin();
 }
 
 export async function signOutAction() {

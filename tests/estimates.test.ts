@@ -103,6 +103,7 @@ function sampleOrder(
         quantity: 1,
         unitPricePaise: 50_000,
         partId: null,
+        part: null,
         sortOrder: 0,
         createdAt: new Date(),
         updatedAt: new Date(),
@@ -116,6 +117,7 @@ function sampleOrder(
         quantity: 1,
         unitPricePaise: 99_900,
         partId: null,
+        part: null,
         sortOrder: 1,
         createdAt: new Date(),
         updatedAt: new Date(),
@@ -239,6 +241,98 @@ describe("estimates service", () => {
       serviceOrderId: order.id,
       revisionNumber: 1,
       notes: null,
+      askPermission: false,
+      permissionVia: null,
+      supersededAt: null,
+      createdById: ownerA.userId,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      createdBy: { id: ownerA.userId, name: "Owner", email: "o@a.test" },
+      lines: [
+        {
+          id: "el-1",
+          garageId: garageA,
+          estimateId: "est-1",
+          type: "LABOUR",
+          description: "Brake pad labour",
+          quantity: 1,
+          unitPricePaise: 50_000,
+          gstRatePercent: 18,
+          hsnOrSac: "998714",
+          approvalState: "APPROVED",
+          sourceOrderLineId: "sol-1",
+          sourceSuggestedRepairId: null,
+          sortOrder: 0,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      ],
+      approvals: [],
+    });
+
+    const result = await createEstimateFromSources(ownerA, order.id);
+
+    expect(createEstimateWithLines).toHaveBeenCalledWith(
+      garageA,
+      expect.objectContaining({
+        serviceOrderId: order.id,
+        revisionNumber: 1,
+        askPermission: false,
+        permissionVia: null,
+        bootstrapApprovedLines: true,
+        lines: expect.arrayContaining([
+          expect.objectContaining({
+            sourceOrderLineId: "sol-1",
+            description: "Brake pad labour",
+            approvalState: "APPROVED",
+            sourceSuggestedRepairId: null,
+          }),
+        ]),
+      }),
+    );
+    const created = vi.mocked(createEstimateWithLines).mock.calls[0]?.[1];
+    expect(created?.lines.every((line) => line.sourceSuggestedRepairId == null)).toBe(
+      true,
+    );
+    expect(created?.lines.every((line) => line.approvalState === "APPROVED")).toBe(
+      true,
+    );
+    expect(result.totals.all.lineCount).toBe(1);
+  });
+
+  it("rejects create when any job-card line is still unpriced", async () => {
+    const order = sampleOrder();
+    order.lines = [
+      {
+        ...order.lines[0]!,
+        unitPricePaise: 50_000,
+      },
+      {
+        ...order.lines[1]!,
+        unitPricePaise: 0,
+      },
+    ];
+    vi.mocked(findServiceOrderById).mockResolvedValue(order);
+    vi.mocked(findCurrentEstimate).mockResolvedValue(null);
+
+    await expect(createEstimateFromSources(ownerA, order.id)).rejects.toMatchObject({
+      code: "ESTIMATE_NO_PRICED_SOURCES",
+    } satisfies Partial<AppError>);
+    expect(createEstimateWithLines).not.toHaveBeenCalled();
+  });
+
+  it("keeps lines pending when customer permission is required", async () => {
+    const order = sampleOrder();
+    vi.mocked(findServiceOrderById).mockResolvedValue(order);
+    vi.mocked(findCurrentEstimate).mockResolvedValue(null);
+    vi.mocked(createEstimateWithLines).mockResolvedValue({
+      id: "est-1",
+      garageId: garageA,
+      serviceOrderId: order.id,
+      revisionNumber: 1,
+      notes: null,
+      askPermission: true,
+      permissionVia: "LIVE_LINK",
       supersededAt: null,
       createdById: ownerA.userId,
       createdAt: new Date(),
@@ -266,27 +360,24 @@ describe("estimates service", () => {
       approvals: [],
     });
 
-    const result = await createEstimateFromSources(ownerA, order.id);
+    await createEstimateFromSources(ownerA, order.id, {
+      askPermission: "yes",
+      permissionVia: "LIVE_LINK",
+    });
 
     expect(createEstimateWithLines).toHaveBeenCalledWith(
       garageA,
       expect.objectContaining({
-        serviceOrderId: order.id,
-        revisionNumber: 1,
+        askPermission: true,
+        permissionVia: "LIVE_LINK",
+        bootstrapApprovedLines: false,
         lines: expect.arrayContaining([
           expect.objectContaining({
-            sourceOrderLineId: "sol-1",
-            description: "Brake pad labour",
-            sourceSuggestedRepairId: null,
+            approvalState: "PENDING",
           }),
         ]),
       }),
     );
-    const created = vi.mocked(createEstimateWithLines).mock.calls[0]?.[1];
-    expect(created?.lines.every((line) => line.sourceSuggestedRepairId == null)).toBe(
-      true,
-    );
-    expect(result.totals.all.lineCount).toBe(1);
   });
 
   it("blocks accountants from creating estimates", async () => {
@@ -426,6 +517,8 @@ describe("estimates service", () => {
       serviceOrderId: order.id,
       revisionNumber: 1,
       notes: null,
+      askPermission: false,
+      permissionVia: null,
       supersededAt: null,
       createdById: ownerA.userId,
       createdAt: new Date(),
@@ -473,6 +566,9 @@ describe("estimates service", () => {
         revisionNumber: 2,
         supersedeEstimateId: "est-1",
         notes: "Extra work",
+        askPermission: false,
+        permissionVia: null,
+        bootstrapApprovedLines: false,
         lines: [
           expect.objectContaining({
             description: "Brake pad labour",

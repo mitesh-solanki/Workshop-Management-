@@ -7,6 +7,7 @@ import { requireSession } from "@/lib/session";
 import { listVehicleServiceHistory } from "@/modules/service-orders/service";
 import { VehicleDetailPanel } from "@/modules/vehicles/components/vehicle-detail-panel";
 import { getVehicle } from "@/modules/vehicles/service";
+import { listVehicleWarranties } from "@/modules/warranties/service";
 
 type Props = {
   params: Promise<{ id: string }>;
@@ -30,7 +31,10 @@ export default async function VehicleDetailPage({ params }: Props) {
     throw error;
   }
 
-  const serviceHistory = await listVehicleServiceHistory(session, vehicle.id);
+  const [serviceHistory, warrantyDocs] = await Promise.all([
+    listVehicleServiceHistory(session, vehicle.id),
+    listVehicleWarranties(session, vehicle.id).catch(() => []),
+  ]);
 
   const canWrite =
     session.role === "OWNER" ||
@@ -40,15 +44,17 @@ export default async function VehicleDetailPage({ params }: Props) {
     session.role === "OWNER" ||
     session.role === "MANAGER" ||
     session.role === "TECHNICIAN";
+  const canWriteWarranty =
+    canWrite || session.role === "ACCOUNTANT";
 
   return (
     <main className="w-full space-y-4">
       <Link
-        href={`/customers/${vehicle.customerId}`}
+        href="/vehicles"
         className="hidden h-5 max-h-5 items-center gap-0.5 px-0.5 text-[13px] leading-5 text-slate-700 hover:text-blue-700 lg:inline-flex"
       >
         <ChevronLeft className="size-3.5 shrink-0" aria-hidden />
-        {tv("backToCustomer")}
+        {tv("back")}
       </Link>
 
       <VehicleDetailPanel
@@ -67,7 +73,9 @@ export default async function VehicleDetailPage({ params }: Props) {
           fitnessExpiry: vehicle.fitnessExpiry,
         }}
         serviceHistory={serviceHistory}
+        warrantyDocs={warrantyDocs}
         canWrite={canWrite}
+        canWriteWarranty={canWriteWarranty}
         canCreateOrder={canCreateOrder}
         locale={locale}
       />

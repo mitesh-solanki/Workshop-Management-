@@ -2,6 +2,7 @@ export const CUSTOMER_SECTIONS = [
   "details",
   "vehicles",
   "service",
+  "warranty",
   "communication",
 ] as const;
 

@@ -21,6 +21,10 @@ export const ESTIMATE_APPROVAL_METHODS = [
 export type EstimateApprovalMethodValue =
   (typeof ESTIMATE_APPROVAL_METHODS)[number];
 
+export const ESTIMATE_PERMISSION_VIA = ["MANUAL", "LIVE_LINK"] as const;
+export type EstimatePermissionViaValue =
+  (typeof ESTIMATE_PERMISSION_VIA)[number];
+
 /** Common workshop GST rates in India (whole percent). */
 export const GST_RATE_OPTIONS = [0, 5, 12, 18, 28] as const;
 
@@ -69,9 +73,42 @@ const optionalNotes = z
     return trimmed === "" ? null : trimmed.slice(0, 2000);
   });
 
-export const createEstimateSchema = z.object({
-  notes: optionalNotes.optional(),
-});
+const askPermissionField = z
+  .union([z.boolean(), z.string(), z.null(), z.undefined()])
+  .transform((value) => {
+    if (value === true || value === "true" || value === "yes") {
+      return true;
+    }
+    return false;
+  });
+
+const permissionViaField = z
+  .union([
+    z.enum(ESTIMATE_PERMISSION_VIA),
+    z.literal(""),
+    z.null(),
+    z.undefined(),
+  ])
+  .transform((value): EstimatePermissionViaValue | null => {
+    if (value === "MANUAL" || value === "LIVE_LINK") {
+      return value;
+    }
+    return null;
+  });
+
+export const createEstimateSchema = z
+  .object({
+    notes: optionalNotes.optional(),
+    askPermission: askPermissionField.default(false),
+    permissionVia: permissionViaField.default(null),
+  })
+  .transform((data) => ({
+    notes: data.notes ?? null,
+    askPermission: data.askPermission,
+    permissionVia: data.askPermission
+      ? (data.permissionVia ?? ("MANUAL" as const))
+      : null,
+  }));
 
 export const createEstimateRevisionSchema = z.object({
   notes: optionalNotes.optional(),

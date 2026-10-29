@@ -113,6 +113,17 @@ export function buildVendorBillAttachmentKey(input: {
   return `garages/${input.garageId}/vendor-bills/${input.vendorBillId}/${id}.${ext}`;
 }
 
+/** Build a garage-scoped object key for a vehicle warranty card photo. */
+export function buildVehicleWarrantyKey(input: {
+  garageId: string;
+  vehicleId: string;
+  contentType: string;
+}) {
+  const ext = extensionForContentType(input.contentType);
+  const id = randomBytes(12).toString("hex");
+  return `garages/${input.garageId}/vehicles/${input.vehicleId}/warranty/${id}.${ext}`;
+}
+
 /** Presigned PUT URL for browser upload to S3-compatible storage. */
 export async function createPresignedUploadUrl(input: {
   storageKey: string;

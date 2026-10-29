@@ -175,6 +175,7 @@ model Garage {
   vendorBillPayments VendorBillPayment[]
   purchaseReturns   PurchaseReturn[]
   bays              Bay[]
+  vehicleWarrantyDocuments VehicleWarrantyDocument[]
 }
 
 /// Physical service bay in the workshop (master list for job cards).
@@ -209,6 +210,7 @@ model Customer {
   serviceOrders ServiceOrder[]
   directSales   DirectSale[]
   invoices      Invoice[]
+  vehicleWarrantyDocuments VehicleWarrantyDocument[]
 
   @@index([garageId])
   @@index([garageId, phone])
@@ -235,10 +237,41 @@ model Vehicle {
   updatedAt          DateTime  @updatedAt
 
   serviceOrders ServiceOrder[]
+  warrantyDocuments VehicleWarrantyDocument[]
 
   @@unique([garageId, registrationNumber])
   @@index([garageId])
   @@index([customerId])
+}
+
+/// Warranty card photo + expiry stored against a vehicle (e.g. battery on invoice).
+model VehicleWarrantyDocument {
+  id                 String    @id @default(cuid())
+  garageId           String
+  garage             Garage    @relation(fields: [garageId], references: [id], onDelete: Cascade)
+  vehicleId          String
+  vehicle            Vehicle   @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  customerId         String
+  customer           Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  partName           String
+  invoiceId          String?
+  invoice            Invoice?  @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+  invoiceLineId      String?   @unique
+  invoiceLine        InvoiceLine? @relation(fields: [invoiceLineId], references: [id], onDelete: SetNull)
+  warrantyExpiresAt  DateTime?
+  storageKey         String?
+  contentType        String?
+  byteSize           Int?
+  fileName           String?
+  createdById        String?
+  createdBy          User?     @relation("WarrantyDocumentCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  @@index([garageId])
+  @@index([garageId, vehicleId])
+  @@index([garageId, customerId])
+  @@index([invoiceId])
 }
 
 model ServiceOrder {
@@ -698,6 +731,11 @@ model SuggestedRepair {
 }
 
 /// Customer-facing estimate for a service order visit. Revisions keep history.
+enum EstimatePermissionVia {
+  MANUAL
+  LIVE_LINK
+}
+
 model Estimate {
   id             String    @id @default(cuid())
   garageId       String
@@ -707,6 +745,10 @@ model Estimate {
   /// Starts at 1; each revision increments. Old revisions are never deleted.
   revisionNumber Int
   notes          String?
+  /// When false, priced lines are created APPROVED and ready to bill.
+  askPermission  Boolean   @default(false)
+  /// How permission is collected when askPermission is true.
+  permissionVia  EstimatePermissionVia?
   /// Set when a newer revision replaces this one. Null = current revision.
   supersededAt   DateTime?
   createdById    String?
@@ -838,6 +880,7 @@ model Invoice {
   lines       InvoiceLine[]
   payments    Payment[]
   creditNotes CreditNote[]
+  warrantyDocuments VehicleWarrantyDocument[]
 
   @@unique([garageId, invoiceNumber])
   @@unique([garageId, financialYearStart, sequenceNumber])
@@ -869,6 +912,8 @@ model InvoiceLine {
   totalPaise       Int
   sortOrder        Int             @default(0)
   createdAt        DateTime        @default(now())
+
+  warrantyDocument VehicleWarrantyDocument?
 
   @@index([garageId])
   @@index([invoiceId])
@@ -1014,6 +1059,7 @@ model User {
   vendorBillsCreated  VendorBill[]          @relation("VendorBillCreatedBy")
   vendorBillPaymentsCreated VendorBillPayment[] @relation("VendorBillPaymentCreatedBy")
   purchaseReturnsCreated PurchaseReturn[]   @relation("PurchaseReturnCreatedBy")
+  warrantyDocumentsCreated VehicleWarrantyDocument[] @relation("WarrantyDocumentCreatedBy")
 
   @@index([garageId])
 }

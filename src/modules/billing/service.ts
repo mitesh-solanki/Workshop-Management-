@@ -46,7 +46,14 @@ import {
   type InvoiceLineCreateRow,
 } from "@/modules/billing/repo";
 import { findCurrentEstimate } from "@/modules/estimates/repo";
+import { syncMissingOrderLinesOntoEstimate } from "@/modules/estimates/service";
 import { findServiceOrderById } from "@/modules/service-orders/repo";
+import { partRequiresWarrantyCard } from "@/modules/warranties/part-requires-warranty";
+import {
+  listWarrantiesForInvoice,
+  relinkWarrantyToInvoiceLine,
+} from "@/modules/warranties/repo";
+import { assertBatteryWarrantiesCompleteForInvoice } from "@/modules/warranties/service";
 
 const READ_ROLES = ["OWNER", "MANAGER", "TECHNICIAN", "ACCOUNTANT"] as const;
 const WRITE_ROLES = ["OWNER", "MANAGER", "ACCOUNTANT"] as const;
@@ -182,7 +189,7 @@ export async function createInvoiceFromApprovedEstimate(
   const input = createInvoiceFromEstimateSchema.parse(raw);
   const order = await loadOrder(session, serviceOrderId);
 
-  const estimate = await findCurrentEstimate(
+  let estimate = await findCurrentEstimate(
     session.garageId,
     order.id,
   );
@@ -191,6 +198,16 @@ export async function createInvoiceFromApprovedEstimate(
   }
   if (estimate.supersededAt != null) {
     throw new AppError("billing.estimate_superseded");
+  }
+
+  // Later-added job parts (e.g. battery) are not on Prices until synced.
+  // Remake / create draft pulls them onto the estimate as agreed so they bill.
+  await syncMissingOrderLinesOntoEstimate(session, order.id, {
+    autoApprove: true,
+  });
+  estimate = await findCurrentEstimate(session.garageId, order.id);
+  if (!estimate || estimate.supersededAt != null) {
+    throw new AppError("billing.estimate_missing");
   }
 
   const garage = await findGarageBillingProfile(session.garageId);
@@ -270,6 +287,14 @@ export async function createInvoiceFromApprovedEstimate(
     lines: lineRows,
   };
 
+  const needsBatteryWarranty = lineRows.some(
+    (line) =>
+      line.type === "PART" && partRequiresWarrantyCard(line.description),
+  );
+  if (input.finalize && needsBatteryWarranty) {
+    throw new AppError("warranties.finalize_requires_draft_first", 400);
+  }
+
   const invoice = input.finalize
     ? await createAndFinalizeInvoice(session.garageId, payload)
     : await createDraftInvoice(session.garageId, payload);
@@ -338,6 +363,11 @@ export async function finalizeInvoice(
     throw new AppError("billing.invoice_draft_outdated");
   }
 
+  await assertBatteryWarrantiesCompleteForInvoice(
+    session.garageId,
+    input.invoiceId,
+  );
+
   const result = await finalizeInvoiceInTransaction(
     session.garageId,
     input.invoiceId,
@@ -382,6 +412,78 @@ export async function deleteDraftInvoice(
     throw new AppError("billing.invoice_immutable");
   }
   return deleted;
+}
+
+/**
+ * Rebuild the draft from agreed estimate lines, keeping warranty cards that
+ * still match a part on the new draft (by estimate line, then part name).
+ */
+export async function remakeDraftInvoice(
+  session: RoleSession,
+  serviceOrderId: string,
+  invoiceId: string,
+  raw: CreateInvoiceFromEstimateInput = {},
+) {
+  requireRole(session, WRITE_ROLES);
+
+  const draft = await findInvoiceById(session.garageId, invoiceId);
+  if (!draft) {
+    throw new NotFoundError();
+  }
+  if (draft.serviceOrderId !== serviceOrderId) {
+    throw new NotFoundError();
+  }
+  if (draft.status !== "DRAFT") {
+    throw new AppError("billing.invoice_immutable");
+  }
+
+  const warranties = await listWarrantiesForInvoice(
+    session.garageId,
+    invoiceId,
+  );
+  const byEstimateLineId = new Map<string, string>();
+  const byPartName = new Map<string, string>();
+  for (const line of draft.lines) {
+    if (line.type !== "PART") continue;
+    const doc = warranties.find((item) => item.invoiceLineId === line.id);
+    if (!doc) continue;
+    if (line.estimateLineId) {
+      byEstimateLineId.set(line.estimateLineId, doc.id);
+    }
+    byPartName.set(line.description.trim().toLowerCase(), doc.id);
+  }
+
+  await deleteDraftInvoice(session, { invoiceId });
+  const created = await createInvoiceFromApprovedEstimate(
+    session,
+    serviceOrderId,
+    { ...raw, finalize: false },
+  );
+
+  const fresh = await findInvoiceById(session.garageId, created.id);
+  if (!fresh) {
+    return created;
+  }
+
+  const usedWarrantyIds = new Set<string>();
+  for (const line of fresh.lines) {
+    if (line.type !== "PART") continue;
+    const warrantyId =
+      (line.estimateLineId
+        ? byEstimateLineId.get(line.estimateLineId)
+        : undefined) ?? byPartName.get(line.description.trim().toLowerCase());
+    if (!warrantyId || usedWarrantyIds.has(warrantyId)) continue;
+    usedWarrantyIds.add(warrantyId);
+    await relinkWarrantyToInvoiceLine({
+      garageId: session.garageId,
+      warrantyId,
+      invoiceId: fresh.id,
+      invoiceLineId: line.id,
+      actorId: session.userId,
+    });
+  }
+
+  return withBalance(fresh);
 }
 
 /** Finalized invoices cannot be edited — call sites should use this guard. */
@@ -588,6 +690,23 @@ export async function getInvoicePdfBuffer(
     throw new NotFoundError();
   }
 
+  const warrantyDocs = await listWarrantiesForInvoice(
+    session.garageId,
+    invoice.id,
+  );
+  const warranties = warrantyDocs
+    .flatMap((doc) => {
+      if (!doc.warrantyExpiresAt) return [];
+      const expiresAt =
+        doc.warrantyExpiresAt instanceof Date
+          ? doc.warrantyExpiresAt
+          : new Date(doc.warrantyExpiresAt);
+      if (!doc.partName.trim() || Number.isNaN(expiresAt.getTime())) {
+        return [];
+      }
+      return [{ partName: doc.partName, expiresAt }];
+    });
+
   return generateInvoicePdf({
     locale,
     status: invoice.status,
@@ -637,6 +756,7 @@ export async function getInvoicePdfBuffer(
       totalPaise: note.totalPaise,
     })),
     notes: invoice.notes,
+    warranties,
   });
 }
 

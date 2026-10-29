@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Plus } from "lucide-react";
 import {
+  createPartByNameModalAction,
   createPartModalAction,
   createPartShopReceiveAction,
   type InventoryActionState,
@@ -33,6 +34,7 @@ import {
   PART_UNIT_OPTIONS,
 } from "@/modules/inventory/schema";
 import { NameSkuFields } from "@/modules/inventory/components/name-sku-fields";
+import { PartNameSuggestInput } from "@/modules/inventory/components/part-name-suggest-input";
 import { QuantityStepper } from "@/modules/inventory/components/quantity-stepper";
 import {
   ShopReceiveFields,
@@ -62,6 +64,10 @@ type SharedProps = {
    * Bought From lines (vendor + qty + bill) on create — Job Card and Inventory.
    */
   shopReceive?: boolean;
+  /** Prefill the name field (e.g. typed in the part picker). */
+  initialName?: string;
+  /** Technician: name-only create (no prices / stock / bills). */
+  nameOnly?: boolean;
 };
 
 function CreatePartFormFields({
@@ -73,6 +79,8 @@ function CreatePartFormFields({
   shopReceive = false,
   shopLines,
   onShopLinesChange,
+  initialName = "",
+  nameOnly = false,
 }: {
   formId: string;
   formAction: (payload: FormData) => void;
@@ -82,8 +90,13 @@ function CreatePartFormFields({
   shopReceive?: boolean;
   shopLines: ShopReceiveLine[];
   onShopLinesChange: (lines: ShopReceiveLine[]) => void;
+  initialName?: string;
+  /** Technician: name (+ optional SKU) only; prices stay 0. */
+  nameOnly?: boolean;
 }) {
   const t = useTranslations("inventory");
+  const [nameOnlyValue, setNameOnlyValue] = useState(initialName);
+  const [vendorErrorKeys, setVendorErrorKeys] = useState<string[]>([]);
 
   return (
     <form
@@ -91,87 +104,134 @@ function CreatePartFormFields({
       key={formKey}
       action={formAction}
       className="flex min-w-0 flex-col gap-4"
+      onSubmit={(event) => {
+        if (!shopReceive || nameOnly) {
+          setVendorErrorKeys([]);
+          return;
+        }
+        const missing = shopLines
+          .filter((line) => !line.vendorId.trim())
+          .map((line) => line.key);
+        if (missing.length > 0) {
+          event.preventDefault();
+          setVendorErrorKeys(missing);
+          return;
+        }
+        const badQty = shopLines.filter((line) => line.quantity < 1);
+        if (badQty.length > 0) {
+          event.preventDefault();
+          setVendorErrorKeys(badQty.map((line) => line.key));
+          return;
+        }
+        setVendorErrorKeys([]);
+      }}
     >
-      <NameSkuFields
-        idPrefix={idPrefix}
-        autoSku
-        autoFocusName
-        afterSku={
-          <>
-            <FormField id={`${idPrefix}-unit`} label={t("unit")}>
-              <FormSelect
-                id={`${idPrefix}-unit`}
-                name="unit"
-                required
-                defaultValue="pcs"
-                options={PART_UNIT_OPTIONS.map((unit) => ({
-                  value: unit,
-                  label: t(`units.${unit}`),
-                }))}
+      {nameOnly ? (
+        <FormField id={`${idPrefix}-name`} label={t("name")}>
+          <PartNameSuggestInput
+            id={`${idPrefix}-name`}
+            name="name"
+            required
+            maxLength={200}
+            autoFocus
+            value={nameOnlyValue}
+            onValueChange={setNameOnlyValue}
+            className="h-11 min-h-11"
+          />
+        </FormField>
+      ) : (
+        <NameSkuFields
+          idPrefix={idPrefix}
+          autoSku
+          autoFocusName
+          defaultName={initialName}
+          afterSku={
+            <>
+              <FormField id={`${idPrefix}-unit`} label={t("unit")}>
+                <FormSelect
+                  id={`${idPrefix}-unit`}
+                  name="unit"
+                  required
+                  defaultValue="pcs"
+                  options={PART_UNIT_OPTIONS.map((unit) => ({
+                    value: unit,
+                    label: t(`units.${unit}`),
+                  }))}
+                />
+              </FormField>
+              <RupeePriceInput
+                id={`${idPrefix}-purchasePriceRupees`}
+                name="purchasePriceRupees"
+                label={t("purchasePrice")}
+                hint={t("priceHint")}
+                defaultPaise={0}
+                inputClassName="h-11 min-h-11"
               />
-            </FormField>
+            </>
+          }
+        />
+      )}
+      {nameOnly ? null : (
+        <>
+          <div className="grid min-w-0 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <RupeePriceInput
-              id={`${idPrefix}-purchasePriceRupees`}
-              name="purchasePriceRupees"
-              label={t("purchasePrice")}
+              id={`${idPrefix}-sellingPriceRupees`}
+              name="sellingPriceRupees"
+              label={t("sellingPrice")}
               hint={t("priceHint")}
               defaultPaise={0}
               inputClassName="h-11 min-h-11"
             />
-          </>
-        }
-      />
+            <FormField id={`${idPrefix}-gstRatePercent`} label={t("gstRate")}>
+              <FormSelect
+                id={`${idPrefix}-gstRatePercent`}
+                name="gstRatePercent"
+                defaultValue={String(DEFAULT_GST_RATE_PERCENT)}
+                options={GST_RATE_OPTIONS.map((rate) => ({
+                  value: String(rate),
+                  label: `${rate}%`,
+                }))}
+              />
+            </FormField>
+            <FormField id={`${idPrefix}-hsn`} label={t("hsn")}>
+              <Input
+                id={`${idPrefix}-hsn`}
+                name="hsn"
+                required
+                maxLength={16}
+                defaultValue={DEFAULT_PART_HSN}
+                className="h-11 min-h-11 font-mono"
+              />
+            </FormField>
+            {shopReceive ? null : (
+              <QuantityStepper
+                id={`${idPrefix}-lowStockLevel`}
+                name="lowStockLevel"
+                label={t("lowStockLevel")}
+                defaultValue={0}
+                min={0}
+              />
+            )}
+          </div>
 
-      <div className="grid min-w-0 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <RupeePriceInput
-          id={`${idPrefix}-sellingPriceRupees`}
-          name="sellingPriceRupees"
-          label={t("sellingPrice")}
-          hint={t("priceHint")}
-          defaultPaise={0}
-          inputClassName="h-11 min-h-11"
-        />
-        <FormField id={`${idPrefix}-gstRatePercent`} label={t("gstRate")}>
-          <FormSelect
-            id={`${idPrefix}-gstRatePercent`}
-            name="gstRatePercent"
-            defaultValue={String(DEFAULT_GST_RATE_PERCENT)}
-            options={GST_RATE_OPTIONS.map((rate) => ({
-              value: String(rate),
-              label: `${rate}%`,
-            }))}
-          />
-        </FormField>
-        <FormField id={`${idPrefix}-hsn`} label={t("hsn")}>
-          <Input
-            id={`${idPrefix}-hsn`}
-            name="hsn"
-            required
-            maxLength={16}
-            defaultValue={DEFAULT_PART_HSN}
-            className="h-11 min-h-11 font-mono"
-          />
-        </FormField>
-        {shopReceive ? null : (
-          <QuantityStepper
-            id={`${idPrefix}-lowStockLevel`}
-            name="lowStockLevel"
-            label={t("lowStockLevel")}
-            defaultValue={0}
-            min={0}
-          />
-        )}
-      </div>
-
-      {shopReceive ? (
-        <>
-          <input type="hidden" name="lowStockLevel" value="0" />
-          <input type="hidden" name="openingStock" value="0" />
+          {shopReceive ? (
+            <>
+              <input type="hidden" name="lowStockLevel" value="0" />
+              <input type="hidden" name="openingStock" value="0" />
           <ShopReceiveFields
             idPrefix={`${idPrefix}-shop`}
             disabled={pending}
             lines={shopLines}
-            onLinesChange={onShopLinesChange}
+            onLinesChange={(next) => {
+              setVendorErrorKeys((prev) =>
+                prev.filter((key) => {
+                  const line = next.find((row) => row.key === key);
+                  return line ? !line.vendorId.trim() : false;
+                }),
+              );
+              onShopLinesChange(next);
+            }}
+            vendorErrorKeys={vendorErrorKeys}
           />
         </>
       ) : (
@@ -183,6 +243,8 @@ function CreatePartFormFields({
           min={0}
           hint={t("openingStockHint")}
         />
+      )}
+        </>
       )}
     </form>
   );
@@ -222,17 +284,23 @@ function useCreatePartAction({
   navigateOnSuccess,
   onSuccessExtra,
   shopReceive = false,
+  nameOnly = false,
 }: {
   onCreated?: (part: CreatedPartSummary) => void;
   navigateOnSuccess: boolean;
   onSuccessExtra?: () => void;
   shopReceive?: boolean;
+  nameOnly?: boolean;
 }) {
   const router = useRouter();
   const t = useTranslations("inventory");
   const tvb = useTranslations("vendorBills");
   const [state, formAction, pending] = useActionState(
-    shopReceive ? createPartShopReceiveAction : createPartModalAction,
+    nameOnly
+      ? createPartByNameModalAction
+      : shopReceive
+        ? createPartShopReceiveAction
+        : createPartModalAction,
     initial,
   );
   const handled = useRef<string | null>(null);
@@ -344,8 +412,10 @@ function useCreatePartAction({
 }
 
 type Props = SharedProps & {
-  trigger?: React.ReactNode;
+  trigger?: React.ReactNode | null;
   size?: "sm" | "md";
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 };
 
 /** Standalone dialog — inventory list / pages that are not already inside a modal. */
@@ -355,16 +425,23 @@ export function CreatePartModal({
   onCreated,
   navigateOnSuccess = !onCreated,
   shopReceive = false,
+  initialName = "",
+  nameOnly = false,
+  open: openControlled,
+  onOpenChange,
 }: Props) {
   const t = useTranslations("inventory");
   const formId = useId();
-  const [open, setOpen] = useState(false);
+  const [openUncontrolled, setOpenUncontrolled] = useState(false);
+  const open = openControlled ?? openUncontrolled;
+  const setOpen = onOpenChange ?? setOpenUncontrolled;
   const [shopLines, setShopLines] = useState(createEmptyShopReceiveLines);
   const { formAction, pending, resetHandled, setPendingFiles } =
     useCreatePartAction({
       onCreated,
       navigateOnSuccess,
-      shopReceive,
+      shopReceive: nameOnly ? false : shopReceive,
+      nameOnly,
       onSuccessExtra: () => {
         setOpen(false);
         setShopLines(createEmptyShopReceiveLines());
@@ -395,28 +472,43 @@ export function CreatePartModal({
         closeModal();
       }}
     >
-      <DialogTrigger asChild>
-        {trigger ?? (
+      {trigger ? <DialogTrigger asChild>{trigger}</DialogTrigger> : null}
+      {!trigger && openControlled == null ? (
+        <DialogTrigger asChild>
           <Button type="button" size={size}>
             <Plus className="size-4" aria-hidden />
             {t("add")}
           </Button>
-        )}
-      </DialogTrigger>
-      <DialogContent className="gap-0 bg-background p-0 sm:max-w-4xl">
+        </DialogTrigger>
+      ) : null}
+      <DialogContent
+        className={
+          nameOnly
+            ? "gap-0 bg-background p-0 sm:max-w-lg"
+            : "gap-0 bg-background p-0 sm:max-w-4xl"
+        }
+      >
         <DialogHeader className="border-b border-border px-5 py-4 text-left">
           <DialogTitle>{t("newTitle")}</DialogTitle>
-          <DialogDescription>{t("newSubtitle")}</DialogDescription>
+          <DialogDescription>
+            {nameOnly ? t("newSubtitleNameOnly") : t("newSubtitle")}
+          </DialogDescription>
         </DialogHeader>
         <DialogBody className="bg-background px-5 py-4">
           <CreatePartFormFields
             formId={formId}
             formAction={formAction}
             pending={pending}
-            formKey={open ? "create-part-open" : "create-part-closed"}
-            shopReceive={shopReceive}
+            formKey={
+              open
+                ? `create-part-open-${initialName}`
+                : "create-part-closed"
+            }
+            shopReceive={nameOnly ? false : shopReceive}
             shopLines={shopLines}
             onShopLinesChange={handleShopLinesChange}
+            initialName={initialName}
+            nameOnly={nameOnly}
           />
         </DialogBody>
         <CreatePartActions

@@ -65,12 +65,19 @@ export function PartPageForm(props: Props) {
   const [state, formAction, pending] = useActionState(boundSave, initial);
   const handled = useRef<string | null>(null);
   const [shopLines, setShopLines] = useState(createEmptyShopReceiveLines);
+  const [vendorErrorKeys, setVendorErrorKeys] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
   const pendingFilesRef = useRef<Array<File | null>>([]);
 
   function handleShopLinesChange(lines: ShopReceiveLine[]) {
     setShopLines(lines);
     pendingFilesRef.current = shopReceiveFilesForUpload(lines);
+    setVendorErrorKeys((prev) =>
+      prev.filter((key) => {
+        const line = lines.find((row) => row.key === key);
+        return line ? !line.vendorId.trim() : false;
+      }),
+    );
   }
 
   useEffect(() => {
@@ -144,6 +151,21 @@ export function PartPageForm(props: Props) {
         id={formId}
         action={formAction}
         className="grid gap-6 rounded-xl border border-border bg-card p-4 shadow-xs sm:p-6 lg:grid-cols-3"
+        onSubmit={(event) => {
+          if (isEdit) {
+            setVendorErrorKeys([]);
+            return;
+          }
+          const missing = shopLines
+            .filter((line) => !line.vendorId.trim())
+            .map((line) => line.key);
+          if (missing.length > 0) {
+            event.preventDefault();
+            setVendorErrorKeys(missing);
+            return;
+          }
+          setVendorErrorKeys([]);
+        }}
       >
         <div className="lg:col-span-3">
           <NameSkuFields
@@ -242,6 +264,7 @@ export function PartPageForm(props: Props) {
             disabled={busy}
             lines={shopLines}
             onLinesChange={handleShopLinesChange}
+            vendorErrorKeys={vendorErrorKeys}
           />
         </div>
       </form>

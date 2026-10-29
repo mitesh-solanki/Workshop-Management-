@@ -27,6 +27,7 @@ import {
   createServiceOrderLine,
   deleteServiceOrderById,
   deleteServiceOrderLine,
+  applyCataloguePricesToUnpricedPartLines,
   findServiceOrderById,
   findTechnicianInGarage,
   listServiceOrderAuditLogs,
@@ -233,6 +234,24 @@ export async function getOrder(session: RoleSession, orderId: string) {
     throw new NotFoundError();
   }
   assertCanViewOrder(session, order);
+
+  if (
+    (session.role === "OWNER" || session.role === "MANAGER") &&
+    order.status !== "COMPLETED"
+  ) {
+    const applied = await applyCataloguePricesToUnpricedPartLines(
+      session.garageId,
+      order.id,
+      session.userId,
+    );
+    if (applied > 0) {
+      const refreshed = await findServiceOrderById(session.garageId, orderId);
+      if (refreshed) {
+        return refreshed;
+      }
+    }
+  }
+
   return order;
 }
 
@@ -475,8 +494,8 @@ export async function removeOrderLine(
   });
 
   if (!result.ok) {
-    if (result.reason === "APPROVED_ON_ESTIMATE") {
-      throw new AppError("orders.line_approved_on_estimate", 409);
+    if (result.reason === "BILLED_ON_FINALIZED_INVOICE") {
+      throw new AppError("orders.line_on_finalized_invoice", 409);
     }
     throw new NotFoundError();
   }

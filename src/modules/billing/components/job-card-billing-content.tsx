@@ -9,6 +9,8 @@ import { InvoicePreviewButton } from "@/modules/billing/components/invoice-previ
 import type { InvoicePreviewData } from "@/modules/billing/components/invoice-preview-dialog";
 import type { getInvoicesForOrder } from "@/modules/billing/service";
 import { LiveLinkStaffPanel } from "@/modules/live-link/components/live-link-staff-panel";
+import { listInvoiceWarranties } from "@/modules/warranties/service";
+import { requireSession } from "@/lib/session";
 
 type InvoiceList = Awaited<ReturnType<typeof getInvoicesForOrder>>;
 
@@ -40,6 +42,7 @@ export type BillingPreviewContext = {
 
 type Props = {
   orderId: string;
+  vehicleId: string;
   canEdit: boolean;
   invoices: InvoiceList;
   hasApprovedEstimateLines: boolean;
@@ -61,6 +64,7 @@ function formatIssuedAt(date: Date, locale: string) {
 
 export async function JobCardBillingContent({
   orderId,
+  vehicleId,
   canEdit,
   invoices,
   hasApprovedEstimateLines,
@@ -75,6 +79,16 @@ export async function JobCardBillingContent({
   const tGst = await getTranslations("gst");
   const locale = await getLocale();
   const pdfLocale = locale === "hi" || locale === "gu" ? locale : "en";
+  const session = await requireSession();
+  const warrantyLists = await Promise.all(
+    invoices.map(async (invoice) => ({
+      invoiceId: invoice.id,
+      docs: await listInvoiceWarranties(session, invoice.id).catch(() => []),
+    })),
+  );
+  const warrantyByInvoice = new Map(
+    warrantyLists.map((row) => [row.invoiceId, row.docs]),
+  );
 
   function stateName(code: string) {
     try {
@@ -147,6 +161,7 @@ export async function JobCardBillingContent({
       lines: invoice.lines.map((line) => ({
         id: line.id,
         description: line.description,
+        type: line.type,
         quantity: line.quantity,
         unitPricePaise: line.unitPricePaise,
         totalPaise: line.totalPaise,
@@ -168,6 +183,17 @@ export async function JobCardBillingContent({
           description: line.description,
           totalPaise: line.totalPaise,
         })),
+      })),
+      warrantyDocs: (warrantyByInvoice.get(invoice.id) ?? []).map((doc) => ({
+        id: doc.id,
+        invoiceLineId: doc.invoiceLineId,
+        partName: doc.partName,
+        warrantyExpiresAt: doc.warrantyExpiresAt,
+        storageKey: doc.storageKey,
+        contentType: doc.contentType,
+        byteSize: doc.byteSize,
+        fileName: doc.fileName,
+        url: doc.url,
       })),
       preview: {
         heading:
@@ -192,6 +218,23 @@ export async function JobCardBillingContent({
         jobLabel: preview.jobLabel,
         placeOfSupplyLabel: `${t("placeOfSupply")}: ${stateName(invoice.placeOfSupplyStateCode)}`,
         notes: invoice.notes,
+        warranties: (warrantyByInvoice.get(invoice.id) ?? [])
+          .filter((doc) => doc.warrantyExpiresAt != null)
+          .map((doc) => {
+            const expiresAt =
+              doc.warrantyExpiresAt instanceof Date
+                ? doc.warrantyExpiresAt
+                : new Date(doc.warrantyExpiresAt!);
+            return {
+              partName: doc.partName,
+              expiresAtLabel: formatIssuedAt(expiresAt, locale),
+            };
+          })
+          .filter(
+            (row) =>
+              Boolean(row.partName.trim()) &&
+              row.expiresAtLabel !== "Invalid Date",
+          ),
         lines: invoice.lines.map((line) => ({
           id: line.id,
           description: line.description,
@@ -348,6 +391,7 @@ export async function JobCardBillingContent({
       ) : (
         <BillingInvoiceWorkspace
           orderId={orderId}
+          vehicleId={vehicleId}
           canEdit={canEdit}
           pdfLocale={pdfLocale}
           invoices={invoiceCards}

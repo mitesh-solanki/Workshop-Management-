@@ -221,6 +221,10 @@ export default async function OrderEditPage({ params, searchParams }: Props) {
             quantity: line.quantity,
             unitPricePaise: surface.hidePrices ? 0 : line.unitPricePaise,
             partId: line.partId,
+            catalogueSellingPricePaise:
+              "part" in line && line.part
+                ? line.part.sellingPricePaise
+                : null,
           })),
         }}
         timeline={surface.includeCommercialSections ? timeline : []}
@@ -258,6 +262,7 @@ export default async function OrderEditPage({ params, searchParams }: Props) {
           surface.includeCommercialSections ? (
             <JobCardBillingContent
               orderId={order.id}
+              vehicleId={order.vehicleId}
               canEdit={canBill}
               invoices={invoices}
               hasApprovedEstimateLines={hasApprovedEstimateLines}

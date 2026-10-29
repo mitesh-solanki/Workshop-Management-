@@ -7,6 +7,7 @@ import { requireSession } from "@/lib/session";
 import { CustomerDetailPanel } from "@/modules/customers/components/customer-detail-panel";
 import { getCustomer } from "@/modules/customers/service";
 import { listCustomerServiceHistory } from "@/modules/service-orders/service";
+import { listCustomerWarranties } from "@/modules/warranties/service";
 
 type Props = {
   params: Promise<{ id: string }>;
@@ -30,7 +31,10 @@ export default async function CustomerDetailPage({ params }: Props) {
     throw error;
   }
 
-  const serviceHistory = await listCustomerServiceHistory(session, customer.id);
+  const [serviceHistory, warrantyDocs] = await Promise.all([
+    listCustomerServiceHistory(session, customer.id),
+    listCustomerWarranties(session, customer.id).catch(() => []),
+  ]);
 
   const canWrite =
     session.role === "OWNER" ||
@@ -40,6 +44,8 @@ export default async function CustomerDetailPage({ params }: Props) {
     session.role === "OWNER" ||
     session.role === "MANAGER" ||
     session.role === "TECHNICIAN";
+  const canWriteWarranty =
+    canWrite || session.role === "ACCOUNTANT";
 
   return (
     <main className="w-full space-y-4">
@@ -72,7 +78,9 @@ export default async function CustomerDetailPage({ params }: Props) {
           fitnessExpiry: vehicle.fitnessExpiry,
         }))}
         serviceHistory={serviceHistory}
+        warrantyDocs={warrantyDocs}
         canWrite={canWrite}
+        canWriteWarranty={canWriteWarranty}
         canCreateOrder={canCreateOrder}
         locale={locale}
       />

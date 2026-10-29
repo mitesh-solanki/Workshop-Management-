@@ -35,6 +35,7 @@ type OrderLine = {
   quantity: number;
   unitPricePaise: number;
   partId?: string | null;
+  catalogueSellingPricePaise?: number | null;
 };
 
 type TimelineEvent = {
@@ -183,7 +184,8 @@ export function JobCardDetailPanel({
       (line) =>
         line.type === "PART" &&
         line.unitPricePaise === 0 &&
-        Boolean(line.partId),
+        Boolean(line.partId) &&
+        (line.catalogueSellingPricePaise ?? 0) <= 0,
     );
   const techLabel =
     order.technician?.name?.trim() ||

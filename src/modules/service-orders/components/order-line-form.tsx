@@ -51,26 +51,32 @@ export function OrderLineForm({ orderId, hidePrices = false }: Props) {
     [orderId],
   );
   const [state, formAction, pending] = useActionState(bound, initial);
-  const handledMessage = useRef<string | null>(null);
+  const wasPending = useRef(false);
   const [lineType, setLineType] = useState<"LABOUR" | "PART">("PART");
   const [partId, setPartId] = useState("");
   const [selected, setSelected] = useState<PartPickerItem | null>(null);
   const [editPart, setEditPart] = useState<EditPartValues | null>(null);
   const [editOpen, setEditOpen] = useState(false);
-  const [quantityKey, setQuantityKey] = useState(0);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [createInitialName, setCreateInitialName] = useState("");
+  const [formKey, setFormKey] = useState(0);
 
   useEffect(() => {
-    if (!state.message || state.message === handledMessage.current) return;
-    handledMessage.current = state.message;
+    const finished = wasPending.current && !pending;
+    wasPending.current = pending;
+    if (!finished || !state.message) return;
+
     if (state.ok) {
       toast.success(t("lineAdded"));
       setPartId("");
       setSelected(null);
-      setQuantityKey((key) => key + 1);
-    } else {
-      toast.error(state.message);
+      setEditOpen(false);
+      setEditPart(null);
+      setFormKey((key) => key + 1);
+      return;
     }
-  }, [state, t]);
+    toast.error(state.message);
+  }, [pending, state, t]);
 
   async function refreshSelectedPart(id: string) {
     const full = await getPartPickerItemAction(id);
@@ -125,6 +131,11 @@ export function OrderLineForm({ orderId, hidePrices = false }: Props) {
     setSelected(part);
   }
 
+  function openCreatePartModal(name = "") {
+    setCreateInitialName(name.trim());
+    setCreateOpen(true);
+  }
+
   async function handlePartCreated(part: CreatedPartSummary) {
     setLineType("PART");
     setPartId(part.id);
@@ -136,6 +147,8 @@ export function OrderLineForm({ orderId, hidePrices = false }: Props) {
       sellingPricePaise: 0,
       quantityOnHand: 0,
     });
+    setCreateOpen(false);
+    setCreateInitialName("");
     await refreshSelectedPart(part.id);
   }
 
@@ -146,25 +159,6 @@ export function OrderLineForm({ orderId, hidePrices = false }: Props) {
 
   return (
     <form action={formAction} className="space-y-2">
-      {!hidePrices ? (
-        <div className="flex flex-wrap items-center justify-end">
-          <CreatePartModal
-            navigateOnSuccess={false}
-            shopReceive
-            onCreated={handlePartCreated}
-            trigger={
-              <button
-                type="button"
-                className="inline-flex items-center gap-1 text-sm font-medium text-blue-700 hover:text-blue-800 hover:underline"
-              >
-                <Plus className="size-4" strokeWidth={2.5} aria-hidden />
-                {t("addSparePart")}
-              </button>
-            }
-          />
-        </div>
-      ) : null}
-
       <div
         className={
           hidePrices
@@ -197,11 +191,12 @@ export function OrderLineForm({ orderId, hidePrices = false }: Props) {
         {lineType === "PART" ? (
           <FormField id="partId" label={ti("part")} className="sm:col-span-2 lg:col-span-1">
             <PartPickerSelect
+              key={`part-${formKey}`}
               id="partId"
               name="partId"
               value={partId}
               onChange={handlePartChange}
-              quickCreateByName={hidePrices}
+              onCreateFromQuery={openCreatePartModal}
             />
             <input
               type="hidden"
@@ -216,6 +211,7 @@ export function OrderLineForm({ orderId, hidePrices = false }: Props) {
             className="sm:col-span-2 lg:col-span-1"
           >
             <Input
+              key={`labour-${formKey}`}
               id="description"
               name="description"
               required
@@ -228,7 +224,7 @@ export function OrderLineForm({ orderId, hidePrices = false }: Props) {
         )}
 
         <QuantityStepper
-          key={quantityKey}
+          key={`qty-${formKey}`}
           id="quantity"
           name="quantity"
           label={t("quantity")}
@@ -245,7 +241,7 @@ export function OrderLineForm({ orderId, hidePrices = false }: Props) {
             defaultPaise={
               lineType === "PART" ? (selected?.sellingPricePaise ?? 0) : 0
             }
-            key={`${lineType}-${selected?.id ?? "labour"}-${selected?.sellingPricePaise ?? 0}`}
+            key={`price-${formKey}-${lineType}-${selected?.id ?? "labour"}-${selected?.sellingPricePaise ?? 0}`}
             inputClassName="h-11 min-h-11 rounded-lg border-slate-300 text-[14px] shadow-xs focus-visible:border-blue-600 focus-visible:ring-blue-600/25"
           />
         )}
@@ -262,6 +258,20 @@ export function OrderLineForm({ orderId, hidePrices = false }: Props) {
           {t("addLineAction")}
         </Button>
       </div>
+
+      <CreatePartModal
+        trigger={null}
+        open={createOpen}
+        onOpenChange={(next) => {
+          setCreateOpen(next);
+          if (!next) setCreateInitialName("");
+        }}
+        navigateOnSuccess={false}
+        shopReceive={!hidePrices}
+        nameOnly={hidePrices}
+        initialName={createInitialName}
+        onCreated={handlePartCreated}
+      />
 
       {!hidePrices && editPart ? (
         <EditPartModal

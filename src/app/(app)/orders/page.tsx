@@ -41,6 +41,7 @@ export default async function OrdersPage() {
 
       <OrdersTable
         canWrite={canWrite}
+        showNeedsPricing={showNeedsPricing}
         orders={orders.map((order) => ({
           id: order.id,
           customerId: order.customerId,

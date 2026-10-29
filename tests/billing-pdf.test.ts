@@ -46,6 +46,12 @@ describe("invoice PDF generation", () => {
       payments: [],
       creditNotes: [],
       notes: null,
+      warranties: [
+        {
+          partName: "battery",
+          expiresAt: new Date("2027-06-15T12:00:00Z"),
+        },
+      ],
     });
 
     expect(buffer.subarray(0, 4).toString("ascii")).toBe("%PDF");
@@ -55,8 +61,38 @@ describe("invoice PDF generation", () => {
       asLatin1.includes("INV-2025-26-0001") || asLatin1.includes("0001"),
     ).toBe(true);
     expect(labels).toEqual(getInvoicePdfLabels("en"));
+    expect(labels.warranties).toBe("Warranty");
+    expect(labels.warrantyExpires).toBe("Expires");
     expect(labels.notEInvoice).toMatch(/not an e-invoice/i);
     expect(labels.gstRate).toBe("GST%");
+  });
+
+  it("omits warranty section when none are provided", async () => {
+    const { buffer, labels } = await generateInvoicePdf({
+      locale: "en",
+      status: "FINALIZED",
+      invoiceNumber: "INV-2025-26-0002",
+      issuedAt: new Date("2025-06-15T10:00:00Z"),
+      garage: { name: "G", address: null, gstin: null },
+      customer: { name: "C", phone: "9", address: null },
+      vehicle: null,
+      placeOfSupplyStateCode: "24",
+      sellerStateCode: "24",
+      gstSplit: "IGST",
+      lines: [],
+      taxablePaise: 0,
+      cgstPaise: 0,
+      sgstPaise: 0,
+      igstPaise: 0,
+      totalPaise: 0,
+      amountPaidPaise: 0,
+      payments: [],
+      creditNotes: [],
+      notes: null,
+      warranties: [],
+    });
+    expect(buffer.subarray(0, 4).toString("ascii")).toBe("%PDF");
+    expect(labels.warranties).toBe("Warranty");
   });
 
   it("selects Hindi and Gujarati label sets for PDF", async () => {

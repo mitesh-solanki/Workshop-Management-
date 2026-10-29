@@ -3,7 +3,7 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
-import { Car, Pencil, Plus, Wrench } from "lucide-react";
+import { Car, FileText, Pencil, Plus, Wrench } from "lucide-react";
 import { usePageDetailLabel } from "@/components/page-chrome";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -33,6 +33,11 @@ import {
   VEHICLE_SECTION_ID_PREFIX,
   VEHICLE_SECTIONS,
 } from "@/modules/vehicles/vehicle-sections";
+import { AddWarrantyCardModal } from "@/modules/warranties/components/add-warranty-card-modal";
+import {
+  WarrantyDocsList,
+  type WarrantyDocListItem,
+} from "@/modules/warranties/components/warranty-docs-list";
 
 type VehicleRow = {
   id: string;
@@ -52,7 +57,9 @@ type Props = {
   customerName: string;
   vehicle: VehicleRow;
   serviceHistory: ServiceHistoryRow[];
+  warrantyDocs: WarrantyDocListItem[];
   canWrite: boolean;
+  canWriteWarranty: boolean;
   canCreateOrder: boolean;
   locale: string;
 };
@@ -125,12 +132,14 @@ export function VehicleDetailPanel({
   customerName,
   vehicle,
   serviceHistory,
+  warrantyDocs,
   canWrite,
+  canWriteWarranty,
   canCreateOrder,
   locale,
 }: Props) {
-  const t = useTranslations("customers");
   const tv = useTranslations("vehicles");
+  const tw = useTranslations("warranties");
   const to = useTranslations("orders");
   const tGst = useTranslations("gst");
   usePageDetailLabel(vehicle.registrationNumber);
@@ -140,27 +149,6 @@ export function VehicleDetailPanel({
       idPrefix: VEHICLE_SECTION_ID_PREFIX,
       initialSection: "overview",
     });
-
-  const createJobCard = (size: "sm" | "md" = "md", compact = false) =>
-    canCreateOrder ? (
-      <Button
-        asChild
-        size={size}
-        className={compact ? "min-h-10 min-w-0 flex-1" : undefined}
-      >
-        <Link href={`/orders/new?vehicleId=${vehicle.id}`}>
-          <Plus className="size-3.5 shrink-0 sm:size-4" aria-hidden />
-          {compact ? (
-            <span className="truncate">{to("createShort")}</span>
-          ) : (
-            <>
-              <span className="lg:hidden">{t("addShort")}</span>
-              <span className="hidden lg:inline">{to("createShort")}</span>
-            </>
-          )}
-        </Link>
-      </Button>
-    ) : null;
 
   const expiryRows = [
     {
@@ -199,22 +187,35 @@ export function VehicleDetailPanel({
     fitnessExpiry: vehicle.fitnessExpiry,
   };
 
-  const headerActions = (
-    <div className="flex flex-wrap items-center gap-2">
-      {createJobCard()}
-      {canWrite ? <EditVehicleModal vehicle={editVehicleValues} /> : null}
-      {canWrite ? (
+  const createJobCard =
+    canCreateOrder ? (
+      <Button asChild size="sm">
+        <Link href={`/orders/new?vehicleId=${vehicle.id}`}>
+          <Plus className="size-3.5 shrink-0 sm:size-4" aria-hidden />
+          {to("createShort")}
+        </Link>
+      </Button>
+    ) : null;
+
+  const headerActions =
+    canWrite ? (
+      <div className="flex flex-wrap items-center gap-2">
+        <EditVehicleModal vehicle={editVehicleValues} />
         <DeleteVehicleButton
           vehicleId={vehicle.id}
           customerId={customerId}
           className="min-h-11"
         />
-      ) : null}
-    </div>
-  );
+      </div>
+    ) : null;
 
   const vehicleNavItems = [
     { id: "overview" as const, label: tv("overview"), icon: Car },
+    {
+      id: "warranty" as const,
+      label: tw("sectionTitle"),
+      icon: FileText,
+    },
     {
       id: "service" as const,
       label: tv("serviceHistory"),
@@ -227,8 +228,8 @@ export function VehicleDetailPanel({
     items: vehicleNavItems,
     active: activeSection,
     onChange: scrollToSection,
-    backHref: `/customers/${customerId}`,
-    backLabel: tv("backToCustomer"),
+    backHref: "/vehicles",
+    backLabel: tv("back"),
     heading: vehicle.registrationNumber,
     headingActions: canWrite ? (
       <EditVehicleModal
@@ -246,7 +247,6 @@ export function VehicleDetailPanel({
         }
       />
     ) : undefined,
-    ctaRow: createJobCard("sm", true),
   } as const;
 
   return (
@@ -282,8 +282,6 @@ export function VehicleDetailPanel({
           items={vehicleNavProps.items}
           active={vehicleNavProps.active}
           onChange={vehicleNavProps.onChange}
-          backHref={vehicleNavProps.backHref}
-          backLabel={vehicleNavProps.backLabel}
         />
 
         <div className="flex min-w-0 flex-col gap-4">
@@ -347,11 +345,34 @@ export function VehicleDetailPanel({
           </SectionBlock>
 
           <SectionBlock
+            id={sectionDomId(VEHICLE_SECTION_ID_PREFIX, "warranty")}
+            title={tw("sectionTitle")}
+            subtitle={tw("vehicleSectionDescription")}
+            sectionRef={setSectionRef("warranty")}
+            action={
+              canWriteWarranty ? (
+                <AddWarrantyCardModal
+                  vehicleId={vehicle.id}
+                  customerId={customerId}
+                />
+              ) : undefined
+            }
+          >
+            <WarrantyDocsList
+              docs={warrantyDocs}
+              canWrite={canWriteWarranty}
+              locale={locale}
+              emptyTitle={tw("emptyTitle")}
+              emptyDescription={tw("emptyVehicleDescription")}
+            />
+          </SectionBlock>
+
+          <SectionBlock
             id={sectionDomId(VEHICLE_SECTION_ID_PREFIX, "service")}
             title={tv("serviceHistory")}
             subtitle={tv("serviceHistoryDescription")}
             sectionRef={setSectionRef("service")}
-            action={createJobCard()}
+            action={createJobCard}
           >
             <ServiceHistoryList
               orders={serviceHistory}

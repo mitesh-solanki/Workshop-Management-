@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import {
-  createPartByNameAction,
   getPartPickerItemAction,
   searchPartsCatalogAction,
   type PartsPickerPageResult,
@@ -27,10 +26,10 @@ type Props = {
   /** Shown until the selected part finishes loading (e.g. line description). */
   initialLabel?: string;
   /**
-   * Technician job card: type a name and Enter / tap Add to create a catalogue
-   * row with defaults (no prices or bills).
+   * When the typed name is not in the list, show Add “{name}” and call this
+   * (opens Create Part modal — do not silent-create like the old mechanic path).
    */
-  quickCreateByName?: boolean;
+  onCreateFromQuery?: (name: string) => void;
 };
 
 /**
@@ -46,14 +45,13 @@ export function PartPickerSelect({
   disabled,
   clearable = true,
   initialLabel,
-  quickCreateByName = false,
+  onCreateFromQuery,
 }: Props) {
   const ti = useTranslations("inventory");
   const [items, setItems] = useState<PartPickerItem[]>([]);
   const [nextOffset, setNextOffset] = useState(0);
   const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [creating, setCreating] = useState(false);
   const [selected, setSelected] = useState<PartPickerItem | null>(() =>
     value && initialLabel
       ? {
@@ -207,35 +205,6 @@ export function PartPickerSelect({
     onChange(nextId, part);
   }
 
-  async function handleCreateFromQuery(name: string) {
-    if (!quickCreateByName || creating) {
-      return;
-    }
-    const trimmed = name.trim();
-    if (!trimmed) {
-      return;
-    }
-    setCreating(true);
-    try {
-      const result = await createPartByNameAction(trimmed);
-      if (!result.ok || !result.part) {
-        toast.error(result.message ?? ti("emptySearchTitle"));
-        return;
-      }
-      toast.success(result.message ?? ti("created"));
-      setSelected(result.part);
-      setItems((prev) => {
-        if (prev.some((item) => item.id === result.part!.id)) {
-          return prev;
-        }
-        return [result.part!, ...prev];
-      });
-      onChange(result.part.id, result.part);
-    } finally {
-      setCreating(false);
-    }
-  }
-
   return (
     <SearchableSelect
       id={id}
@@ -254,26 +223,23 @@ export function PartPickerSelect({
       disabled={disabled}
       placeholder={ti("partSelectPlaceholder")}
       searchPlaceholder={
-        quickCreateByName
+        onCreateFromQuery
           ? ti("partSelectPlaceholderQuickCreate")
           : ti("partSelectPlaceholder")
       }
       emptyLabel={
-        quickCreateByName
+        onCreateFromQuery
           ? ti("emptySearchQuickCreate")
           : ti("emptySearchTitle")
       }
       loadingLabel={ti("pickerLoading")}
       className={className}
       createFromQueryLabel={
-        quickCreateByName
+        onCreateFromQuery
           ? (query) => ti("quickAddPart", { name: query })
           : undefined
       }
-      onCreateFromQuery={
-        quickCreateByName ? handleCreateFromQuery : undefined
-      }
-      creatingFromQuery={creating}
+      onCreateFromQuery={onCreateFromQuery}
     />
   );
 }

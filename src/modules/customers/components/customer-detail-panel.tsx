@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useTranslations } from "next-intl";
 import {
   Car,
+  FileText,
   MapPin,
   MessageSquare,
   NotebookPen,
@@ -43,6 +44,11 @@ import {
   type ServiceHistoryRow,
 } from "@/modules/service-orders/components/service-history-list";
 import { CreateVehicleModal } from "@/modules/vehicles/components/create-vehicle-modal";
+import { AddWarrantyCardModal } from "@/modules/warranties/components/add-warranty-card-modal";
+import {
+  WarrantyDocsList,
+  type WarrantyDocListItem,
+} from "@/modules/warranties/components/warranty-docs-list";
 
 export type { ServiceHistoryRow };
 
@@ -50,7 +56,9 @@ type Props = {
   customer: EditCustomerValues;
   vehicles: CustomerVehicleRow[];
   serviceHistory: ServiceHistoryRow[];
+  warrantyDocs: WarrantyDocListItem[];
   canWrite: boolean;
+  canWriteWarranty: boolean;
   canCreateOrder: boolean;
   locale: string;
 };
@@ -92,12 +100,15 @@ export function CustomerDetailPanel({
   customer,
   vehicles,
   serviceHistory,
+  warrantyDocs,
   canWrite,
+  canWriteWarranty,
   canCreateOrder,
   locale,
 }: Props) {
   const t = useTranslations("customers");
   const tv = useTranslations("vehicles");
+  const tw = useTranslations("warranties");
   const to = useTranslations("orders");
   usePageDetailLabel(customer.name);
   const { activeSection, scrollToSection, setSectionRef } =
@@ -111,6 +122,11 @@ export function CustomerDetailPanel({
     { id: "details" as const, label: t("details"), icon: NotebookPen },
     { id: "vehicles" as const, label: t("vehicles"), icon: Car },
     { id: "service" as const, label: t("serviceHistory"), icon: Wrench },
+    {
+      id: "warranty" as const,
+      label: tw("customerSectionTitle"),
+      icon: FileText,
+    },
     {
       id: "communication" as const,
       label: t("communicationHistory"),
@@ -335,6 +351,35 @@ export function CustomerDetailPanel({
               }
               showRegistration
               statusLabel={(status) => to(`statuses.${status}`)}
+            />
+          </SectionBlock>
+
+          <SectionBlock
+            id={sectionDomId(CUSTOMER_SECTION_ID_PREFIX, "warranty")}
+            title={tw("customerSectionTitle")}
+            subtitle={tw("customerSectionDescription")}
+            sectionRef={setSectionRef("warranty")}
+            action={
+              canWriteWarranty && vehicles.length > 0 ? (
+                <AddWarrantyCardModal
+                  customerId={customer.id}
+                  vehicles={vehicles.map((vehicle) => ({
+                    id: vehicle.id,
+                    registrationNumber: vehicle.registrationNumber,
+                    make: vehicle.make,
+                    model: vehicle.model,
+                  }))}
+                />
+              ) : undefined
+            }
+          >
+            <WarrantyDocsList
+              docs={warrantyDocs}
+              canWrite={canWriteWarranty}
+              locale={locale}
+              showVehicle
+              emptyTitle={tw("emptyTitle")}
+              emptyDescription={tw("emptyCustomerDescription")}
             />
           </SectionBlock>
 

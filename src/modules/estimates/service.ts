@@ -100,6 +100,7 @@ async function collectSourceLines(
 function toCreateInput(
   sources: SourceLine[],
   startSort = 0,
+  approvalState: "PENDING" | "APPROVED" = "PENDING",
 ): EstimateLineCreateInput[] {
   return sources.map((source, index) => ({
     type: source.type,
@@ -108,7 +109,7 @@ function toCreateInput(
     unitPricePaise: source.unitPricePaise,
     gstRatePercent: DEFAULT_GST_RATE_PERCENT,
     hsnOrSac: defaultHsnOrSac(source.type),
-    approvalState: "PENDING" as const,
+    approvalState,
     sourceOrderLineId: source.sourceOrderLineId ?? null,
     sourceSuggestedRepairId: source.sourceSuggestedRepairId ?? null,
     sortOrder: startSort + index,
@@ -181,17 +182,39 @@ export async function createEstimateFromSources(
     throw new AppError("ESTIMATE_NO_SOURCES");
   }
 
-  const estimate = await createEstimateWithLines(session.garageId, {
-    serviceOrderId: order.id,
-    revisionNumber: 1,
-    notes: input.notes ?? null,
-    createdById: session.userId,
-    lines: toCreateInput(sources),
-  });
-  if (!estimate) {
-    throw new AppError("ESTIMATE_CREATE_FAILED");
+  if (sources.some((line) => line.unitPricePaise <= 0)) {
+    throw new AppError("ESTIMATE_NO_PRICED_SOURCES");
   }
-  return withTotals(estimate);
+
+  const autoApprove = !input.askPermission;
+  try {
+    const estimate = await createEstimateWithLines(session.garageId, {
+      serviceOrderId: order.id,
+      revisionNumber: 1,
+      notes: input.notes ?? null,
+      askPermission: input.askPermission,
+      permissionVia: input.permissionVia,
+      createdById: session.userId,
+      lines: toCreateInput(
+        sources,
+        0,
+        autoApprove ? "APPROVED" : "PENDING",
+      ),
+      bootstrapApprovedLines: autoApprove,
+    });
+    if (!estimate) {
+      throw new AppError("ESTIMATE_CREATE_FAILED");
+    }
+    return withTotals(estimate);
+  } catch (error) {
+    if (
+      error instanceof EstimateStockTxError &&
+      error.reason === "INSUFFICIENT_STOCK"
+    ) {
+      throw new AppError("inventory.insufficient_stock", 409);
+    }
+    throw error;
+  }
 }
 
 /**
@@ -226,18 +249,31 @@ export async function createEstimateRevision(
     sortOrder: index,
   }));
 
-  const estimate = await createEstimateWithLines(session.garageId, {
-    serviceOrderId: order.id,
-    revisionNumber: current.revisionNumber + 1,
-    notes: input.notes ?? null,
-    createdById: session.userId,
-    lines: copied,
-    supersedeEstimateId: current.id,
-  });
-  if (!estimate) {
-    throw new AppError("ESTIMATE_REVISION_FAILED");
+  try {
+    const estimate = await createEstimateWithLines(session.garageId, {
+      serviceOrderId: order.id,
+      revisionNumber: current.revisionNumber + 1,
+      notes: input.notes ?? null,
+      askPermission: current.askPermission,
+      permissionVia: current.permissionVia,
+      createdById: session.userId,
+      lines: copied,
+      supersedeEstimateId: current.id,
+      bootstrapApprovedLines: false,
+    });
+    if (!estimate) {
+      throw new AppError("ESTIMATE_REVISION_FAILED");
+    }
+    return withTotals(estimate);
+  } catch (error) {
+    if (
+      error instanceof EstimateStockTxError &&
+      error.reason === "INSUFFICIENT_STOCK"
+    ) {
+      throw new AppError("inventory.insufficient_stock", 409);
+    }
+    throw error;
   }
-  return withTotals(estimate);
 }
 
 export async function addManualEstimateLine(
@@ -255,21 +291,108 @@ export async function addManualEstimateLine(
     throw new AppError("ESTIMATE_MISSING");
   }
 
-  const line = await addEstimateLine(session.garageId, {
-    estimateId: current.id,
-    serviceOrderId: order.id,
-    type: input.type,
-    description: input.description,
-    quantity: input.quantity,
-    unitPricePaise: input.unitPricePaise,
-    gstRatePercent: input.gstRatePercent,
-    hsnOrSac: input.hsnOrSac,
-    actorId: session.userId,
-  });
-  if (!line) {
-    throw new AppError("ESTIMATE_LINE_FAILED");
+  try {
+    const line = await addEstimateLine(session.garageId, {
+      estimateId: current.id,
+      serviceOrderId: order.id,
+      type: input.type,
+      description: input.description,
+      quantity: input.quantity,
+      unitPricePaise: input.unitPricePaise,
+      gstRatePercent: input.gstRatePercent,
+      hsnOrSac: input.hsnOrSac,
+      actorId: session.userId,
+      autoApprove: !current.askPermission,
+    });
+    if (!line) {
+      throw new AppError("ESTIMATE_LINE_FAILED");
+    }
+    return line;
+  } catch (error) {
+    if (
+      error instanceof EstimateStockTxError &&
+      error.reason === "INSUFFICIENT_STOCK"
+    ) {
+      throw new AppError("inventory.insufficient_stock", 409);
+    }
+    throw error;
   }
-  return line;
+}
+
+/**
+ * Pull priced job-card lines that are not yet on the current estimate onto it.
+ * Used before draft create / remake so later-added parts (e.g. battery) bill automatically.
+ */
+export async function syncMissingOrderLinesOntoEstimate(
+  session: RoleSession,
+  serviceOrderId: string,
+  options?: { autoApprove?: boolean },
+) {
+  requireRole(session, [
+    "OWNER",
+    "MANAGER",
+    "TECHNICIAN",
+    "ACCOUNTANT",
+  ] as const);
+  const order = await loadOrderForSession(session, serviceOrderId);
+  if (session.role === "ACCOUNTANT") {
+    if (order.status === "COMPLETED") {
+      throw new AppError("ORDER_COMPLETED");
+    }
+  } else {
+    assertCanMutateOrder(session, order);
+  }
+
+  const current = await findCurrentEstimate(session.garageId, order.id);
+  if (!current) {
+    throw new AppError("ESTIMATE_MISSING");
+  }
+
+  const alreadyLinked = new Set(
+    current.lines
+      .map((line) => line.sourceOrderLineId)
+      .filter((id): id is string => Boolean(id)),
+  );
+
+  const missing = order.lines.filter(
+    (line) =>
+      !alreadyLinked.has(line.id) &&
+      line.unitPricePaise > 0,
+  );
+
+  const autoApprove = options?.autoApprove ?? !current.askPermission;
+  const added = [];
+
+  for (const line of missing) {
+    try {
+      const created = await addEstimateLine(session.garageId, {
+        estimateId: current.id,
+        serviceOrderId: order.id,
+        type: line.type,
+        description: line.description,
+        quantity: line.quantity,
+        unitPricePaise: line.unitPricePaise,
+        gstRatePercent: DEFAULT_GST_RATE_PERCENT,
+        hsnOrSac: defaultHsnOrSac(line.type),
+        sourceOrderLineId: line.id,
+        actorId: session.userId,
+        autoApprove,
+      });
+      if (created) {
+        added.push(created);
+      }
+    } catch (error) {
+      if (
+        error instanceof EstimateStockTxError &&
+        error.reason === "INSUFFICIENT_STOCK"
+      ) {
+        throw new AppError("inventory.insufficient_stock", 409);
+      }
+      throw error;
+    }
+  }
+
+  return { estimateId: current.id, addedCount: added.length };
 }
 
 export async function removeEstimateLine(

@@ -16,6 +16,8 @@ import { RecordPaymentForm } from "@/modules/billing/components/record-payment-f
 import { RecordRefundForm } from "@/modules/billing/components/record-refund-form";
 import { RemakeDraftInvoiceForm } from "@/modules/billing/components/remake-draft-invoice-form";
 import type { PdfLocale } from "@/modules/billing/schema";
+import { InvoiceWarrantyPanel } from "@/modules/warranties/components/invoice-warranty-panel";
+import { partRequiresWarrantyCard } from "@/modules/warranties/part-requires-warranty";
 
 type UnbilledLine = {
   id: string;
@@ -43,6 +45,7 @@ export type BillingInvoiceCardModel = {
   lines: Array<{
     id: string;
     description: string;
+    type: "LABOUR" | "PART";
     quantity: number;
     unitPricePaise: number;
     totalPaise: number;
@@ -61,11 +64,23 @@ export type BillingInvoiceCardModel = {
     totalPaise: number;
     lines: Array<{ id: string; description: string; totalPaise: number }>;
   }>;
+  warrantyDocs: Array<{
+    id: string;
+    invoiceLineId: string | null;
+    partName: string;
+    warrantyExpiresAt: Date | string | null;
+    storageKey: string | null;
+    contentType: string | null;
+    byteSize: number | null;
+    fileName: string | null;
+    url: string | null;
+  }>;
   preview: InvoicePreviewData;
 };
 
 type Props = {
   orderId: string;
+  vehicleId: string;
   canEdit: boolean;
   pdfLocale: PdfLocale;
   invoices: BillingInvoiceCardModel[];
@@ -110,6 +125,7 @@ function methodLabel(
 
 export function BillingInvoiceWorkspace({
   orderId,
+  vehicleId,
   canEdit,
   pdfLocale,
   invoices,
@@ -143,8 +159,26 @@ export function BillingInvoiceWorkspace({
   }, [invoices]);
 
   const [activeId, setActiveId] = useState(initialId);
+  const [warrantyFormComplete, setWarrantyFormComplete] = useState(true);
   const active =
     invoices.find((inv) => inv.id === activeId) ?? invoices[0] ?? null;
+
+  function selectInvoice(id: string) {
+    setActiveId(id);
+    setWarrantyFormComplete(true);
+  }
+
+  const warrantyIncomplete = useMemo(() => {
+    if (!active) return false;
+    return active.lines.some((line) => {
+      if (line.type !== "PART") return false;
+      if (!partRequiresWarrantyCard(line.description)) return false;
+      const doc = active.warrantyDocs.find(
+        (item) => item.invoiceLineId === line.id,
+      );
+      return !(doc?.storageKey && doc.warrantyExpiresAt);
+    });
+  }, [active]);
 
   if (!active) {
     return null;
@@ -163,7 +197,7 @@ export function BillingInvoiceWorkspace({
               <button
                 key={invoice.id}
                 type="button"
-                onClick={() => setActiveId(invoice.id)}
+                onClick={() => selectInvoice(invoice.id)}
                 className={cn(
                   "inline-flex min-h-11 items-center rounded-full border px-3.5 text-[13px] font-bold transition-colors",
                   selected
@@ -296,9 +330,28 @@ export function BillingInvoiceWorkspace({
           </div>
         </dl>
 
+        {active.lines.some((line) => line.type === "PART") ? (
+          <div className="border-t border-slate-200 px-4 py-4">
+            <InvoiceWarrantyPanel
+              orderId={orderId}
+              invoiceId={active.id}
+              vehicleId={vehicleId}
+              lines={active.lines}
+              docs={active.warrantyDocs}
+              canEdit={canEdit && active.status === "DRAFT"}
+              onRequiredValidityChange={setWarrantyFormComplete}
+            />
+          </div>
+        ) : null}
+
         {canEdit && active.status === "DRAFT" ? (
           <div className="flex flex-wrap items-center gap-2 border-t border-slate-200 px-4 py-4">
-            <FinalizeInvoiceForm invoiceId={active.id} orderId={orderId} />
+            <FinalizeInvoiceForm
+              invoiceId={active.id}
+              orderId={orderId}
+              disabled={warrantyIncomplete || !warrantyFormComplete}
+            />
+
             <RemakeDraftInvoiceForm
               invoiceId={active.id}
               orderId={orderId}
@@ -306,9 +359,12 @@ export function BillingInvoiceWorkspace({
               notes={active.notes}
             />
             <DeleteDraftInvoiceForm invoiceId={active.id} orderId={orderId} />
-            <p className="basis-full text-[13px] text-slate-500">
-              {t("draftNextStepHint")}
-            </p>
+            <div className="basis-full space-y-1 text-[13px] leading-relaxed text-slate-700">
+              <p>{t("draftNextStepHint")}</p>
+              <p>{t("draftNextStepRemake")}</p>
+              <p>{t("draftNextStepFinalize")}</p>
+              <p>{t("draftNextStepDelete")}</p>
+            </div>
           </div>
         ) : null}
       </article>

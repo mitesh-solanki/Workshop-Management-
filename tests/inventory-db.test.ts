@@ -1,5 +1,5 @@
 /**
- * Live Postgres proofs for stock rules (FOR UPDATE + allowNegativeStock).
+ * Live Postgres proofs for stock rules (FOR UPDATE; stock never below zero).
  * Requires DATABASE_URL (defaults to local docker-compose on host port 5433).
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -37,11 +37,8 @@ describe("inventory stock against Postgres", () => {
 
     const garage = await prisma.garage.create({
       data: {
-        name: `Stock test garage ${suffix}`,
-        allowNegativeStock: false,
-      },
-      select: { id: true },
-    });
+        name: `Stock test garage ${suffix}` },
+      select: { id: true } });
     garageId = garage.id;
 
     const user = await prisma.user.create({
@@ -49,10 +46,8 @@ describe("inventory stock against Postgres", () => {
         email: `stock-test-${suffix}@example.com`,
         name: "Stock Tester",
         role: "OWNER",
-        garageId,
-      },
-      select: { id: true },
-    });
+        garageId },
+      select: { id: true } });
     userId = user.id;
 
     const part = await prisma.part.create({
@@ -65,10 +60,8 @@ describe("inventory stock against Postgres", () => {
         sellingPricePaise: 15000,
         gstRatePercent: 18,
         hsn: "87089900",
-        lowStockLevel: 2,
-      },
-      select: { id: true },
-    });
+        lowStockLevel: 2 },
+      select: { id: true } });
     partId = part.id;
 
     await prisma.stockMovement.create({
@@ -78,9 +71,7 @@ describe("inventory stock against Postgres", () => {
         type: "IN",
         quantityChange: 10,
         note: "seed",
-        createdById: userId,
-      },
-    });
+        createdById: userId } });
   }, 30_000);
 
   afterAll(async () => {
@@ -90,7 +81,7 @@ describe("inventory stock against Postgres", () => {
     await prisma.$disconnect();
   });
 
-  it("rejects OUT that would go negative when garage disallows it", async () => {
+  it("rejects OUT that would go negative", async () => {
     if (!ready) {
       throw new Error(
         "Postgres not reachable — start docker compose and set DATABASE_URL",
@@ -119,51 +110,6 @@ describe("inventory stock against Postgres", () => {
     expect(await getPartStock(garageId, partId)).toBe(10);
   });
 
-  it("allows negative stock when garage setting is on", async () => {
-    if (!ready) {
-      throw new Error(
-        "Postgres not reachable — start docker compose and set DATABASE_URL",
-      );
-    }
-
-    const { applyStockMovement, getPartStock } = await import(
-      "@/modules/inventory/repo"
-    );
-
-    await prisma.garage.update({
-      where: { id: garageId },
-      data: { allowNegativeStock: true },
-    });
-
-    const result = await applyStockMovement(garageId, {
-      partId,
-      type: "OUT",
-      quantity: 12,
-      note: "allowed negative",
-      actorId: userId,
-    });
-
-    expect(result.ok).toBe(true);
-    if (result.ok) {
-      expect(result.resultingStock).toBe(-2);
-    }
-    expect(await getPartStock(garageId, partId)).toBe(-2);
-
-    // Restore stock and disallow negative for the concurrent test.
-    await applyStockMovement(garageId, {
-      partId,
-      type: "IN",
-      quantity: 12,
-      note: "restore",
-      actorId: userId,
-    });
-    await prisma.garage.update({
-      where: { id: garageId },
-      data: { allowNegativeStock: false },
-    });
-    expect(await getPartStock(garageId, partId)).toBe(10);
-  });
-
   it("serializes concurrent OUTs so stock is not oversold", async () => {
     if (!ready) {
       throw new Error(
@@ -175,26 +121,27 @@ describe("inventory stock against Postgres", () => {
       "@/modules/inventory/repo"
     );
 
-    // Reset to a known on-hand of 10 under a disallow-negative setting.
-    await prisma.garage.update({
-      where: { id: garageId },
-      data: { allowNegativeStock: true },
-    });
     const current = await getPartStock(garageId, partId);
     if (current !== 10) {
       const delta = 10 - current;
-      await applyStockMovement(garageId, {
-        partId,
-        type: "ADJUSTMENT",
-        quantity: delta,
-        note: "reset for concurrency",
-        actorId: userId,
-      });
+      if (delta > 0) {
+        await applyStockMovement(garageId, {
+          partId,
+          type: "IN",
+          quantity: delta,
+          note: "reset for concurrency",
+          actorId: userId,
+        });
+      } else if (delta < 0) {
+        await applyStockMovement(garageId, {
+          partId,
+          type: "OUT",
+          quantity: -delta,
+          note: "reset for concurrency",
+          actorId: userId,
+        });
+      }
     }
-    await prisma.garage.update({
-      where: { id: garageId },
-      data: { allowNegativeStock: false },
-    });
     expect(await getPartStock(garageId, partId)).toBe(10);
 
     const [a, b] = await Promise.all([
@@ -203,15 +150,13 @@ describe("inventory stock against Postgres", () => {
         type: "OUT",
         quantity: 6,
         note: "race-a",
-        actorId: userId,
-      }),
+        actorId: userId }),
       applyStockMovement(garageId, {
         partId,
         type: "OUT",
         quantity: 6,
         note: "race-b",
-        actorId: userId,
-      }),
+        actorId: userId }),
     ]);
 
     const successes = [a, b].filter((r) => r.ok);
@@ -221,8 +166,7 @@ describe("inventory stock against Postgres", () => {
     expect(failures).toHaveLength(1);
     expect(failures[0]).toMatchObject({
       ok: false,
-      reason: "INSUFFICIENT_STOCK",
-    });
+      reason: "INSUFFICIENT_STOCK" });
     expect(await getPartStock(garageId, partId)).toBe(4);
   });
 });

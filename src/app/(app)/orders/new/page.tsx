@@ -26,7 +26,7 @@ export default async function NewJobCardPage({ searchParams }: Props) {
   const t = await getTranslations("orders");
 
   try {
-    requireRole(session, ["OWNER", "MANAGER", "TECHNICIAN"]);
+    requireRole(session, ["OWNER", "MANAGER"]);
   } catch (error) {
     if (error instanceof ForbiddenError) {
       return (
@@ -51,17 +51,8 @@ export default async function NewJobCardPage({ searchParams }: Props) {
   }
 
   const surface = jobCardSurfaceForRole(session.role);
-  const isTechnician = session.role === "TECHNICIAN";
   const [technicians, bays] = await Promise.all([
-    isTechnician
-      ? Promise.resolve([
-          {
-            id: session.userId,
-            name: session.name,
-            email: session.email,
-          },
-        ])
-      : listAssignableTechnicians(session),
+    listAssignableTechnicians(session),
     listBaysForSelect(session),
   ]);
 
@@ -170,7 +161,6 @@ export default async function NewJobCardPage({ searchParams }: Props) {
           technicians={technicians}
           bays={bays}
           initialVehicleId={preselectedVehicleId}
-          lockTechnicianId={isTechnician ? session.userId : undefined}
           surface={surface}
         />
       )}

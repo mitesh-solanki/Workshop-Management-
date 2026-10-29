@@ -66,6 +66,7 @@ export const APP_NAV_ITEMS: readonly NavItem[] = [
     key: "dashboard",
     icon: LayoutDashboard,
     group: "workshop",
+    roles: ["OWNER", "MANAGER", "ACCOUNTANT"],
   },
   {
     href: "/workshop",
@@ -91,12 +92,14 @@ export const APP_NAV_ITEMS: readonly NavItem[] = [
     key: "customers",
     icon: Contact,
     group: "business",
+    roles: ["OWNER", "MANAGER", "ACCOUNTANT"],
   },
   {
     href: "/vehicles",
     key: "vehicles",
     icon: Car,
     group: "business",
+    roles: ["OWNER", "MANAGER", "ACCOUNTANT"],
   },
   {
     href: "/invoices",

@@ -12,11 +12,13 @@ import {
 
 export class PurchasesTxError extends Error {
   readonly code: string;
+  readonly params?: Record<string, string | number>;
 
-  constructor(code: string) {
+  constructor(code: string, params?: Record<string, string | number>) {
     super(code);
     this.name = "PurchasesTxError";
     this.code = code;
+    this.params = params;
   }
 }
 
@@ -653,6 +655,46 @@ export async function findVendorBillById(garageId: string, id: string) {
   };
 }
 
+/** Attachment metadata for shop-receive Bought From download links. */
+export async function findVendorBillAttachmentsByIds(
+  garageId: string,
+  ids: string[],
+) {
+  const unique = [...new Set(ids.map((id) => id.trim()).filter(Boolean))];
+  if (unique.length === 0) return [];
+  return prisma.vendorBill.findMany({
+    where: { garageId, id: { in: unique } },
+    select: {
+      id: true,
+      attachmentStorageKey: true,
+      attachmentFileName: true,
+      attachmentContentType: true,
+    },
+  });
+}
+
+/**
+ * Recent vendor bills for matching shop-receive stock-ins that predate the
+ * bill-id marker in the movement note (match by createdAt proximity).
+ */
+export async function listRecentVendorBillsForShopReceiveMatch(
+  garageId: string,
+  take = 200,
+) {
+  return prisma.vendorBill.findMany({
+    where: { garageId },
+    select: {
+      id: true,
+      createdAt: true,
+      attachmentStorageKey: true,
+      attachmentFileName: true,
+      attachmentContentType: true,
+    },
+    orderBy: { createdAt: "desc" },
+    take,
+  });
+}
+
 export async function createVendorBill(
   garageId: string,
   data: {
@@ -971,7 +1013,7 @@ export async function createPurchaseReturn(
 
     const part = await tx.part.findFirst({
       where: { id: data.partId, garageId },
-      select: { id: true },
+      select: { id: true, name: true },
     });
     if (!part) {
       throw new PurchasesTxError("purchases.part_not_found");
@@ -1029,7 +1071,10 @@ export async function createPurchaseReturn(
     );
     if (!stock.ok) {
       if (stock.reason === "INSUFFICIENT_STOCK") {
-        throw new PurchasesTxError("inventory.insufficient_stock");
+        throw new PurchasesTxError("inventory.insufficient_stock", {
+          partName: stock.partName ?? part.name,
+          partId: stock.partId ?? part.id,
+        });
       }
       throw new PurchasesTxError("purchases.stock_failed");
     }

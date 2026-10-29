@@ -11,12 +11,10 @@ import {
   createDraftInvoice,
   finalizeInvoiceInTransaction,
   recordPaymentRow,
-  recordRefundRow,
-} from "@/modules/billing/repo";
+  recordRefundRow } from "@/modules/billing/repo";
 import {
   pendingBalancePaise,
-  refundDuePaise,
-} from "@/modules/billing/balance";
+  refundDuePaise } from "@/modules/billing/balance";
 
 if (!process.env.DATABASE_URL) {
   process.env.DATABASE_URL =
@@ -55,11 +53,8 @@ describe("billing against Postgres", () => {
     const garage = await prisma.garage.create({
       data: {
         name: `Billing test garage ${suffix}`,
-        gstin: "24AABCU9603R1ZM",
-        allowNegativeStock: false,
-      },
-      select: { id: true },
-    });
+        gstin: "24AABCU9603R1ZM" },
+      select: { id: true } });
     garageId = garage.id;
 
     const user = await prisma.user.create({
@@ -67,20 +62,16 @@ describe("billing against Postgres", () => {
         email: `billing-test-${suffix}@example.com`,
         name: "Billing Tester",
         role: "OWNER",
-        garageId,
-      },
-      select: { id: true },
-    });
+        garageId },
+      select: { id: true } });
     userId = user.id;
 
     const customer = await prisma.customer.create({
       data: {
         garageId,
         name: "Test Customer",
-        phone: "9876543210",
-      },
-      select: { id: true },
-    });
+        phone: "9876543210" },
+      select: { id: true } });
     customerId = customer.id;
 
     const vehicle = await prisma.vehicle.create({
@@ -89,10 +80,8 @@ describe("billing against Postgres", () => {
         customerId,
         registrationNumber: `GJ01T${suffix.slice(0, 4)}`.toUpperCase(),
         make: "Maruti",
-        model: "Swift",
-      },
-      select: { id: true },
-    });
+        model: "Swift" },
+      select: { id: true } });
     vehicleId = vehicle.id;
 
     const order = await prisma.serviceOrder.create({
@@ -101,10 +90,8 @@ describe("billing against Postgres", () => {
         customerId,
         vehicleId,
         complaint: "Billing test",
-        status: "READY",
-      },
-      select: { id: true },
-    });
+        status: "READY" },
+      select: { id: true } });
     orderId = order.id;
 
     const estimate = await prisma.estimate.create({
@@ -123,12 +110,8 @@ describe("billing against Postgres", () => {
             gstRatePercent: 18,
             hsnOrSac: "998714",
             approvalState: "APPROVED",
-            sortOrder: 0,
-          },
-        },
-      },
-      include: { lines: true },
-    });
+            sortOrder: 0 } } },
+      include: { lines: true } });
     estimateId = estimate.id;
     estimateLineId = estimate.lines[0]!.id;
   }, 30_000);
@@ -191,10 +174,8 @@ describe("billing against Postgres", () => {
           sgstPaise: 9_000,
           igstPaise: 0,
           totalPaise: 118_000,
-          sortOrder: 0,
-        },
-      ],
-    });
+          sortOrder: 0 },
+      ] });
     expect(draft?.status).toBe("DRAFT");
     expect(draft?.invoiceNumber).toBeNull();
 
@@ -246,10 +227,8 @@ describe("billing against Postgres", () => {
           sgstPaise: 0,
           igstPaise: 9_000,
           totalPaise: 59_000,
-          sortOrder: 0,
-        },
-      ],
-    });
+          sortOrder: 0 },
+      ] });
     expect(invoice?.status).toBe("FINALIZED");
 
     const note = await createCreditNoteRow(garageId, {
@@ -274,10 +253,8 @@ describe("billing against Postgres", () => {
           sgstPaise: 0,
           igstPaise: 1_800,
           totalPaise: 11_800,
-          sortOrder: 0,
-        },
-      ],
-    });
+          sortOrder: 0 },
+      ] });
     expect(note && "creditNote" in note && note.creditNote?.creditNoteNumber).toMatch(
       /^CN-[A-Z0-9]{2,4}\/\d{4}-\d{2}\/\d{4}$/,
     );
@@ -304,10 +281,8 @@ describe("billing against Postgres", () => {
           sgstPaise: 0,
           igstPaise: 9_000,
           totalPaise: 59_000,
-          sortOrder: 0,
-        },
-      ],
-    });
+          sortOrder: 0 },
+      ] });
     expect(over && "error" in over && over.error).toBe("exceeds_invoice");
   });
 
@@ -344,10 +319,8 @@ describe("billing against Postgres", () => {
           sgstPaise: 9_000,
           igstPaise: 0,
           totalPaise: 118_000,
-          sortOrder: 0,
-        },
-      ],
-    });
+          sortOrder: 0 },
+      ] });
     expect(invoice?.status).toBe("FINALIZED");
     expect(invoice?.amountPaidPaise).toBe(0);
 
@@ -359,8 +332,7 @@ describe("billing against Postgres", () => {
       upiPaise: 40_000,
       cardPaise: 0,
       note: "partial upi",
-      actorId: userId,
-    });
+      actorId: userId });
     expect(partial && "payment" in partial && partial.payment?.amountPaise).toBe(
       40_000,
     );
@@ -371,8 +343,7 @@ describe("billing against Postgres", () => {
       pendingBalancePaise({
         totalPaise: 118_000,
         amountPaidPaise: 40_000,
-        creditNotesTotalPaise: 0,
-      }),
+        creditNotesTotalPaise: 0 }),
     ).toBe(78_000);
 
     const mixed = await recordPaymentRow(garageId, {
@@ -383,8 +354,7 @@ describe("billing against Postgres", () => {
       upiPaise: 15_000,
       cardPaise: 15_000,
       note: "mixed remainder chunk",
-      actorId: userId,
-    });
+      actorId: userId });
     expect(mixed && "payment" in mixed && mixed.payment?.method).toBe("MIXED");
     expect(mixed && "payment" in mixed && mixed.payment?.cashPaise).toBe(20_000);
     expect(mixed && "payment" in mixed && mixed.payment?.upiPaise).toBe(15_000);
@@ -401,8 +371,7 @@ describe("billing against Postgres", () => {
       upiPaise: 0,
       cardPaise: 0,
       note: null,
-      actorId: userId,
-    });
+      actorId: userId });
     expect(over && "error" in over && over.error).toBe("overpay");
     expect(over && "error" in over && over.pending).toBe(28_000);
 
@@ -414,14 +383,12 @@ describe("billing against Postgres", () => {
       upiPaise: 0,
       cardPaise: 0,
       note: null,
-      actorId: userId,
-    });
+      actorId: userId });
     expect(foreign).toBeNull();
 
     const still = await prisma.invoice.findFirst({
       where: { id: invoice!.id, garageId },
-      select: { amountPaidPaise: true },
-    });
+      select: { amountPaidPaise: true } });
     expect(still?.amountPaidPaise).toBe(90_000);
   });
 
@@ -458,10 +425,8 @@ describe("billing against Postgres", () => {
           sgstPaise: 9_000,
           igstPaise: 0,
           totalPaise: 118_000,
-          sortOrder: 0,
-        },
-      ],
-    });
+          sortOrder: 0 },
+      ] });
 
     const paid = await recordPaymentRow(garageId, {
       invoiceId: invoice!.id,
@@ -471,8 +436,7 @@ describe("billing against Postgres", () => {
       upiPaise: 118_000,
       cardPaise: 0,
       note: null,
-      actorId: userId,
-    });
+      actorId: userId });
     expect(paid && "invoice" in paid && paid.invoice?.amountPaidPaise).toBe(
       118_000,
     );
@@ -499,17 +463,14 @@ describe("billing against Postgres", () => {
           sgstPaise: 900,
           igstPaise: 0,
           totalPaise: 11_800,
-          sortOrder: 0,
-        },
-      ],
-    });
+          sortOrder: 0 },
+      ] });
     expect(note && "creditNote" in note).toBe(true);
 
     const due = refundDuePaise({
       totalPaise: 118_000,
       amountPaidPaise: 118_000,
-      creditNotesTotalPaise: 11_800,
-    });
+      creditNotesTotalPaise: 11_800 });
     expect(due).toBe(11_800);
 
     const refund = await recordRefundRow(garageId, {
@@ -520,8 +481,7 @@ describe("billing against Postgres", () => {
       upiPaise: 0,
       cardPaise: 0,
       note: "Cash returned",
-      actorId: userId,
-    });
+      actorId: userId });
     expect(refund && "payment" in refund && refund.payment?.isRefund).toBe(true);
     expect(refund && "invoice" in refund && refund.invoice?.amountPaidPaise).toBe(
       106_200,
@@ -530,15 +490,13 @@ describe("billing against Postgres", () => {
       refundDuePaise({
         totalPaise: 118_000,
         amountPaidPaise: 106_200,
-        creditNotesTotalPaise: 11_800,
-      }),
+        creditNotesTotalPaise: 11_800 }),
     ).toBe(0);
     expect(
       pendingBalancePaise({
         totalPaise: 118_000,
         amountPaidPaise: 106_200,
-        creditNotesTotalPaise: 11_800,
-      }),
+        creditNotesTotalPaise: 11_800 }),
     ).toBe(0);
   });
 
@@ -575,10 +533,8 @@ describe("billing against Postgres", () => {
           sgstPaise: 900,
           igstPaise: 0,
           totalPaise: 11_800,
-          sortOrder: 0,
-        },
-      ],
-    });
+          sortOrder: 0 },
+      ] });
     expect(draft?.status).toBe("DRAFT");
 
     const [first, second] = await Promise.all([

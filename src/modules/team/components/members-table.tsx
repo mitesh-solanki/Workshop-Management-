@@ -9,6 +9,7 @@ import { InitialsAvatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { DataTable, type ColumnDef } from "@/components/ui/data-table";
 import { EmptyState } from "@/components/ui/empty-state";
+import { ListFiltersResetButton } from "@/components/ui/list-filters-reset-button";
 import { SearchInput } from "@/components/ui/search-input";
 import { MemberRowActions } from "@/modules/team/components/member-row-actions";
 
@@ -34,6 +35,7 @@ export function MembersTable({
   joinedLabels,
 }: MembersTableProps) {
   const t = useTranslations("team");
+  const tc = useTranslations("common");
   const [query, setQuery] = useState("");
 
   const filtered = useMemo(() => {
@@ -126,14 +128,21 @@ export function MembersTable({
       data={filtered}
       defaultPageSize={10}
       toolbar={
-        <SearchInput
-          id="team-member-search"
-          value={query}
-          onValueChange={setQuery}
-          label={t("searchLabel")}
-          placeholder={t("searchPlaceholder")}
-          className="w-full max-w-md"
-        />
+        <div className="flex w-full flex-wrap items-center justify-between gap-2">
+          <SearchInput
+            id="team-member-search"
+            value={query}
+            onValueChange={setQuery}
+            label={t("searchLabel")}
+            placeholder={t("searchPlaceholder")}
+            className="w-full min-w-0 flex-1 md:max-w-md"
+          />
+          <ListFiltersResetButton
+            label={tc("resetFilters")}
+            disabled={!query.trim()}
+            onReset={() => setQuery("")}
+          />
+        </div>
       }
       empty={
         members.length === 0 ? (

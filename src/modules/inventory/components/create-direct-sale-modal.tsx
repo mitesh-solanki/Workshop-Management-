@@ -21,6 +21,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { toast } from "@/components/ui/toast";
+import { toastStockError } from "@/components/ui/toast-stock-error";
 import {
   DirectSaleForm,
   type DirectSaleCustomerOption,
@@ -63,8 +64,11 @@ export function CreateDirectSaleModal({
       return () => window.clearTimeout(id);
     }
 
-    toast.error(state.message);
-  }, [state, router]);
+    toastStockError(state.message, {
+      stockPartId: state.stockPartId,
+      viewStockLabel: t("errors.viewStock"),
+    });
+  }, [state, router, t]);
 
   return (
     <Dialog

@@ -533,7 +533,14 @@ export function VendorDetailPanel({
                         <TableCell className="text-right font-semibold tabular-nums text-foreground">
                           {formatRupees(bill.amountPaise)}
                         </TableCell>
-                        <TableCell className="text-right font-semibold tabular-nums text-foreground">
+                        <TableCell
+                          className={cn(
+                            "text-right font-semibold tabular-nums",
+                            bill.outstandingPaise <= 0
+                              ? "text-emerald-700"
+                              : "text-amber-700",
+                          )}
+                        >
                           {formatRupees(bill.outstandingPaise)}
                         </TableCell>
                       </TableRow>

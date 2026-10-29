@@ -2,11 +2,12 @@
 
 import { useLocale, useTranslations } from "next-intl";
 import { useEffect, useMemo, useState } from "react";
-import { CalendarClock, Car, ClipboardList, User } from "lucide-react";
+import { CalendarClock, CalendarDays, Car, ClipboardList, User } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { DataTable, type ColumnDef } from "@/components/ui/data-table";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FormSelect } from "@/components/ui/form-select";
+import { ListFiltersResetButton } from "@/components/ui/list-filters-reset-button";
 import { ListSortMenu } from "@/components/ui/list-sort-menu";
 import { SearchInput } from "@/components/ui/search-input";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -37,6 +38,7 @@ export type OrderTableRow = {
 type OrdersTableProps = {
   orders: OrderTableRow[];
   canWrite?: boolean;
+  canDelete?: boolean;
   showNeedsPricing?: boolean;
   emptyAction?: React.ReactNode;
 };
@@ -73,14 +75,18 @@ function isOverdue(value: Date | string | null): boolean {
 export function OrdersTable({
   orders,
   canWrite = false,
+  canDelete = false,
   showNeedsPricing = false,
   emptyAction,
 }: OrdersTableProps) {
   const t = useTranslations("orders");
+  const tc = useTranslations("common");
   const locale = useLocale();
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<OrderSort>("newest");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("");
+  const filtersActive =
+    Boolean(query.trim()) || sort !== "newest" || Boolean(statusFilter);
 
   const sortOptions = useMemo(
     () => [
@@ -183,6 +189,16 @@ export function OrdersTable({
         ),
       },
       {
+        id: "createdOn",
+        accessorFn: (row) => new Date(row.createdAt).getTime(),
+        header: t("columns.createdOn"),
+        cell: ({ row }) => (
+          <span className="text-muted-foreground">
+            {formatDueDate(row.original.createdAt, locale, t("dueNone"))}
+          </span>
+        ),
+      },
+      {
         id: "dueDate",
         accessorFn: (row) =>
           row.expectedCompletion
@@ -234,11 +250,13 @@ export function OrdersTable({
             customerId={row.original.customerId}
             label={row.original.vehicle.registrationNumber}
             canWrite={canWrite}
+            canDelete={canDelete}
+            status={row.original.status}
           />
         ),
       },
     ],
-    [t, canWrite, locale, showNeedsPricing],
+    [t, canWrite, canDelete, locale, showNeedsPricing],
   );
 
   useEffect(() => {
@@ -302,6 +320,15 @@ export function OrdersTable({
               onChange={setSort}
               ariaLabel={t("sortLabel")}
             />
+            <ListFiltersResetButton
+              label={tc("resetFilters")}
+              disabled={!filtersActive}
+              onReset={() => {
+                setQuery("");
+                setSort("newest");
+                setStatusFilter("");
+              }}
+            />
           </div>
         </div>
       }
@@ -337,6 +364,14 @@ export function OrdersTable({
                 <Car className="size-3.5 shrink-0" aria-hidden />
                 {order.vehicle.make} {order.vehicle.model}
               </span>
+              <span className="inline-flex items-center gap-1">
+                <CalendarDays className="size-3.5 shrink-0" aria-hidden />
+                {`${t("columns.createdOn")}: ${formatDueDate(
+                  order.createdAt,
+                  locale,
+                  t("dueNone"),
+                )}`}
+              </span>
               <span
                 className={cn(
                   "inline-flex items-center gap-1",
@@ -359,6 +394,8 @@ export function OrdersTable({
                 customerId={order.customerId}
                 label={order.vehicle.registrationNumber}
                 canWrite={canWrite}
+                canDelete={canDelete}
+                status={order.status}
               />
             </div>
           </div>

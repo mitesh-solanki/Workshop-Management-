@@ -8,6 +8,7 @@ import {
   type ServiceOrderActionState,
 } from "@/app/actions/service-orders";
 import {
+  createPartByNameAction,
   getPartEditValuesAction,
   getPartPickerItemAction,
 } from "@/app/actions/inventory";
@@ -52,6 +53,7 @@ export function OrderLineForm({ orderId, hidePrices = false }: Props) {
   );
   const [state, formAction, pending] = useActionState(bound, initial);
   const wasPending = useRef(false);
+  const partsOnly = hidePrices;
   const [lineType, setLineType] = useState<"LABOUR" | "PART">("PART");
   const [partId, setPartId] = useState("");
   const [selected, setSelected] = useState<PartPickerItem | null>(null);
@@ -59,6 +61,7 @@ export function OrderLineForm({ orderId, hidePrices = false }: Props) {
   const [editOpen, setEditOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [createInitialName, setCreateInitialName] = useState("");
+  const [creatingPart, setCreatingPart] = useState(false);
   const [formKey, setFormKey] = useState(0);
 
   useEffect(() => {
@@ -152,6 +155,35 @@ export function OrderLineForm({ orderId, hidePrices = false }: Props) {
     await refreshSelectedPart(part.id);
   }
 
+  async function handleCreateFromQuery(name: string) {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    if (!hidePrices) {
+      openCreatePartModal(trimmed);
+      return;
+    }
+    if (creatingPart) return;
+    setCreatingPart(true);
+    try {
+      const result = await createPartByNameAction(trimmed);
+      if (result.ok && result.part) {
+        toast.success(result.message ?? ti("createdByName"));
+        await handlePartCreated({
+          id: result.part.id,
+          name: result.part.name,
+          sku: result.part.sku,
+          unit: result.part.unit,
+        });
+        return;
+      }
+      toast.error(result.message ?? tc("error"));
+    } catch {
+      toast.error(tc("error"));
+    } finally {
+      setCreatingPart(false);
+    }
+  }
+
   async function handleEditSaved() {
     if (!editPart) return;
     await refreshSelectedPart(editPart.id);
@@ -159,44 +191,53 @@ export function OrderLineForm({ orderId, hidePrices = false }: Props) {
 
   return (
     <form action={formAction} className="space-y-2">
+      {partsOnly ? <input type="hidden" name="type" value="PART" /> : null}
       <div
         className={
           hidePrices
-            ? "grid grid-cols-1 items-end gap-3 sm:grid-cols-2 lg:grid-cols-[8rem_minmax(0,1fr)_9rem_auto] lg:gap-3"
+            ? "grid grid-cols-1 items-end gap-3 sm:grid-cols-[minmax(0,1fr)_9rem_auto]"
             : "grid grid-cols-1 items-end gap-3 sm:grid-cols-2 lg:grid-cols-[8rem_minmax(0,1fr)_9rem_9.5rem_auto] lg:gap-3"
         }
       >
-        <FormField id="type" label={t("lineType")}>
-          <FormSelect
-            id="type"
-            name="type"
-            required
-            value={lineType}
-            onValueChange={(value) => {
-              const next = value === "PART" ? "PART" : "LABOUR";
-              setLineType(next);
-              setPartId("");
-              setSelected(null);
-              setEditOpen(false);
-              setEditPart(null);
-            }}
-            options={[
-              { value: "PART", label: t("lineTypes.PART") },
-              { value: "LABOUR", label: t("lineTypes.LABOUR") },
-            ]}
-            triggerClassName={fieldControlClass}
-          />
-        </FormField>
+        {!partsOnly ? (
+          <FormField id="type" label={t("lineType")}>
+            <FormSelect
+              id="type"
+              name="type"
+              required
+              value={lineType}
+              onValueChange={(value) => {
+                const next = value === "PART" ? "PART" : "LABOUR";
+                setLineType(next);
+                setPartId("");
+                setSelected(null);
+                setEditOpen(false);
+                setEditPart(null);
+              }}
+              options={[
+                { value: "PART", label: t("lineTypes.PART") },
+                { value: "LABOUR", label: t("lineTypes.LABOUR") },
+              ]}
+              triggerClassName={fieldControlClass}
+            />
+          </FormField>
+        ) : null}
 
         {lineType === "PART" ? (
-          <FormField id="partId" label={ti("part")} className="sm:col-span-2 lg:col-span-1">
+          <FormField
+            id="partId"
+            label={ti("part")}
+            className={partsOnly ? undefined : "sm:col-span-2 lg:col-span-1"}
+          >
             <PartPickerSelect
               key={`part-${formKey}`}
               id="partId"
               name="partId"
               value={partId}
               onChange={handlePartChange}
-              onCreateFromQuery={openCreatePartModal}
+              onCreateFromQuery={handleCreateFromQuery}
+              disabled={creatingPart || pending}
+              nameOnlyLabels={partsOnly}
             />
             <input
               type="hidden"
@@ -223,14 +264,18 @@ export function OrderLineForm({ orderId, hidePrices = false }: Props) {
           </FormField>
         )}
 
-        <QuantityStepper
-          key={`qty-${formKey}`}
-          id="quantity"
-          name="quantity"
-          label={t("quantity")}
-          defaultValue={1}
-          min={1}
-        />
+        {lineType === "LABOUR" && !partsOnly ? (
+          <input type="hidden" name="quantity" value="1" />
+        ) : (
+          <QuantityStepper
+            key={`qty-${formKey}`}
+            id="quantity"
+            name="quantity"
+            label={t("quantity")}
+            defaultValue={1}
+            min={1}
+          />
+        )}
 
         {hidePrices ? (
           <input type="hidden" name="unitPriceRupees" value="0" />
@@ -259,19 +304,20 @@ export function OrderLineForm({ orderId, hidePrices = false }: Props) {
         </Button>
       </div>
 
-      <CreatePartModal
-        trigger={null}
-        open={createOpen}
-        onOpenChange={(next) => {
-          setCreateOpen(next);
-          if (!next) setCreateInitialName("");
-        }}
-        navigateOnSuccess={false}
-        shopReceive={!hidePrices}
-        nameOnly={hidePrices}
-        initialName={createInitialName}
-        onCreated={handlePartCreated}
-      />
+      {!hidePrices ? (
+        <CreatePartModal
+          trigger={null}
+          open={createOpen}
+          onOpenChange={(next) => {
+            setCreateOpen(next);
+            if (!next) setCreateInitialName("");
+          }}
+          navigateOnSuccess={false}
+          shopReceive
+          initialName={createInitialName}
+          onCreated={handlePartCreated}
+        />
+      ) : null}
 
       {!hidePrices && editPart ? (
         <EditPartModal

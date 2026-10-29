@@ -48,6 +48,7 @@ type Props = {
   locale: string;
   customerId: string;
   canWrite: boolean;
+  canDelete?: boolean;
   emptyTitle: string;
   emptyBody: string;
   showRegistration: boolean;
@@ -60,6 +61,7 @@ export function ServiceHistoryList({
   locale,
   customerId,
   canWrite,
+  canDelete = false,
   emptyTitle,
   emptyBody,
   showRegistration,
@@ -124,6 +126,8 @@ export function ServiceHistoryList({
                   customerId={customerId}
                   label={label}
                   canWrite={canWrite}
+                  canDelete={canDelete}
+                  status={order.status}
                   mode="view-delete"
                 />
               </div>
@@ -196,6 +200,8 @@ export function ServiceHistoryList({
                       customerId={customerId}
                       label={label}
                       canWrite={canWrite}
+                      canDelete={canDelete}
+                      status={order.status}
                       mode="view-delete"
                     />
                   </TableCell>

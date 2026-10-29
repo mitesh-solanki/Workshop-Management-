@@ -2,6 +2,7 @@ import "server-only";
 
 import { AppError, ForbiddenError, NotFoundError } from "@/lib/errors";
 import { requireRole, type RoleSession } from "@/lib/rbac";
+import { insufficientStockError } from "@/modules/inventory/insufficient-stock-error";
 import { findServiceOrderById } from "@/modules/service-orders/repo";
 import type { ServiceOrderStatusValue } from "@/modules/service-orders/schema";
 import {
@@ -211,7 +212,7 @@ export async function createEstimateFromSources(
       error instanceof EstimateStockTxError &&
       error.reason === "INSUFFICIENT_STOCK"
     ) {
-      throw new AppError("inventory.insufficient_stock", 409);
+      throw insufficientStockError(error.partName, error.partId);
     }
     throw error;
   }
@@ -270,7 +271,7 @@ export async function createEstimateRevision(
       error instanceof EstimateStockTxError &&
       error.reason === "INSUFFICIENT_STOCK"
     ) {
-      throw new AppError("inventory.insufficient_stock", 409);
+      throw insufficientStockError(error.partName, error.partId);
     }
     throw error;
   }
@@ -313,7 +314,101 @@ export async function addManualEstimateLine(
       error instanceof EstimateStockTxError &&
       error.reason === "INSUFFICIENT_STOCK"
     ) {
-      throw new AppError("inventory.insufficient_stock", 409);
+      throw insufficientStockError(error.partName, error.partId);
+    }
+    throw error;
+  }
+}
+
+/**
+ * When a priced job-card line is added/updated and a current estimate exists,
+ * mirror it onto the permission / pricing list so staff can ask the customer
+ * (or bill) without waiting for invoice create. Skips lines already linked.
+ * Does nothing if there is no current estimate or the line is still unpriced.
+ */
+export async function mirrorOrderLineOntoCurrentEstimate(
+  session: RoleSession,
+  serviceOrderId: string,
+  orderLine: {
+    id: string;
+    type: EstimateLineTypeValue;
+    description: string;
+    quantity: number;
+    unitPricePaise: number;
+  },
+) {
+  if (orderLine.unitPricePaise <= 0) {
+    return null;
+  }
+
+  requireRole(session, [
+    "OWNER",
+    "MANAGER",
+    "TECHNICIAN",
+    "ACCOUNTANT",
+  ] as const);
+
+  const order = await loadOrderForSession(session, serviceOrderId);
+  if (session.role !== "ACCOUNTANT") {
+    assertCanMutateOrder(session, order);
+  } else if (order.status === "COMPLETED") {
+    throw new AppError("ORDER_COMPLETED");
+  }
+
+  const current = await findCurrentEstimate(session.garageId, order.id);
+  if (!current) {
+    return null;
+  }
+
+  const linked = current.lines.find(
+    (line) => line.sourceOrderLineId === orderLine.id,
+  );
+  if (linked) {
+    try {
+      const updated = await updateEstimateLineDetails(session.garageId, {
+        lineId: linked.id,
+        estimateId: current.id,
+        serviceOrderId: order.id,
+        description: orderLine.description,
+        quantity: orderLine.quantity,
+        unitPricePaise: orderLine.unitPricePaise,
+        actorId: session.userId,
+      });
+      if (updated === "billed" || updated == null) {
+        return linked;
+      }
+      return updated;
+    } catch (error) {
+      if (
+        error instanceof EstimateStockTxError &&
+        error.reason === "INSUFFICIENT_STOCK"
+      ) {
+        throw insufficientStockError(error.partName, error.partId);
+      }
+      throw error;
+    }
+  }
+
+  try {
+    return await addEstimateLine(session.garageId, {
+      estimateId: current.id,
+      serviceOrderId: order.id,
+      type: orderLine.type,
+      description: orderLine.description,
+      quantity: orderLine.quantity,
+      unitPricePaise: orderLine.unitPricePaise,
+      gstRatePercent: DEFAULT_GST_RATE_PERCENT,
+      hsnOrSac: defaultHsnOrSac(orderLine.type),
+      sourceOrderLineId: orderLine.id,
+      actorId: session.userId,
+      autoApprove: !current.askPermission,
+    });
+  } catch (error) {
+    if (
+      error instanceof EstimateStockTxError &&
+      error.reason === "INSUFFICIENT_STOCK"
+    ) {
+      throw insufficientStockError(error.partName, error.partId);
     }
     throw error;
   }
@@ -386,7 +481,7 @@ export async function syncMissingOrderLinesOntoEstimate(
         error instanceof EstimateStockTxError &&
         error.reason === "INSUFFICIENT_STOCK"
       ) {
-        throw new AppError("inventory.insufficient_stock", 409);
+        throw insufficientStockError(error.partName, error.partId);
       }
       throw error;
     }
@@ -415,21 +510,31 @@ export async function removeEstimateLine(
   );
   assertCanMutateOrder(session, order);
 
-  const result = await deleteEstimateLine(session.garageId, {
-    lineId: existing.id,
-    estimateId: existing.estimateId,
-    serviceOrderId: order.id,
-    description: existing.description,
-    actorId: session.userId,
-  });
-  if (result === "not_found") {
-    throw new NotFoundError();
-  }
-  if (result === "billed") {
-    throw new AppError("ESTIMATE_LINE_BILLED");
-  }
-  if (result === "insufficient_stock") {
-    throw new AppError("inventory.insufficient_stock", 409);
+  try {
+    const result = await deleteEstimateLine(session.garageId, {
+      lineId: existing.id,
+      estimateId: existing.estimateId,
+      serviceOrderId: order.id,
+      description: existing.description,
+      actorId: session.userId,
+    });
+    if (result === "not_found") {
+      throw new NotFoundError();
+    }
+    if (result === "billed") {
+      throw new AppError("ESTIMATE_LINE_BILLED");
+    }
+  } catch (error) {
+    if (
+      error instanceof EstimateStockTxError &&
+      error.reason === "INSUFFICIENT_STOCK"
+    ) {
+      throw insufficientStockError(
+        error.partName ?? existing.description,
+        error.partId,
+      );
+    }
+    throw error;
   }
 }
 
@@ -471,7 +576,10 @@ export async function setEstimateLineApproval(
   });
   if (!result.ok) {
     if (result.reason === "INSUFFICIENT_STOCK") {
-      throw new AppError("inventory.insufficient_stock", 409);
+      throw insufficientStockError(
+        result.partName ?? existing.description,
+        result.partId,
+      );
     }
     if (result.reason === "PART_NOT_FOUND") {
       throw new NotFoundError();
@@ -479,6 +587,58 @@ export async function setEstimateLineApproval(
     throw new AppError("APPROVAL_CONFLICT");
   }
   return result;
+}
+
+/** Mark every waiting line as Agreed (manual) on the current estimate. */
+export async function agreeAllPendingEstimateLines(
+  session: RoleSession,
+  serviceOrderId: string,
+) {
+  requireRole(session, WRITE_ROLES);
+  const order = await loadOrderForSession(session, serviceOrderId);
+  assertCanMutateOrder(session, order);
+
+  const current = await findCurrentEstimate(session.garageId, order.id);
+  if (!current) {
+    throw new NotFoundError();
+  }
+  if (!current.askPermission) {
+    throw new AppError("APPROVAL_UNCHANGED");
+  }
+
+  const pending = current.lines.filter(
+    (line) => line.approvalState === "PENDING",
+  );
+  if (pending.length === 0) {
+    return { count: 0 };
+  }
+
+  for (const line of pending) {
+    const result = await recordLineApproval(session.garageId, {
+      estimateId: current.id,
+      estimateLineId: line.id,
+      serviceOrderId: order.id,
+      fromState: "PENDING",
+      toState: "APPROVED",
+      method: "MANUAL",
+      note: null,
+      recordedById: session.userId,
+    });
+    if (!result.ok) {
+      if (result.reason === "INSUFFICIENT_STOCK") {
+        throw insufficientStockError(
+          result.partName ?? line.description,
+          result.partId,
+        );
+      }
+      if (result.reason === "PART_NOT_FOUND") {
+        throw new NotFoundError();
+      }
+      throw new AppError("APPROVAL_CONFLICT");
+    }
+  }
+
+  return { count: pending.length };
 }
 
 export async function savePermissionLine(
@@ -535,7 +695,7 @@ export async function savePermissionLine(
         error instanceof EstimateStockTxError &&
         error.reason === "INSUFFICIENT_STOCK"
       ) {
-        throw new AppError("inventory.insufficient_stock", 409);
+        throw insufficientStockError(error.partName, error.partId);
       }
       throw error;
     }
@@ -554,7 +714,10 @@ export async function savePermissionLine(
     });
     if (!result.ok) {
       if (result.reason === "INSUFFICIENT_STOCK") {
-        throw new AppError("inventory.insufficient_stock", 409);
+        throw insufficientStockError(
+          result.partName ?? input.description ?? existing.description,
+          result.partId,
+        );
       }
       if (result.reason === "PART_NOT_FOUND") {
         throw new NotFoundError();

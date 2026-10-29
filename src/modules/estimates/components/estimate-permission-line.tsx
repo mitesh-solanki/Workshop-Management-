@@ -1,6 +1,11 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import {
+  useState,
+  useTransition,
+  type MouseEvent,
+  type ReactNode,
+} from "react";
 import { ChevronDown, Pencil, Trash2, X } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { deleteEstimateLineAction } from "@/app/actions/estimates";
@@ -15,7 +20,9 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { SmoothAccordion } from "@/components/ui/smooth-accordion";
+import { TableCell, TableRow } from "@/components/ui/table";
 import { toast } from "@/components/ui/toast";
+import { toastStockError } from "@/components/ui/toast-stock-error";
 import { formatRupees } from "@/lib/money";
 import { cn } from "@/lib/utils";
 import { CompactLineApproval } from "@/modules/estimates/components/compact-line-approval";
@@ -29,6 +36,7 @@ type Props = {
   orderId: string;
   canEdit: boolean;
   index: number;
+  layout?: "card" | "table";
   line: {
     id: string;
     description: string;
@@ -46,10 +54,68 @@ type Props = {
 const actionBtnClass =
   "size-9 min-h-9 min-w-9 border border-slate-300 bg-white shadow-xs";
 
+const qtyColClass = "w-16 min-w-16 max-w-16";
+const typeColClass = "w-[4.5rem] min-w-[4.5rem] max-w-[4.5rem]";
+const priceColClass = "w-[6.5rem] min-w-[6.5rem] max-w-[6.5rem]";
+const subtotalColClass = "w-[6.5rem] min-w-[6.5rem] max-w-[6.5rem]";
+const statusColClass = "w-[16.5rem] min-w-[16.5rem] max-w-[16.5rem]";
+const actionsColClass = "w-[5.5rem] min-w-[5.5rem] max-w-[5.5rem]";
+const descColClass = "w-44 min-w-0 max-w-44";
+
 function approvalTone(state: string) {
   if (state === "APPROVED") return "agreed";
   if (state === "REJECTED") return "rejected";
   return "waiting";
+}
+
+function TypeBadge({ type }: { type: string }) {
+  const t = useTranslations("estimates");
+  const typeKey = type === "PART" || type === "LABOUR" ? type : "LABOUR";
+  return (
+    <span
+      className={cn(
+        "inline-flex w-max rounded-md border px-2 py-0.5 text-[11px] font-semibold",
+        typeKey === "PART"
+          ? "border-blue-200 bg-blue-50 text-blue-800"
+          : "border-orange-200 bg-orange-50 text-orange-800",
+      )}
+    >
+      {t(`lineTypes.${typeKey}`)}
+    </span>
+  );
+}
+
+function StatusBadge({
+  state,
+  compact = false,
+}: {
+  state: EstimateApprovalStateValue;
+  compact?: boolean;
+}) {
+  const t = useTranslations("estimates");
+  const tone = approvalTone(state);
+  const label = compact
+    ? state === "PENDING"
+      ? t("decisionWaiting")
+      : state === "APPROVED"
+        ? t("decisionAgreed")
+        : t("decisionSaidNo")
+    : t(`approvalStatesShort.${state}`);
+  return (
+    <span
+      title={t(`approvalStatesShort.${state}`)}
+      className={cn(
+        "inline-flex max-w-full truncate rounded-full px-2 py-1 text-[11px] font-bold",
+        tone === "agreed"
+          ? "bg-emerald-50 text-emerald-800"
+          : tone === "rejected"
+            ? "bg-red-50 text-red-700"
+            : "bg-amber-50 text-amber-800",
+      )}
+    >
+      {label}
+    </span>
+  );
 }
 
 export function EstimatePermissionLine({
@@ -57,17 +123,18 @@ export function EstimatePermissionLine({
   canEdit,
   index,
   line,
+  layout = "card",
 }: Props) {
   const t = useTranslations("estimates");
   const tc = useTranslations("common");
+  const ti = useTranslations("inventory");
   const [open, setOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [removing, startRemove] = useTransition();
-  const tone = approvalTone(line.approvalState);
   const typeKey =
     line.type === "PART" || line.type === "LABOUR" ? line.type : "LABOUR";
 
-  function openDelete(event: React.MouseEvent) {
+  function openDelete(event: MouseEvent) {
     event.preventDefault();
     event.stopPropagation();
     setDeleteOpen(true);
@@ -81,7 +148,10 @@ export function EstimatePermissionLine({
         toast.success(t("lineRemoved"));
         return;
       }
-      toast.error(result.message ?? t("errors.lineBilled"));
+      toastStockError(result.message ?? t("errors.lineBilled"), {
+        stockPartId: result.stockPartId,
+        viewStockLabel: ti("errors.viewStock"),
+      });
     });
   }
 
@@ -90,185 +160,246 @@ export function EstimatePermissionLine({
     setOpen((value) => !value);
   }
 
-  return (
-    <li className="list-none">
-      <div className="overflow-hidden rounded-xl border border-slate-300 bg-white shadow-sm">
-      <div
-        role={canEdit ? "button" : undefined}
-        tabIndex={canEdit ? 0 : undefined}
-        aria-expanded={canEdit ? open : undefined}
-        className={cn(
-          "flex w-full flex-wrap items-center gap-3 px-4 py-3.5",
-          open && "bg-blue-50/70",
-          canEdit && "cursor-pointer",
-        )}
-        onClick={canEdit ? toggleOpen : undefined}
-        onKeyDown={
-          canEdit
-            ? (event) => {
-                if (event.key === "Enter" || event.key === " ") {
-                  event.preventDefault();
-                  toggleOpen();
-                }
-              }
-            : undefined
-        }
-      >
-        <span className="grid size-[34px] shrink-0 place-items-center rounded-lg bg-slate-100 text-[13px] font-extrabold text-slate-600">
-          {String(index + 1).padStart(2, "0")}
-        </span>
-        <div className="min-w-0 flex-1 text-left">
-          <b className="block text-[14px] font-semibold text-slate-900">
-            {line.description}
-          </b>
-          <small className="mt-0.5 block text-[13px] text-slate-500">
-            {`${t(`lineTypes.${typeKey as EstimateLineTypeValue}`)} · ${line.quantity} × ${formatRupees(line.unitPricePaise)}`}
-            {line.hsnOrSac ? ` · ${line.hsnOrSac}` : null}
-            {` · GST ${line.gstRatePercent}%`}
-          </small>
-        </div>
-        <div className="flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto sm:flex-nowrap">
-          <strong className="text-[15px] font-semibold text-slate-900">
-            {formatRupees(line.totalPaise)}
-          </strong>
-          <span
-            className={
-              tone === "agreed"
-                ? "rounded-full bg-emerald-50 px-2.5 py-1.5 text-[12px] font-bold text-emerald-800"
-                : tone === "rejected"
-                  ? "rounded-full bg-red-50 px-2.5 py-1.5 text-[12px] font-bold text-red-700"
-                  : "rounded-full bg-amber-50 px-2.5 py-1.5 text-[12px] font-bold text-amber-800"
-            }
-          >
-            {t(`approvalStatesShort.${line.approvalState}`)}
-          </span>
-          {canEdit && !open && line.approvalState === "PENDING" ? (
-            <CompactLineApproval
-              orderId={orderId}
-              lineId={line.id}
-              approvalState={line.approvalState}
-              description={line.description}
-              quantity={line.quantity}
-              unitPricePaise={line.unitPricePaise}
-            />
-          ) : null}
-          {canEdit ? (
-            <div
-              className="flex items-center gap-1.5"
-              data-row-stop
-              onClick={(event) => event.stopPropagation()}
-              onKeyDown={(event) => event.stopPropagation()}
-            >
-              {open ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon-sm"
-                  className={cn(
-                    actionBtnClass,
-                    "text-slate-600 hover:bg-slate-50",
-                  )}
-                  aria-label={t("cancelEdit")}
-                  title={t("cancelEdit")}
-                  onClick={() => setOpen(false)}
-                >
-                  <X className="size-4" />
-                </Button>
-              ) : (
-                <>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="icon-sm"
-                    className={cn(
-                      actionBtnClass,
-                      "text-blue-700 hover:border-blue-300 hover:bg-blue-50",
-                    )}
-                    aria-label={t("editPermissionDetails")}
-                    title={t("editPermissionDetails")}
-                    aria-expanded={open}
-                    onClick={() => setOpen(true)}
-                  >
-                    <Pencil className="size-4" />
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="icon-sm"
-                    className={cn(
-                      actionBtnClass,
-                      "text-red-600 hover:border-red-300 hover:bg-red-50 hover:text-red-700",
-                    )}
-                    aria-label={t("removeLine")}
-                    title={t("removeLine")}
-                    disabled={removing}
-                    onClick={openDelete}
-                  >
-                    <Trash2 className="size-4" />
-                  </Button>
-                </>
-              )}
-            </div>
-          ) : null}
-        </div>
-      </div>
-
-      {canEdit ? (
-        <SmoothAccordion open={open}>
-          <div className="border-t border-slate-300 bg-[#fbfcff] px-3 py-3 sm:px-4">
-            <LineApprovalForm
-              orderId={orderId}
-              lineId={line.id}
-              lineType={typeKey as EstimateLineTypeValue}
-              currentState={line.approvalState}
-              description={line.description}
-              quantity={line.quantity}
-              unitPricePaise={line.unitPricePaise}
-              initialPartId={line.partId}
-              onSaved={() => setOpen(false)}
-            />
-          </div>
-        </SmoothAccordion>
-      ) : null}
-      </div>
-
-      <Dialog
-        open={deleteOpen}
-        onOpenChange={(next) => {
-          if (removing) return;
-          setDeleteOpen(next);
-        }}
-      >
-        <DialogContent className="gap-0 p-0 sm:max-w-md">
-          <DialogHeader className="border-b border-border px-5 py-4 text-left">
-            <DialogTitle>{t("deleteLineTitle")}</DialogTitle>
-            <DialogDescription>
-              {t("deleteLineConfirm")}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="gap-2 px-5 py-4 sm:justify-end">
-            <DialogClose asChild>
-              <Button
-                type="button"
-                variant="secondary"
-                size="md"
-                disabled={removing}
-              >
-                {tc("cancel")}
-              </Button>
-            </DialogClose>
+  const deleteDialog = (
+    <Dialog
+      open={deleteOpen}
+      onOpenChange={(next) => {
+        if (removing) return;
+        setDeleteOpen(next);
+      }}
+    >
+      <DialogContent className="gap-0 p-0 sm:max-w-md">
+        <DialogHeader className="border-b border-border px-5 py-4 text-left">
+          <DialogTitle>{t("deleteLineTitle")}</DialogTitle>
+          <DialogDescription>{t("deleteLineConfirm")}</DialogDescription>
+        </DialogHeader>
+        <DialogFooter className="gap-2 px-5 py-4 sm:justify-end">
+          <DialogClose asChild>
             <Button
               type="button"
-              variant="danger"
+              variant="secondary"
               size="md"
-              loading={removing}
-              onClick={onConfirmDelete}
+              disabled={removing}
             >
-              {t("removeLine")}
+              {tc("cancel")}
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </DialogClose>
+          <Button
+            type="button"
+            variant="danger"
+            size="md"
+            loading={removing}
+            onClick={onConfirmDelete}
+          >
+            {t("removeLine")}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+
+  const editForm = (
+    <div className="border-t border-slate-300 bg-[#fbfcff] px-3 py-3 sm:px-4">
+      <LineApprovalForm
+        orderId={orderId}
+        lineId={line.id}
+        lineType={typeKey as EstimateLineTypeValue}
+        currentState={line.approvalState}
+        description={line.description}
+        quantity={line.quantity}
+        unitPricePaise={line.unitPricePaise}
+        initialPartId={line.partId}
+        onSaved={() => setOpen(false)}
+      />
+    </div>
+  );
+
+  const decideActions =
+    canEdit && !open && line.approvalState === "PENDING" ? (
+      <CompactLineApproval
+        orderId={orderId}
+        lineId={line.id}
+        approvalState={line.approvalState}
+        description={line.description}
+        quantity={line.quantity}
+        unitPricePaise={line.unitPricePaise}
+      />
+    ) : null;
+
+  const iconActions = canEdit ? (
+    <div
+      className="flex flex-nowrap items-center justify-end gap-1"
+      data-row-stop
+      onClick={(event) => event.stopPropagation()}
+      onKeyDown={(event) => event.stopPropagation()}
+    >
+      {open ? (
+        <Button
+          type="button"
+          variant="outline"
+          size="icon-sm"
+          className={cn(actionBtnClass, "text-slate-600 hover:bg-slate-50")}
+          aria-label={t("cancelEdit")}
+          title={t("cancelEdit")}
+          onClick={() => setOpen(false)}
+        >
+          <X className="size-4" />
+        </Button>
+      ) : (
+        <>
+          <Button
+            type="button"
+            variant="outline"
+            size="icon-sm"
+            className={cn(
+              actionBtnClass,
+              "text-blue-700 hover:border-blue-300 hover:bg-blue-50",
+            )}
+            aria-label={t("editPermissionDetails")}
+            title={t("editPermissionDetails")}
+            aria-expanded={open}
+            onClick={() => setOpen(true)}
+          >
+            <Pencil className="size-4" />
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="icon-sm"
+            className={cn(
+              actionBtnClass,
+              "text-red-600 hover:border-red-300 hover:bg-red-50 hover:text-red-700",
+            )}
+            aria-label={t("removeLine")}
+            title={t("removeLine")}
+            disabled={removing}
+            onClick={openDelete}
+          >
+            <Trash2 className="size-4" />
+          </Button>
+        </>
+      )}
+    </div>
+  ) : null;
+
+  if (layout === "table") {
+    const colSpan = canEdit ? 7 : 6;
+    return (
+      <>
+        {deleteDialog}
+        <TableRow className={cn(open && "bg-blue-50/40 hover:bg-blue-50/40")}>
+          <TableCell className={cn(typeColClass, "whitespace-nowrap")}>
+            <TypeBadge type={line.type} />
+          </TableCell>
+          <TableCell className={cn(descColClass, "whitespace-normal")}>
+            <span className="block truncate font-medium text-slate-900" title={line.description}>
+              {line.description}
+            </span>
+          </TableCell>
+          <TableCell
+            className={cn(
+              qtyColClass,
+              "text-center tabular-nums text-slate-800",
+            )}
+          >
+            <span className="inline-flex h-10 min-h-10 w-full items-center justify-center">
+              {line.type === "PART" ? line.quantity : "—"}
+            </span>
+          </TableCell>
+          <TableCell className={cn(priceColClass, "tabular-nums text-slate-800")}>
+            <span className="inline-flex h-10 min-h-10 items-center">
+              {formatRupees(line.unitPricePaise)}
+            </span>
+          </TableCell>
+          <TableCell
+            className={cn(
+              subtotalColClass,
+              "font-semibold tabular-nums text-slate-950",
+            )}
+          >
+            <span className="inline-flex h-10 min-h-10 items-center">
+              {formatRupees(line.totalPaise)}
+            </span>
+          </TableCell>
+          <TableCell className={cn(statusColClass, "whitespace-nowrap")}>
+            <div className="flex flex-nowrap items-center gap-1.5">
+              <StatusBadge state={line.approvalState} compact />
+              {decideActions}
+            </div>
+          </TableCell>
+          {canEdit ? (
+            <TableCell className={cn(actionsColClass, "text-right")}>
+              {iconActions}
+            </TableCell>
+          ) : null}
+        </TableRow>
+        {canEdit ? (
+          <TableRow
+            className={cn(
+              "hover:bg-transparent",
+              !open && "border-b-0 [&_td]:border-b-0",
+            )}
+          >
+            <TableCell colSpan={colSpan} className="whitespace-normal p-0">
+              <SmoothAccordion open={open}>{editForm}</SmoothAccordion>
+            </TableCell>
+          </TableRow>
+        ) : null}
+      </>
+    );
+  }
+
+  return (
+    <li className="list-none">
+      {deleteDialog}
+      <div className="overflow-hidden rounded-xl border border-slate-300 bg-white shadow-sm">
+        <div
+          role={canEdit ? "button" : undefined}
+          tabIndex={canEdit ? 0 : undefined}
+          aria-expanded={canEdit ? open : undefined}
+          className={cn(
+            "flex w-full flex-wrap items-center gap-3 px-4 py-3.5",
+            open && "bg-blue-50/70",
+            canEdit && "cursor-pointer",
+          )}
+          onClick={canEdit ? toggleOpen : undefined}
+          onKeyDown={
+            canEdit
+              ? (event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    toggleOpen();
+                  }
+                }
+              : undefined
+          }
+        >
+          <span className="grid size-[34px] shrink-0 place-items-center rounded-lg bg-slate-100 text-[13px] font-extrabold text-slate-600">
+            {String(index + 1).padStart(2, "0")}
+          </span>
+          <div className="min-w-0 flex-1 text-left">
+            <b className="block text-[14px] font-semibold text-slate-900">
+              {line.description}
+            </b>
+            <small className="mt-0.5 block text-[13px] text-slate-500">
+              {`${t(`lineTypes.${typeKey as EstimateLineTypeValue}`)} · ${line.quantity} × ${formatRupees(line.unitPricePaise)}`}
+              {line.hsnOrSac ? ` · ${line.hsnOrSac}` : null}
+              {` · GST ${line.gstRatePercent}%`}
+            </small>
+          </div>
+          <div className="flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto sm:flex-nowrap">
+            <strong className="text-[15px] font-semibold text-slate-900">
+              {formatRupees(line.totalPaise)}
+            </strong>
+            <StatusBadge state={line.approvalState} />
+            {decideActions}
+            {iconActions}
+          </div>
+        </div>
+        {canEdit ? (
+          <SmoothAccordion open={open}>{editForm}</SmoothAccordion>
+        ) : null}
+      </div>
     </li>
   );
 }
@@ -276,7 +407,7 @@ export function EstimatePermissionLine({
 type HistoryProps = {
   title: string;
   hint: string;
-  children: React.ReactNode;
+  children: ReactNode;
   defaultOpen?: boolean;
 };
 

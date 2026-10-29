@@ -5,8 +5,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { PrismaClient } from "@prisma/client";
 import {
   findLinkedPartLine,
-  recordLineApproval,
-} from "@/modules/estimates/repo";
+  recordLineApproval } from "@/modules/estimates/repo";
 
 if (!process.env.DATABASE_URL) {
   process.env.DATABASE_URL =
@@ -47,9 +46,8 @@ describe("estimate stock from suggested repairs", () => {
     }
 
     const garage = await prisma.garage.create({
-      data: { name: `SR stock ${suffix}`, allowNegativeStock: false },
-      select: { id: true },
-    });
+      data: { name: `SR stock ${suffix}` },
+      select: { id: true } });
     garageId = garage.id;
 
     const user = await prisma.user.create({
@@ -57,16 +55,13 @@ describe("estimate stock from suggested repairs", () => {
         email: `sr-stock-${suffix}@example.com`,
         name: "SR Tester",
         role: "OWNER",
-        garageId,
-      },
-      select: { id: true },
-    });
+        garageId },
+      select: { id: true } });
     userId = user.id;
 
     const customer = await prisma.customer.create({
       data: { garageId, name: "Cust", phone: "9000000001" },
-      select: { id: true },
-    });
+      select: { id: true } });
 
     const vehicle = await prisma.vehicle.create({
       data: {
@@ -75,10 +70,8 @@ describe("estimate stock from suggested repairs", () => {
         registrationNumber: `GJ01SR${suffix.slice(-4)}`.toUpperCase(),
         make: "Maruti",
         model: "Swift",
-        stateCode: "24",
-      },
-      select: { id: true },
-    });
+        stateCode: "24" },
+      select: { id: true } });
 
     const order = await prisma.serviceOrder.create({
       data: {
@@ -86,10 +79,8 @@ describe("estimate stock from suggested repairs", () => {
         customerId: customer.id,
         vehicleId: vehicle.id,
         status: "INSPECTION",
-        complaint: "Test",
-      },
-      select: { id: true },
-    });
+        complaint: "Test" },
+      select: { id: true } });
     serviceOrderId = order.id;
 
     const part = await prisma.part.create({
@@ -102,10 +93,8 @@ describe("estimate stock from suggested repairs", () => {
         sellingPricePaise: 15000,
         gstRatePercent: 18,
         hsn: "87089900",
-        lowStockLevel: 0,
-      },
-      select: { id: true },
-    });
+        lowStockLevel: 0 },
+      select: { id: true } });
     partId = part.id;
 
     await prisma.stockMovement.create({
@@ -115,14 +104,11 @@ describe("estimate stock from suggested repairs", () => {
         type: "IN",
         quantityChange: 5,
         note: "seed",
-        createdById: userId,
-      },
-    });
+        createdById: userId } });
 
     const inspection = await prisma.inspection.create({
       data: { garageId, serviceOrderId },
-      select: { id: true },
-    });
+      select: { id: true } });
 
     const repair = await prisma.suggestedRepair.create({
       data: {
@@ -132,10 +118,8 @@ describe("estimate stock from suggested repairs", () => {
         description: "Pad (SRP)",
         quantity: 2,
         unitPricePaise: 15000,
-        partId,
-      },
-      select: { id: true },
-    });
+        partId },
+      select: { id: true } });
 
     const estimate = await prisma.estimate.create({
       data: {
@@ -154,15 +138,10 @@ describe("estimate stock from suggested repairs", () => {
             hsnOrSac: "87089900",
             approvalState: "PENDING",
             sourceSuggestedRepairId: repair.id,
-            sortOrder: 0,
-          },
-        },
-      },
+            sortOrder: 0 } } },
       select: {
         id: true,
-        lines: { select: { id: true } },
-      },
-    });
+        lines: { select: { id: true } } } });
     estimateId = estimate.id;
     estimateLineId = estimate.lines[0]!.id;
   });
@@ -186,10 +165,8 @@ describe("estimate stock from suggested repairs", () => {
         sourceSuggestedRepairId: (
           await tx.estimateLine.findFirstOrThrow({
             where: { id: estimateLineId },
-            select: { sourceSuggestedRepairId: true },
-          })
-        ).sourceSuggestedRepairId,
-      });
+            select: { sourceSuggestedRepairId: true } })
+        ).sourceSuggestedRepairId });
       expect(linked).toEqual({ partId, serviceOrderLineId: null });
     });
   });
@@ -200,8 +177,7 @@ describe("estimate stock from suggested repairs", () => {
     }
     const before = await prisma.stockMovement.aggregate({
       where: { garageId, partId },
-      _sum: { quantityChange: true },
-    });
+      _sum: { quantityChange: true } });
     expect(before._sum.quantityChange).toBe(5);
 
     const result = await recordLineApproval(garageId, {
@@ -212,14 +188,12 @@ describe("estimate stock from suggested repairs", () => {
       toState: "APPROVED",
       method: "MANUAL",
       note: null,
-      recordedById: userId,
-    });
+      recordedById: userId });
     expect(result.ok).toBe(true);
 
     const after = await prisma.stockMovement.aggregate({
       where: { garageId, partId },
-      _sum: { quantityChange: true },
-    });
+      _sum: { quantityChange: true } });
     expect(after._sum.quantityChange).toBe(3);
   });
 
@@ -229,8 +203,7 @@ describe("estimate stock from suggested repairs", () => {
     }
     const before = await prisma.stockMovement.aggregate({
       where: { garageId, partId },
-      _sum: { quantityChange: true },
-    });
+      _sum: { quantityChange: true } });
     expect(before._sum.quantityChange).toBe(3);
 
     const result = await recordLineApproval(garageId, {
@@ -241,14 +214,12 @@ describe("estimate stock from suggested repairs", () => {
       toState: "REJECTED",
       method: "MANUAL",
       note: null,
-      recordedById: userId,
-    });
+      recordedById: userId });
     expect(result.ok).toBe(true);
 
     const after = await prisma.stockMovement.aggregate({
       where: { garageId, partId },
-      _sum: { quantityChange: true },
-    });
+      _sum: { quantityChange: true } });
     expect(after._sum.quantityChange).toBe(5);
   });
 });

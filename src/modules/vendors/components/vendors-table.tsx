@@ -6,6 +6,7 @@ import { Phone } from "lucide-react";
 import { InitialsAvatar } from "@/components/ui/avatar";
 import { DataTable, type ColumnDef } from "@/components/ui/data-table";
 import { formatRupees } from "@/lib/money";
+import { cn } from "@/lib/utils";
 import { VendorRowActions } from "@/modules/vendors/components/vendor-row-actions";
 import { VendorSearch } from "@/modules/vendors/components/vendor-search";
 
@@ -73,11 +74,19 @@ export function VendorsTable({
       {
         accessorKey: "outstandingPaise",
         header: t("columns.outstanding"),
-        cell: ({ row }) => (
-          <span className="font-semibold tabular-nums text-foreground">
-            {formatRupees(row.original.outstandingPaise)}
-          </span>
-        ),
+        cell: ({ row }) => {
+          const outstanding = row.original.outstandingPaise;
+          return (
+            <span
+              className={cn(
+                "font-semibold tabular-nums",
+                outstanding <= 0 ? "text-emerald-700" : "text-amber-700",
+              )}
+            >
+              {formatRupees(outstanding)}
+            </span>
+          );
+        },
       },
       {
         id: "actions",
@@ -147,7 +156,14 @@ export function VendorsTable({
                 <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
                   {t("columns.outstanding")}
                 </p>
-                <p className="mt-0.5 text-sm font-semibold tabular-nums text-foreground">
+                <p
+                  className={cn(
+                    "mt-0.5 text-sm font-semibold tabular-nums",
+                    vendor.outstandingPaise <= 0
+                      ? "text-emerald-700"
+                      : "text-amber-700",
+                  )}
+                >
                   {formatRupees(vendor.outstandingPaise)}
                 </p>
               </div>

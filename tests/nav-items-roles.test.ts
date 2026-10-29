@@ -64,13 +64,7 @@ describe("navItemsForRole — other roles keep full access", () => {
     expect(keys).not.toContain("settings");
   });
 
-  it("limits technician to jobs, customers and vehicles only", () => {
-    expect(keysFor("TECHNICIAN")).toEqual([
-      "dashboard",
-      "workshop",
-      "orders",
-      "customers",
-      "vehicles",
-    ]);
+  it("limits technician to workshop board and job cards only", () => {
+    expect(keysFor("TECHNICIAN")).toEqual(["workshop", "orders"]);
   });
 });

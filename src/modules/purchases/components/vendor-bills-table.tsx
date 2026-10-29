@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { DataTable, type ColumnDef } from "@/components/ui/data-table";
 import { formatRupees } from "@/lib/money";
+import { cn } from "@/lib/utils";
 import { VendorBillSearch } from "@/modules/purchases/components/vendor-bill-search";
 
 export type VendorBillTableRow = {
@@ -86,11 +87,20 @@ export function VendorBillsTable({
       {
         accessorKey: "outstandingPaise",
         header: t("columns.outstanding"),
-        cell: ({ row }) => (
-          <span className="font-semibold tabular-nums text-foreground">
-            {formatRupees(row.original.outstandingPaise)}
-          </span>
-        ),
+        cell: ({ row }) => {
+          const outstanding = row.original.outstandingPaise;
+          const paidOff = outstanding <= 0;
+          return (
+            <span
+              className={cn(
+                "font-semibold tabular-nums",
+                paidOff ? "text-emerald-700" : "text-amber-700",
+              )}
+            >
+              {formatRupees(outstanding)}
+            </span>
+          );
+        },
       },
     ],
     [t, dateFmt],
@@ -134,7 +144,14 @@ export function VendorBillsTable({
                 <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
                   {t("columns.outstanding")}
                 </p>
-                <p className="mt-0.5 font-semibold tabular-nums">
+                <p
+                  className={cn(
+                    "mt-0.5 font-semibold tabular-nums",
+                    bill.outstandingPaise <= 0
+                      ? "text-emerald-700"
+                      : "text-amber-700",
+                  )}
+                >
                   {formatRupees(bill.outstandingPaise)}
                 </p>
               </div>

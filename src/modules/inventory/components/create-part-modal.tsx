@@ -42,6 +42,7 @@ import {
   shopReceiveFilesForUpload,
   type ShopReceiveLine,
 } from "@/modules/inventory/components/shop-receive-fields";
+import { shopReceiveRequiredVendorErrorKeys } from "@/modules/inventory/shop-receive";
 import { uploadVendorBillAttachmentFile } from "@/modules/purchases/components/upload-vendor-bill-attachment";
 
 const initial: InventoryActionState = { ok: false };
@@ -97,6 +98,11 @@ function CreatePartFormFields({
   const t = useTranslations("inventory");
   const [nameOnlyValue, setNameOnlyValue] = useState(initialName);
   const [vendorErrorKeys, setVendorErrorKeys] = useState<string[]>([]);
+  const [manualStock, setManualStock] = useState(0);
+  const vendorStockQty = shopLines
+    .filter((line) => line.vendorId.trim())
+    .reduce((sum, line) => sum + Math.max(0, line.quantity), 0);
+  const stockFromVendors = vendorStockQty > 0;
 
   return (
     <form
@@ -109,18 +115,11 @@ function CreatePartFormFields({
           setVendorErrorKeys([]);
           return;
         }
-        const missing = shopLines
-          .filter((line) => !line.vendorId.trim())
-          .map((line) => line.key);
-        if (missing.length > 0) {
+        // Job-card part create: need ≥1 vendor; blank extra rows are ignored.
+        const errorKeys = shopReceiveRequiredVendorErrorKeys(shopLines);
+        if (errorKeys.length > 0) {
           event.preventDefault();
-          setVendorErrorKeys(missing);
-          return;
-        }
-        const badQty = shopLines.filter((line) => line.quantity < 1);
-        if (badQty.length > 0) {
-          event.preventDefault();
-          setVendorErrorKeys(badQty.map((line) => line.key));
+          setVendorErrorKeys(errorKeys);
           return;
         }
         setVendorErrorKeys([]);
@@ -203,7 +202,34 @@ function CreatePartFormFields({
                 className="h-11 min-h-11 font-mono"
               />
             </FormField>
-            {shopReceive ? null : (
+            {shopReceive ? (
+              stockFromVendors ? (
+                <>
+                  <input type="hidden" name="openingStock" value="0" />
+                  <QuantityStepper
+                    key={`auto-stock-${vendorStockQty}`}
+                    id={`${idPrefix}-openingStock`}
+                    name="openingStockDisplay"
+                    label={t("openingStock")}
+                    defaultValue={vendorStockQty}
+                    min={0}
+                    disabled
+                    hint={t("openingStockFromVendorsHint")}
+                  />
+                </>
+              ) : (
+                <QuantityStepper
+                  key="manual-stock"
+                  id={`${idPrefix}-openingStock`}
+                  name="openingStock"
+                  label={t("openingStock")}
+                  defaultValue={manualStock}
+                  min={0}
+                  hint={t("openingStockHint")}
+                  onValueChange={setManualStock}
+                />
+              )
+            ) : (
               <QuantityStepper
                 id={`${idPrefix}-lowStockLevel`}
                 name="lowStockLevel"
@@ -217,33 +243,43 @@ function CreatePartFormFields({
           {shopReceive ? (
             <>
               <input type="hidden" name="lowStockLevel" value="0" />
-              <input type="hidden" name="openingStock" value="0" />
-          <ShopReceiveFields
-            idPrefix={`${idPrefix}-shop`}
-            disabled={pending}
-            lines={shopLines}
-            onLinesChange={(next) => {
-              setVendorErrorKeys((prev) =>
-                prev.filter((key) => {
-                  const line = next.find((row) => row.key === key);
-                  return line ? !line.vendorId.trim() : false;
-                }),
-              );
-              onShopLinesChange(next);
-            }}
-            vendorErrorKeys={vendorErrorKeys}
-          />
-        </>
-      ) : (
-        <QuantityStepper
-          id={`${idPrefix}-openingStock`}
-          name="openingStock"
-          label={t("openingStock")}
-          defaultValue={0}
-          min={0}
-          hint={t("openingStockHint")}
-        />
-      )}
+              <ShopReceiveFields
+                idPrefix={`${idPrefix}-shop`}
+                disabled={pending}
+                lines={shopLines}
+                onLinesChange={(next) => {
+                  if (next.some((line) => line.vendorId.trim())) {
+                    setVendorErrorKeys([]);
+                  } else {
+                    setVendorErrorKeys((prev) =>
+                      prev.filter((key) => next.some((row) => row.key === key)),
+                    );
+                  }
+                  const nextVendorQty = next
+                    .filter((line) => line.vendorId.trim())
+                    .reduce(
+                      (sum, line) => sum + Math.max(0, line.quantity),
+                      0,
+                    );
+                  if (nextVendorQty > 0) {
+                    setManualStock(nextVendorQty);
+                  }
+                  onShopLinesChange(next);
+                }}
+                vendorErrorKeys={vendorErrorKeys}
+                vendorCreateMode="inline"
+              />
+            </>
+          ) : (
+            <QuantityStepper
+              id={`${idPrefix}-openingStock`}
+              name="openingStock"
+              label={t("openingStock")}
+              defaultValue={0}
+              min={0}
+              hint={t("openingStockHint")}
+            />
+          )}
         </>
       )}
     </form>

@@ -5,6 +5,7 @@ import { PageChromeProvider } from "@/components/page-chrome";
 import { AppSidebar } from "@/components/shared/app-sidebar";
 import type { AppRole } from "@/components/shared/nav-items";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
+import { homePathForRole } from "@/lib/rbac";
 
 type AppShellProps = {
   role: AppRole;
@@ -40,7 +41,11 @@ export function AppShell({
       />
       <SidebarInset className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <PageChromeProvider>
-          <AppHeader appName={appName} garageName={garageName} />
+          <AppHeader
+            appName={appName}
+            garageName={garageName}
+            homeHref={homePathForRole(role)}
+          />
           {/* Only this pane scrolls — header stays put; section navs sticky inside. */}
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
             {/* Outer min-h-full fills the pane; padding is inner so loaders do not overflow. */}

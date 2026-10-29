@@ -2,12 +2,11 @@ import { getTranslations } from "next-intl/server";
 import { computeLineGst } from "@/lib/gst";
 import { formatRupees, multiplyByQuantity } from "@/lib/money";
 import { cn } from "@/lib/utils";
+import { AgreeAllPendingCheckbox } from "@/modules/estimates/components/agree-all-pending-checkbox";
 import { CreateEstimateForm } from "@/modules/estimates/components/create-estimate-form";
 import { EstimateLineForm } from "@/modules/estimates/components/estimate-line-form";
-import {
-  EstimatePermissionLine,
-  SmoothHistoryPanel,
-} from "@/modules/estimates/components/estimate-permission-line";
+import { EstimateLinesTable } from "@/modules/estimates/components/estimate-lines-table";
+import { SmoothHistoryPanel } from "@/modules/estimates/components/estimate-permission-line";
 import type {
   EstimateApprovalMethodValue,
   EstimateApprovalStateValue,
@@ -178,6 +177,26 @@ export async function JobCardEstimateContent({
             </div>
           ) : (
             <>
+              {approvedCount > 0 ? (
+                <div className="flex flex-wrap items-start justify-between gap-3 rounded-[11px] border border-emerald-200 bg-emerald-50/70 px-4 py-3.5">
+                  <div className="min-w-0">
+                    <strong className="text-[13px] font-semibold text-emerald-950">
+                      {t("readyToBillAgreedTitle")}
+                    </strong>
+                    <p className="mt-1 text-[12px] leading-relaxed text-emerald-900/80">
+                      {t("readyToBillAgreedBody")}
+                    </p>
+                  </div>
+                  <JobCardSectionJumpButton
+                    section="billing"
+                    variant="default"
+                    className="bg-blue-600 text-white hover:bg-blue-700 hover:text-white"
+                  >
+                    {t("goToBilling")}
+                  </JobCardSectionJumpButton>
+                </div>
+              ) : null}
+
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div className="rounded-[11px] border border-slate-300 bg-blue-50/70 px-4 py-3.5">
                   <strong className="text-[13px] font-semibold text-slate-900">
@@ -221,95 +240,48 @@ export async function JobCardEstimateContent({
                   ? t("permissionListTitle")
                   : t("pricedLinesTitle")}
               </h3>
-              <p className="text-[12px] text-slate-500">
-                {t("revisionLabel", { number: current.revisionNumber })}
-                <span className="ml-1 text-slate-400">
-                  · {t("currentRevision")}
-                </span>
-              </p>
+              <div className="flex flex-wrap items-center justify-end gap-3">
+                {askPermission && canEdit && current.lines.length > 0 ? (
+                  <AgreeAllPendingCheckbox
+                    orderId={orderId}
+                    pendingCount={pendingCount}
+                  />
+                ) : null}
+                <p className="text-[12px] text-slate-500">
+                  {t("revisionLabel", { number: current.revisionNumber })}
+                  <span className="ml-1 text-slate-400">
+                    · {t("currentRevision")}
+                  </span>
+                </p>
+              </div>
             </div>
 
-            {current.lines.length === 0 ? (
-              <p className="text-sm text-slate-600">{t("linesEmpty")}</p>
-            ) : askPermission ? (
-              <ul className="grid gap-3">
-                {current.lines.map((line, index) => {
-                  const amounts = computeLineGst(line);
-                  const linkedPartId =
-                    line.sourceOrderLineId != null
-                      ? (order.lines.find(
-                          (orderLine) => orderLine.id === line.sourceOrderLineId,
-                        )?.partId ?? null)
-                      : null;
-                  return (
-                    <EstimatePermissionLine
-                      key={line.id}
-                      orderId={orderId}
-                      canEdit={canEdit}
-                      index={index}
-                      line={{
-                        id: line.id,
-                        description: line.description,
-                        type: line.type,
-                        quantity: line.quantity,
-                        unitPricePaise: line.unitPricePaise,
-                        hsnOrSac: line.hsnOrSac,
-                        gstRatePercent: line.gstRatePercent,
-                        approvalState: line.approvalState,
-                        totalPaise: amounts.totalPaise,
-                        partId: linkedPartId,
-                      }}
-                    />
-                  );
-                })}
-              </ul>
-            ) : (
-              <ul className="divide-y divide-slate-200/80 overflow-hidden rounded-[10px] border border-slate-200 bg-white">
-                {current.lines.map((line) => {
-                  const typeKey =
-                    line.type === "PART" || line.type === "LABOUR"
-                      ? line.type
-                      : "LABOUR";
-                  const amounts = computeLineGst(line);
-                  return (
-                    <li
-                      key={line.id}
-                      className="flex flex-wrap items-center justify-between gap-3 px-3.5 py-3"
-                    >
-                      <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-                        <span
-                          className={cn(
-                            "inline-flex shrink-0 rounded-md border px-2 py-0.5 text-[11px] font-semibold",
-                            typeKey === "PART"
-                              ? "border-blue-200 bg-blue-50 text-blue-800"
-                              : "border-orange-200 bg-orange-50 text-orange-800",
-                          )}
-                        >
-                          {t(`lineTypes.${typeKey}`)}
-                        </span>
-                        <p className="min-w-0 truncate text-[14px] font-medium text-slate-900">
-                          {line.description}
-                        </p>
-                        <span className="inline-flex shrink-0 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-800">
-                          {t("readyToBillBadge")}
-                        </span>
-                      </div>
-                      <div className="shrink-0 text-right">
-                        <p className="text-[12px] tabular-nums text-slate-500">
-                          {t("emptyPreviewQtyPrice", {
-                            quantity: line.quantity,
-                            price: formatRupees(line.unitPricePaise),
-                          })}
-                        </p>
-                        <p className="text-[14px] font-semibold tabular-nums text-slate-900">
-                          {formatRupees(amounts.totalPaise)}
-                        </p>
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
+            <EstimateLinesTable
+              orderId={orderId}
+              canEdit={canEdit}
+              askPermission={askPermission}
+              lines={current.lines.map((line) => {
+                const amounts = computeLineGst(line);
+                const linkedPartId =
+                  line.sourceOrderLineId != null
+                    ? (order.lines.find(
+                        (orderLine) => orderLine.id === line.sourceOrderLineId,
+                      )?.partId ?? null)
+                    : null;
+                return {
+                  id: line.id,
+                  description: line.description,
+                  type: line.type,
+                  quantity: line.quantity,
+                  unitPricePaise: line.unitPricePaise,
+                  hsnOrSac: line.hsnOrSac,
+                  gstRatePercent: line.gstRatePercent,
+                  approvalState: line.approvalState,
+                  totalPaise: amounts.totalPaise,
+                  partId: linkedPartId,
+                };
+              })}
+            />
           </div>
 
           <section className="overflow-hidden rounded-[11px] border border-slate-300">

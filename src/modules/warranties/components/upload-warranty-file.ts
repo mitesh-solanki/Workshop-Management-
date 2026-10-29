@@ -2,6 +2,7 @@
 
 import { requestWarrantyUploadUrlAction } from "@/app/actions/warranties";
 import { compressImageFile } from "@/lib/compress-image";
+import { uploadBlobToStorageTarget } from "@/lib/client-storage-upload";
 
 export async function uploadWarrantyCardFile(input: {
   vehicleId: string;
@@ -26,19 +27,21 @@ export async function uploadWarrantyCardFile(input: {
     fileName,
   });
 
-  const put = await fetch(signed.uploadUrl, {
-    method: "PUT",
-    headers: { "Content-Type": contentType },
-    body: blob,
-  });
-  if (!put.ok) {
+  try {
+    const uploaded = await uploadBlobToStorageTarget({
+      target: signed,
+      blob,
+      contentType,
+      fileName,
+    });
+
+    return {
+      storageKey: uploaded.storageKey,
+      contentType,
+      byteSize: blob.size,
+      fileName,
+    };
+  } catch {
     throw new Error(input.uploadFailedMessage);
   }
-
-  return {
-    storageKey: signed.storageKey,
-    contentType,
-    byteSize: blob.size,
-    fileName,
-  };
 }

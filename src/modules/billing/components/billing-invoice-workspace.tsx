@@ -12,6 +12,7 @@ import { DownloadInvoicePdfButton } from "@/modules/billing/components/download-
 import { FinalizeInvoiceForm } from "@/modules/billing/components/finalize-invoice-form";
 import { InvoicePreviewButton } from "@/modules/billing/components/invoice-preview-button";
 import type { InvoicePreviewData } from "@/modules/billing/components/invoice-preview-dialog";
+import { PricingLinesTable } from "@/modules/billing/components/pricing-lines-table";
 import { RecordPaymentForm } from "@/modules/billing/components/record-payment-form";
 import { RecordRefundForm } from "@/modules/billing/components/record-refund-form";
 import { RemakeDraftInvoiceForm } from "@/modules/billing/components/remake-draft-invoice-form";
@@ -22,6 +23,8 @@ import { partRequiresWarrantyCard } from "@/modules/warranties/part-requires-war
 type UnbilledLine = {
   id: string;
   description: string;
+  type?: "LABOUR" | "PART";
+  typeLabel?: string;
   quantity: number;
   unitPricePaise: number;
   totalPaise: number;
@@ -134,6 +137,7 @@ export function BillingInvoiceWorkspace({
   defaultPlaceOfSupplyStateCode,
 }: Props) {
   const t = useTranslations("billing");
+  const tw = useTranslations("warranties");
   const tGst = useTranslations("gst");
 
   function stateName(code: string) {
@@ -260,25 +264,18 @@ export function BillingInvoiceWorkspace({
         <div className="border-b border-slate-100 bg-[#eff4ff] px-4 py-2.5 text-[12px] font-bold tracking-wide text-[#354e73]">
           {t("paperLinesHeading")}
         </div>
-        {active.lines.map((line) => (
-          <div
-            key={line.id}
-            className="flex flex-wrap items-baseline justify-between gap-2 border-b border-slate-100 px-4 py-3"
-          >
-            <span className="min-w-0 text-[14px] text-slate-800">
-              {line.description}
-              <span className="text-slate-500">
-                {" "}
-                · {line.quantity} × {formatRupees(line.unitPricePaise)}
-              </span>
-            </span>
-            <span className="shrink-0 text-[14px] font-semibold text-slate-900">
-              {formatRupees(line.totalPaise)}
-            </span>
-          </div>
-        ))}
+        <InvoiceWarrantyPanel
+          orderId={orderId}
+          invoiceId={active.id}
+          vehicleId={vehicleId}
+          emptyLabel={t("invoiceEmpty")}
+          lines={active.lines}
+          docs={active.warrantyDocs}
+          canEdit={canEdit && active.status === "DRAFT"}
+          onRequiredValidityChange={setWarrantyFormComplete}
+        />
 
-        <dl className="grid grid-cols-2 gap-3 border-t border-slate-200 bg-slate-50 px-4 py-3.5 sm:grid-cols-4">
+        <dl className="flex flex-wrap items-start gap-x-6 gap-y-3 border-t border-slate-200 bg-slate-50 px-4 py-3.5 sm:flex-nowrap sm:justify-between">
           <div>
             <dt className="text-[13px] text-slate-500">{t("taxable")}</dt>
             <dd className="mt-0.5 text-[14px] font-semibold text-slate-900">
@@ -322,27 +319,13 @@ export function BillingInvoiceWorkspace({
               </dd>
             </div>
           ) : null}
-          <div className="col-span-2 sm:col-span-4">
+          <div className="sm:ml-auto sm:text-right">
             <dt className="text-[13px] text-slate-500">{t("paperTotal")}</dt>
             <dd className="mt-0.5 text-[18px] font-bold text-blue-700">
               {formatRupees(active.totalPaise)}
             </dd>
           </div>
         </dl>
-
-        {active.lines.some((line) => line.type === "PART") ? (
-          <div className="border-t border-slate-200 px-4 py-4">
-            <InvoiceWarrantyPanel
-              orderId={orderId}
-              invoiceId={active.id}
-              vehicleId={vehicleId}
-              lines={active.lines}
-              docs={active.warrantyDocs}
-              canEdit={canEdit && active.status === "DRAFT"}
-              onRequiredValidityChange={setWarrantyFormComplete}
-            />
-          </div>
-        ) : null}
 
         {canEdit && active.status === "DRAFT" ? (
           <div className="flex flex-wrap items-center gap-2 border-t border-slate-200 px-4 py-4">
@@ -351,6 +334,11 @@ export function BillingInvoiceWorkspace({
               orderId={orderId}
               disabled={warrantyIncomplete || !warrantyFormComplete}
             />
+            {warrantyIncomplete || !warrantyFormComplete ? (
+              <p className="basis-full text-sm text-amber-800">
+                {tw("finalizeBlocked")}
+              </p>
+            ) : null}
 
             <RemakeDraftInvoiceForm
               invoiceId={active.id}
@@ -530,25 +518,21 @@ export function BillingInvoiceWorkspace({
           </div>
           {hasUnbilledApprovedLines ? (
             <div className="space-y-4 p-4 sm:p-5">
-              <ul className="space-y-2">
-                {unbilledLines.map((line) => (
-                  <li
-                    key={line.id}
-                    className="flex flex-wrap items-baseline justify-between gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-[14px]"
-                  >
-                    <span className="min-w-0 text-slate-800">
-                      {line.description}
-                      <span className="text-slate-500">
-                        {" "}
-                        · {line.quantity} × {formatRupees(line.unitPricePaise)}
-                      </span>
-                    </span>
-                    <span className="shrink-0 font-semibold text-slate-900">
-                      {formatRupees(line.totalPaise)}
-                    </span>
-                  </li>
-                ))}
-              </ul>
+              <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+                <PricingLinesTable
+                  showType
+                  emptyLabel={t("invoiceEmpty")}
+                  lines={unbilledLines.map((line) => ({
+                    id: line.id,
+                    description: line.description,
+                    type: line.type,
+                    typeLabel: line.typeLabel,
+                    quantity: line.quantity,
+                    unitPricePaise: line.unitPricePaise,
+                    totalPaise: line.totalPaise,
+                  }))}
+                />
+              </div>
               <CreateInvoiceForm
                 orderId={orderId}
                 defaultPlaceOfSupplyStateCode={defaultPlaceOfSupplyStateCode}

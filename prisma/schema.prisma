@@ -129,14 +129,12 @@ enum CreditNoteReason {
 }
 
 model Garage {
-  id                 String   @id @default(cuid())
-  name               String
-  address            String?
-  gstin              String?
-  /// When false, stock OUT/ADJUSTMENT cannot take quantity below zero.
-  allowNegativeStock Boolean  @default(false)
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  id        String   @id @default(cuid())
+  name      String
+  address   String?
+  gstin     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   users             User[]
   invites           Invite[]

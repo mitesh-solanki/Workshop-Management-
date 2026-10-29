@@ -40,6 +40,7 @@ import {
   updateServiceOrderLine,
   updateServiceOrderStatus,
 } from "@/modules/service-orders/repo";
+import { mirrorOrderLineOntoCurrentEstimate } from "@/modules/estimates/service";
 
 async function resolveBayFilterName(
   garageId: string,
@@ -57,7 +58,7 @@ async function resolveBayFilterName(
   return bay?.name;
 }
 
-const CREATE_ROLES = ["OWNER", "MANAGER", "TECHNICIAN"] as const;
+const CREATE_ROLES = ["OWNER", "MANAGER"] as const;
 const MANAGE_ROLES = ["OWNER", "MANAGER"] as const;
 const LINE_ROLES = ["OWNER", "MANAGER", "TECHNICIAN"] as const;
 const READ_ROLES = ["OWNER", "MANAGER", "TECHNICIAN", "ACCOUNTANT"] as const;
@@ -410,18 +411,23 @@ export async function addOrderLine(
 
   assertCanMutateOrder(session, order);
 
+  if (session.role === "TECHNICIAN" && input.type === "LABOUR") {
+    throw new AppError("orders.technician_parts_only", 403);
+  }
+
   if (input.type === "PART" && !input.partId) {
     throw new AppError("inventory.part_required", 400);
   }
 
   const unitPricePaise =
     session.role === "TECHNICIAN" ? 0 : input.unitPricePaise;
+  const quantity = input.type === "LABOUR" ? 1 : input.quantity;
 
   const result = await createServiceOrderLine(session.garageId, {
     serviceOrderId: order.id,
     type: input.type,
     description: input.description,
-    quantity: input.quantity,
+    quantity,
     unitPricePaise,
     partId: input.partId,
     actorId: session.userId,
@@ -429,6 +435,16 @@ export async function addOrderLine(
 
   if (!result.ok) {
     throw new NotFoundError();
+  }
+
+  if (result.line.unitPricePaise > 0) {
+    await mirrorOrderLineOntoCurrentEstimate(session, order.id, {
+      id: result.line.id,
+      type: result.line.type,
+      description: result.line.description,
+      quantity: result.line.quantity,
+      unitPricePaise: result.line.unitPricePaise,
+    });
   }
 
   return result.line;
@@ -450,18 +466,26 @@ export async function updateOrderLine(
   assertCanMutateOrder(session, order);
 
   const existing = order.lines.find((line) => line.id === lineId);
+  if (!existing) {
+    throw new NotFoundError();
+  }
+  if (session.role === "TECHNICIAN" && existing.type === "LABOUR") {
+    throw new AppError("orders.technician_parts_only", 403);
+  }
+
   const unitPricePaise =
     session.role === "TECHNICIAN"
-      ? (existing?.unitPricePaise ?? 0)
+      ? (existing.unitPricePaise ?? 0)
       : input.unitPricePaise;
+  const quantity = existing.type === "LABOUR" ? 1 : input.quantity;
 
   const result = await updateServiceOrderLine(session.garageId, {
     lineId,
     serviceOrderId: order.id,
     description: input.description,
-    quantity: input.quantity,
+    quantity,
     unitPricePaise,
-    ...(existing?.type === "PART"
+    ...(existing.type === "PART"
       ? { partId: input.partId || existing.partId }
       : {}),
     actorId: session.userId,
@@ -469,6 +493,16 @@ export async function updateOrderLine(
 
   if (!result.ok) {
     throw new NotFoundError();
+  }
+
+  if (result.line.unitPricePaise > 0) {
+    await mirrorOrderLineOntoCurrentEstimate(session, order.id, {
+      id: result.line.id,
+      type: result.line.type,
+      description: result.line.description,
+      quantity: result.line.quantity,
+      unitPricePaise: result.line.unitPricePaise,
+    });
   }
 
   return result.line;
@@ -486,6 +520,11 @@ export async function removeOrderLine(
     throw new NotFoundError();
   }
   assertCanMutateOrder(session, order);
+
+  const existing = order.lines.find((line) => line.id === lineId);
+  if (session.role === "TECHNICIAN" && existing?.type === "LABOUR") {
+    throw new AppError("orders.technician_parts_only", 403);
+  }
 
   const result = await deleteServiceOrderLine(session.garageId, {
     lineId,

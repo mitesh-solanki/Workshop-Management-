@@ -10,6 +10,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { authCopy } from "@/lib/auth-copy";
+import { homePathForRole } from "@/lib/rbac";
 import { getOptionalSession } from "@/lib/session";
 
 export const instant = false;
@@ -17,7 +18,7 @@ export const instant = false;
 export default async function SignupPage() {
   const session = await getOptionalSession();
   if (session) {
-    redirect("/dashboard");
+    redirect(homePathForRole(session.role));
   }
 
   return (

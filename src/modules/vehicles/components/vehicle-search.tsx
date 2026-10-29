@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
+import { ListFiltersResetButton } from "@/components/ui/list-filters-reset-button";
 import { ListSortMenu } from "@/components/ui/list-sort-menu";
 import { SearchInput } from "@/components/ui/search-input";
 import { cn } from "@/lib/utils";
@@ -36,6 +37,7 @@ type VehicleSearchProps = {
 
 export function VehicleSearch({ className, actions }: VehicleSearchProps) {
   const t = useTranslations("vehicles");
+  const tc = useTranslations("common");
   const router = useRouter();
   const searchParams = useSearchParams();
   const [pending, startTransition] = useTransition();
@@ -46,6 +48,7 @@ export function VehicleSearch({ className, actions }: VehicleSearchProps) {
     : "newest";
   const [value, setValue] = useState(urlQuery);
   const [syncedUrlQuery, setSyncedUrlQuery] = useState(urlQuery);
+  const filtersActive = Boolean(urlQuery.trim()) || urlSort !== "newest";
 
   if (urlQuery !== syncedUrlQuery) {
     setSyncedUrlQuery(urlQuery);
@@ -123,6 +126,16 @@ export function VehicleSearch({ className, actions }: VehicleSearchProps) {
           onChange={(sort) => replaceParams({ sort })}
           ariaLabel={t("sortLabel")}
           disabled={pending}
+        />
+        <ListFiltersResetButton
+          label={tc("resetFilters")}
+          disabled={!filtersActive || pending}
+          onReset={() => {
+            setValue("");
+            startTransition(() => {
+              router.replace("/vehicles");
+            });
+          }}
         />
       </div>
     </div>

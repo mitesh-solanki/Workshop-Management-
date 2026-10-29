@@ -10,9 +10,27 @@ import {
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { randomBytes } from "node:crypto";
+import {
+  cloudinaryDeliveryUrl,
+  deleteDocument,
+  getCloudinaryRootFolder,
+  isCloudinaryConfigured,
+  resourceTypeFromStorageKey,
+  uploadWithPublicId,
+} from "@/lib/cloudinary";
 import { AppError } from "@/lib/errors";
 
 let bucketReady: Promise<void> | null = null;
+
+export type StorageUploadTarget = {
+  uploadUrl: string;
+  storageKey: string;
+  /** Browser upload verb. Cloudinary uses POST multipart; S3 uses PUT. */
+  method: "PUT" | "POST";
+  /** Extra form fields for POST uploads (Cloudinary / app upload API). */
+  fields?: Record<string, string>;
+  bucket?: string;
+};
 
 function requireEnv(name: string): string {
   const value = process.env[name]?.trim();
@@ -39,6 +57,18 @@ function getClient() {
   });
 }
 
+/** Prefer Cloudinary when configured (temp production); otherwise S3/MinIO. */
+export function getStorageDriver(): "cloudinary" | "s3" {
+  const explicit = process.env.STORAGE_DRIVER?.trim().toLowerCase();
+  if (explicit === "cloudinary" || explicit === "s3") {
+    return explicit;
+  }
+  if (isCloudinaryConfigured()) {
+    return "cloudinary";
+  }
+  return "s3";
+}
+
 /** Create the configured bucket once if it does not exist (local MinIO). */
 async function ensureBucket() {
   if (!bucketReady) {
@@ -51,12 +81,14 @@ async function ensureBucket() {
         try {
           await client.send(new CreateBucketCommand({ Bucket: bucket }));
         } catch (error) {
-          // Another request may have created it first.
           const name =
             error && typeof error === "object" && "name" in error
               ? String((error as { name: unknown }).name)
               : "";
-          if (name !== "BucketAlreadyOwnedByYou" && name !== "BucketAlreadyExists") {
+          if (
+            name !== "BucketAlreadyOwnedByYou" &&
+            name !== "BucketAlreadyExists"
+          ) {
             bucketReady = null;
             throw error;
           }
@@ -88,6 +120,19 @@ function extensionForContentType(contentType: string): string {
     return "mov";
   }
   return "mp4";
+}
+
+/**
+ * Cloudinary public_id under the workshop folder, without file extension.
+ * Example: workshop/garages/{garageId}/inspections/.../abc
+ */
+export function toCloudinaryPublicId(storageKey: string): string {
+  const withoutExt = storageKey.replace(/\.[^.]+$/, "");
+  const folder = getCloudinaryRootFolder();
+  if (withoutExt === folder || withoutExt.startsWith(`${folder}/`)) {
+    return withoutExt;
+  }
+  return `${folder}/${withoutExt}`;
 }
 
 /** Build a garage-scoped object key for an inspection media upload. */
@@ -124,12 +169,30 @@ export function buildVehicleWarrantyKey(input: {
   return `garages/${input.garageId}/vehicles/${input.vehicleId}/warranty/${id}.${ext}`;
 }
 
-/** Presigned PUT URL for browser upload to S3-compatible storage. */
+/**
+ * Presigned PUT (S3) or app POST target (Cloudinary) for browser upload.
+ * Cloudinary path posts the file to `/api/storage/upload` (server uploads).
+ */
 export async function createPresignedUploadUrl(input: {
   storageKey: string;
   contentType: string;
   expiresInSeconds?: number;
-}) {
+}): Promise<StorageUploadTarget> {
+  if (getStorageDriver() === "cloudinary") {
+    if (!isCloudinaryConfigured()) {
+      throw new AppError("STORAGE_NOT_CONFIGURED", 500);
+    }
+    return {
+      uploadUrl: "/api/storage/upload",
+      storageKey: input.storageKey,
+      method: "POST",
+      fields: {
+        storageKey: input.storageKey,
+        contentType: input.contentType,
+      },
+    };
+  }
+
   await ensureBucket();
   const client = getClient();
   const command = new PutObjectCommand({
@@ -140,17 +203,30 @@ export async function createPresignedUploadUrl(input: {
   const uploadUrl = await getSignedUrl(client, command, {
     expiresIn: input.expiresInSeconds ?? 600,
   });
-  return { uploadUrl, storageKey: input.storageKey, bucket: getBucket() };
+  return {
+    uploadUrl,
+    storageKey: input.storageKey,
+    method: "PUT",
+    bucket: getBucket(),
+  };
 }
 
 /**
- * Presigned GET URL so the browser can view private bucket objects
- * (local MinIO defaults to PRIVATE; production buckets should stay private too).
+ * Browser-readable URL for a stored object.
+ * Cloudinary: CDN delivery URL. S3: short-lived signed GET.
  */
 export async function createPresignedDownloadUrl(
   storageKey: string,
   expiresInSeconds = 3600,
 ): Promise<string> {
+  if (getStorageDriver() === "cloudinary") {
+    const publicId = toCloudinaryPublicId(storageKey);
+    return cloudinaryDeliveryUrl(
+      publicId,
+      resourceTypeFromStorageKey(storageKey),
+    );
+  }
+
   const client = getClient();
   const command = new GetObjectCommand({
     Bucket: getBucket(),
@@ -160,6 +236,34 @@ export async function createPresignedDownloadUrl(
 }
 
 export async function deleteStoredObject(storageKey: string) {
+  if (getStorageDriver() === "cloudinary") {
+    const publicId = toCloudinaryPublicId(storageKey);
+    const resourceType = resourceTypeFromStorageKey(storageKey);
+    try {
+      await deleteDocument(publicId, resourceType);
+    } catch {
+      // Retry as image/video/raw if type guess was wrong.
+      if (resourceType !== "image") {
+        try {
+          await deleteDocument(publicId, "image");
+          return;
+        } catch {
+          /* continue */
+        }
+      }
+      if (resourceType !== "video") {
+        try {
+          await deleteDocument(publicId, "video");
+          return;
+        } catch {
+          /* continue */
+        }
+      }
+      await deleteDocument(publicId, "raw");
+    }
+    return;
+  }
+
   const client = getClient();
   await client.send(
     new DeleteObjectCommand({
@@ -167,6 +271,24 @@ export async function deleteStoredObject(storageKey: string) {
       Key: storageKey,
     }),
   );
+}
+
+/** Server-side Cloudinary upload used by `/api/storage/upload`. */
+export async function uploadBufferToStorage(input: {
+  storageKey: string;
+  contentType: string;
+  fileBuffer: Buffer;
+}): Promise<{ storageKey: string; url: string }> {
+  if (getStorageDriver() !== "cloudinary") {
+    throw new AppError("STORAGE_NOT_CONFIGURED", 500);
+  }
+  const publicId = toCloudinaryPublicId(input.storageKey);
+  const uploaded = await uploadWithPublicId({
+    fileBuffer: input.fileBuffer,
+    publicId,
+    contentType: input.contentType,
+  });
+  return { storageKey: input.storageKey, url: uploaded.url };
 }
 
 /** True when the key belongs to this garage (prevents confirm of foreign keys). */

@@ -58,35 +58,90 @@ const EMPTY: FormValues = {
   notes: "",
 };
 
+export type CreatedVendorSummary = {
+  id: string;
+  name: string;
+};
+
 type Props = {
   trigger?: React.ReactNode;
   size?: "sm" | "md";
+  /** Controlled open (e.g. quick-add from inventory Bought From). */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  /** Prefill name when opening from a typed vendor query. */
+  initialName?: string;
+  /** Stay on the current page and call `onCreated` instead of opening the vendor. */
+  navigateOnSuccess?: boolean;
+  onCreated?: (vendor: CreatedVendorSummary) => void;
 };
 
-export function CreateVendorModal({ trigger, size = "md" }: Props) {
+export function CreateVendorModal({
+  trigger,
+  size = "md",
+  open: openProp,
+  onOpenChange: onOpenChangeProp,
+  initialName = "",
+  navigateOnSuccess = true,
+  onCreated,
+}: Props) {
   const t = useTranslations("vendors");
   const te = useTranslations("errors");
   const formId = useId();
-  const [values, setValues] = useState<FormValues>(EMPTY);
+  const [values, setValues] = useState<FormValues>(() => ({
+    ...EMPTY,
+    name: initialName,
+  }));
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [state, formAction, pending] = useActionState(
     createVendorModalAction,
     initial,
   );
   const errorHandled = useRef<string | null>(null);
+  const successHandled = useRef<string | null>(null);
+  const submittedNameRef = useRef("");
+  const controlled = openProp !== undefined;
 
-  const { open, onOpenChange } = useCreateModalNavigation({
+  function resetForm(name = "") {
+    setValues({ ...EMPTY, name });
+    setFieldErrors({});
+  }
+
+  const nav = useCreateModalNavigation({
     kind: "vendor",
     success:
-      state.ok && state.vendorId
+      navigateOnSuccess && state.ok && state.vendorId
         ? { id: state.vendorId, message: state.message }
         : null,
     hrefForId: (id) => `/vendors/${id}`,
-    onReset: () => {
-      setValues(EMPTY);
-      setFieldErrors({});
-    },
+    onReset: () => resetForm(),
   });
+
+  const open = controlled ? Boolean(openProp) : nav.open;
+
+  function handleOpenChange(next: boolean) {
+    if (controlled) {
+      onOpenChangeProp?.(next);
+    } else {
+      nav.onOpenChange(next);
+    }
+    if (next) {
+      errorHandled.current = null;
+      successHandled.current = null;
+      resetForm(initialName.trim());
+    } else {
+      resetForm();
+    }
+  }
+
+  useEffect(() => {
+    if (!open) return;
+    setValues((prev) =>
+      prev.name.trim() === initialName.trim()
+        ? prev
+        : { ...prev, name: initialName },
+    );
+  }, [open, initialName]);
 
   useEffect(() => {
     if (state.ok || !state.message) return;
@@ -97,6 +152,20 @@ export function CreateVendorModal({ trigger, size = "md" }: Props) {
     }
     toast.error(state.message);
   }, [state]);
+
+  useEffect(() => {
+    if (navigateOnSuccess) return;
+    if (!state.ok || !state.vendorId) return;
+    if (successHandled.current === state.vendorId) return;
+    successHandled.current = state.vendorId;
+    const created = {
+      id: state.vendorId,
+      name: submittedNameRef.current.trim() || t("add"),
+    };
+    toast.success(state.message ?? t("created"));
+    onCreated?.(created);
+    handleOpenChange(false);
+  }, [state, navigateOnSuccess, onCreated, t]);
 
   function setField<K extends keyof FormValues>(key: K, value: FormValues[K]) {
     setValues((prev) => ({ ...prev, [key]: value }));
@@ -140,24 +209,17 @@ export function CreateVendorModal({ trigger, size = "md" }: Props) {
   }
 
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(next) => {
-        onOpenChange(next);
-        if (next) {
-          errorHandled.current = null;
-          setFieldErrors({});
-        }
-      }}
-    >
-      <DialogTrigger asChild>
-        {trigger ?? (
-          <Button type="button" size={size}>
-            <Plus className="size-4" aria-hidden />
-            {t("add")}
-          </Button>
-        )}
-      </DialogTrigger>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      {trigger !== null ? (
+        <DialogTrigger asChild>
+          {trigger ?? (
+            <Button type="button" size={size}>
+              <Plus className="size-4" aria-hidden />
+              {t("add")}
+            </Button>
+          )}
+        </DialogTrigger>
+      ) : null}
       <DialogContent className="gap-0 p-0 sm:max-w-2xl">
         <DialogHeader className="border-b border-border px-5 py-4 pr-12 text-left">
           <DialogTitle>{t("newTitle")}</DialogTitle>
@@ -171,6 +233,7 @@ export function CreateVendorModal({ trigger, size = "md" }: Props) {
             onSubmit={(e) => {
               e.preventDefault();
               if (!validateClient()) return;
+              submittedNameRef.current = values.name;
               const formData = new FormData(e.currentTarget);
               startTransition(() => {
                 formAction(formData);

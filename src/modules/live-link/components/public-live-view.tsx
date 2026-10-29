@@ -3,6 +3,7 @@ import { StatusBadge } from "@/components/ui/status-badge";
 import { formatRupees } from "@/lib/money";
 import type { ServiceOrderStatus } from "@/lib/service-order-status";
 import { cn } from "@/lib/utils";
+import { LiveApproveButtons } from "@/modules/live-link/components/live-approve-buttons";
 import { LiveMediaGallery } from "@/modules/live-link/components/live-media-gallery";
 import { LivePayPanel } from "@/modules/live-link/components/live-pay-panel";
 import type { PublicLiveView } from "@/modules/live-link/service";
@@ -81,29 +82,41 @@ export async function PublicLiveViewPanel({
               <p className="text-sm text-slate-500">{t("estimateEmpty")}</p>
             ) : (
               <ul className="divide-y overflow-hidden rounded-xl border border-slate-200 bg-white">
-                {view.estimate.lines.map((line) => (
-                  <li
-                    key={line.id}
-                    className="space-y-1 px-3 py-3.5 min-[400px]:px-4"
-                  >
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p className="min-w-0 text-sm font-medium text-slate-900">
-                        {line.description}
-                      </p>
-                      <span
-                        className={cn(
-                          "inline-flex shrink-0 rounded-md border px-2 py-0.5 text-xs font-medium",
-                          approvalBadgeClass(line.approvalState),
-                        )}
-                      >
-                        {t(`approval.${line.approvalState}`)}
-                      </span>
-                    </div>
-                    <p className="text-caption tabular-nums text-slate-500">
-                      {`${line.quantity} × ${formatRupees(line.unitPricePaise)} = ${formatRupees(line.lineTotalPaise)}`}
-                    </p>
-                  </li>
-                ))}
+                {view.estimate.lines.map((line) => {
+                  const showDecide =
+                    view.estimate?.canCustomerApprove &&
+                    line.approvalState === "PENDING";
+                  return (
+                    <li
+                      key={line.id}
+                      className="space-y-2 px-3 py-3.5 min-[400px]:px-4"
+                    >
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1 space-y-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="min-w-0 text-sm font-medium text-slate-900">
+                              {line.description}
+                            </p>
+                            <span
+                              className={cn(
+                                "inline-flex shrink-0 rounded-md border px-2 py-0.5 text-xs font-medium",
+                                approvalBadgeClass(line.approvalState),
+                              )}
+                            >
+                              {t(`approval.${line.approvalState}`)}
+                            </span>
+                          </div>
+                          <p className="text-caption tabular-nums text-slate-500">
+                            {`${line.quantity} × ${formatRupees(line.unitPricePaise)} = ${formatRupees(line.lineTotalPaise)}`}
+                          </p>
+                        </div>
+                        {showDecide ? (
+                          <LiveApproveButtons token={token} lineId={line.id} />
+                        ) : null}
+                      </div>
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </section>

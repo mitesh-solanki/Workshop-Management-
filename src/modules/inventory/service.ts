@@ -2,6 +2,12 @@ import "server-only";
 
 import { AppError, ForbiddenError, NotFoundError } from "@/lib/errors";
 import { requireRole, type RoleSession } from "@/lib/rbac";
+import { createPresignedDownloadUrl } from "@/lib/storage";
+import { insufficientStockError } from "@/modules/inventory/insufficient-stock-error";
+import {
+  displayShopReceiveNote,
+  parseShopReceiveBillId,
+} from "@/modules/inventory/shop-receive";
 import {
   DEFAULT_GST_RATE_PERCENT,
   DEFAULT_PART_HSN,
@@ -44,6 +50,10 @@ import {
   updatePart,
 } from "@/modules/inventory/repo";
 import { skuFromPartName } from "@/modules/inventory/sku-from-name";
+import {
+  getVendorBillAttachmentsByIds,
+  listRecentShopReceiveVendorBills,
+} from "@/modules/purchases/service";
 
 const READ_ROLES = ["OWNER", "MANAGER", "ACCOUNTANT"] as const;
 /** Job-card item picker — technicians may browse parts, not manage stock pages. */
@@ -72,11 +82,13 @@ async function allocateUniqueSku(
 
 function mapStockFailure(
   reason: "PART_NOT_FOUND" | "INSUFFICIENT_STOCK",
+  partName?: string | null,
+  partId?: string | null,
 ): never {
   if (reason === "PART_NOT_FOUND") {
     throw new NotFoundError();
   }
-  throw new AppError("inventory.insufficient_stock", 409);
+  throw insufficientStockError(partName, partId);
 }
 
 export async function listParts(
@@ -152,7 +164,93 @@ export async function getPartForPicker(session: RoleSession, partId: string) {
 export async function getPartHistory(session: RoleSession, partId: string) {
   const part = await getPart(session, partId);
   const movements = await listPartMovements(session.garageId, part.id);
-  return { part, movements };
+
+  const markedBillIds = movements
+    .map((m) => parseShopReceiveBillId(m.note))
+    .filter((id): id is string => Boolean(id));
+
+  const recentBills = await listRecentShopReceiveVendorBills(session);
+  const usedLegacyIds = new Set<string>();
+
+  /** Pair older stock-ins to the vendor bill created in the same save (~ms apart). */
+  function legacyBillFor(createdAt: Date) {
+    let best: (typeof recentBills)[number] | null = null;
+    let bestDelta = Number.POSITIVE_INFINITY;
+    for (const bill of recentBills) {
+      if (usedLegacyIds.has(bill.id)) continue;
+      const delta = Math.abs(bill.createdAt.getTime() - createdAt.getTime());
+      if (delta <= 120_000 && delta < bestDelta) {
+        best = bill;
+        bestDelta = delta;
+      }
+    }
+    if (best) usedLegacyIds.add(best.id);
+    return best;
+  }
+
+  // Assign legacy bills oldest-first so each receive maps to its own bill.
+  const legacyByMovementId = new Map<
+    string,
+    (typeof recentBills)[number]
+  >();
+  const shopInsOldestFirst = [...movements]
+    .filter(
+      (m) =>
+        m.type === "IN" &&
+        m.quantityChange > 0 &&
+        !parseShopReceiveBillId(m.note) &&
+        m.note !== "Opening stock",
+    )
+    .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+  for (const m of shopInsOldestFirst) {
+    const bill = legacyBillFor(m.createdAt);
+    if (bill) legacyByMovementId.set(m.id, bill);
+  }
+
+  const attachmentRows = await getVendorBillAttachmentsByIds(session, [
+    ...markedBillIds,
+    ...[...legacyByMovementId.values()].map((b) => b.id),
+  ]);
+  const attachmentById = new Map(attachmentRows.map((row) => [row.id, row]));
+
+  const enriched = await Promise.all(
+    movements.map(async (m) => {
+      const markedId = parseShopReceiveBillId(m.note);
+      const legacy = legacyByMovementId.get(m.id);
+      const vendorBillId = markedId ?? legacy?.id ?? null;
+      const attachment = vendorBillId
+        ? attachmentById.get(vendorBillId)
+        : undefined;
+
+      let billDownloadUrl: string | null = null;
+      if (attachment?.attachmentStorageKey) {
+        try {
+          billDownloadUrl = await createPresignedDownloadUrl(
+            attachment.attachmentStorageKey,
+          );
+        } catch (error) {
+          if (
+            !(
+              error instanceof AppError &&
+              error.code === "STORAGE_NOT_CONFIGURED"
+            )
+          ) {
+            throw error;
+          }
+        }
+      }
+
+      return {
+        ...m,
+        note: displayShopReceiveNote(m.note) ?? m.note,
+        vendorBillId,
+        billFileName: attachment?.attachmentFileName ?? null,
+        billDownloadUrl,
+      };
+    }),
+  );
+
+  return { part, movements: enriched };
 }
 
 export async function getLowStockAlerts(session: RoleSession) {
@@ -289,7 +387,7 @@ export async function recordStockIn(
   });
 
   if (!result.ok) {
-    mapStockFailure(result.reason);
+    mapStockFailure(result.reason, result.partName, result.partId);
   }
   return result;
 }
@@ -310,7 +408,7 @@ export async function recordStockOut(
   });
 
   if (!result.ok) {
-    mapStockFailure(result.reason);
+    mapStockFailure(result.reason, result.partName, result.partId);
   }
   return result;
 }
@@ -331,7 +429,7 @@ export async function recordStockAdjustment(
   });
 
   if (!result.ok) {
-    mapStockFailure(result.reason);
+    mapStockFailure(result.reason, result.partName, result.partId);
   }
   return result;
 }
@@ -376,7 +474,7 @@ export async function createDirectSaleRecord(
         error.reason === "PART_NOT_FOUND" ||
         error.reason === "INSUFFICIENT_STOCK"
       ) {
-        mapStockFailure(error.reason);
+        mapStockFailure(error.reason, error.partName, error.partId);
       }
     }
     throw error;
@@ -444,7 +542,7 @@ export async function updateDirectSaleRecord(
         error.reason === "PART_NOT_FOUND" ||
         error.reason === "INSUFFICIENT_STOCK"
       ) {
-        mapStockFailure(error.reason);
+        mapStockFailure(error.reason, error.partName, error.partId);
       }
     }
     throw error;
@@ -471,7 +569,7 @@ export async function deleteDirectSaleRecord(
         error.reason === "PART_NOT_FOUND" ||
         error.reason === "INSUFFICIENT_STOCK"
       ) {
-        mapStockFailure(error.reason);
+        mapStockFailure(error.reason, error.partName, error.partId);
       }
     }
     throw error;

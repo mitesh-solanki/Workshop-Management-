@@ -12,18 +12,15 @@ import type { RoleSession } from "@/lib/rbac";
 import { AppError } from "@/lib/errors";
 import {
   createInvoiceFromApprovedEstimate,
-  remakeDraftInvoice,
-} from "@/modules/billing/service";
+  remakeDraftInvoice } from "@/modules/billing/service";
 import { recordLineApproval } from "@/modules/estimates/repo";
 import {
   createServiceOrderLine,
-  deleteServiceOrderLine,
-} from "@/modules/service-orders/repo";
+  deleteServiceOrderLine } from "@/modules/service-orders/repo";
 import {
   upsertInvoiceLineWarranty,
   listWarrantiesForInvoice,
-  findWarrantyById,
-} from "@/modules/warranties/repo";
+  findWarrantyById } from "@/modules/warranties/repo";
 import { assertBatteryWarrantiesCompleteForInvoice } from "@/modules/warranties/service";
 
 if (!process.env.DATABASE_URL) {
@@ -67,21 +64,15 @@ describe("warranties + remake against Postgres", () => {
     const garage = await prisma.garage.create({
       data: {
         name: `Warr DB ${suffix}`,
-        gstin: "24AABCU9603R1ZM",
-        allowNegativeStock: false,
-      },
-      select: { id: true },
-    });
+        gstin: "24AABCU9603R1ZM" },
+      select: { id: true } });
     garageId = garage.id;
 
     const other = await prisma.garage.create({
       data: {
         name: `Warr other ${suffix}`,
-        gstin: "27AABCU9603R1ZM",
-        allowNegativeStock: false,
-      },
-      select: { id: true },
-    });
+        gstin: "27AABCU9603R1ZM" },
+      select: { id: true } });
     otherGarageId = other.id;
 
     const user = await prisma.user.create({
@@ -89,16 +80,13 @@ describe("warranties + remake against Postgres", () => {
         email: `warr-db-${suffix}@example.com`,
         name: "Warranty Tester",
         role: "OWNER",
-        garageId,
-      },
-      select: { id: true },
-    });
+        garageId },
+      select: { id: true } });
     userId = user.id;
 
     const customer = await prisma.customer.create({
       data: { garageId, name: "Warr Cust", phone: "9444444444" },
-      select: { id: true },
-    });
+      select: { id: true } });
     customerId = customer.id;
 
     const vehicle = await prisma.vehicle.create({
@@ -108,10 +96,8 @@ describe("warranties + remake against Postgres", () => {
         registrationNumber: `GJ01W${suffix.slice(-4)}`.toUpperCase(),
         make: "Honda",
         model: "City",
-        stateCode: "24",
-      },
-      select: { id: true },
-    });
+        stateCode: "24" },
+      select: { id: true } });
     vehicleId = vehicle.id;
 
     const pad = await prisma.part.create({
@@ -124,10 +110,8 @@ describe("warranties + remake against Postgres", () => {
         sellingPricePaise: 32_000,
         gstRatePercent: 18,
         hsn: "87083000",
-        lowStockLevel: 0,
-      },
-      select: { id: true },
-    });
+        lowStockLevel: 0 },
+      select: { id: true } });
     padPartId = pad.id;
 
     const battery = await prisma.part.create({
@@ -140,10 +124,8 @@ describe("warranties + remake against Postgres", () => {
         sellingPricePaise: 45_000,
         gstRatePercent: 18,
         hsn: "85071000",
-        lowStockLevel: 0,
-      },
-      select: { id: true },
-    });
+        lowStockLevel: 0 },
+      select: { id: true } });
     batteryPartId = battery.id;
 
     await prisma.stockMovement.createMany({
@@ -154,18 +136,15 @@ describe("warranties + remake against Postgres", () => {
           type: "IN",
           quantityChange: 20,
           note: "seed",
-          createdById: userId,
-        },
+          createdById: userId },
         {
           garageId,
           partId: batteryPartId,
           type: "IN",
           quantityChange: 10,
           note: "seed",
-          createdById: userId,
-        },
-      ],
-    });
+          createdById: userId },
+      ] });
 
     const order = await prisma.serviceOrder.create({
       data: {
@@ -173,18 +152,15 @@ describe("warranties + remake against Postgres", () => {
         customerId,
         vehicleId,
         complaint: "Warranty remake flow",
-        status: "IN_PROGRESS",
-      },
-      select: { id: true },
-    });
+        status: "IN_PROGRESS" },
+      select: { id: true } });
     orderId = order.id;
   });
 
   afterAll(async () => {
     if (garageId) {
       await prisma.garage.deleteMany({
-        where: { id: { in: [garageId, otherGarageId].filter(Boolean) } },
-      });
+        where: { id: { in: [garageId, otherGarageId].filter(Boolean) } } });
     }
     await prisma.$disconnect();
   });
@@ -207,8 +183,7 @@ describe("warranties + remake against Postgres", () => {
       quantity: 1,
       unitPricePaise: 32_000,
       partId: padPartId,
-      actorId: userId,
-    });
+      actorId: userId });
     expect(padLine.ok).toBe(true);
     if (!padLine.ok) return;
 
@@ -219,8 +194,7 @@ describe("warranties + remake against Postgres", () => {
       quantity: 1,
       unitPricePaise: 45_000,
       partId: batteryPartId,
-      actorId: userId,
-    });
+      actorId: userId });
     expect(batteryLine.ok).toBe(true);
     if (!batteryLine.ok) return;
 
@@ -243,8 +217,7 @@ describe("warranties + remake against Postgres", () => {
               hsnOrSac: "87083000",
               approvalState: "PENDING",
               sourceOrderLineId: padLine.line.id,
-              sortOrder: 0,
-            },
+              sortOrder: 0 },
             {
               garageId,
               type: "PART",
@@ -255,16 +228,11 @@ describe("warranties + remake against Postgres", () => {
               hsnOrSac: "85071000",
               approvalState: "PENDING",
               sourceOrderLineId: batteryLine.line.id,
-              sortOrder: 1,
-            },
-          ],
-        },
-      },
+              sortOrder: 1 },
+          ] } },
       select: {
         id: true,
-        lines: { select: { id: true, description: true } },
-      },
-    });
+        lines: { select: { id: true, description: true } } } });
 
     for (const line of estimate.lines) {
       const agreed = await recordLineApproval(garageId, {
@@ -275,8 +243,7 @@ describe("warranties + remake against Postgres", () => {
         toState: "APPROVED",
         method: "MANUAL",
         note: null,
-        recordedById: userId,
-      });
+        recordedById: userId });
       expect(agreed.ok).toBe(true);
     }
 
@@ -298,8 +265,7 @@ describe("warranties + remake against Postgres", () => {
     await expect(
       assertBatteryWarrantiesCompleteForInvoice(garageId, draft.id),
     ).rejects.toMatchObject({
-      code: "warranties.battery_details_required",
-    } satisfies Partial<AppError>);
+      code: "warranties.battery_details_required" } satisfies Partial<AppError>);
 
     const created = await upsertInvoiceLineWarranty({
       garageId,
@@ -313,8 +279,7 @@ describe("warranties + remake against Postgres", () => {
       contentType: "image/jpeg",
       byteSize: 2048,
       fileName: "battery-card.jpg",
-      createdById: userId,
-    });
+      createdById: userId });
     expect(created.storageKey).toContain("/warranty/");
 
     await assertBatteryWarrantiesCompleteForInvoice(garageId, draft.id);
@@ -331,8 +296,7 @@ describe("warranties + remake against Postgres", () => {
       contentType: null,
       byteSize: null,
       fileName: null,
-      createdById: userId,
-    });
+      createdById: userId });
     expect(cleared.id).toBe(created.id);
     expect(cleared.storageKey).toBeNull();
     expect(cleared.warrantyExpiresAt).not.toBeNull();
@@ -340,8 +304,7 @@ describe("warranties + remake against Postgres", () => {
     await expect(
       assertBatteryWarrantiesCompleteForInvoice(garageId, draft.id),
     ).rejects.toMatchObject({
-      code: "warranties.battery_details_required",
-    } satisfies Partial<AppError>);
+      code: "warranties.battery_details_required" } satisfies Partial<AppError>);
 
     await upsertInvoiceLineWarranty({
       garageId,
@@ -355,8 +318,7 @@ describe("warranties + remake against Postgres", () => {
       contentType: "image/jpeg",
       byteSize: 3000,
       fileName: "battery-card.jpg",
-      createdById: userId,
-    });
+      createdById: userId });
 
     await upsertInvoiceLineWarranty({
       garageId,
@@ -370,8 +332,7 @@ describe("warranties + remake against Postgres", () => {
       contentType: "image/jpeg",
       byteSize: 1500,
       fileName: "pad-card.jpg",
-      createdById: userId,
-    });
+      createdById: userId });
 
     const beforeRemake = await listWarrantiesForInvoice(garageId, draft.id);
     expect(beforeRemake).toHaveLength(2);
@@ -402,8 +363,7 @@ describe("warranties + remake against Postgres", () => {
       quantity: 1,
       unitPricePaise: 5_000,
       partId: padPartId,
-      actorId: userId,
-    });
+      actorId: userId });
     expect(spare.ok).toBe(true);
     if (!spare.ok) return;
 
@@ -437,17 +397,14 @@ describe("warranties + remake against Postgres", () => {
       await deleteServiceOrderLine(garageId, {
         lineId: spare.line.id,
         serviceOrderId: orderId,
-        actorId: userId,
-      }),
+        actorId: userId }),
     ).toEqual({ ok: true });
 
     const invoiceAfterDelete = await prisma.invoice.findFirst({
       where: { id: remadeAgain.id, garageId },
       select: {
         totalPaise: true,
-        lines: { select: { id: true, description: true } },
-      },
-    });
+        lines: { select: { id: true, description: true } } } });
     expect(
       invoiceAfterDelete?.lines.some((l) => l.id === spareInvoiceLine.id),
     ).toBe(false);

@@ -37,9 +37,14 @@ const TITLE_BY_PREFIX: { prefix: string; key: NavKey }[] = [
 type AppHeaderProps = {
   appName: string;
   garageName: string;
+  homeHref?: string;
 };
 
-export function AppHeader({ appName, garageName }: AppHeaderProps) {
+export function AppHeader({
+  appName,
+  garageName,
+  homeHref = "/dashboard",
+}: AppHeaderProps) {
   const pathname = usePathname();
   const tNav = useTranslations("nav");
   const tShell = useTranslations("shell");
@@ -53,8 +58,9 @@ export function AppHeader({ appName, garageName }: AppHeaderProps) {
   );
   const sectionTitle = match ? tNav(match.key) : appName;
   const pageTitle = sectionTitle;
-  const isHome = pathname === "/dashboard" || pathname.startsWith("/dashboard/");
-  const sectionHref = match?.prefix ?? "/dashboard";
+  const isHome =
+    pathname === homeHref || pathname.startsWith(`${homeHref}/`);
+  const sectionHref = match?.prefix ?? homeHref;
   const triggerLabel = isMobile
     ? openMobile
       ? tNav("closeMenu")
@@ -71,7 +77,7 @@ export function AppHeader({ appName, garageName }: AppHeaderProps) {
       }
     >
       <Link
-        href="/dashboard"
+        href={homeHref}
         className="truncate hover:text-slate-800 focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
       >
         {garageName}

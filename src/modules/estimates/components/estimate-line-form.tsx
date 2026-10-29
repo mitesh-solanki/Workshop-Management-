@@ -13,6 +13,7 @@ import { FormField } from "@/components/ui/form-field";
 import { FormSelect } from "@/components/ui/form-select";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/toast";
+import { toastStockError } from "@/components/ui/toast-stock-error";
 import {
   PartPickerSelect,
   type PartPickerItem,
@@ -61,9 +62,12 @@ export function EstimateLineForm({
       setPartId("");
       setSelectedPart(null);
     } else {
-      toast.error(state.message);
+      toastStockError(state.message, {
+        stockPartId: state.stockPartId,
+        viewStockLabel: ti("errors.viewStock"),
+      });
     }
-  }, [state, t]);
+  }, [state, t, ti]);
 
   return (
     <section className="overflow-hidden rounded-[13px] border border-[#cfdcf1] bg-white shadow-[0_3px_17px_rgba(36,58,99,0.04)]">

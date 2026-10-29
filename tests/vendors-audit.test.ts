@@ -32,9 +32,8 @@ describe("vendor audit against Postgres", () => {
     if (!ready) return;
 
     const garage = await prisma.garage.create({
-      data: { name: `Vendor audit ${suffix}`, allowNegativeStock: false },
-      select: { id: true },
-    });
+      data: { name: `Vendor audit ${suffix}` },
+      select: { id: true } });
     garageId = garage.id;
 
     const user = await prisma.user.create({
@@ -42,10 +41,8 @@ describe("vendor audit against Postgres", () => {
         email: `vendor-audit-${suffix}@example.com`,
         name: "Vendor Auditor",
         role: "OWNER",
-        garageId,
-      },
-      select: { id: true },
-    });
+        garageId },
+      select: { id: true } });
     userId = user.id;
   }, 30_000);
 
@@ -77,17 +74,14 @@ describe("vendor audit against Postgres", () => {
       address: null,
       gstin: null,
       notes: null,
-      actorId: userId,
-    });
+      actorId: userId });
 
     const created = await prisma.auditLog.findFirst({
       where: {
         garageId,
         entity: "Vendor",
         entityId: vendor.id,
-        action: "vendor.created",
-      },
-    });
+        action: "vendor.created" } });
     expect(created).not.toBeNull();
     expect(created?.actorId).toBe(userId);
 
@@ -98,17 +92,14 @@ describe("vendor audit against Postgres", () => {
       address: null,
       gstin: null,
       notes: "updated",
-      actorId: userId,
-    });
+      actorId: userId });
 
     const updated = await prisma.auditLog.findFirst({
       where: {
         garageId,
         entity: "Vendor",
         entityId: vendor.id,
-        action: "vendor.updated",
-      },
-    });
+        action: "vendor.updated" } });
     expect(updated).not.toBeNull();
     expect(updated?.actorId).toBe(userId);
   });

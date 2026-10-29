@@ -1,14 +1,17 @@
 "use client";
 
-import { useRef, useState, useTransition, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
+import { Camera, Film, Loader2, X } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { Camera, Film, X } from "lucide-react";
 import { compressImageFile } from "@/lib/compress-image";
+import { uploadBlobToStorageTarget } from "@/lib/client-storage-upload";
 import {
   confirmMediaUploadAction,
   removeMediaAction,
   requestMediaUploadUrlAction,
 } from "@/app/actions/inspections";
+import { toast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 
 type MediaRow = {
@@ -50,14 +53,27 @@ export function ItemMediaUploader({
   trailingActions,
 }: Props) {
   const t = useTranslations("inspections");
+  const router = useRouter();
   const photoInputRef = useRef<HTMLInputElement>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
   const proofInputRef = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<string | null>(null);
-  const [pending, startTransition] = useTransition();
+  const [uploading, setUploading] = useState(false);
+  const [removingId, setRemovingId] = useState<string | null>(null);
+  /** Hide thumbnails immediately on remove — don't wait for router.refresh(). */
+  const [removedIds, setRemovedIds] = useState<string[]>([]);
+  const busy = uploading || removingId != null;
+  const visibleMedia = media.filter((m) => !removedIds.includes(m.id));
+
+  useEffect(() => {
+    const live = new Set(media.map((m) => m.id));
+    setRemovedIds((prev) => prev.filter((id) => live.has(id)));
+  }, [media]);
 
   async function uploadFile(file: File, kind: "PHOTO" | "VIDEO") {
     setError(null);
+    setUploading(true);
+
     try {
       let blob: Blob = file;
       let contentType = file.type || "application/octet-stream";
@@ -75,25 +91,29 @@ export function ItemMediaUploader({
         byteSize: blob.size,
       });
 
-      const put = await fetch(signed.uploadUrl, {
-        method: "PUT",
-        headers: { "Content-Type": contentType },
-        body: blob,
+      const uploaded = await uploadBlobToStorageTarget({
+        target: signed,
+        blob,
+        contentType,
       });
-      if (!put.ok) {
-        throw new Error(t("uploadFailed"));
-      }
 
       await confirmMediaUploadAction({
         inspectionItemId: itemId,
         kind,
-        storageKey: signed.storageKey,
+        storageKey: uploaded.storageKey,
         contentType,
         byteSize: blob.size,
         orderId,
       });
+
+      toast.success(t("mediaUploaded"));
+      router.refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : t("uploadFailed"));
+      const message = err instanceof Error ? err.message : t("uploadFailed");
+      setError(message);
+      toast.error(message);
+    } finally {
+      setUploading(false);
     }
   }
 
@@ -103,30 +123,51 @@ export function ItemMediaUploader({
   ) {
     const file = event.target.files?.[0];
     event.target.value = "";
-    if (!file) {
+    if (!file || busy) {
       return;
     }
-    startTransition(() => {
-      void uploadFile(file, kind);
-    });
+    void uploadFile(file, kind);
   }
 
   function onProofPick(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     event.target.value = "";
-    if (!file) {
+    if (!file || busy) {
       return;
     }
     const kind: "PHOTO" | "VIDEO" = file.type.startsWith("video/")
       ? "VIDEO"
       : "PHOTO";
-    startTransition(() => {
-      void uploadFile(file, kind);
-    });
+    void uploadFile(file, kind);
+  }
+
+  async function onRemove(mediaId: string) {
+    setError(null);
+    setRemovingId(mediaId);
+    try {
+      const result = await removeMediaAction(mediaId, orderId);
+      if (!result.ok) {
+        const message = result.message ?? t("uploadFailed");
+        setError(message);
+        toast.error(message);
+        return;
+      }
+      setRemovedIds((prev) =>
+        prev.includes(mediaId) ? prev : [...prev, mediaId],
+      );
+      toast.success(t("mediaRemoved"));
+      router.refresh();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : t("uploadFailed");
+      setError(message);
+      toast.error(message);
+    } finally {
+      setRemovingId(null);
+    }
   }
 
   const controlsVisible = showControls && (canEdit || trailingActions);
-  const galleryVisible = showGallery && media.length > 0;
+  const galleryVisible = showGallery && visibleMedia.length > 0;
 
   if (!galleryVisible && !controlsVisible && !error) {
     return null;
@@ -142,7 +183,7 @@ export function ItemMediaUploader({
               type="file"
               accept="image/*,video/*"
               className="hidden"
-              disabled={pending}
+              disabled={busy}
               onChange={onProofPick}
             />
           ) : (
@@ -152,7 +193,7 @@ export function ItemMediaUploader({
                 type="file"
                 accept="image/*"
                 className="hidden"
-                disabled={pending}
+                disabled={busy}
                 onChange={(e) => onPick(e, "PHOTO")}
               />
               <input
@@ -160,7 +201,7 @@ export function ItemMediaUploader({
                 type="file"
                 accept="video/*"
                 className="hidden"
-                disabled={pending}
+                disabled={busy}
                 onChange={(e) => onPick(e, "VIDEO")}
               />
             </>
@@ -175,10 +216,13 @@ export function ItemMediaUploader({
             compact && "order-last w-full basis-full",
           )}
         >
-          {media.map((m) => (
+          {visibleMedia.map((m) => (
             <li
               key={m.id}
-              className="relative size-16 shrink-0 overflow-hidden rounded-md border border-slate-200 bg-slate-50 sm:size-20"
+              className={cn(
+                "relative size-16 shrink-0 overflow-hidden rounded-md border border-slate-200 bg-slate-50 sm:size-20",
+                removingId === m.id && "opacity-50",
+              )}
             >
               {m.kind === "PHOTO" ? (
                 // eslint-disable-next-line @next/next/no-img-element
@@ -191,25 +235,31 @@ export function ItemMediaUploader({
                   muted
                 />
               )}
+              {removingId === m.id ? (
+                <span className="absolute inset-0 flex items-center justify-center bg-slate-900/45">
+                  <Loader2
+                    className="size-5 animate-spin text-white"
+                    aria-hidden
+                  />
+                </span>
+              ) : null}
               {canEdit ? (
                 <button
                   type="button"
-                  disabled={pending}
+                  disabled={busy}
                   aria-label={t("removeMedia")}
-                  className="absolute top-0.5 right-0.5 flex size-5 items-center justify-center rounded-full bg-slate-900/80 text-white"
+                  className="absolute top-0.5 right-0.5 flex size-5 items-center justify-center rounded-full bg-slate-900/80 text-white disabled:opacity-60"
                   onClick={(event) => {
                     event.preventDefault();
                     event.stopPropagation();
-                    startTransition(async () => {
-                      setError(null);
-                      const result = await removeMediaAction(m.id, orderId);
-                      if (!result.ok) {
-                        setError(result.message ?? t("uploadFailed"));
-                      }
-                    });
+                    void onRemove(m.id);
                   }}
                 >
-                  <X className="size-3" aria-hidden />
+                  {removingId === m.id ? (
+                    <Loader2 className="size-3 animate-spin" aria-hidden />
+                  ) : (
+                    <X className="size-3" aria-hidden />
+                  )}
                 </button>
               ) : null}
             </li>
@@ -222,53 +272,66 @@ export function ItemMediaUploader({
           {canEdit && showControls && proofButton ? (
             <button
               type="button"
-              disabled={pending}
+              disabled={busy}
               title={t("proofMediaHint")}
+              aria-busy={uploading}
               className={cn(
                 "inline-flex min-h-9 items-center gap-1.5 rounded-md bg-blue-600 px-3 text-xs font-bold text-white hover:bg-blue-700",
-                pending && "opacity-60",
+                busy && "opacity-60",
               )}
               onClick={(event) => {
                 event.preventDefault();
                 event.stopPropagation();
-                proofInputRef.current?.click();
+                if (!busy) proofInputRef.current?.click();
               }}
             >
-              <Camera className="size-3.5 shrink-0" aria-hidden />
-              {pending ? t("saving") : t("proofMedia")}
+              {uploading ? (
+                <Loader2 className="size-3.5 shrink-0 animate-spin" aria-hidden />
+              ) : (
+                <Camera className="size-3.5 shrink-0" aria-hidden />
+              )}
+              {uploading ? t("uploading") : t("proofMedia")}
             </button>
           ) : null}
           {canEdit && showControls && !proofButton ? (
             <>
               <button
                 type="button"
-                disabled={pending}
+                disabled={busy}
                 title={t("addPhoto")}
+                aria-busy={uploading}
                 className={cn(
                   "inline-flex min-h-9 items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 text-xs font-medium text-slate-700 hover:border-slate-400 hover:bg-slate-50",
-                  pending && "opacity-60",
+                  busy && "opacity-60",
                 )}
                 onClick={(event) => {
                   event.preventDefault();
                   event.stopPropagation();
-                  photoInputRef.current?.click();
+                  if (!busy) photoInputRef.current?.click();
                 }}
               >
-                <Camera className="size-3.5 shrink-0" aria-hidden />
-                {t("addPhoto")}
+                {uploading ? (
+                  <Loader2
+                    className="size-3.5 shrink-0 animate-spin"
+                    aria-hidden
+                  />
+                ) : (
+                  <Camera className="size-3.5 shrink-0" aria-hidden />
+                )}
+                {uploading ? t("uploading") : t("addPhoto")}
               </button>
               <button
                 type="button"
-                disabled={pending}
+                disabled={busy}
                 title={t("addVideo")}
                 className={cn(
                   "inline-flex min-h-9 items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 text-xs font-medium text-slate-700 hover:border-slate-400 hover:bg-slate-50",
-                  pending && "opacity-60",
+                  busy && "opacity-60",
                 )}
                 onClick={(event) => {
                   event.preventDefault();
                   event.stopPropagation();
-                  videoInputRef.current?.click();
+                  if (!busy) videoInputRef.current?.click();
                 }}
               >
                 <Film className="size-3.5 shrink-0" aria-hidden />

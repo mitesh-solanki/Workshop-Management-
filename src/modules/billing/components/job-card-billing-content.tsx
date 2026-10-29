@@ -7,8 +7,8 @@ import {
 import { CreateInvoiceForm } from "@/modules/billing/components/create-invoice-form";
 import { InvoicePreviewButton } from "@/modules/billing/components/invoice-preview-button";
 import type { InvoicePreviewData } from "@/modules/billing/components/invoice-preview-dialog";
+import { PricingLinesTable } from "@/modules/billing/components/pricing-lines-table";
 import type { getInvoicesForOrder } from "@/modules/billing/service";
-import { LiveLinkStaffPanel } from "@/modules/live-link/components/live-link-staff-panel";
 import { listInvoiceWarranties } from "@/modules/warranties/service";
 import { requireSession } from "@/lib/session";
 
@@ -27,6 +27,7 @@ export type BillingPreviewContext = {
   approvedLines: Array<{
     id: string;
     description: string;
+    type: "LABOUR" | "PART";
     typeLabel: string;
     quantity: number;
     unitPricePaise: number;
@@ -45,13 +46,9 @@ type Props = {
   vehicleId: string;
   canEdit: boolean;
   invoices: InvoiceList;
-  hasApprovedEstimateLines: boolean;
   hasUnbilledApprovedLines: boolean;
   defaultPlaceOfSupplyStateCode: string;
   preview: BillingPreviewContext;
-  liveLinkActive: { id: string; expiresAt: Date | string } | null;
-  canEditLiveLink: boolean;
-  hasEstimate: boolean;
 };
 
 function formatIssuedAt(date: Date, locale: string) {
@@ -67,13 +64,9 @@ export async function JobCardBillingContent({
   vehicleId,
   canEdit,
   invoices,
-  hasApprovedEstimateLines,
   hasUnbilledApprovedLines,
   defaultPlaceOfSupplyStateCode,
   preview,
-  liveLinkActive,
-  canEditLiveLink,
-  hasEstimate,
 }: Props) {
   const t = await getTranslations("billing");
   const tGst = await getTranslations("gst");
@@ -256,33 +249,6 @@ export async function JobCardBillingContent({
 
   return (
     <div className="space-y-5">
-      {hasEstimate ? (
-        <LiveLinkStaffPanel
-          orderId={orderId}
-          active={liveLinkActive}
-          canEdit={canEditLiveLink}
-          variant="embed"
-        />
-      ) : null}
-
-      <div className="flex gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3.5">
-        <span className="grid size-8 shrink-0 place-items-center rounded-full bg-emerald-100 text-[17px] font-black text-emerald-700">
-          ✓
-        </span>
-        <div>
-          <strong className="text-[13px] font-semibold text-slate-900">
-            {hasUnbilledApprovedLines
-              ? t("readyForBilling", { count: preview.approvedLines.length })
-              : hasApprovedEstimateLines
-                ? t("createAnotherEmpty")
-                : t("emptyNeedApproval")}
-          </strong>
-          <p className="mt-1 text-[13px] leading-relaxed text-slate-600">
-            {t("notEInvoice")}
-          </p>
-        </div>
-      </div>
-
       {invoices.length === 0 ? (
         <section className="space-y-5">
           {hasUnbilledApprovedLines ? (
@@ -302,23 +268,19 @@ export async function JobCardBillingContent({
                     {t("itemCount", { count: preview.approvedLines.length })}
                   </small>
                 </div>
-                {preview.approvedLines.map((line) => (
-                  <div
-                    key={line.id}
-                    className="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-3 last:border-b-0"
-                  >
-                    <span className="min-w-0 text-[14px] text-slate-800">
-                      {line.description}
-                      <span className="text-slate-500">
-                        {" "}
-                        · {line.quantity} × {formatRupees(line.unitPricePaise)}
-                      </span>
-                    </span>
-                    <span className="shrink-0 text-[14px] font-semibold text-slate-900">
-                      {formatRupees(line.totalPaise)}
-                    </span>
-                  </div>
-                ))}
+                <PricingLinesTable
+                  showType
+                  emptyLabel={t("invoiceEmpty")}
+                  lines={preview.approvedLines.map((line) => ({
+                    id: line.id,
+                    description: line.description,
+                    type: line.type,
+                    typeLabel: line.typeLabel,
+                    quantity: line.quantity,
+                    unitPricePaise: line.unitPricePaise,
+                    totalPaise: line.totalPaise,
+                  }))}
+                />
                 <dl className="flex flex-wrap items-start justify-between gap-3 border-t border-slate-200 bg-slate-50 px-4 py-3.5">
                   <div>
                     <dt className="text-[13px] text-slate-500">{t("taxable")}</dt>

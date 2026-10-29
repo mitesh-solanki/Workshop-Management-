@@ -60,6 +60,7 @@ type Props = {
   canWrite: boolean;
   canWriteWarranty: boolean;
   canCreateOrder: boolean;
+  canDeleteOrder?: boolean;
   locale: string;
 };
 
@@ -104,6 +105,7 @@ export function CustomerDetailPanel({
   canWrite,
   canWriteWarranty,
   canCreateOrder,
+  canDeleteOrder = false,
   locale,
 }: Props) {
   const t = useTranslations("customers");
@@ -333,6 +335,7 @@ export function CustomerDetailPanel({
               locale={locale}
               customerId={customer.id}
               canWrite={canCreateOrder}
+              canDelete={canDeleteOrder}
               emptyTitle={t("serviceHistoryEmpty")}
               emptyBody={
                 vehicles.length === 0

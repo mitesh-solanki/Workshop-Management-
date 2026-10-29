@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState, useEffect, useMemo, useRef } from "react";
+import { useActionState, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import {
@@ -16,6 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
+import { BaySearchSelect } from "@/modules/bays/components/bay-search-select";
 import {
   SERVICE_ORDER_PRIORITIES,
   STATUS_TRANSITIONS,
@@ -69,6 +70,8 @@ type EditProps = {
     status: ServiceOrderStatusValue;
   };
   canEdit: boolean;
+  /** Mechanic job card: vehicle, bay, odometer, status, complaint, requested services. */
+  technicianFieldsOnly?: boolean;
   className?: string;
 };
 
@@ -86,6 +89,23 @@ export function datetimeLocalFromOrder(
   value: Date | string | null,
 ): string {
   return toDatetimeLocalValue(value);
+}
+
+function TechnicianReadField({
+  label,
+  value,
+}: {
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="min-w-0">
+      <dt className="text-[13px] font-medium text-slate-500">{label}</dt>
+      <dd className="mt-1 whitespace-pre-wrap text-[15px] font-medium text-slate-900">
+        {value}
+      </dd>
+    </div>
+  );
 }
 
 export function ServiceOrderForm(props: Props) {
@@ -132,18 +152,7 @@ export function ServiceOrderForm(props: Props) {
           status: "WAITING" as const,
         };
 
-  const baySelectOptions = useMemo(() => {
-    const knownNames = new Set(props.bays.map((bay) => bay.name));
-    const options = props.bays.map((bay) => ({
-      value: bay.name,
-      label: bay.name,
-    }));
-    const assigned = defaults.bay.trim();
-    if (assigned && !knownNames.has(assigned)) {
-      options.unshift({ value: assigned, label: assigned });
-    }
-    return options;
-  }, [props.bays, defaults.bay]);
+  const [bay, setBay] = useState(defaults.bay);
 
   const currentStatus =
     props.mode === "edit" ? props.defaults.status : ("WAITING" as const);
@@ -153,9 +162,39 @@ export function ServiceOrderForm(props: Props) {
       ? ([currentStatus, ...nextStatuses] as ServiceOrderStatusValue[])
       : [];
 
+  const technicianFieldsOnly =
+    props.mode === "edit" && Boolean(props.technicianFieldsOnly);
+
+  if (technicianFieldsOnly && readOnly && props.mode === "edit") {
+    const unset = t("notSet");
+    const vehicleLabel = `${props.locked.registrationNumber} · ${props.locked.vehicleLabel}`;
+    const odometer =
+      defaults.odometerIn == null ? unset : String(defaults.odometerIn);
+    const bayLabel = defaults.bay.trim() || unset;
+    const complaint = defaults.complaint.trim() || unset;
+    const requested = defaults.requestedServices.trim() || unset;
+
+    return (
+      <dl className="grid gap-x-6 gap-y-4 sm:grid-cols-2">
+        <TechnicianReadField label={t("vehicle")} value={vehicleLabel} />
+        <TechnicianReadField
+          label={t("statusField")}
+          value={t(`statuses.${currentStatus}`)}
+        />
+        <TechnicianReadField label={t("bay")} value={bayLabel} />
+        <TechnicianReadField label={t("odometerIn")} value={odometer} />
+        <TechnicianReadField label={t("complaint")} value={complaint} />
+        <TechnicianReadField
+          label={t("requestedServices")}
+          value={requested}
+        />
+      </dl>
+    );
+  }
+
   const bayField = (
     <div className="space-y-2">
-      {props.bays.length === 0 ? (
+      {props.bays.length === 0 && !technicianFieldsOnly ? (
         <p className="text-caption text-slate-500">
           {t("baysEmptyHint")}{" "}
           <Link
@@ -167,17 +206,41 @@ export function ServiceOrderForm(props: Props) {
         </p>
       ) : null}
       <FormField id="bay" label={t("bay")}>
-        <FormSelect
+        <BaySearchSelect
           id="bay"
           name="bay"
-          defaultValue={defaults.bay}
+          value={bay}
+          onChange={setBay}
+          bays={props.bays}
+          valueKey="name"
           disabled={readOnly}
+          orphanValue={defaults.bay}
           placeholder={t("bayPlaceholder")}
-          options={baySelectOptions}
+          searchPlaceholder={t("baySearchPlaceholder")}
+          emptyLabel={t("bayEmptyOptions")}
         />
       </FormField>
     </div>
   );
+
+  const statusField =
+    props.mode === "edit" ? (
+      <FormField id="status" label={t("statusField")}>
+        <FormSelect
+          id="status"
+          name="status"
+          defaultValue={currentStatus}
+          disabled={readOnly || nextStatuses.length === 0}
+          options={statusOptions.map((status) => ({
+            value: status,
+            label:
+              status === currentStatus
+                ? t(`statuses.${status}`)
+                : `${t(`statuses.${currentStatus}`)} → ${t(`statuses.${status}`)}`,
+          }))}
+        />
+      </FormField>
+    ) : null;
 
   return (
     <form
@@ -188,9 +251,24 @@ export function ServiceOrderForm(props: Props) {
         <input type="hidden" name="vehicleId" value={props.vehicleId} />
       ) : null}
 
-      <div className="space-y-4">
-        {props.mode === "edit" ? (
-          <>
+      {technicianFieldsOnly && props.mode === "edit" ? (
+        <>
+          <input
+            type="hidden"
+            name="expectedCompletion"
+            value={defaults.expectedCompletion}
+          />
+          <input
+            type="hidden"
+            name="technicianId"
+            value={defaults.technicianId}
+          />
+          <input
+            type="hidden"
+            name="priority"
+            value={defaults.priority || "NORMAL"}
+          />
+          <div className="space-y-4">
             <div className="grid gap-4 sm:grid-cols-2">
               <FormField id="locked-vehicle" label={t("vehicle")}>
                 <Input
@@ -201,146 +279,186 @@ export function ServiceOrderForm(props: Props) {
                   className="h-11 min-h-11"
                 />
               </FormField>
-              <FormField id="locked-customer" label={t("customer")}>
+              {statusField}
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              {bayField}
+              <FormField id="odometerIn" label={t("odometerIn")}>
                 <Input
-                  id="locked-customer"
-                  value={props.locked.customerName}
-                  disabled
-                  readOnly
+                  id="odometerIn"
+                  name="odometerIn"
+                  type="number"
+                  inputMode="numeric"
+                  min={0}
+                  defaultValue={defaults.odometerIn ?? ""}
+                  disabled={readOnly}
                   className="h-11 min-h-11"
                 />
               </FormField>
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
-              {bayField}
-              <FormField id="status" label={t("statusField")}>
-                <FormSelect
-                  id="status"
-                  name="status"
-                  defaultValue={currentStatus}
-                  disabled={readOnly || nextStatuses.length === 0}
-                  options={statusOptions.map((status) => ({
-                    value: status,
-                    label:
-                      status === currentStatus
-                        ? t(`statuses.${status}`)
-                        : `${t(`statuses.${currentStatus}`)} → ${t(`statuses.${status}`)}`,
-                  }))}
+              <FormField id="complaint" label={t("complaint")}>
+                <Textarea
+                  id="complaint"
+                  name="complaint"
+                  required
+                  rows={4}
+                  defaultValue={defaults.complaint}
+                  disabled={readOnly}
+                />
+              </FormField>
+              <FormField id="requestedServices" label={t("requestedServices")}>
+                <Textarea
+                  id="requestedServices"
+                  name="requestedServices"
+                  rows={4}
+                  defaultValue={defaults.requestedServices}
+                  disabled={readOnly}
                 />
               </FormField>
             </div>
-            <p className="text-caption text-slate-500">
-              {t("customerVehicleLocked")}
-            </p>
-          </>
-        ) : (
-          <div className="grid gap-4 sm:grid-cols-2">{bayField}</div>
-        )}
-      </div>
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="space-y-4">
+            {props.mode === "edit" ? (
+              <>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <FormField id="locked-vehicle" label={t("vehicle")}>
+                    <Input
+                      id="locked-vehicle"
+                      value={`${props.locked.registrationNumber} · ${props.locked.vehicleLabel}`}
+                      disabled
+                      readOnly
+                      className="h-11 min-h-11"
+                    />
+                  </FormField>
+                  <FormField id="locked-customer" label={t("customer")}>
+                    <Input
+                      id="locked-customer"
+                      value={props.locked.customerName}
+                      disabled
+                      readOnly
+                      className="h-11 min-h-11"
+                    />
+                  </FormField>
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {bayField}
+                  {statusField}
+                </div>
+                <p className="text-caption text-slate-500">
+                  {t("customerVehicleLocked")}
+                </p>
+              </>
+            ) : (
+              <div className="grid gap-4 sm:grid-cols-2">{bayField}</div>
+            )}
+          </div>
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <FormField id="complaint" label={t("complaint")}>
-          <Textarea
-            id="complaint"
-            name="complaint"
-            required
-            rows={4}
-            autoFocus={props.mode === "create"}
-            defaultValue={defaults.complaint}
-            disabled={readOnly}
-          />
-        </FormField>
-        <FormField
-          id="requestedServices"
-          label={t("requestedServices")}
-          hint={t("requestedServicesHint")}
-        >
-          <Textarea
-            id="requestedServices"
-            name="requestedServices"
-            rows={4}
-            placeholder={t("requestedServicesHint")}
-            defaultValue={defaults.requestedServices}
-            disabled={readOnly}
-          />
-        </FormField>
-      </div>
-      <div className="grid gap-4 sm:grid-cols-2">
-        <FormField id="odometerIn" label={t("odometerIn")}>
-          <Input
-            id="odometerIn"
-            name="odometerIn"
-            type="number"
-            inputMode="numeric"
-            min={0}
-            defaultValue={defaults.odometerIn ?? ""}
-            disabled={readOnly}
-            className="h-11 min-h-11"
-          />
-        </FormField>
-        <FormField id="expectedCompletion" label={t("expectedCompletion")}>
-          <Input
-            id="expectedCompletion"
-            name="expectedCompletion"
-            type="datetime-local"
-            defaultValue={defaults.expectedCompletion}
-            disabled={readOnly}
-            className="h-11 min-h-11"
-          />
-        </FormField>
-      </div>
-      <div className="grid gap-4 sm:grid-cols-2">
-        <FormField id="technicianId" label={t("technician")}>
-          {lockTechnicianId ? (
-            <>
-              <input
-                type="hidden"
-                name="technicianId"
-                value={lockTechnicianId}
+          <div className="grid gap-4 sm:grid-cols-2">
+            <FormField id="complaint" label={t("complaint")}>
+              <Textarea
+                id="complaint"
+                name="complaint"
+                required
+                rows={4}
+                autoFocus={props.mode === "create"}
+                defaultValue={defaults.complaint}
+                disabled={readOnly}
               />
+            </FormField>
+            <FormField id="requestedServices" label={t("requestedServices")}>
+              <Textarea
+                id="requestedServices"
+                name="requestedServices"
+                rows={4}
+                defaultValue={defaults.requestedServices}
+                disabled={readOnly}
+              />
+            </FormField>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <FormField id="odometerIn" label={t("odometerIn")}>
               <Input
-                id="technicianId"
-                value={
-                  props.technicians.find((tech) => tech.id === lockTechnicianId)
-                    ?.name?.trim() ||
-                  props.technicians.find((tech) => tech.id === lockTechnicianId)
-                    ?.email ||
-                  t("technicianSelf")
-                }
-                disabled
-                readOnly
+                id="odometerIn"
+                name="odometerIn"
+                type="number"
+                inputMode="numeric"
+                min={0}
+                defaultValue={defaults.odometerIn ?? ""}
+                disabled={readOnly}
                 className="h-11 min-h-11"
               />
-            </>
-          ) : (
-            <FormSelect
-              id="technicianId"
-              name="technicianId"
-              defaultValue={defaults.technicianId}
-              disabled={readOnly}
-              options={[
-                { value: "", label: t("technicianUnassigned") },
-                ...props.technicians.map((tech) => ({
-                  value: tech.id,
-                  label: tech.name?.trim() || tech.email,
-                })),
-              ]}
-            />
-          )}
-        </FormField>
-        <FormField id="priority" label={t("priority")}>
-          <FormSelect
-            id="priority"
-            name="priority"
-            defaultValue={defaults.priority || "NORMAL"}
-            disabled={readOnly}
-            options={SERVICE_ORDER_PRIORITIES.map((priority) => ({
-              value: priority,
-              label: t(`priorities.${priority}`),
-            }))}
-          />
-        </FormField>
-      </div>
+            </FormField>
+            <FormField id="expectedCompletion" label={t("expectedCompletion")}>
+              <Input
+                id="expectedCompletion"
+                name="expectedCompletion"
+                type="datetime-local"
+                defaultValue={defaults.expectedCompletion}
+                disabled={readOnly}
+                className="h-11 min-h-11"
+              />
+            </FormField>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <FormField id="technicianId" label={t("technician")}>
+              {lockTechnicianId ? (
+                <>
+                  <input
+                    type="hidden"
+                    name="technicianId"
+                    value={lockTechnicianId}
+                  />
+                  <Input
+                    id="technicianId"
+                    value={
+                      props.technicians.find(
+                        (tech) => tech.id === lockTechnicianId,
+                      )?.name?.trim() ||
+                      props.technicians.find(
+                        (tech) => tech.id === lockTechnicianId,
+                      )?.email ||
+                      t("technicianSelf")
+                    }
+                    disabled
+                    readOnly
+                    className="h-11 min-h-11"
+                  />
+                </>
+              ) : (
+                <FormSelect
+                  id="technicianId"
+                  name="technicianId"
+                  defaultValue={defaults.technicianId}
+                  disabled={readOnly}
+                  options={[
+                    { value: "", label: t("technicianUnassigned") },
+                    ...props.technicians.map((tech) => ({
+                      value: tech.id,
+                      label: tech.name?.trim() || tech.email,
+                    })),
+                  ]}
+                />
+              )}
+            </FormField>
+            <FormField id="priority" label={t("priority")}>
+              <FormSelect
+                id="priority"
+                name="priority"
+                defaultValue={defaults.priority || "NORMAL"}
+                disabled={readOnly}
+                options={SERVICE_ORDER_PRIORITIES.map((priority) => ({
+                  value: priority,
+                  label: t(`priorities.${priority}`),
+                }))}
+              />
+            </FormField>
+          </div>
+        </>
+      )}
       {!readOnly ? (
         <div className="flex flex-wrap gap-2 border-t border-border pt-4">
           <Button type="submit" size="md" loading={pending}>

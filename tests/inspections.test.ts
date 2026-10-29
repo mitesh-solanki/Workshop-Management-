@@ -14,6 +14,7 @@ vi.mock("@/lib/storage", () => ({
   createPresignedUploadUrl: vi.fn(async () => ({
     uploadUrl: "http://localhost:9000/workshop/key",
     storageKey: "garages/garage-a/inspections/i1/items/item-1/abc.jpg",
+    method: "PUT" as const,
     bucket: "workshop",
   })),
   createPresignedDownloadUrl: vi.fn(

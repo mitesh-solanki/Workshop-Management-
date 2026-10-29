@@ -41,6 +41,10 @@ const APP_ERROR_MESSAGE_KEYS: Record<string, readonly [string, string]> = {
     "orders",
     "errors.lineOnFinalizedInvoice",
   ],
+  "orders.technician_parts_only": [
+    "orders",
+    "errors.technicianPartsOnly",
+  ],
   "inventory.insufficient_stock": ["inventory", "errors.insufficientStock"],
   "inventory.sku_exists": ["inventory", "errors.skuExists"],
   "inventory.part_required": ["inventory", "errors.partRequired"],
@@ -207,6 +211,14 @@ export async function translateError(error: unknown): Promise<string> {
   const common = await getTranslations("common");
 
   if (error instanceof AppError) {
+    if (error.code === "inventory.insufficient_stock") {
+      const inventory = await getTranslations("inventory");
+      const partName = String(error.params?.partName ?? "").trim();
+      if (partName) {
+        return inventory("errors.insufficientStock", { partName });
+      }
+      return inventory("errors.insufficientStockGeneric");
+    }
     const translated = await translateAppErrorCode(error.code, error.params);
     return translated ?? common("error");
   }

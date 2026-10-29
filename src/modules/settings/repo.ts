@@ -10,7 +10,6 @@ export async function findGarageById(garageId: string) {
       name: true,
       address: true,
       gstin: true,
-      allowNegativeStock: true,
       updatedAt: true,
     },
   });
@@ -22,7 +21,6 @@ export async function updateGarageById(
     name: string;
     address: string | null;
     gstin: string | null;
-    allowNegativeStock: boolean;
   },
 ) {
   const result = await prisma.garage.updateMany({
@@ -31,7 +29,6 @@ export async function updateGarageById(
       name: data.name,
       address: data.address,
       gstin: data.gstin,
-      allowNegativeStock: data.allowNegativeStock,
     },
   });
 

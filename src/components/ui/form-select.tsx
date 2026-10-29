@@ -1,6 +1,7 @@
 "use client";
 
 import { useId, useState } from "react";
+import { X } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -28,6 +29,9 @@ type FormSelectProps = {
   placeholder?: string;
   disabled?: boolean;
   required?: boolean;
+  /** Show an X to clear back to empty when a non-empty value is selected. */
+  clearable?: boolean;
+  clearLabel?: string;
   className?: string;
   triggerClassName?: string;
   options: readonly FormSelectOption[];
@@ -55,6 +59,8 @@ export function FormSelect({
   placeholder,
   disabled,
   required,
+  clearable = false,
+  clearLabel = "Clear",
   className,
   triggerClassName,
   options,
@@ -76,6 +82,7 @@ export function FormSelect({
   const selectedLabel = listOptions.find(
     (option) => option.value === current,
   )?.label;
+  const showClear = clearable && current !== "" && !disabled;
 
   function handleChange(next: string) {
     const external = fromInternal(next);
@@ -85,8 +92,14 @@ export function FormSelect({
     onValueChange?.(external);
   }
 
+  function clearSelection(event: React.MouseEvent<HTMLButtonElement>) {
+    event.preventDefault();
+    event.stopPropagation();
+    handleChange(EMPTY_VALUE);
+  }
+
   return (
-    <div className={cn("w-full min-w-0", className)}>
+    <div className={cn("relative w-full min-w-0", className)}>
       {name ? (
         <input type="hidden" name={name} value={current} disabled={disabled} />
       ) : null}
@@ -100,6 +113,7 @@ export function FormSelect({
           id={selectId}
           className={cn(
             "h-11 min-h-11 w-full min-w-0 bg-card shadow-none",
+            showClear && "pr-14",
             triggerClassName,
           )}
         >
@@ -139,6 +153,17 @@ export function FormSelect({
           ))}
         </SelectContent>
       </Select>
+      {showClear ? (
+        <button
+          type="button"
+          className="absolute top-1/2 right-8 z-10 flex size-7 -translate-y-1/2 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+          aria-label={clearLabel}
+          onClick={clearSelection}
+          onPointerDown={(event) => event.stopPropagation()}
+        >
+          <X className="size-3.5" strokeWidth={2.5} aria-hidden />
+        </button>
+      ) : null}
     </div>
   );
 }

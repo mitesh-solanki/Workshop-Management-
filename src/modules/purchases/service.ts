@@ -19,9 +19,11 @@ import {
   findPartsRequestById,
   findPurchaseOrderById,
   findPurchaseReturnById,
+  findVendorBillAttachmentsByIds,
   findVendorBillById,
   listOpenPartsRequests,
   listPartsRequestsForPart,
+  listRecentVendorBillsForShopReceiveMatch,
   PurchasesTxError,
   receiveAgainstPurchaseOrder,
   recordVendorBillPayment,
@@ -63,7 +65,8 @@ const MONEY_ROLES = ["OWNER", "MANAGER", "ACCOUNTANT"] as const;
 
 function mapPurchasesError(error: unknown): never {
   if (error instanceof PurchasesTxError) {
-    throw new AppError(error.code, 400);
+    const status = error.code === "inventory.insufficient_stock" ? 409 : 400;
+    throw new AppError(error.code, status, error.params);
   }
   throw error;
 }
@@ -278,6 +281,24 @@ export async function getVendorBill(session: RoleSession, id: string) {
   return { ...bill, attachmentUrl };
 }
 
+/** Attachments for stock-history / shop-receive bill links on a part. */
+export async function getVendorBillAttachmentsByIds(
+  session: RoleSession,
+  ids: string[],
+) {
+  requireRole(session, ["OWNER", "MANAGER", "ACCOUNTANT"] as const);
+  return findVendorBillAttachmentsByIds(session.garageId, ids);
+}
+
+/** Recent bills for matching legacy shop-receive stock-ins by time. */
+export async function listRecentShopReceiveVendorBills(
+  session: RoleSession,
+  take = 200,
+) {
+  requireRole(session, ["OWNER", "MANAGER", "ACCOUNTANT"] as const);
+  return listRecentVendorBillsForShopReceiveMatch(session.garageId, take);
+}
+
 export async function createVendorBillAttachmentUploadUrl(
   session: RoleSession,
   raw: CreateVendorBillAttachmentUploadUrlInput,
@@ -309,6 +330,8 @@ export async function createVendorBillAttachmentUploadUrl(
     return {
       uploadUrl: signed.uploadUrl,
       storageKey: signed.storageKey,
+      method: signed.method,
+      fields: signed.fields,
       contentType: input.contentType,
       vendorBillId: bill.id,
     };

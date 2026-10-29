@@ -17,10 +17,14 @@ export default async function OrdersPage() {
     session.role === "OWNER" ||
     session.role === "MANAGER" ||
     session.role === "TECHNICIAN";
+  const canDelete =
+    session.role === "OWNER" || session.role === "MANAGER";
+  const canCreate =
+    session.role === "OWNER" || session.role === "MANAGER";
   const showNeedsPricing =
     session.role === "OWNER" || session.role === "MANAGER";
 
-  const createAction = canWrite ? (
+  const createAction = canCreate ? (
     <Button asChild size="md">
       <Link href="/orders/new">
         <Plus className="size-4" aria-hidden />
@@ -41,6 +45,7 @@ export default async function OrdersPage() {
 
       <OrdersTable
         canWrite={canWrite}
+        canDelete={canDelete}
         showNeedsPricing={showNeedsPricing}
         orders={orders.map((order) => ({
           id: order.id,

@@ -315,6 +315,7 @@ export function AppSidebar({
           email={userEmail}
           roleLabel={roleLabel}
           collapsed={collapsed}
+          showProfileLink={role === "OWNER" || role === "MANAGER"}
         />
       </SidebarFooter>
 

@@ -5,6 +5,7 @@ import {
   requestVendorBillAttachmentUploadUrlAction,
 } from "@/app/actions/purchases";
 import { compressImageFile } from "@/lib/compress-image";
+import { uploadBlobToStorageTarget } from "@/lib/client-storage-upload";
 
 export async function uploadVendorBillAttachmentFile(input: {
   vendorBillId: string;
@@ -14,6 +15,12 @@ export async function uploadVendorBillAttachmentFile(input: {
   let blob: Blob = input.file;
   let contentType = input.file.type || "application/octet-stream";
   let fileName = input.file.name;
+  if (
+    contentType === "application/octet-stream" &&
+    fileName.toLowerCase().endsWith(".pdf")
+  ) {
+    contentType = "application/pdf";
+  }
 
   if (contentType.startsWith("image/")) {
     const compressed = await compressImageFile(input.file);
@@ -29,24 +36,26 @@ export async function uploadVendorBillAttachmentFile(input: {
     fileName,
   });
 
-  const put = await fetch(signed.uploadUrl, {
-    method: "PUT",
-    headers: { "Content-Type": contentType },
-    body: blob,
-  });
-  if (!put.ok) {
+  try {
+    const uploaded = await uploadBlobToStorageTarget({
+      target: signed,
+      blob,
+      contentType,
+      fileName,
+    });
+
+    const result = await confirmVendorBillAttachmentAction({
+      vendorBillId: input.vendorBillId,
+      storageKey: uploaded.storageKey,
+      contentType,
+      byteSize: blob.size,
+      fileName,
+    });
+    if (!result.ok) {
+      throw new Error(result.message ?? input.uploadFailedMessage);
+    }
+    return result;
+  } catch {
     throw new Error(input.uploadFailedMessage);
   }
-
-  const result = await confirmVendorBillAttachmentAction({
-    vendorBillId: input.vendorBillId,
-    storageKey: signed.storageKey,
-    contentType,
-    byteSize: blob.size,
-    fileName,
-  });
-  if (!result.ok) {
-    throw new Error(result.message ?? input.uploadFailedMessage);
-  }
-  return result;
 }

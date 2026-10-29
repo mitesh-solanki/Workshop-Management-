@@ -18,6 +18,8 @@ const PAGE_SIZE = 25;
 type Props = {
   id?: string;
   name?: string;
+  /** Associate the hidden partId input with an external form. */
+  form?: string;
   value: string;
   onChange: (partId: string, part: PartPickerItem | null) => void;
   className?: string;
@@ -25,6 +27,8 @@ type Props = {
   clearable?: boolean;
   /** Shown until the selected part finishes loading (e.g. line description). */
   initialLabel?: string;
+  /** Mechanic job card: show part name only (no stock · unit). */
+  nameOnlyLabels?: boolean;
   /**
    * When the typed name is not in the list, show Add “{name}” and call this
    * (opens Create Part modal — do not silent-create like the old mechanic path).
@@ -39,12 +43,14 @@ type Props = {
 export function PartPickerSelect({
   id,
   name,
+  form,
   value,
   onChange,
   className,
   disabled,
   clearable = true,
   initialLabel,
+  nameOnlyLabels = false,
   onCreateFromQuery,
 }: Props) {
   const ti = useTranslations("inventory");
@@ -132,17 +138,19 @@ export function PartPickerSelect({
   const options = useMemo(() => {
     return withSelectedPartFirst(items, selected).map((part) => ({
       value: part.id,
-      label: part.sku
-        ? ti("partOptionLabel", {
-            name: part.name,
-            sku: part.sku,
-            count: part.quantityOnHand,
-            unit: part.unit,
-          })
-        : part.name,
+      label: nameOnlyLabels
+        ? part.name
+        : part.sku
+          ? ti("partOptionLabel", {
+              name: part.name,
+              sku: part.sku,
+              count: part.quantityOnHand,
+              unit: part.unit,
+            })
+          : part.name,
       keywords: `${part.name} ${part.sku}`,
     }));
-  }, [items, selected, ti]);
+  }, [items, selected, ti, nameOnlyLabels]);
 
   function handleQueryChange(query: string) {
     queryRef.current = query;
@@ -209,6 +217,7 @@ export function PartPickerSelect({
     <SearchableSelect
       id={id}
       name={name}
+      form={form}
       value={value}
       onChange={handleChange}
       options={options}

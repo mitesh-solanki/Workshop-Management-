@@ -4,6 +4,7 @@ import { useTransition } from "react";
 import { useTranslations } from "next-intl";
 import { savePermissionLineAction } from "@/app/actions/estimates";
 import { toast } from "@/components/ui/toast";
+import { toastStockError } from "@/components/ui/toast-stock-error";
 import {
   isZeroRupeesInput,
   paiseToRupeesInput,
@@ -28,6 +29,8 @@ type Props = {
   quantity: number;
   unitPricePaise: number;
   disabled?: boolean;
+  /** Icon-only marks for tight table cells; labels stay in title/aria. */
+  compact?: boolean;
 };
 
 export function CompactLineApproval({
@@ -38,8 +41,10 @@ export function CompactLineApproval({
   quantity,
   unitPricePaise,
   disabled,
+  compact = false,
 }: Props) {
   const t = useTranslations("estimates");
+  const ti = useTranslations("inventory");
   const [pending, startTransition] = useTransition();
 
   function save(nextState: EstimateApprovalStateValue) {
@@ -66,7 +71,10 @@ export function CompactLineApproval({
         toast.success(t("approvalSaved"));
         return;
       }
-      toast.error(result.message ?? t("errors.lineBilled"));
+      toastStockError(result.message ?? t("errors.lineBilled"), {
+        stockPartId: result.stockPartId,
+        viewStockLabel: ti("errors.viewStock"),
+      });
     });
   }
 
@@ -74,23 +82,26 @@ export function CompactLineApproval({
     <div
       role="group"
       aria-label={t("customerSaidTitle")}
-      className="flex flex-wrap gap-1"
+      className="inline-flex flex-nowrap items-center gap-1"
       data-row-stop
       onClick={(event) => event.stopPropagation()}
       onKeyDown={(event) => event.stopPropagation()}
     >
       {DECISIONS.map(({ value, mark, labelKey }) => {
         const active = approvalState === value;
+        const label = t(labelKey);
         return (
           <button
             key={value}
             type="button"
             disabled={disabled || pending}
-            title={t(labelKey)}
+            title={label}
+            aria-label={label}
             aria-pressed={active}
             onClick={() => save(value)}
             className={cn(
-              "inline-flex min-h-9 items-center gap-1 rounded-lg border px-2 text-[11px] font-bold transition-colors disabled:opacity-60 sm:px-2.5 sm:text-[12px]",
+              "inline-flex h-9 min-h-9 shrink-0 items-center justify-center gap-1 rounded-md border text-[11px] font-bold transition-colors disabled:opacity-60",
+              compact ? "w-9 px-0" : "px-2 sm:px-2.5 sm:text-[12px]",
               value === "APPROVED"
                 ? active
                   ? "border-emerald-600 bg-emerald-50 text-emerald-800"
@@ -101,7 +112,7 @@ export function CompactLineApproval({
             )}
           >
             <span aria-hidden>{mark}</span>
-            <span className="hidden sm:inline">{t(labelKey)}</span>
+            {compact ? null : <span>{label}</span>}
           </button>
         );
       })}

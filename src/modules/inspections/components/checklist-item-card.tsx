@@ -90,7 +90,11 @@ export function ChecklistItemCard({
     item.result ?? "",
   );
   const hasExtras = Boolean(item.notes?.trim()) || item.media.length > 0;
-  const [notesOpen, setNotesOpen] = useState(hasExtras);
+  // Photos live outside this accordion — never open it because of media
+  // (refresh after remove would remount and force it open).
+  const [notesOpen, setNotesOpen] = useState(
+    () => Boolean(item.notes?.trim()),
+  );
   const handledMessage = useRef<string | null>(null);
   const notesId = `notes-${item.id}`;
   const pending = notesPending || conditionPending;

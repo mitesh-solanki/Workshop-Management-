@@ -173,7 +173,7 @@ describe("job card module — full scenarios", () => {
       requestedServices: "Oil change",
       odometerIn: 12_500,
       expectedCompletion: new Date("2030-01-15T10:00:00.000Z"),
-      technicianId,
+      technicianIds: [technicianId],
       bay: "Bay 1",
       priority: "HIGH",
       actorId: userId });
@@ -184,6 +184,9 @@ describe("job card module — full scenarios", () => {
     expect(order.complaint).toBe("Engine oil leak");
     expect(order.bay).toBe("Bay 1");
     expect(order.technicianId).toBe(technicianId);
+    expect(order.technicianAssignments.map((row) => row.technicianId)).toEqual([
+      technicianId,
+    ]);
     expect(order.odometerIn).toBe(12_500);
 
     const vehicle = await prisma.vehicle.findFirst({
@@ -205,7 +208,7 @@ describe("job card module — full scenarios", () => {
       requestedServices: "Oil + filter",
       odometerIn: 12_600,
       expectedCompletion: new Date("2030-01-16T10:00:00.000Z"),
-      technicianId,
+      technicianIds: [technicianId],
       bay: "Bay 2",
       priority: "URGENT",
       vehicleId,
@@ -509,7 +512,7 @@ describe("job card module — full scenarios", () => {
       requestedServices: null,
       odometerIn: null,
       expectedCompletion: null,
-      technicianId: null,
+      technicianIds: [],
       bay: null,
       priority: "NORMAL",
       actorId: userId });
@@ -560,7 +563,7 @@ describe("job card module — full scenarios", () => {
       method: "MANUAL",
       note: null,
       recordedById: userId });
-    expect(blocked).toEqual({ ok: false, reason: "INSUFFICIENT_STOCK" });
+    expect(blocked).toMatchObject({ ok: false, reason: "INSUFFICIENT_STOCK" });
     expect(await getPartStock(garageId, partId)).toBe(1);
   });
 
@@ -621,7 +624,7 @@ describe("job card module — full scenarios", () => {
         requestedServices: null,
         odometerIn: null,
         expectedCompletion: null,
-        technicianId: null,
+        technicianIds: [],
         bay: null,
         priority: "LOW",
         vehicleId,

@@ -35,6 +35,7 @@ type Props = {
   locale: string;
   canWrite: boolean;
   canCreateOrder?: boolean;
+  canCreateInspection?: boolean;
   empty: ReactNode;
 };
 
@@ -64,13 +65,15 @@ function toEditValues(
 export function CustomerVehiclesList({
   vehicles,
   customerId,
-  locale,
+  locale: _locale,
   canWrite,
   canCreateOrder = false,
+  canCreateInspection = false,
   empty,
 }: Props) {
   const t = useTranslations("vehicles");
   const to = useTranslations("orders");
+  const ti = useTranslations("inspections");
 
   if (vehicles.length === 0) {
     return empty;
@@ -103,16 +106,19 @@ export function CustomerVehiclesList({
                       ? ` · ${t("yearShort", { year: vehicle.year })}`
                       : ""}
                   </span>
-                  {vehicle.odometer != null ? (
-                    <span className="block text-caption text-muted-foreground">
-                      {t("odometerShort", {
-                        value: vehicle.odometer.toLocaleString(locale),
-                      })}
-                    </span>
-                  ) : null}
                 </span>
               </Link>
               <div className="mt-3 flex flex-wrap items-center justify-end gap-2 border-t border-border pt-3">
+                {canCreateInspection ? (
+                  <Button asChild variant="outline" size="sm" className="min-h-10">
+                    <Link
+                      href={`/inspections/new?customerId=${customerId}&vehicleId=${vehicle.id}`}
+                    >
+                      <Plus className="size-3.5" aria-hidden />
+                      {ti("addInspection")}
+                    </Link>
+                  </Button>
+                ) : null}
                 {canCreateOrder ? (
                   <Button asChild size="sm" className="min-h-10 text-white">
                     <Link
@@ -144,9 +150,6 @@ export function CustomerVehiclesList({
               <TableHead className="text-slate-700">
                 {t("columns.makeModel")}
               </TableHead>
-              <TableHead className="text-slate-700">
-                {t("columns.odometer")}
-              </TableHead>
               <TableHead className="w-[1%] text-right text-slate-700">
                 <span className="sr-only">{t("actions")}</span>
               </TableHead>
@@ -174,15 +177,18 @@ export function CustomerVehiclesList({
                       </span>
                     ) : null}
                   </TableCell>
-                  <TableCell className="whitespace-nowrap tabular-nums text-muted-foreground">
-                    {vehicle.odometer != null
-                      ? t("odometerShort", {
-                          value: vehicle.odometer.toLocaleString(locale),
-                        })
-                      : t("notSet")}
-                  </TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-1.5">
+                      {canCreateInspection ? (
+                        <Button asChild variant="outline" size="sm">
+                          <Link
+                            href={`/inspections/new?customerId=${customerId}&vehicleId=${vehicle.id}`}
+                          >
+                            <Plus className="size-3.5" aria-hidden />
+                            {ti("addInspection")}
+                          </Link>
+                        </Button>
+                      ) : null}
                       {canCreateOrder ? (
                         <Button asChild size="sm" className="text-white">
                           <Link

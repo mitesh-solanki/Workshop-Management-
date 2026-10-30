@@ -45,6 +45,10 @@ type Props = {
   initialVehicleId?: string;
   /** When set (technician create), assignment is locked to this user. */
   lockTechnicianId?: string;
+  /** Link this inspection after create. */
+  inspectionId?: string;
+  /** Prefill expected completion from the linked inspection. */
+  defaultExpectedCompletion?: string;
   /** Defaults to full Owner/Manager surface — pass technician surface separately. */
   surface?: JobCardSurface;
 };
@@ -116,13 +120,15 @@ export function NewJobCardForm({
   bays,
   initialVehicleId = "",
   lockTechnicianId,
+  inspectionId,
+  defaultExpectedCompletion,
   surface = FULL_JOB_CARD_SURFACE,
 }: Props) {
   const t = useTranslations("orders");
-  const ti = useTranslations("inspections");
   const te = useTranslations("estimates");
   const tb = useTranslations("billing");
   const [vehicleId, setVehicleId] = useState(initialVehicleId);
+  const [vehicleQuery, setVehicleQuery] = useState("");
   const sections = surface.sections;
   const showCommercial = surface.includeCommercialSections;
   const { activeSection, scrollToSection, setSectionRef } = useJobCardSections({
@@ -143,14 +149,24 @@ export function NewJobCardForm({
   const vehicleOptions = useMemo(() => {
     const options = vehicles.map((vehicle) => ({
       value: vehicle.id,
-      label: `${vehicle.registrationNumber} — ${vehicle.make} ${vehicle.model}`,
-      keywords: `${vehicle.registrationNumber} ${vehicle.make} ${vehicle.model} ${vehicle.customerName}`,
+      label: `${vehicle.registrationNumber} · ${vehicle.customerName}`,
+      keywords: `${vehicle.registrationNumber} ${vehicle.customerName} ${vehicle.make} ${vehicle.model}`,
     }));
-    if (!vehicleId) return options;
-    const current = options.find((option) => option.value === vehicleId);
-    if (!current) return options;
-    return [current, ...options.filter((option) => option.value !== vehicleId)];
-  }, [vehicles, vehicleId]);
+    const ordered = (() => {
+      if (!vehicleId) return options;
+      const current = options.find((option) => option.value === vehicleId);
+      if (!current) return options;
+      return [current, ...options.filter((option) => option.value !== vehicleId)];
+    })();
+    const q = vehicleQuery.trim().toLowerCase();
+    if (!q) return ordered;
+    return ordered.filter(
+      (opt) =>
+        opt.label.toLowerCase().includes(q) ||
+        opt.value.toLowerCase().includes(q) ||
+        Boolean(opt.keywords?.toLowerCase().includes(q)),
+    );
+  }, [vehicles, vehicleId, vehicleQuery]);
 
   function goToDetails() {
     scrollToSection("details");
@@ -186,6 +202,12 @@ export function NewJobCardForm({
                   value={vehicleId}
                   onChange={setVehicleId}
                   options={vehicleOptions}
+                  filter="remote"
+                  minQueryLength={0}
+                  onQueryChange={setVehicleQuery}
+                  onOpenChange={(open) => {
+                    if (!open) setVehicleQuery("");
+                  }}
                   clearable={false}
                   placeholder={t("selectVehiclePlaceholder")}
                   searchPlaceholder={t("selectVehicleSearchPlaceholder")}
@@ -210,9 +232,11 @@ export function NewJobCardForm({
                 mode="create"
                 vehicleId={selected.id}
                 defaultOdometer={selected.odometer}
+                defaultExpectedCompletion={defaultExpectedCompletion}
                 technicians={technicians}
                 bays={bays}
                 lockTechnicianId={lockTechnicianId}
+                inspectionId={inspectionId}
               />
             ) : (
               <p className="rounded-lg border border-dashed border-slate-200 bg-slate-50/80 px-4 py-8 text-center text-body text-slate-600">
@@ -220,16 +244,6 @@ export function NewJobCardForm({
               </p>
             )}
           </div>
-        </SectionBlock>
-
-        <SectionBlock
-          id="inspection"
-          title={ti("title")}
-          subtitle={t("inspectionHint")}
-          sectionRef={setSectionRef("inspection")}
-          sectionNumber={sectionNumbers.inspection}
-        >
-          <LockedBody onGoDetails={goToDetails} />
         </SectionBlock>
 
         <SectionBlock

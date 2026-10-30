@@ -71,6 +71,7 @@ export default async function OrdersPage() {
                 email: order.technician.email,
               }
             : null,
+          technicianAssignments: order.technicianAssignments,
         }))}
         emptyAction={createAction}
       />

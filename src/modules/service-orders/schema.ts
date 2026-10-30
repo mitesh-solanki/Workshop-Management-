@@ -147,6 +147,27 @@ const optionalTechnicianId = z
     return value.trim();
   });
 
+/** One or more technician user ids (empty = unassigned). */
+const technicianIdsField = z
+  .union([z.array(z.string()), z.string(), z.null(), z.undefined()])
+  .transform((value) => {
+    const raw =
+      value == null
+        ? []
+        : Array.isArray(value)
+          ? value
+          : value === ""
+            ? []
+            : [value];
+    return [
+      ...new Set(
+        raw
+          .map((id) => id.trim())
+          .filter((id) => id.length > 0),
+      ),
+    ];
+  });
+
 const optionalBay = z
   .union([z.string(), z.null(), z.undefined()])
   .transform((value) => {
@@ -188,15 +209,45 @@ const priorityField = z
     return value;
   });
 
+/** Complaint lives on Inspection; job card keeps the column for legacy rows. */
+const optionalComplaint = z
+  .union([z.string(), z.null(), z.undefined()])
+  .transform((value) => {
+    if (value == null) {
+      return "";
+    }
+    return value.trim().slice(0, 4000);
+  });
+
 export const createServiceOrderSchema = z.object({
   vehicleId: z.string().trim().min(1),
-  complaint: z.string().trim().min(1).max(4000),
+  complaint: optionalComplaint,
   requestedServices: optionalRequestedServices,
   odometerIn: optionalOdometer,
   expectedCompletion: optionalDateTime,
-  technicianId: optionalTechnicianId,
+  technicianIds: technicianIdsField,
+  /** @deprecated Prefer technicianIds — kept for older form posts. */
+  technicianId: optionalTechnicianId.optional(),
   bay: optionalBay,
   priority: priorityField,
+  inspectionId: z
+    .union([z.string(), z.null(), z.undefined()])
+    .optional()
+    .transform((value) => {
+      if (value == null || value === "") {
+        return null;
+      }
+      return value.trim();
+    }),
+}).transform((data) => {
+  const fromLegacy =
+    data.technicianIds.length === 0 && data.technicianId
+      ? [data.technicianId]
+      : data.technicianIds;
+  return {
+    ...data,
+    technicianIds: fromLegacy,
+  };
 });
 
 export const updateServiceOrderStatusSchema = z.object({
@@ -204,19 +255,34 @@ export const updateServiceOrderStatusSchema = z.object({
 });
 
 /** Editable job-card fields (customer/vehicle stay fixed after create). */
-export const updateServiceOrderSchema = z.object({
-  complaint: z.string().trim().min(1).max(4000),
-  requestedServices: optionalRequestedServices,
-  odometerIn: optionalOdometer,
-  expectedCompletion: optionalDateTime,
-  technicianId: optionalTechnicianId,
-  bay: optionalBay,
-  priority: priorityField,
-  /** Optional — same as current status means no transition. */
-  status: z
-    .union([z.enum(SERVICE_ORDER_STATUSES), z.literal(""), z.undefined()])
-    .transform((value) => (value === "" || value == null ? undefined : value)),
-});
+export const updateServiceOrderSchema = z
+  .object({
+    complaint: optionalComplaint,
+    requestedServices: optionalRequestedServices,
+    odometerIn: optionalOdometer,
+    expectedCompletion: optionalDateTime,
+    technicianIds: technicianIdsField,
+    /** @deprecated Prefer technicianIds — kept for older form posts. */
+    technicianId: optionalTechnicianId.optional(),
+    bay: optionalBay,
+    priority: priorityField,
+    /** Optional — same as current status means no transition. */
+    status: z
+      .union([z.enum(SERVICE_ORDER_STATUSES), z.literal(""), z.undefined()])
+      .transform((value) =>
+        value === "" || value == null ? undefined : value,
+      ),
+  })
+  .transform((data) => {
+    const fromLegacy =
+      data.technicianIds.length === 0 && data.technicianId
+        ? [data.technicianId]
+        : data.technicianIds;
+    return {
+      ...data,
+      technicianIds: fromLegacy,
+    };
+  });
 
 export const addServiceOrderLineSchema = z.object({
   type: z.enum(["LABOUR", "PART"]),

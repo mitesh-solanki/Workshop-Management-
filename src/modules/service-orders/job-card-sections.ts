@@ -1,6 +1,5 @@
 export const JOB_CARD_SECTIONS = [
   "details",
-  "inspection",
   "lines",
   "estimate",
   "billing",
@@ -12,7 +11,6 @@ export type JobCardSection = (typeof JOB_CARD_SECTIONS)[number];
 /** Technician-only surface — never used for Owner / Manager / Accountant. */
 export const TECHNICIAN_JOB_CARD_SECTIONS = [
   "details",
-  "inspection",
   "lines",
 ] as const satisfies readonly JobCardSection[];
 

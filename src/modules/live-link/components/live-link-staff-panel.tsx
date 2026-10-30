@@ -1,18 +1,19 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
-import { ArrowUpRight, ChevronDown, Copy } from "lucide-react";
-import { useLocale, useTranslations } from "next-intl";
+import { ArrowUpRight, Copy } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { FormSelect } from "@/components/ui/form-select";
-import { SmoothAccordion } from "@/components/ui/smooth-accordion";
-import { cn } from "@/lib/utils";
 import {
   createLiveLinkAction,
   revokeLiveLinkAction,
+  type LiveLinkTarget,
 } from "@/app/actions/live-link";
+
+const DEFAULT_EXPIRY_HOURS = "168";
 
 const EXPIRY_OPTIONS = [
   { hours: 1, labelKey: "expiry1h" as const },
@@ -23,101 +24,74 @@ const EXPIRY_OPTIONS = [
   { hours: 168, labelKey: "expiry7d" as const },
 ];
 
-function storageKey(orderId: string) {
-  return `liveLinkUrl:${orderId}`;
+function storageKey(subjectId: string) {
+  return `liveLinkUrl:${subjectId}`;
 }
 
-/** Set after first estimate create so the pricing embed opens once. */
-export function markOpenLiveLinkEmbed(orderId: string) {
+export function persistLiveLinkUrl(subjectId: string, url: string) {
   try {
-    sessionStorage.setItem(`openLiveLinkEmbed:${orderId}`, "1");
-  } catch {
-    /* ignore */
-  }
-}
-
-function consumeOpenLiveLinkEmbed(orderId: string): boolean {
-  try {
-    const key = `openLiveLinkEmbed:${orderId}`;
-    if (sessionStorage.getItem(key) !== "1") return false;
-    sessionStorage.removeItem(key);
-    return true;
-  } catch {
-    return false;
-  }
+    sessionStorage.setItem(storageKey(subjectId), url);
+  } catch {}
 }
 
 type Props = {
-  orderId: string;
+  orderId?: string;
+  inspectionId?: string;
   active: { id: string; expiresAt: Date | string } | null;
   canEdit: boolean;
-  /** Compact card for estimate; header bar for billing (owner/staff). */
   variant?: "full" | "embed" | "header";
+  estimateOnly?: boolean;
 };
 
 export function LiveLinkStaffPanel({
   orderId,
+  inspectionId,
   active,
   canEdit,
   variant = "full",
+  estimateOnly = false,
 }: Props) {
   const t = useTranslations("liveLink");
   const tRoles = useTranslations("team.roles");
-  const locale = useLocale();
   const router = useRouter();
+  const subjectId = orderId ?? inspectionId ?? "";
+  const target: LiveLinkTarget = orderId
+    ? { serviceOrderId: orderId }
+    : { inspectionId: inspectionId! };
   const embed = variant === "embed";
   const header = variant === "header";
   const [savedUrl, setSavedUrl] = useState<string | null>(null);
-  const [expiresAt, setExpiresAt] = useState<string | null>(null);
   const [createPending, startCreate] = useTransition();
   const [revokePending, startRevoke] = useTransition();
-  const [expiryHours, setExpiryHours] = useState("168");
-  const [open, setOpen] = useState(false);
+  const [expiryHours, setExpiryHours] = useState(DEFAULT_EXPIRY_HOURS);
 
   useEffect(() => {
     try {
-      setSavedUrl(sessionStorage.getItem(storageKey(orderId)));
+      setSavedUrl(sessionStorage.getItem(storageKey(subjectId)));
     } catch {
       setSavedUrl(null);
     }
-  }, [orderId]);
-
-  useEffect(() => {
-    if (!embed) return;
-    if (consumeOpenLiveLinkEmbed(orderId)) {
-      setOpen(true);
-    }
-  }, [embed, orderId]);
+  }, [subjectId]);
 
   const displayUrl = savedUrl;
-  const expiresLabel = expiresAt
-    ? new Date(expiresAt).toLocaleString(locale)
-    : active
-      ? new Date(active.expiresAt).toLocaleString(locale)
-      : null;
   const linkIsActive = Boolean(displayUrl) || Boolean(active);
   const busy = createPending || revokePending;
 
   function persistUrl(url: string | null) {
     try {
-      if (url) sessionStorage.setItem(storageKey(orderId), url);
-      else sessionStorage.removeItem(storageKey(orderId));
-    } catch {
-      /* ignore */
-    }
+      if (url) sessionStorage.setItem(storageKey(subjectId), url);
+      else sessionStorage.removeItem(storageKey(subjectId));
+    } catch {}
     setSavedUrl(url);
   }
 
-  function onCreate(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const formData = new FormData(event.currentTarget);
-    formData.set("expiresInHours", expiryHours);
+  function createLink(hours = DEFAULT_EXPIRY_HOURS) {
+    const formData = new FormData();
+    formData.set("expiresInHours", hours);
     startCreate(async () => {
-      const result = await createLiveLinkAction(orderId, { ok: false }, formData);
+      const result = await createLiveLinkAction(target, { ok: false }, formData);
       if (result.ok && result.url) {
         persistUrl(result.url);
-        setExpiresAt(result.expiresAt ?? null);
-        setOpen(true);
         toast.success(t("linkCreated"));
         router.refresh();
         return;
@@ -129,13 +103,12 @@ export function LiveLinkStaffPanel({
   function onRevoke() {
     startRevoke(async () => {
       const result = await revokeLiveLinkAction(
-        orderId,
+        target,
         { ok: false },
         new FormData(),
       );
       if (result.ok) {
         persistUrl(null);
-        setExpiresAt(null);
         toast.success(t("linkRevoked"));
         router.refresh();
         return;
@@ -154,12 +127,6 @@ export function LiveLinkStaffPanel({
     }
   }
 
-  const expirySelectId = header
-    ? `expiresInHours-header-${orderId}`
-    : embed
-      ? `expiresInHours-embed-${orderId}`
-      : `expiresInHours-${orderId}`;
-
   if (header) {
     if (!displayUrl) return null;
 
@@ -176,21 +143,75 @@ export function LiveLinkStaffPanel({
     );
   }
 
-  const body = (
-    <>
+  if (embed) {
+    return (
+      <section className="flex flex-wrap items-center gap-2 rounded-[11px] border border-blue-200 bg-blue-50/50 px-3 py-2.5">
+        <p className="mr-auto min-w-0 text-[13px] font-semibold text-slate-900">
+          {t("embedTitle")}
+        </p>
+        {createPending && !displayUrl ? (
+          <p className="text-[12px] text-slate-600">{t("creatingLink")}</p>
+        ) : displayUrl ? (
+          <>
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              className="h-9 min-h-9 border-blue-200 bg-white text-blue-800 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-950"
+              onClick={() => void copyUrl()}
+            >
+              <Copy className="size-3.5" strokeWidth={2.25} aria-hidden />
+              {t("copyLiveLink")}
+            </Button>
+            {canEdit ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                loading={revokePending}
+                disabled={busy}
+                className="h-9 min-h-9 border-red-200 bg-red-50 text-red-700 hover:border-red-300 hover:bg-red-100 hover:text-red-800"
+                onClick={onRevoke}
+              >
+                {t("revoke")}
+              </Button>
+            ) : null}
+          </>
+        ) : canEdit ? (
+          <Button
+            type="button"
+            variant="primary"
+            size="sm"
+            loading={createPending}
+            disabled={busy}
+            onClick={() => createLink(DEFAULT_EXPIRY_HOURS)}
+          >
+            {linkIsActive ? t("renewLink") : t("createLink")}
+          </Button>
+        ) : (
+          <p className="text-sm text-slate-500">
+            {t("readOnly", {
+              owner: tRoles("OWNER"),
+              manager: tRoles("MANAGER"),
+              accountant: tRoles("ACCOUNTANT"),
+            })}
+          </p>
+        )}
+      </section>
+    );
+  }
+
+  const expirySelectId = `expiresInHours-${subjectId}`;
+
+  return (
+    <div className="space-y-5">
+      <p className="text-sm text-slate-600">
+        {estimateOnly ? t("staffHintEstimateOnly") : t("staffHint")}
+      </p>
       {linkIsActive ? (
         <div className="space-y-3 rounded-lg border border-blue-200 bg-white p-3">
           <div className="flex flex-wrap items-start justify-between gap-2">
-            <div className="min-w-0">
-              <p className="text-sm font-medium text-slate-900">
-                {t("linkActive")}
-              </p>
-              {expiresLabel ? (
-                <p className="mt-1 text-caption text-slate-500">
-                  {t("expiresAt", { when: expiresLabel })}
-                </p>
-              ) : null}
-            </div>
+            <p className="text-sm font-medium text-slate-900">{t("linkActive")}</p>
             {canEdit ? (
               <Button
                 type="button"
@@ -227,9 +248,8 @@ export function LiveLinkStaffPanel({
           )}
         </div>
       ) : null}
-
       {canEdit ? (
-        <form onSubmit={onCreate} className="space-y-1.5">
+        <div className="space-y-1.5">
           <label
             htmlFor={expirySelectId}
             className="text-sm font-medium text-slate-800"
@@ -248,16 +268,17 @@ export function LiveLinkStaffPanel({
               }))}
             />
             <Button
-              type="submit"
+              type="button"
               variant="primary"
               loading={createPending}
               disabled={busy}
               className="h-11 min-h-11 shrink-0"
+              onClick={() => createLink(expiryHours)}
             >
               {linkIsActive ? t("renewLink") : t("createLink")}
             </Button>
           </div>
-        </form>
+        </div>
       ) : (
         <p className="text-sm text-slate-500">
           {t("readOnly", {
@@ -267,47 +288,6 @@ export function LiveLinkStaffPanel({
           })}
         </p>
       )}
-    </>
-  );
-
-  if (embed) {
-    return (
-      <section className="overflow-hidden rounded-[11px] border border-blue-200 bg-blue-50/50">
-        <button
-          type="button"
-          className="flex w-full items-start justify-between gap-3 px-4 py-3.5 text-left"
-          aria-expanded={open}
-          onClick={() => setOpen((value) => !value)}
-        >
-          <span className="min-w-0">
-            <strong className="block text-[15px] font-semibold text-slate-900">
-              {t("embedTitle")}
-            </strong>
-            <span className="mt-1 block text-[12px] leading-relaxed text-slate-600">
-              {t("embedHint")}
-            </span>
-          </span>
-          <ChevronDown
-            className={cn(
-              "mt-0.5 size-4 shrink-0 text-slate-600 transition-transform duration-300",
-              open && "rotate-180",
-            )}
-            aria-hidden
-          />
-        </button>
-        <SmoothAccordion open={open}>
-          <div className="space-y-3 border-t border-blue-200/80 px-4 py-3.5">
-            {body}
-          </div>
-        </SmoothAccordion>
-      </section>
-    );
-  }
-
-  return (
-    <div className="space-y-5">
-      <p className="text-sm text-slate-600">{t("staffHint")}</p>
-      {body}
     </div>
   );
 }

@@ -25,6 +25,14 @@ const APP_ERROR_MESSAGE_KEYS: Record<string, readonly [string, string]> = {
   "team.email_send_failed": ["team", "errors.emailSendFailed"],
   "team.invite_expired": ["team", "errors.inviteExpired"],
   "vehicles.duplicate_registration": ["vehicles", "errors.duplicateRegistration"],
+  "inspections.linked_cannot_delete": [
+    "inspections",
+    "errors.linkedCannotDelete",
+  ],
+  "inspections.vehicle_customer_mismatch": [
+    "inspections",
+    "errors.vehicleCustomerMismatch",
+  ],
   "bays.name_exists": ["bays", "errors.nameExists"],
   CUSTOMER_HAS_ORDERS: ["customers", "cannotDeleteHasOrders"],
   VEHICLE_HAS_ORDERS: ["vehicles", "cannotDeleteHasOrders"],

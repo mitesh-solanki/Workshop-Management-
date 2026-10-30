@@ -1,38 +1,48 @@
 "use client";
 
 import { useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { agreeAllPendingLinesAction } from "@/app/actions/estimates";
+import {
+  agreeAllPendingInspectionEstimateLinesAction,
+  agreeAllPendingLinesAction,
+} from "@/app/actions/estimates";
 import { toast } from "@/components/ui/toast";
 import { toastStockError } from "@/components/ui/toast-stock-error";
 import { cn } from "@/lib/utils";
 
 type Props = {
-  orderId: string;
+  orderId?: string;
+  inspectionId?: string;
   pendingCount: number;
   disabled?: boolean;
 };
 
 export function AgreeAllPendingCheckbox({
   orderId,
+  inspectionId,
   pendingCount,
   disabled = false,
 }: Props) {
   const t = useTranslations("estimates");
   const ti = useTranslations("inventory");
+  const router = useRouter();
   const [pending, startTransition] = useTransition();
   const allAgreed = pendingCount === 0;
 
   function onChange(checked: boolean) {
     if (!checked || allAgreed || disabled || pending) return;
     startTransition(async () => {
-      const result = await agreeAllPendingLinesAction(orderId);
+      const result = orderId
+        ? await agreeAllPendingLinesAction(orderId)
+        : await agreeAllPendingInspectionEstimateLinesAction(inspectionId!);
       if (result.ok) {
         toast.success(
           result.message === "agreeAllSaved"
             ? t("agreeAllSaved")
             : t("approvalSaved"),
         );
+        router.refresh();
         return;
       }
       toastStockError(result.message ?? t("errors.lineBilled"), {

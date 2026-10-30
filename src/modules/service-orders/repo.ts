@@ -25,15 +25,41 @@ function emptyStatusCounts(): Record<ServiceOrderStatusValue, number> {
   ) as Record<ServiceOrderStatusValue, number>;
 }
 
+/** Match legacy primary technicianId or any join-table assignment. */
+export function assignedTechnicianWhere(
+  technicianId: string,
+): Prisma.ServiceOrderWhereInput {
+  return {
+    OR: [
+      { technicianId },
+      { technicianAssignments: { some: { technicianId } } },
+    ],
+  };
+}
+
 function serviceOrderScopeWhere(
   garageId: string,
   options: { technicianId?: string } = {},
 ): Prisma.ServiceOrderWhereInput {
+  if (!options.technicianId) {
+    return { garageId };
+  }
   return {
     garageId,
-    ...(options.technicianId ? { technicianId: options.technicianId } : {}),
+    AND: [assignedTechnicianWhere(options.technicianId)],
   };
 }
+
+const technicianAssignmentSelect = {
+  technicianId: true,
+  technician: {
+    select: {
+      id: true,
+      name: true,
+      email: true,
+    },
+  },
+} as const;
 
 const lineSelect = {
   id: true,
@@ -87,6 +113,10 @@ const orderListSelect = {
       email: true,
     },
   },
+  technicianAssignments: {
+    select: technicianAssignmentSelect,
+    orderBy: { createdAt: "asc" as const },
+  },
   lines: {
     where: {
       type: "PART" as const,
@@ -126,10 +156,9 @@ export async function listServiceOrders(
 ) {
   return prisma.serviceOrder.findMany({
     where: {
-      garageId,
-      ...(options.technicianId
-        ? { technicianId: options.technicianId }
-        : {}),
+      ...serviceOrderScopeWhere(garageId, {
+        technicianId: options.technicianId,
+      }),
       ...(options.bay ? { bay: options.bay } : {}),
     },
     select: orderListSelect,
@@ -179,20 +208,27 @@ export async function listServiceOrdersForToday(
 ) {
   return prisma.serviceOrder.findMany({
     where: {
-      ...serviceOrderScopeWhere(garageId, options),
+      garageId,
       status: { not: "COMPLETED" },
-      OR: [
+      AND: [
+        ...(options.technicianId
+          ? [assignedTechnicianWhere(options.technicianId)]
+          : []),
         {
-          expectedCompletion: {
-            gte: day.start,
-            lt: day.end,
-          },
-        },
-        {
-          createdAt: {
-            gte: day.start,
-            lt: day.end,
-          },
+          OR: [
+            {
+              expectedCompletion: {
+                gte: day.start,
+                lt: day.end,
+              },
+            },
+            {
+              createdAt: {
+                gte: day.start,
+                lt: day.end,
+              },
+            },
+          ],
         },
       ],
     },
@@ -323,12 +359,15 @@ export async function createServiceOrder(
     requestedServices: string | null;
     odometerIn: number | null;
     expectedCompletion: Date | null;
-    technicianId: string | null;
+    technicianIds: string[];
     bay: string | null;
     priority: ServiceOrderPriority;
     actorId: string;
   },
 ) {
+  const technicianIds = [...new Set(data.technicianIds.filter(Boolean))];
+  const primaryTechnicianId = technicianIds[0] ?? null;
+
   return prisma.$transaction(async (tx) => {
     const order = await tx.serviceOrder.create({
       data: {
@@ -341,8 +380,14 @@ export async function createServiceOrder(
         requestedServices: data.requestedServices,
         odometerIn: data.odometerIn,
         expectedCompletion: data.expectedCompletion,
-        technicianId: data.technicianId,
+        technicianId: primaryTechnicianId,
         bay: data.bay,
+        technicianAssignments: {
+          create: technicianIds.map((technicianId) => ({
+            garageId,
+            technicianId,
+          })),
+        },
       },
       select: orderListSelect,
     });
@@ -365,6 +410,7 @@ export async function createServiceOrder(
           from: null,
           to: "WAITING",
           created: true,
+          technicianIds,
         } satisfies Prisma.InputJsonValue,
       },
     });
@@ -381,13 +427,16 @@ export async function updateServiceOrderDetails(
     requestedServices: string | null;
     odometerIn: number | null;
     expectedCompletion: Date | null;
-    technicianId: string | null;
+    technicianIds: string[];
     bay: string | null;
     priority: ServiceOrderPriority;
     vehicleId: string;
     actorId: string;
   },
 ) {
+  const technicianIds = [...new Set(data.technicianIds.filter(Boolean))];
+  const primaryTechnicianId = technicianIds[0] ?? null;
+
   return prisma.$transaction(async (tx) => {
     const existing = await tx.serviceOrder.findFirst({
       where: { id: orderId, garageId },
@@ -397,6 +446,20 @@ export async function updateServiceOrderDetails(
       return null;
     }
 
+    await tx.serviceOrderTechnicianAssignment.deleteMany({
+      where: { serviceOrderId: orderId, garageId },
+    });
+
+    if (technicianIds.length > 0) {
+      await tx.serviceOrderTechnicianAssignment.createMany({
+        data: technicianIds.map((technicianId) => ({
+          garageId,
+          serviceOrderId: orderId,
+          technicianId,
+        })),
+      });
+    }
+
     const order = await tx.serviceOrder.update({
       where: { id: orderId },
       data: {
@@ -404,7 +467,7 @@ export async function updateServiceOrderDetails(
         requestedServices: data.requestedServices,
         odometerIn: data.odometerIn,
         expectedCompletion: data.expectedCompletion,
-        technicianId: data.technicianId,
+        technicianId: primaryTechnicianId,
         bay: data.bay,
         priority: data.priority,
       },
@@ -429,7 +492,7 @@ export async function updateServiceOrderDetails(
           complaint: data.complaint,
           priority: data.priority,
           bay: data.bay,
-          technicianId: data.technicianId,
+          technicianIds,
         } satisfies Prisma.InputJsonValue,
       },
     });

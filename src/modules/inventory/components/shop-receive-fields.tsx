@@ -1,15 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { FileText, Plus, Trash2, Upload, X } from "lucide-react";
-import {
-  createVendorModalAction,
-  getVendorOptionsAction,
-} from "@/app/actions/vendors";
+import { getVendorOptionsAction } from "@/app/actions/vendors";
 import { Button } from "@/components/ui/button";
 import { FormField } from "@/components/ui/form-field";
-import { Input } from "@/components/ui/input";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import {
   Table,
@@ -19,18 +15,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Textarea } from "@/components/ui/textarea";
-import { toast } from "@/components/ui/toast";
-import {
-  isValidEmail,
-  isValidPhone,
-  sanitizeEmailTyping,
-  sanitizePhoneTyping,
-} from "@/lib/contact";
 import { cn } from "@/lib/utils";
 import { QuantityStepper } from "@/modules/inventory/components/quantity-stepper";
 import { shopReceiveFilesForUpload as filesForUpload } from "@/modules/inventory/shop-receive";
-import { CreateVendorModal } from "@/modules/vendors/components/create-vendor-modal";
 
 export type ShopReceiveVendor = { id: string; name: string };
 
@@ -41,24 +28,6 @@ export type ShopReceiveLine = {
   file: File | null;
 };
 
-type VendorDraft = {
-  name: string;
-  phone: string;
-  email: string;
-  address: string;
-  gstin: string;
-  notes: string;
-};
-
-const EMPTY_VENDOR: VendorDraft = {
-  name: "",
-  phone: "",
-  email: "",
-  address: "",
-  gstin: "",
-  notes: "",
-};
-
 type Props = {
   idPrefix: string;
   disabled?: boolean;
@@ -66,12 +35,6 @@ type Props = {
   onLinesChange: (lines: ShopReceiveLine[]) => void;
   /** Line keys that need a vendor — red error under the vendor field. */
   vendorErrorKeys?: string[];
-  /**
-   * How to create a vendor not yet in the list.
-   * Use `inline` inside an already-open dialog (no nested modal).
-   * Use `modal` on full inventory pages.
-   */
-  vendorCreateMode?: "inline" | "modal";
 };
 
 function newLine(): ShopReceiveLine {
@@ -109,35 +72,21 @@ export function ShopReceiveFields({
   lines,
   onLinesChange,
   vendorErrorKeys = [],
-  vendorCreateMode = "modal",
 }: Props) {
   const t = useTranslations("inventory");
-  const tv = useTranslations("vendors");
-  const te = useTranslations("errors");
-  const inlineVendorCreate = vendorCreateMode === "inline";
   const [vendors, setVendors] = useState<ShopReceiveVendor[]>([]);
   const [vendorQueries, setVendorQueries] = useState<Record<string, string>>(
     {},
   );
-  const [addingVendor, setAddingVendor] = useState(false);
-  const [vendorModalOpen, setVendorModalOpen] = useState(false);
-  const [vendorInitialName, setVendorInitialName] = useState("");
-  const [vendorDraft, setVendorDraft] = useState<VendorDraft>(EMPTY_VENDOR);
-  const [vendorFieldErrors, setVendorFieldErrors] = useState<
-    Record<string, string>
-  >({});
-  const [createForLineKey, setCreateForLineKey] = useState<string | null>(null);
   const [highlightedLineKey, setHighlightedLineKey] = useState<string | null>(
     null,
   );
   const [previewUrls, setPreviewUrls] = useState<Record<string, string>>({});
-  const [pendingVendor, startVendorTransition] = useTransition();
   const linesRef = useRef(lines);
   linesRef.current = lines;
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const previewUrlsRef = useRef<Record<string, string>>({});
   const rowRefs = useRef<Record<string, HTMLElement | null>>({});
-  const newVendorPanelRef = useRef<HTMLDivElement | null>(null);
   const highlightClearTimerRef = useRef<number | null>(null);
 
   function flashHighlight(lineKey: string) {
@@ -204,24 +153,6 @@ export function ShopReceiveFields({
   }, [lines]);
 
   useEffect(() => {
-    if (!inlineVendorCreate || !addingVendor) return;
-    const scrollIn = () => {
-      const panel = newVendorPanelRef.current;
-      if (panel) scrollIntoViewClearOfStickyFooter(panel);
-    };
-    const early = window.setTimeout(scrollIn, 40);
-    const afterOpen = window.setTimeout(scrollIn, 320);
-    const focusName = window.setTimeout(() => {
-      document.getElementById(`${idPrefix}-new-vendor-name`)?.focus();
-    }, 340);
-    return () => {
-      window.clearTimeout(early);
-      window.clearTimeout(afterOpen);
-      window.clearTimeout(focusName);
-    };
-  }, [addingVendor, idPrefix, inlineVendorCreate]);
-
-  useEffect(() => {
     if (vendorErrorKeys.length === 0) return;
     const firstKey = vendorErrorKeys[0];
     if (!firstKey) return;
@@ -232,7 +163,7 @@ export function ShopReceiveFields({
     }, 50);
   }, [vendorErrorKeys, idPrefix]);
 
-  const busy = disabled || pendingVendor;
+  const busy = disabled;
 
   function updateLine(key: string, patch: Partial<ShopReceiveLine>) {
     onLinesChange(
@@ -249,7 +180,6 @@ export function ShopReceiveFields({
     const line = newLine();
     onLinesChange([...linesRef.current, line]);
     flashHighlight(line.key);
-    setAddingVendor(false);
     window.setTimeout(() => {
       const row = rowRefs.current[line.key];
       if (row) scrollIntoViewClearOfStickyFooter(row);
@@ -266,114 +196,6 @@ export function ShopReceiveFields({
     }
     onLinesChange(linesRef.current.filter((line) => line.key !== key));
     if (highlightedLineKey === key) setHighlightedLineKey(null);
-    if (createForLineKey === key) {
-      setCreateForLineKey(null);
-    }
-  }
-
-  function closeNewVendorForm() {
-    setAddingVendor(false);
-    setCreateForLineKey(null);
-    setVendorDraft(EMPTY_VENDOR);
-    setVendorFieldErrors({});
-  }
-
-  function assignCreatedVendor(created: { id: string; name: string }) {
-    setVendors((prev) =>
-      prev.some((row) => row.id === created.id)
-        ? prev
-        : [created, ...prev.filter((row) => row.id !== created.id)],
-    );
-    const targetKey =
-      createForLineKey ?? linesRef.current[linesRef.current.length - 1]?.key;
-    if (targetKey) {
-      updateLine(targetKey, { vendorId: created.id });
-    }
-  }
-
-  function openCreateVendor(lineKey: string, name: string) {
-    setCreateForLineKey(lineKey || null);
-    if (inlineVendorCreate) {
-      setVendorDraft({ ...EMPTY_VENDOR, name: name.trim() });
-      setVendorFieldErrors({});
-      setAddingVendor(true);
-      return;
-    }
-    setVendorInitialName(name.trim());
-    setVendorModalOpen(true);
-  }
-
-  function setVendorField<K extends keyof VendorDraft>(
-    key: K,
-    value: VendorDraft[K],
-  ) {
-    setVendorDraft((prev) => ({ ...prev, [key]: value }));
-    setVendorFieldErrors((prev) => {
-      if (!prev[key]) return prev;
-      const next = { ...prev };
-      delete next[key];
-      return next;
-    });
-  }
-
-  function validateVendorDraft(): boolean {
-    const next: Record<string, string> = {};
-    if (!vendorDraft.name.trim()) {
-      next.name = te("validation.required");
-    }
-    if (vendorDraft.phone.trim() && !isValidPhone(vendorDraft.phone)) {
-      next.phone = te("validation.invalidPhone");
-    }
-    if (vendorDraft.email.trim() && !isValidEmail(vendorDraft.email)) {
-      next.email = te("validation.invalidEmail");
-    }
-    if (!vendorDraft.phone.trim() && !vendorDraft.email.trim()) {
-      next.phone = te("validation.phoneOrEmail");
-    }
-    if (
-      vendorDraft.gstin.trim() &&
-      !/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(
-        vendorDraft.gstin.trim().toUpperCase(),
-      )
-    ) {
-      next.gstin = te("validation.invalidGstin");
-    }
-    setVendorFieldErrors(next);
-    if (Object.keys(next).length === 0) return true;
-    const first = Object.keys(next)[0];
-    window.setTimeout(() => {
-      document.getElementById(`${idPrefix}-new-vendor-${first}`)?.focus();
-    }, 50);
-    return false;
-  }
-
-  function saveNewVendor() {
-    if (!validateVendorDraft()) return;
-
-    const formData = new FormData();
-    formData.set("name", vendorDraft.name.trim());
-    formData.set("phone", vendorDraft.phone.trim());
-    formData.set("email", vendorDraft.email.trim());
-    formData.set("address", vendorDraft.address.trim());
-    formData.set("gstin", vendorDraft.gstin.trim());
-    formData.set("notes", vendorDraft.notes.trim());
-
-    startVendorTransition(async () => {
-      const result = await createVendorModalAction({ ok: false }, formData);
-      if (!result.ok || !result.vendorId) {
-        if (result.fieldErrors) {
-          setVendorFieldErrors(result.fieldErrors);
-        }
-        toast.error(result.message ?? tv("error"));
-        return;
-      }
-      assignCreatedVendor({
-        id: result.vendorId,
-        name: vendorDraft.name.trim(),
-      });
-      closeNewVendorForm();
-      toast.success(result.message);
-    });
   }
 
   function optionsForLine(line: ShopReceiveLine) {
@@ -393,11 +215,7 @@ export function ShopReceiveFields({
     }));
   }
 
-  function renderVendorSelect(
-    line: ShopReceiveLine,
-    index: number,
-    showLabel: boolean,
-  ) {
+  function renderVendorSelect(line: ShopReceiveLine, showLabel: boolean) {
     const vendorError = vendorErrorKeys.includes(line.key)
       ? t("shopVendorRequired")
       : undefined;
@@ -419,15 +237,9 @@ export function ShopReceiveFields({
         }
         placeholder={t("boughtFromPlaceholder")}
         searchPlaceholder={t("boughtFromPlaceholder")}
-        emptyLabel={t("emptyVendorSearchQuickCreate")}
+        emptyLabel={t("emptyVendorSearch")}
         disabled={busy}
         options={optionsForLine(line)}
-        createFromQueryLabel={(query) =>
-          t("quickAddVendor", { name: query })
-        }
-        onCreateFromQuery={(query) => {
-          openCreateVendor(line.key, query);
-        }}
       />
     );
     if (!showLabel) {
@@ -659,7 +471,7 @@ export function ShopReceiveFields({
                 {renderRemove(line)}
               </div>
               <div className="space-y-3">
-                {renderVendorSelect(line, index, true)}
+                {renderVendorSelect(line, true)}
                 {renderQty(line, true)}
                 {renderBill(line, true)}
               </div>
@@ -718,7 +530,7 @@ export function ShopReceiveFields({
                     {index + 1}
                   </TableCell>
                   <TableCell className="align-middle whitespace-normal py-2.5">
-                    {renderVendorSelect(line, index, false)}
+                    {renderVendorSelect(line, false)}
                   </TableCell>
                   <TableCell className="align-middle whitespace-normal py-2.5">
                     {renderQty(line, false)}
@@ -740,202 +552,6 @@ export function ShopReceiveFields({
           </TableBody>
         </Table>
       </div>
-
-      {inlineVendorCreate ? (
-        <>
-        <div className="flex w-full justify-center">
-          <p className="text-center text-sm text-slate-600">
-            <span className="mr-1">{t("vendorMissingFromList")}</span>
-            <button
-              type="button"
-              className="inline-flex items-center gap-1 font-medium text-blue-700 hover:text-blue-800 hover:underline"
-              onClick={() => {
-                if (addingVendor) {
-                  closeNewVendorForm();
-                  return;
-                }
-                const targetKey =
-                  highlightedLineKey ??
-                  linesRef.current[linesRef.current.length - 1]?.key ??
-                  null;
-                openCreateVendor(targetKey ?? "", "");
-              }}
-              disabled={busy}
-            >
-              <Plus className="size-3.5" strokeWidth={2.5} aria-hidden />
-              {t("createNewVendor")}
-            </button>
-          </p>
-        </div>
-        <div
-          ref={newVendorPanelRef}
-          className={cn(
-            "grid transition-[grid-template-rows] duration-300 ease-out",
-            addingVendor ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
-          )}
-        >
-          <div className="min-h-0 overflow-hidden">
-            <div className="space-y-3 rounded-xl border border-border bg-card p-3 shadow-xs">
-              <p className="text-caption text-muted-foreground">
-                {tv("contactRequiredHint")}
-              </p>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <FormField
-                  id={`${idPrefix}-new-vendor-name`}
-                  label={tv("nameRequired")}
-                  error={vendorFieldErrors.name}
-                >
-                  <Input
-                    id={`${idPrefix}-new-vendor-name`}
-                    value={vendorDraft.name}
-                    onChange={(e) => setVendorField("name", e.target.value)}
-                    className="h-11 min-h-11"
-                    disabled={busy}
-                    placeholder={tv("namePlaceholder")}
-                    aria-invalid={Boolean(vendorFieldErrors.name)}
-                  />
-                </FormField>
-                <FormField
-                  id={`${idPrefix}-new-vendor-phone`}
-                  label={tv("phone")}
-                  error={vendorFieldErrors.phone}
-                >
-                  <Input
-                    id={`${idPrefix}-new-vendor-phone`}
-                    type="tel"
-                    inputMode="tel"
-                    value={vendorDraft.phone}
-                    onChange={(e) =>
-                      setVendorField(
-                        "phone",
-                        sanitizePhoneTyping(e.target.value),
-                      )
-                    }
-                    className="h-11 min-h-11"
-                    disabled={busy}
-                    placeholder={tv("phonePlaceholder")}
-                    aria-invalid={Boolean(vendorFieldErrors.phone)}
-                  />
-                </FormField>
-              </div>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <FormField
-                  id={`${idPrefix}-new-vendor-email`}
-                  label={tv("email")}
-                  error={vendorFieldErrors.email}
-                >
-                  <Input
-                    id={`${idPrefix}-new-vendor-email`}
-                    type="email"
-                    value={vendorDraft.email}
-                    onChange={(e) =>
-                      setVendorField(
-                        "email",
-                        sanitizeEmailTyping(e.target.value),
-                      )
-                    }
-                    className="h-11 min-h-11"
-                    disabled={busy}
-                    placeholder={tv("emailPlaceholder")}
-                    aria-invalid={Boolean(vendorFieldErrors.email)}
-                  />
-                </FormField>
-                <FormField
-                  id={`${idPrefix}-new-vendor-gstin`}
-                  label={tv("gstin")}
-                  error={vendorFieldErrors.gstin}
-                >
-                  <Input
-                    id={`${idPrefix}-new-vendor-gstin`}
-                    value={vendorDraft.gstin}
-                    onChange={(e) =>
-                      setVendorField(
-                        "gstin",
-                        e.target.value
-                          .toUpperCase()
-                          .replace(/[^0-9A-Z]/g, "")
-                          .slice(0, 15),
-                      )
-                    }
-                    className="h-11 min-h-11 uppercase"
-                    disabled={busy}
-                    placeholder={tv("gstinPlaceholder")}
-                    maxLength={15}
-                    autoCapitalize="characters"
-                    spellCheck={false}
-                    aria-invalid={Boolean(vendorFieldErrors.gstin)}
-                  />
-                </FormField>
-              </div>
-              <FormField
-                id={`${idPrefix}-new-vendor-address`}
-                label={tv("address")}
-              >
-                <Textarea
-                  id={`${idPrefix}-new-vendor-address`}
-                  rows={2}
-                  value={vendorDraft.address}
-                  onChange={(e) => setVendorField("address", e.target.value)}
-                  disabled={busy}
-                  placeholder={tv("addressPlaceholder")}
-                />
-              </FormField>
-              <FormField id={`${idPrefix}-new-vendor-notes`} label={tv("notes")}>
-                <Textarea
-                  id={`${idPrefix}-new-vendor-notes`}
-                  rows={2}
-                  value={vendorDraft.notes}
-                  onChange={(e) => setVendorField("notes", e.target.value)}
-                  disabled={busy}
-                  placeholder={tv("notesPlaceholder")}
-                />
-              </FormField>
-              <div className="flex flex-wrap justify-end gap-2">
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="md"
-                  className="h-11 min-h-11"
-                  disabled={busy}
-                  onClick={closeNewVendorForm}
-                >
-                  {tv("cancel")}
-                </Button>
-                <Button
-                  type="button"
-                  size="md"
-                  className="h-11 min-h-11"
-                  loading={pendingVendor}
-                  disabled={busy}
-                  onClick={saveNewVendor}
-                >
-                  {tv("create")}
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
-        </>
-      ) : (
-        <CreateVendorModal
-          trigger={null}
-          open={vendorModalOpen}
-          onOpenChange={(next) => {
-            setVendorModalOpen(next);
-            if (!next) {
-              setCreateForLineKey(null);
-              setVendorInitialName("");
-            }
-          }}
-          initialName={vendorInitialName}
-          navigateOnSuccess={false}
-          onCreated={(created) => {
-            assignCreatedVendor(created);
-            setCreateForLineKey(null);
-            setVendorInitialName("");
-          }}
-        />
-      )}
     </div>
   );
 }

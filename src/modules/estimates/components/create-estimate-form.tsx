@@ -1,6 +1,7 @@
 "use client";
 
-import { useActionState, useEffect, useMemo, useState } from "react";
+import { useActionState, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import {
   createEstimateAction,
@@ -10,8 +11,9 @@ import {
 import { Button } from "@/components/ui/button";
 import { FormField } from "@/components/ui/form-field";
 import { Textarea } from "@/components/ui/textarea";
+import { toast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
-import { markOpenLiveLinkEmbed } from "@/modules/live-link/components/live-link-staff-panel";
+import { persistLiveLinkUrl } from "@/modules/live-link/components/live-link-staff-panel";
 import { useJobCardSectionJump } from "@/modules/service-orders/components/job-card-section-jump";
 
 const initial: EstimateActionState = { ok: false };
@@ -33,7 +35,9 @@ type Props = CreateProps | RevisionProps;
 
 export function CreateEstimateForm(props: Props) {
   const t = useTranslations("estimates");
+  const router = useRouter();
   const jump = useJobCardSectionJump();
+  const handled = useRef<string | null>(null);
   const [askPermission, setAskPermission] = useState(false);
   const [permissionVia, setPermissionVia] = useState<"MANUAL" | "LIVE_LINK">(
     "MANUAL",
@@ -46,38 +50,31 @@ export function CreateEstimateForm(props: Props) {
     return createEstimateAction.bind(null, props.orderId);
   }, [props.mode, props.orderId]);
 
-  const wrapped = useMemo(() => {
-    return async (
-      prev: EstimateActionState,
-      formData: FormData,
-    ): Promise<EstimateActionState> => {
-      const result = await bound(prev, formData);
-      if (
-        result.ok &&
-        props.mode === "create" &&
-        result.askPermission &&
-        result.permissionVia === "LIVE_LINK"
-      ) {
-        markOpenLiveLinkEmbed(props.orderId);
-      }
-      return result;
-    };
-  }, [bound, props.mode, props.orderId]);
-
-  const [state, formAction, pending] = useActionState(wrapped, initial);
+  const [state, formAction, pending] = useActionState(bound, initial);
 
   useEffect(() => {
-    if (
-      !state.ok ||
-      state.message !== "estimateCreated" ||
-      props.mode !== "create"
-    ) {
+    if (!state.message || state.message === handled.current) return;
+    handled.current = state.message;
+    if (!state.ok) {
+      toast.error(state.message);
       return;
+    }
+    if (props.mode === "revision") {
+      toast.success(t("revisionCreated"));
+      router.refresh();
+      return;
+    }
+    if (state.message !== "estimateCreated") return;
+    toast.success(t("estimateCreated"));
+    if (state.liveLinkUrl) {
+      persistLiveLinkUrl(props.orderId, state.liveLinkUrl);
     }
     if (!state.askPermission) {
       jump?.("billing");
+      return;
     }
-  }, [state, jump, props.mode]);
+    router.refresh();
+  }, [state, jump, props.mode, props.orderId, router, t]);
 
   const isRevision = props.mode === "revision";
   const hasUnpriced =
@@ -101,10 +98,8 @@ export function CreateEstimateForm(props: Props) {
           <div className="grid gap-2 sm:grid-cols-2">
             <label
               className={cn(
-                "flex min-h-11 cursor-pointer items-start gap-3 rounded-md border px-3 py-2.5",
-                !askPermission
-                  ? "border-blue-300 bg-blue-50/80"
-                  : "border-slate-200 bg-white",
+                "flex min-h-11 cursor-pointer items-start gap-3 rounded-md border bg-white px-3 py-2.5",
+                !askPermission ? "border-blue-500" : "border-slate-200",
               )}
             >
               <input
@@ -126,10 +121,8 @@ export function CreateEstimateForm(props: Props) {
             </label>
             <label
               className={cn(
-                "flex min-h-11 cursor-pointer items-start gap-3 rounded-md border px-3 py-2.5",
-                askPermission
-                  ? "border-blue-300 bg-blue-50/80"
-                  : "border-slate-200 bg-white",
+                "flex min-h-11 cursor-pointer items-start gap-3 rounded-md border bg-white px-3 py-2.5",
+                askPermission ? "border-blue-500" : "border-slate-200",
               )}
             >
               <input
@@ -159,10 +152,10 @@ export function CreateEstimateForm(props: Props) {
               <div className="grid gap-2 sm:grid-cols-2">
                 <label
                   className={cn(
-                    "flex min-h-11 cursor-pointer items-start gap-3 rounded-md border px-3 py-2.5",
+                    "flex min-h-11 cursor-pointer items-start gap-3 rounded-md border bg-white px-3 py-2.5",
                     permissionVia === "MANUAL"
-                      ? "border-blue-300 bg-white"
-                      : "border-slate-200 bg-white",
+                      ? "border-blue-500"
+                      : "border-slate-200",
                   )}
                 >
                   <input
@@ -184,10 +177,10 @@ export function CreateEstimateForm(props: Props) {
                 </label>
                 <label
                   className={cn(
-                    "flex min-h-11 cursor-pointer items-start gap-3 rounded-md border px-3 py-2.5",
+                    "flex min-h-11 cursor-pointer items-start gap-3 rounded-md border bg-white px-3 py-2.5",
                     permissionVia === "LIVE_LINK"
-                      ? "border-blue-300 bg-white"
-                      : "border-slate-200 bg-white",
+                      ? "border-blue-500"
+                      : "border-slate-200",
                   )}
                 >
                   <input
@@ -208,6 +201,11 @@ export function CreateEstimateForm(props: Props) {
                   </span>
                 </label>
               </div>
+              {permissionVia === "LIVE_LINK" ? (
+                <p className="text-[12px] text-slate-500">
+                  {t("liveLinkAfterCreateHint")}
+                </p>
+              ) : null}
             </div>
           ) : (
             <input type="hidden" name="permissionVia" value="" />

@@ -141,11 +141,37 @@ function sampleOrder(
       stateCode: "24",
     },
     customer: { id: customerId, name: "Ravi", phone: "9876543210" },
-    technician: {
-      id: "tech-a",
-      name: "Amit",
-      email: "amit@example.com",
-    },
+    technician:
+      (overrides.technicianId === undefined ? "tech-a" : overrides.technicianId)
+        ? {
+            id:
+              overrides.technicianId === undefined
+                ? "tech-a"
+                : overrides.technicianId!,
+            name: "Amit",
+            email: "amit@example.com",
+          }
+        : null,
+    technicianAssignments: (
+      overrides.technicianId === undefined ? "tech-a" : overrides.technicianId
+    )
+      ? [
+          {
+            technicianId:
+              overrides.technicianId === undefined
+                ? "tech-a"
+                : overrides.technicianId!,
+            technician: {
+              id:
+                overrides.technicianId === undefined
+                  ? "tech-a"
+                  : overrides.technicianId!,
+              name: "Amit",
+              email: "amit@example.com",
+            },
+          },
+        ]
+      : [],
     lines: [],
   };
 }
@@ -198,7 +224,7 @@ describe("create and status change", () => {
       requestedServices: "Oil change",
       odometerIn: 12000,
       expectedCompletion: null,
-      technicianId: "tech-a",
+      technicianIds: ["tech-a"],
       bay: "Bay 1",
       priority: "HIGH",
     });
@@ -209,9 +235,45 @@ describe("create and status change", () => {
         vehicleId: "veh-1",
         customerId: "cust-1",
         complaint: "Engine noise",
-        technicianId: "tech-a",
+        technicianIds: ["tech-a"],
         priority: "HIGH",
         actorId: "owner-a",
+      }),
+    );
+  });
+
+  it("creates a job card with multiple technicians", async () => {
+    vi.mocked(findVehicleById).mockResolvedValue(sampleVehicle);
+    vi.mocked(findTechnicianInGarage)
+      .mockResolvedValueOnce({
+        id: "tech-a",
+        name: "Amit",
+        email: "amit@example.com",
+        role: "TECHNICIAN",
+      })
+      .mockResolvedValueOnce({
+        id: "tech-b",
+        name: "Bina",
+        email: "bina@example.com",
+        role: "TECHNICIAN",
+      });
+    vi.mocked(createServiceOrder).mockResolvedValue(sampleOrder());
+
+    await createOrder(ownerA, {
+      vehicleId: "veh-1",
+      complaint: "Engine noise",
+      requestedServices: "Oil change",
+      odometerIn: 12000,
+      expectedCompletion: null,
+      technicianIds: ["tech-a", "tech-b"],
+      bay: "Bay 1",
+      priority: "NORMAL",
+    });
+
+    expect(createServiceOrder).toHaveBeenCalledWith(
+      garageA,
+      expect.objectContaining({
+        technicianIds: ["tech-a", "tech-b"],
       }),
     );
   });
@@ -271,6 +333,34 @@ describe("role limits", () => {
     expect(listServiceOrders).toHaveBeenCalledWith(garageA, {});
   });
 
+  it("allows a co-assigned technician to view the order", async () => {
+    vi.mocked(findServiceOrderById).mockResolvedValue({
+      ...sampleOrder({ technicianId: "tech-a" }),
+      technicianAssignments: [
+        {
+          technicianId: "tech-a",
+          technician: {
+            id: "tech-a",
+            name: "Amit",
+            email: "amit@example.com",
+          },
+        },
+        {
+          technicianId: "tech-other",
+          technician: {
+            id: "tech-other",
+            name: "Other",
+            email: "other@example.com",
+          },
+        },
+      ],
+    });
+
+    await expect(getOrder(techOther, "order-1")).resolves.toMatchObject({
+      id: "order-1",
+    });
+  });
+
   it("blocks technicians from viewing another technician's order", async () => {
     vi.mocked(findServiceOrderById).mockResolvedValue(
       sampleOrder({ technicianId: "tech-a" }),
@@ -310,7 +400,7 @@ describe("role limits", () => {
         requestedServices: null,
         odometerIn: null,
         expectedCompletion: null,
-        technicianId: null,
+        technicianIds: [],
         bay: null,
       }),
     ).rejects.toBeInstanceOf(ForbiddenError);
@@ -346,7 +436,7 @@ describe("role limits", () => {
         requestedServices: null,
         odometerIn: null,
         expectedCompletion: null,
-        technicianId: null,
+        technicianIds: [],
         bay: null,
         priority: "NORMAL",
       }),
@@ -693,7 +783,7 @@ describe("service order schema i18n messages", () => {
       odometerIn: -1,
       requestedServices: "",
       expectedCompletion: "",
-      technicianId: "",
+      technicianIds: [],
       bay: "",
       priority: "",
     });
@@ -710,7 +800,7 @@ describe("service order schema i18n messages", () => {
       odometerIn: "",
       requestedServices: "",
       expectedCompletion: "not-a-date",
-      technicianId: "",
+      technicianIds: [],
       bay: "",
       priority: "",
     });

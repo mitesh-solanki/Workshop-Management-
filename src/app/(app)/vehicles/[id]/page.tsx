@@ -5,6 +5,7 @@ import { getLocale, getTranslations } from "next-intl/server";
 import { NotFoundError } from "@/lib/errors";
 import { homePathForRole } from "@/lib/rbac";
 import { requireSession } from "@/lib/session";
+import { listVehicleInspections } from "@/modules/inspections/service";
 import { listVehicleServiceHistory } from "@/modules/service-orders/service";
 import { VehicleDetailPanel } from "@/modules/vehicles/components/vehicle-detail-panel";
 import { getVehicle } from "@/modules/vehicles/service";
@@ -35,8 +36,9 @@ export default async function VehicleDetailPage({ params }: Props) {
     throw error;
   }
 
-  const [serviceHistory, warrantyDocs] = await Promise.all([
+  const [serviceHistory, inspections, warrantyDocs] = await Promise.all([
     listVehicleServiceHistory(session, vehicle.id),
+    listVehicleInspections(session, vehicle.id).catch(() => []),
     listVehicleWarranties(session, vehicle.id).catch(() => []),
   ]);
 
@@ -44,6 +46,7 @@ export default async function VehicleDetailPage({ params }: Props) {
     session.role === "OWNER" || session.role === "MANAGER";
   const canCreateOrder = canWrite;
   const canDeleteOrder = canWrite;
+  const canCreateInspection = canWrite;
   const canWriteWarranty =
     canWrite || session.role === "ACCOUNTANT";
 
@@ -73,10 +76,26 @@ export default async function VehicleDetailPage({ params }: Props) {
           fitnessExpiry: vehicle.fitnessExpiry,
         }}
         serviceHistory={serviceHistory}
+        inspections={inspections.map((item) => ({
+          id: item.id,
+          createdAt: item.createdAt,
+          expectedCompletion: item.expectedCompletion,
+          customer: { id: item.customer.id, name: item.customer.name },
+          vehicle: {
+            id: item.vehicle.id,
+            registrationNumber: item.vehicle.registrationNumber,
+            make: item.vehicle.make,
+            model: item.vehicle.model,
+          },
+          serviceOrderId: item.serviceOrderId,
+          itemCount: item._count.items,
+          approvalStatus: item.approvalStatus,
+        }))}
         warrantyDocs={warrantyDocs}
         canWrite={canWrite}
         canWriteWarranty={canWriteWarranty}
         canCreateOrder={canCreateOrder}
+        canCreateInspection={canCreateInspection}
         canDeleteOrder={canDeleteOrder}
         locale={locale}
       />

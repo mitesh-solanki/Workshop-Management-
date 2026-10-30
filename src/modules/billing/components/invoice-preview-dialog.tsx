@@ -38,7 +38,6 @@ export type InvoicePreviewData = {
   customerGstin: string | null;
   vehicleLabel: string;
   jobLabel: string;
-  placeOfSupplyLabel: string;
   notes: string | null;
   warranties?: InvoicePreviewWarranty[];
   lines: InvoicePreviewLine[];
@@ -162,9 +161,6 @@ export function InvoicePreviewDialog({
                   </small>
                   <strong className="block text-[13px]">{data.vehicleLabel}</strong>
                   <p className="mt-1 text-[11px] text-[#67788c]">{data.jobLabel}</p>
-                  <p className="mt-1 text-[11px] text-[#67788c]">
-                    {data.placeOfSupplyLabel}
-                  </p>
                 </div>
               </div>
 

@@ -11,9 +11,11 @@ import {
   getInvoicesForOrder,
 } from "@/modules/billing/service";
 import { JobCardEstimateContent } from "@/modules/estimates/components/job-card-estimate-content";
-import { getEstimateForOrder } from "@/modules/estimates/service";
-import { JobCardInspectionContent } from "@/modules/inspections/components/job-card-inspection-content";
-import { getOrCreateInspection } from "@/modules/inspections/service";
+import {
+  getEstimateForOrder,
+  getLatestEstimateForCustomerVehicle,
+} from "@/modules/estimates/service";
+import { getInspectionForOrder } from "@/modules/inspections/service";
 import { getLiveLinkStatusForOrder } from "@/modules/live-link/service";
 import { listBaysForSelect } from "@/modules/bays/service";
 import { JobCardDetailPanel } from "@/modules/service-orders/components/job-card-detail-panel";
@@ -41,8 +43,6 @@ export default async function OrderEditPage({ params, searchParams }: Props) {
   const locale = await getLocale();
   const t = await getTranslations("orders");
   const te = await getTranslations("estimates");
-  const tb = await getTranslations("billing");
-  const tGst = await getTranslations("gst");
 
   const surface = jobCardSurfaceForRole(session.role);
 
@@ -69,8 +69,12 @@ export default async function OrderEditPage({ params, searchParams }: Props) {
     session.role === "ACCOUNTANT";
 
   let timeline: Awaited<ReturnType<typeof getOrderTimeline>> = [];
-  let inspection: Awaited<ReturnType<typeof getOrCreateInspection>> = null;
+  let linkedInspection: Awaited<ReturnType<typeof getInspectionForOrder>> =
+    null;
   let estimate: Awaited<ReturnType<typeof getEstimateForOrder>> | null = null;
+  let latestCustomerVehicleEstimate: Awaited<
+    ReturnType<typeof getLatestEstimateForCustomerVehicle>
+  > = null;
   let invoices: Awaited<ReturnType<typeof getInvoicesForOrder>> = [];
   let technicians: Awaited<ReturnType<typeof listAssignableTechnicians>> = [];
   let bays: { id: string; name: string }[] = [];
@@ -83,8 +87,9 @@ export default async function OrderEditPage({ params, searchParams }: Props) {
     if (surface.includeCommercialSections) {
       [
         timeline,
-        inspection,
+        linkedInspection,
         estimate,
+        latestCustomerVehicleEstimate,
         invoices,
         technicians,
         bays,
@@ -92,8 +97,13 @@ export default async function OrderEditPage({ params, searchParams }: Props) {
         liveLinkStatus,
       ] = await Promise.all([
         getOrderTimeline(session, id),
-        getOrCreateInspection(session, id),
+        getInspectionForOrder(session, id),
         getEstimateForOrder(session, id),
+        getLatestEstimateForCustomerVehicle(
+          session,
+          order.customerId,
+          order.vehicleId,
+        ),
         getInvoicesForOrder(session, id),
         listAssignableTechnicians(session),
         listBaysForSelect(session).catch(() => []),
@@ -101,8 +111,13 @@ export default async function OrderEditPage({ params, searchParams }: Props) {
         getLiveLinkStatusForOrder(session, id).catch(() => ({ active: null })),
       ]);
     } else {
-      [inspection, technicians, bays] = await Promise.all([
-        getOrCreateInspection(session, id),
+      // Technicians do not use the inspections module — only the latest estimate card.
+      [latestCustomerVehicleEstimate, technicians, bays] = await Promise.all([
+        getLatestEstimateForCustomerVehicle(
+          session,
+          order.customerId,
+          order.vehicleId,
+        ),
         session.role === "TECHNICIAN"
           ? Promise.resolve([
               {
@@ -114,6 +129,7 @@ export default async function OrderEditPage({ params, searchParams }: Props) {
           : listAssignableTechnicians(session),
         listBaysForSelect(session).catch(() => []),
       ]);
+      linkedInspection = null;
     }
   } catch (error) {
     if (error instanceof NotFoundError || error instanceof ForbiddenError) {
@@ -170,15 +186,32 @@ export default async function OrderEditPage({ params, searchParams }: Props) {
     0,
   );
 
-  const placeCode = order.vehicle.stateCode || "24";
-  let placeLabel = placeCode;
-  try {
-    placeLabel = tGst(`states.${placeCode}`);
-  } catch {
-    placeLabel = placeCode;
-  }
-
   const initialSection = clampJobCardSection(sectionParam, surface.sections);
+
+  const expectedCompletionPrefill =
+    order.expectedCompletion ??
+    latestCustomerVehicleEstimate?.inspection?.expectedCompletion ??
+    latestCustomerVehicleEstimate?.serviceOrder?.expectedCompletion ??
+    linkedInspection?.expectedCompletion ??
+    null;
+
+  const latestEstimatePanel = (() => {
+    if (!latestCustomerVehicleEstimate) return null;
+    const approvedLines = latestCustomerVehicleEstimate.lines.filter(
+      (line) => line.approvalState === "APPROVED",
+    );
+    if (approvedLines.length === 0) return null;
+    return {
+      lines: approvedLines.map((line) => ({
+        id: line.id,
+        type: line.type,
+        description: line.description,
+        quantity: line.quantity,
+        unitPricePaise: surface.hidePrices ? 0 : line.unitPricePaise,
+        approvalState: line.approvalState,
+      })),
+    };
+  })();
 
   return (
     <main className="w-full max-w-none space-y-4">
@@ -198,7 +231,7 @@ export default async function OrderEditPage({ params, searchParams }: Props) {
           complaint: order.complaint,
           requestedServices: order.requestedServices,
           odometerIn: order.odometerIn,
-          expectedCompletion: order.expectedCompletion,
+          expectedCompletion: expectedCompletionPrefill,
           bay: order.bay,
           technicianId: order.technicianId,
           customerId: order.customerId,
@@ -214,6 +247,7 @@ export default async function OrderEditPage({ params, searchParams }: Props) {
                 email: order.technician.email,
               }
             : null,
+          technicianAssignments: order.technicianAssignments,
           lines: order.lines.map((line) => ({
             id: line.id,
             type: line.type,
@@ -234,25 +268,12 @@ export default async function OrderEditPage({ params, searchParams }: Props) {
         surface={surface}
         locale={locale}
         initialSection={initialSection}
-        inspectionContent={
-          <JobCardInspectionContent
-            orderId={order.id}
-            canEdit={canMutate}
-            inspection={
-              inspection
-                ? {
-                    items: inspection.items,
-                  }
-                : null
-            }
-          />
-        }
+        latestEstimate={latestEstimatePanel}
         liveLink={
           surface.includeCommercialSections
             ? {
                 active: liveLinkStatus.active,
                 canEdit: canBill,
-                // Only when a live link already exists (URL shown client-side).
                 showInBillingHeader: Boolean(liveLinkStatus.active),
               }
             : undefined
@@ -287,7 +308,6 @@ export default async function OrderEditPage({ params, searchParams }: Props) {
                 vehicleLabel:
                   `${order.vehicle.make} ${order.vehicle.model}`.trim(),
                 jobLabel: t("detailsTitle"),
-                placeOfSupplyLabel: `${tb("placeOfSupply")}: ${placeLabel}`,
                 approvedLines: approvedPreviewLines,
                 approvedTaxablePaise,
                 approvedTaxPaise,

@@ -63,6 +63,7 @@ function OtpStep({
         <Input
           id="code"
           name="code"
+          type="password"
           inputMode="numeric"
           autoComplete="one-time-code"
           required

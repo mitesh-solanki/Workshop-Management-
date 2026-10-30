@@ -7,6 +7,7 @@ import { homePathForRole } from "@/lib/rbac";
 import { requireSession } from "@/lib/session";
 import { CustomerDetailPanel } from "@/modules/customers/components/customer-detail-panel";
 import { getCustomer } from "@/modules/customers/service";
+import { listCustomerInspections } from "@/modules/inspections/service";
 import { listCustomerServiceHistory } from "@/modules/service-orders/service";
 import { listCustomerWarranties } from "@/modules/warranties/service";
 
@@ -35,8 +36,9 @@ export default async function CustomerDetailPage({ params }: Props) {
     throw error;
   }
 
-  const [serviceHistory, warrantyDocs] = await Promise.all([
+  const [serviceHistory, inspections, warrantyDocs] = await Promise.all([
     listCustomerServiceHistory(session, customer.id),
+    listCustomerInspections(session, customer.id).catch(() => []),
     listCustomerWarranties(session, customer.id).catch(() => []),
   ]);
 
@@ -44,6 +46,7 @@ export default async function CustomerDetailPage({ params }: Props) {
     session.role === "OWNER" || session.role === "MANAGER";
   const canCreateOrder = canWrite;
   const canDeleteOrder = canWrite;
+  const canCreateInspection = canWrite;
   const canWriteWarranty =
     canWrite || session.role === "ACCOUNTANT";
 
@@ -78,10 +81,26 @@ export default async function CustomerDetailPage({ params }: Props) {
           fitnessExpiry: vehicle.fitnessExpiry,
         }))}
         serviceHistory={serviceHistory}
+        inspections={inspections.map((item) => ({
+          id: item.id,
+          createdAt: item.createdAt,
+          expectedCompletion: item.expectedCompletion,
+          customer: { id: item.customer.id, name: item.customer.name },
+          vehicle: {
+            id: item.vehicle.id,
+            registrationNumber: item.vehicle.registrationNumber,
+            make: item.vehicle.make,
+            model: item.vehicle.model,
+          },
+          serviceOrderId: item.serviceOrderId,
+          itemCount: item._count.items,
+          approvalStatus: item.approvalStatus,
+        }))}
         warrantyDocs={warrantyDocs}
         canWrite={canWrite}
         canWriteWarranty={canWriteWarranty}
         canCreateOrder={canCreateOrder}
+        canCreateInspection={canCreateInspection}
         canDeleteOrder={canDeleteOrder}
         locale={locale}
       />

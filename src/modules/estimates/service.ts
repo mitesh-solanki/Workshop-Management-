@@ -26,14 +26,19 @@ import {
   deleteEstimateLine,
   EstimateStockTxError,
   findCurrentEstimate,
+  findCurrentEstimateForInspection,
   findEstimateById,
   findEstimateLineById,
+  findLatestCurrentEstimateForCustomerVehicle,
+  listEstimatesForInspection,
   listEstimatesForOrder,
   recordLineApproval,
   updateEstimateLineDetails,
   type EstimateLineCreateInput,
 } from "@/modules/estimates/repo";
 import { computeEstimateTotals } from "@/modules/estimates/totals";
+import { collectInspectionEstimateSources as collectInspectionEstimateSourceLines } from "@/modules/inspections/estimate-sources";
+import { findInspectionById } from "@/modules/inspections/repo";
 
 const WRITE_ROLES = ["OWNER", "MANAGER", "TECHNICIAN"] as const;
 const READ_ROLES = ["OWNER", "MANAGER", "TECHNICIAN", "ACCOUNTANT"] as const;
@@ -102,13 +107,15 @@ function toCreateInput(
   sources: SourceLine[],
   startSort = 0,
   approvalState: "PENDING" | "APPROVED" = "PENDING",
+  /** Inspection quotes use GST-inclusive prices entered by the owner (rate 0). */
+  gstRatePercent: number = DEFAULT_GST_RATE_PERCENT,
 ): EstimateLineCreateInput[] {
   return sources.map((source, index) => ({
     type: source.type,
     description: source.description,
     quantity: source.quantity,
     unitPricePaise: source.unitPricePaise,
-    gstRatePercent: DEFAULT_GST_RATE_PERCENT,
+    gstRatePercent,
     hsnOrSac: defaultHsnOrSac(source.type),
     approvalState,
     sourceOrderLineId: source.sourceOrderLineId ?? null,
@@ -151,14 +158,257 @@ export async function getEstimateForOrder(
   };
 }
 
+/** Latest current estimate for this customer + vehicle (any inspection or job card). */
+export async function getLatestEstimateForCustomerVehicle(
+  session: RoleSession,
+  customerId: string,
+  vehicleId: string,
+) {
+  requireRole(session, READ_ROLES);
+  const estimate = await findLatestCurrentEstimateForCustomerVehicle(
+    session.garageId,
+    customerId,
+    vehicleId,
+  );
+  return estimate ? withTotals(estimate) : null;
+}
+
 export async function getEstimateById(session: RoleSession, estimateId: string) {
   requireRole(session, READ_ROLES);
   const estimate = await findEstimateById(session.garageId, estimateId);
   if (!estimate) {
     throw new NotFoundError();
   }
-  const order = await loadOrderForSession(session, estimate.serviceOrderId);
-  assertCanViewOrder(session, order);
+  if (estimate.serviceOrderId) {
+    const order = await loadOrderForSession(session, estimate.serviceOrderId);
+    assertCanViewOrder(session, order);
+  } else if (estimate.inspectionId) {
+    const inspection = await findInspectionById(
+      session.garageId,
+      estimate.inspectionId,
+    );
+    if (!inspection) {
+      throw new NotFoundError();
+    }
+  } else {
+    throw new NotFoundError();
+  }
+  return withTotals(estimate);
+}
+
+export async function getEstimateForInspection(
+  session: RoleSession,
+  inspectionId: string,
+) {
+  requireRole(session, READ_ROLES);
+  const inspection = await findInspectionById(session.garageId, inspectionId);
+  if (!inspection) {
+    throw new NotFoundError();
+  }
+
+  const current = await findCurrentEstimateForInspection(
+    session.garageId,
+    inspection.id,
+  );
+  const revisions = await listEstimatesForInspection(
+    session.garageId,
+    inspection.id,
+  );
+
+  return {
+    inspection,
+    current: current ? withTotals(current) : null,
+    revisions,
+  };
+}
+
+function collectInspectionEstimateSources(
+  inspection: NonNullable<Awaited<ReturnType<typeof findInspectionById>>>,
+): SourceLine[] {
+  return collectInspectionEstimateSourceLines(inspection.items).map(
+    (line) => ({
+      type: "PART" as const,
+      description: line.description,
+      quantity: line.quantity,
+      unitPricePaise: line.unitPricePaise,
+      sourceOrderLineId: null,
+      sourceSuggestedRepairId: null,
+    }),
+  );
+}
+
+/** First estimate from priced inspection sub-spares. No stock movement. */
+export async function createEstimateFromInspection(
+  session: RoleSession,
+  inspectionId: string,
+  raw: CreateEstimateInput = {},
+) {
+  requireRole(session, ["OWNER", "MANAGER"]);
+  const input = createEstimateSchema.parse(raw);
+  const inspection = await findInspectionById(session.garageId, inspectionId);
+  if (!inspection) {
+    throw new NotFoundError();
+  }
+
+  const existing = await findCurrentEstimateForInspection(
+    session.garageId,
+    inspection.id,
+  );
+  if (existing) {
+    throw new AppError("ESTIMATE_EXISTS");
+  }
+
+  const sources = collectInspectionEstimateSources(inspection);
+  if (sources.length === 0) {
+    throw new AppError("ESTIMATE_NO_PRICED_SOURCES");
+  }
+
+  const autoApprove = !input.askPermission;
+  const estimate = await createEstimateWithLines(session.garageId, {
+    inspectionId: inspection.id,
+    serviceOrderId: null,
+    revisionNumber: 1,
+    notes: input.notes ?? null,
+    askPermission: input.askPermission,
+    permissionVia: input.permissionVia,
+    createdById: session.userId,
+    // Owner enters GST-inclusive prices on inspection items — do not add GST again.
+    lines: toCreateInput(
+      sources,
+      0,
+      autoApprove ? "APPROVED" : "PENDING",
+      0,
+    ),
+    bootstrapApprovedLines: autoApprove,
+  });
+  if (!estimate) {
+    throw new AppError("ESTIMATE_CREATE_FAILED");
+  }
+  return withTotals(estimate);
+}
+
+/** Add priced inspection sub-spares that are not already on the current estimate. */
+export async function syncInspectionEstimateFromItems(
+  session: RoleSession,
+  inspectionId: string,
+) {
+  requireRole(session, ["OWNER", "MANAGER"]);
+  const inspection = await findInspectionById(session.garageId, inspectionId);
+  if (!inspection) {
+    throw new NotFoundError();
+  }
+
+  const current = await findCurrentEstimateForInspection(
+    session.garageId,
+    inspection.id,
+  );
+  if (!current) {
+    throw new AppError("ESTIMATE_MISSING");
+  }
+
+  const sources = collectInspectionEstimateSources(inspection);
+  const byDescription = new Map(
+    current.lines.map((line) => [
+      line.description.trim().toLowerCase(),
+      line,
+    ]),
+  );
+
+  const autoApprove = !current.askPermission;
+  let addedCount = 0;
+  let updatedCount = 0;
+
+  for (const source of sources) {
+    const key = source.description.trim().toLowerCase();
+    const existing = byDescription.get(key);
+    if (!existing) {
+      const line = await addEstimateLine(session.garageId, {
+        estimateId: current.id,
+        serviceOrderId: null,
+        type: source.type,
+        description: source.description,
+        quantity: source.quantity,
+        unitPricePaise: source.unitPricePaise,
+        gstRatePercent: 0,
+        hsnOrSac: defaultHsnOrSac(source.type),
+        actorId: session.userId,
+        autoApprove,
+      });
+      if (line) {
+        addedCount += 1;
+      }
+      continue;
+    }
+    if (
+      existing.quantity !== source.quantity ||
+      existing.unitPricePaise !== source.unitPricePaise
+    ) {
+      const updated = await updateEstimateLineDetails(session.garageId, {
+        lineId: existing.id,
+        estimateId: current.id,
+        serviceOrderId: null,
+        description: existing.description,
+        quantity: source.quantity,
+        unitPricePaise: source.unitPricePaise,
+        actorId: session.userId,
+      });
+      if (updated && updated !== "billed") {
+        updatedCount += 1;
+      }
+    }
+  }
+
+  return { addedCount, updatedCount };
+}
+
+export async function createInspectionEstimateRevision(
+  session: RoleSession,
+  inspectionId: string,
+  raw: CreateEstimateRevisionInput = {},
+) {
+  requireRole(session, ["OWNER", "MANAGER"]);
+  const input = createEstimateRevisionSchema.parse(raw);
+  const inspection = await findInspectionById(session.garageId, inspectionId);
+  if (!inspection) {
+    throw new NotFoundError();
+  }
+
+  const current = await findCurrentEstimateForInspection(
+    session.garageId,
+    inspection.id,
+  );
+  if (!current) {
+    throw new AppError("ESTIMATE_MISSING");
+  }
+
+  const copied: EstimateLineCreateInput[] = current.lines.map((line, index) => ({
+    type: line.type,
+    description: line.description,
+    quantity: line.quantity,
+    unitPricePaise: line.unitPricePaise,
+    gstRatePercent: line.gstRatePercent,
+    hsnOrSac: line.hsnOrSac,
+    approvalState: line.approvalState,
+    sourceOrderLineId: line.sourceOrderLineId,
+    sourceSuggestedRepairId: line.sourceSuggestedRepairId,
+    sortOrder: index,
+  }));
+
+  const estimate = await createEstimateWithLines(session.garageId, {
+    inspectionId: inspection.id,
+    serviceOrderId: null,
+    revisionNumber: current.revisionNumber + 1,
+    notes: input.notes ?? null,
+    askPermission: current.askPermission,
+    permissionVia: current.permissionVia,
+    createdById: session.userId,
+    lines: copied,
+    supersedeEstimateId: current.id,
+    bootstrapApprovedLines: false,
+  });
+  if (!estimate) {
+    throw new AppError("ESTIMATE_REVISION_FAILED");
+  }
   return withTotals(estimate);
 }
 
@@ -318,6 +568,91 @@ export async function addManualEstimateLine(
     }
     throw error;
   }
+}
+
+export async function addManualInspectionEstimateLine(
+  session: RoleSession,
+  inspectionId: string,
+  raw: AddEstimateLineInput,
+) {
+  requireRole(session, ["OWNER", "MANAGER"]);
+  const input = addEstimateLineSchema.parse(raw);
+  const inspection = await findInspectionById(session.garageId, inspectionId);
+  if (!inspection) {
+    throw new NotFoundError();
+  }
+
+  const current = await findCurrentEstimateForInspection(
+    session.garageId,
+    inspection.id,
+  );
+  if (!current) {
+    throw new AppError("ESTIMATE_MISSING");
+  }
+
+  const line = await addEstimateLine(session.garageId, {
+    estimateId: current.id,
+    serviceOrderId: null,
+    type: input.type,
+    description: input.description,
+    quantity: input.quantity,
+    unitPricePaise: input.unitPricePaise,
+    gstRatePercent: 0,
+    hsnOrSac: input.hsnOrSac || defaultHsnOrSac(input.type),
+    actorId: session.userId,
+    autoApprove: !current.askPermission,
+  });
+  if (!line) {
+    throw new AppError("ESTIMATE_LINE_FAILED");
+  }
+  return line;
+}
+
+export async function agreeAllPendingInspectionEstimateLines(
+  session: RoleSession,
+  inspectionId: string,
+) {
+  requireRole(session, ["OWNER", "MANAGER"]);
+  const inspection = await findInspectionById(session.garageId, inspectionId);
+  if (!inspection) {
+    throw new NotFoundError();
+  }
+
+  const current = await findCurrentEstimateForInspection(
+    session.garageId,
+    inspection.id,
+  );
+  if (!current) {
+    throw new NotFoundError();
+  }
+  if (!current.askPermission) {
+    throw new AppError("APPROVAL_UNCHANGED");
+  }
+
+  const pending = current.lines.filter(
+    (line) => line.approvalState === "PENDING",
+  );
+  if (pending.length === 0) {
+    return { count: 0 };
+  }
+
+  for (const line of pending) {
+    const result = await recordLineApproval(session.garageId, {
+      estimateId: current.id,
+      estimateLineId: line.id,
+      serviceOrderId: null,
+      fromState: "PENDING",
+      toState: "APPROVED",
+      method: "MANUAL",
+      note: null,
+      recordedById: session.userId,
+    });
+    if (!result.ok) {
+      throw new AppError("APPROVAL_CONFLICT");
+    }
+  }
+
+  return { count: pending.length };
 }
 
 /**
@@ -504,17 +839,27 @@ export async function removeEstimateLine(
     throw new AppError("ESTIMATE_SUPERSEDED");
   }
 
-  const order = await loadOrderForSession(
-    session,
-    existing.estimate.serviceOrderId,
-  );
-  assertCanMutateOrder(session, order);
+  let serviceOrderId: string | null = existing.estimate.serviceOrderId;
+  if (serviceOrderId) {
+    const order = await loadOrderForSession(session, serviceOrderId);
+    assertCanMutateOrder(session, order);
+  } else if (existing.estimate.inspectionId) {
+    const inspection = await findInspectionById(
+      session.garageId,
+      existing.estimate.inspectionId,
+    );
+    if (!inspection) {
+      throw new NotFoundError();
+    }
+  } else {
+    throw new NotFoundError();
+  }
 
   try {
     const result = await deleteEstimateLine(session.garageId, {
       lineId: existing.id,
       estimateId: existing.estimateId,
-      serviceOrderId: order.id,
+      serviceOrderId,
       description: existing.description,
       actorId: session.userId,
     });
@@ -554,11 +899,21 @@ export async function setEstimateLineApproval(
     throw new AppError("ESTIMATE_SUPERSEDED");
   }
 
-  const order = await loadOrderForSession(
-    session,
-    existing.estimate.serviceOrderId,
-  );
-  assertCanMutateOrder(session, order);
+  let serviceOrderId: string | null = existing.estimate.serviceOrderId;
+  if (serviceOrderId) {
+    const order = await loadOrderForSession(session, serviceOrderId);
+    assertCanMutateOrder(session, order);
+  } else if (existing.estimate.inspectionId) {
+    const inspection = await findInspectionById(
+      session.garageId,
+      existing.estimate.inspectionId,
+    );
+    if (!inspection) {
+      throw new NotFoundError();
+    }
+  } else {
+    throw new NotFoundError();
+  }
 
   if (existing.approvalState === input.approvalState) {
     throw new AppError("APPROVAL_UNCHANGED");
@@ -567,7 +922,7 @@ export async function setEstimateLineApproval(
   const result = await recordLineApproval(session.garageId, {
     estimateId: existing.estimateId,
     estimateLineId: existing.id,
-    serviceOrderId: order.id,
+    serviceOrderId,
     fromState: existing.approvalState,
     toState: input.approvalState,
     method: input.method,
@@ -657,11 +1012,21 @@ export async function savePermissionLine(
     throw new AppError("ESTIMATE_SUPERSEDED");
   }
 
-  const order = await loadOrderForSession(
-    session,
-    existing.estimate.serviceOrderId,
-  );
-  assertCanMutateOrder(session, order);
+  let serviceOrderId: string | null = existing.estimate.serviceOrderId;
+  if (serviceOrderId) {
+    const order = await loadOrderForSession(session, serviceOrderId);
+    assertCanMutateOrder(session, order);
+  } else if (existing.estimate.inspectionId) {
+    const inspection = await findInspectionById(
+      session.garageId,
+      existing.estimate.inspectionId,
+    );
+    if (!inspection) {
+      throw new NotFoundError();
+    }
+  } else {
+    throw new NotFoundError();
+  }
 
   const detailsChanged =
     existing.description !== input.description ||
@@ -678,7 +1043,7 @@ export async function savePermissionLine(
       const updated = await updateEstimateLineDetails(session.garageId, {
         lineId: existing.id,
         estimateId: existing.estimateId,
-        serviceOrderId: order.id,
+        serviceOrderId,
         description: input.description,
         quantity: input.quantity,
         unitPricePaise: input.unitPricePaise,
@@ -705,7 +1070,7 @@ export async function savePermissionLine(
     const result = await recordLineApproval(session.garageId, {
       estimateId: existing.estimateId,
       estimateLineId: existing.id,
-      serviceOrderId: order.id,
+      serviceOrderId,
       fromState: existing.approvalState,
       toState: input.approvalState,
       method: input.method,

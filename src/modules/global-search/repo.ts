@@ -80,31 +80,44 @@ export async function searchOrdersForGlobal(
     where: {
       garageId,
       ...(options.technicianId
-        ? { technicianId: options.technicianId }
-        : {}),
-      OR: [
-        { complaint: textContains(query) },
-        {
-          customer: {
+        ? {
             OR: [
-              { name: textContains(query) },
-              { phone: { contains: query } },
-            ],
-          },
-        },
-        {
-          vehicle: {
-            OR: [
+              { technicianId: options.technicianId },
               {
-                registrationNumber: {
-                  contains: regQuery,
-                  mode: "insensitive",
+                technicianAssignments: {
+                  some: { technicianId: options.technicianId },
                 },
               },
-              { make: textContains(query) },
-              { model: textContains(query) },
             ],
-          },
+          }
+        : {}),
+      AND: [
+        {
+          OR: [
+            { complaint: textContains(query) },
+            {
+              customer: {
+                OR: [
+                  { name: textContains(query) },
+                  { phone: { contains: query } },
+                ],
+              },
+            },
+            {
+              vehicle: {
+                OR: [
+                  {
+                    registrationNumber: {
+                      contains: regQuery,
+                      mode: "insensitive",
+                    },
+                  },
+                  { make: textContains(query) },
+                  { model: textContains(query) },
+                ],
+              },
+            },
+          ],
         },
       ],
     },

@@ -267,7 +267,6 @@ function CreatePartFormFields({
                   onShopLinesChange(next);
                 }}
                 vendorErrorKeys={vendorErrorKeys}
-                vendorCreateMode="inline"
               />
             </>
           ) : (

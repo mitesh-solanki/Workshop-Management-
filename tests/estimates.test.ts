@@ -10,11 +10,14 @@ vi.mock("@/modules/service-orders/repo", () => ({
 
 vi.mock("@/modules/inspections/repo", () => ({
   findInspectionByServiceOrderId: vi.fn(),
+  findInspectionById: vi.fn(),
 }));
 
 vi.mock("@/modules/estimates/repo", () => ({
   findCurrentEstimate: vi.fn(),
+  findCurrentEstimateForInspection: vi.fn(),
   listEstimatesForOrder: vi.fn(),
+  listEstimatesForInspection: vi.fn(),
   findEstimateById: vi.fn(),
   findEstimateLineById: vi.fn(),
   createEstimateWithLines: vi.fn(),
@@ -30,17 +33,23 @@ vi.mock("@/modules/estimates/repo", () => ({
   },
 }));
 
-import { findInspectionByServiceOrderId } from "@/modules/inspections/repo";
+import {
+  findInspectionById,
+  findInspectionByServiceOrderId,
+} from "@/modules/inspections/repo";
 import { findServiceOrderById } from "@/modules/service-orders/repo";
 import {
+  createEstimateFromInspection,
   createEstimateFromSources,
   createEstimateRevision,
+  createInspectionEstimateRevision,
   getEstimateForGarageId,
   setEstimateLineApproval,
 } from "@/modules/estimates/service";
 import {
   createEstimateWithLines,
   findCurrentEstimate,
+  findCurrentEstimateForInspection,
   findEstimateLineById,
   listEstimatesForOrder,
   recordLineApproval,
@@ -93,6 +102,7 @@ function sampleOrder(
     },
     customer: { id: "cust-1", name: "Ravi", phone: "9876543210" },
     technician: null,
+    technicianAssignments: [],
     lines: [
       {
         id: "sol-1",
@@ -239,6 +249,7 @@ describe("estimates service", () => {
       id: "est-1",
       garageId: garageA,
       serviceOrderId: order.id,
+      inspectionId: null,
       revisionNumber: 1,
       notes: null,
       askPermission: false,
@@ -329,6 +340,7 @@ describe("estimates service", () => {
       id: "est-1",
       garageId: garageA,
       serviceOrderId: order.id,
+      inspectionId: null,
       revisionNumber: 1,
       notes: null,
       askPermission: true,
@@ -408,6 +420,7 @@ describe("estimates service", () => {
       estimate: {
         id: "est-1",
         serviceOrderId: order.id,
+        inspectionId: null,
         supersededAt: null,
         revisionNumber: 1,
       },
@@ -490,6 +503,7 @@ describe("estimates service", () => {
       estimate: {
         id: "est-1",
         serviceOrderId: order.id,
+        inspectionId: null,
         supersededAt: null,
         revisionNumber: 1,
       },
@@ -515,6 +529,7 @@ describe("estimates service", () => {
       id: "est-1",
       garageId: garageA,
       serviceOrderId: order.id,
+      inspectionId: null,
       revisionNumber: 1,
       notes: null,
       askPermission: false,
@@ -601,4 +616,288 @@ describe("estimates service", () => {
       code: "ESTIMATE_NO_SOURCES",
     } satisfies Partial<AppError>);
   });
+
+  it("creates an inspection estimate without a job card", async () => {
+    const inspection = sampleInspection();
+    vi.mocked(findInspectionById).mockResolvedValue(inspection);
+    vi.mocked(findCurrentEstimateForInspection).mockResolvedValue(null);
+    vi.mocked(createEstimateWithLines).mockResolvedValue({
+      id: "est-insp-1",
+      garageId: garageA,
+      serviceOrderId: null,
+      inspectionId: inspection.id,
+      revisionNumber: 1,
+      notes: null,
+      askPermission: false,
+      permissionVia: null,
+      supersededAt: null,
+      createdById: ownerA.userId,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      createdBy: { id: ownerA.userId, name: "Owner", email: "o@a.test" },
+      lines: [
+        {
+          id: "el-insp-1",
+          garageId: garageA,
+          estimateId: "est-insp-1",
+          type: "PART",
+          description: "Front brake pads",
+          quantity: 1,
+          unitPricePaise: 80_000,
+          gstRatePercent: 18,
+          hsnOrSac: "87089900",
+          approvalState: "APPROVED",
+          sourceOrderLineId: null,
+          sourceSuggestedRepairId: null,
+          sortOrder: 0,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      ],
+      approvals: [],
+    });
+
+    const result = await createEstimateFromInspection(ownerA, inspection.id);
+
+    expect(createEstimateWithLines).toHaveBeenCalledWith(
+      garageA,
+      expect.objectContaining({
+        inspectionId: inspection.id,
+        serviceOrderId: null,
+        revisionNumber: 1,
+        bootstrapApprovedLines: true,
+        lines: [
+          expect.objectContaining({
+            description: "Front brake pads",
+            unitPricePaise: 80_000,
+            gstRatePercent: 0,
+            approvalState: "APPROVED",
+            sourceOrderLineId: null,
+          }),
+        ],
+      }),
+    );
+    expect(result.totals.all.lineCount).toBe(1);
+  });
+
+  it("keeps live link permission via for inspection estimates", async () => {
+    const inspection = sampleInspection();
+    vi.mocked(findInspectionById).mockResolvedValue(inspection);
+    vi.mocked(findCurrentEstimateForInspection).mockResolvedValue(null);
+    vi.mocked(createEstimateWithLines).mockResolvedValue({
+      id: "est-insp-1",
+      garageId: garageA,
+      serviceOrderId: null,
+      inspectionId: inspection.id,
+      revisionNumber: 1,
+      notes: null,
+      askPermission: true,
+      permissionVia: "LIVE_LINK",
+      supersededAt: null,
+      createdById: ownerA.userId,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      createdBy: { id: ownerA.userId, name: "Owner", email: "o@a.test" },
+      lines: [],
+      approvals: [],
+    });
+
+    await createEstimateFromInspection(ownerA, inspection.id, {
+      askPermission: "yes",
+      permissionVia: "LIVE_LINK",
+    });
+
+    expect(createEstimateWithLines).toHaveBeenCalledWith(
+      garageA,
+      expect.objectContaining({
+        askPermission: true,
+        permissionVia: "LIVE_LINK",
+        bootstrapApprovedLines: false,
+        lines: [
+          expect.objectContaining({
+            gstRatePercent: 0,
+          }),
+        ],
+      }),
+    );
+  });
+
+  it("revises an inspection estimate and keeps the previous revision", async () => {
+    const inspection = sampleInspection();
+    const current = {
+      id: "est-insp-1",
+      garageId: garageA,
+      serviceOrderId: null,
+      inspectionId: inspection.id,
+      revisionNumber: 1,
+      notes: null,
+      askPermission: false,
+      permissionVia: null,
+      supersededAt: null,
+      createdById: ownerA.userId,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      createdBy: { id: ownerA.userId, name: "Owner", email: "o@a.test" },
+      lines: [
+        {
+          id: "el-insp-1",
+          garageId: garageA,
+          estimateId: "est-insp-1",
+          type: "PART" as const,
+          description: "Front brake pads",
+          quantity: 1,
+          unitPricePaise: 80_000,
+          gstRatePercent: 18,
+          hsnOrSac: "87089900",
+          approvalState: "APPROVED" as const,
+          sourceOrderLineId: null,
+          sourceSuggestedRepairId: null,
+          sortOrder: 0,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      ],
+      approvals: [],
+    };
+
+    vi.mocked(findInspectionById).mockResolvedValue(inspection);
+    vi.mocked(findCurrentEstimateForInspection).mockResolvedValue(current);
+    vi.mocked(createEstimateWithLines).mockResolvedValue({
+      ...current,
+      id: "est-insp-2",
+      revisionNumber: 2,
+      lines: current.lines.map((line) => ({
+        ...line,
+        estimateId: "est-insp-2",
+      })),
+    });
+
+    await createInspectionEstimateRevision(ownerA, inspection.id, {
+      notes: "Added labour after agree",
+    });
+
+    expect(createEstimateWithLines).toHaveBeenCalledWith(
+      garageA,
+      expect.objectContaining({
+        inspectionId: inspection.id,
+        serviceOrderId: null,
+        revisionNumber: 2,
+        supersedeEstimateId: "est-insp-1",
+        notes: "Added labour after agree",
+        bootstrapApprovedLines: false,
+        lines: [
+          expect.objectContaining({
+            description: "Front brake pads",
+            approvalState: "APPROVED",
+          }),
+        ],
+      }),
+    );
+  });
+
+  it("rejects inspection estimate create when no priced items", async () => {
+    const inspection = sampleInspection({
+      items: [
+        {
+          id: "ii-1",
+          garageId: garageA,
+          inspectionId: "insp-1",
+          key: "brakes",
+          label: "Front brake pads",
+          result: "NEEDS_ATTENTION",
+          notes: null,
+          quantity: 1,
+          unitPricePaise: 0,
+          externalCheck: false,
+          sortOrder: 0,
+          isCustom: false,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          media: [],
+        },
+      ],
+    });
+    vi.mocked(findInspectionById).mockResolvedValue(inspection);
+    vi.mocked(findCurrentEstimateForInspection).mockResolvedValue(null);
+
+    await expect(
+      createEstimateFromInspection(ownerA, inspection.id),
+    ).rejects.toMatchObject({
+      code: "ESTIMATE_NO_PRICED_SOURCES",
+    } satisfies Partial<AppError>);
+    expect(createEstimateWithLines).not.toHaveBeenCalled();
+  });
 });
+
+function sampleInspection(
+  overrides: {
+    items?: NonNullable<
+      Awaited<ReturnType<typeof findInspectionById>>
+    >["items"];
+  } = {},
+): NonNullable<Awaited<ReturnType<typeof findInspectionById>>> {
+  return {
+    id: "insp-1",
+    garageId: garageA,
+    customerId: "cust-1",
+    vehicleId: "veh-1",
+    serviceOrderId: null,
+    notes: null,
+    complaint: "Brake noise",
+    recommendedNotes: null,
+    expectedCompletion: null,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    customer: { id: "cust-1", name: "Ravi", phone: "9876543210" },
+    vehicle: {
+      id: "veh-1",
+      registrationNumber: "GJ01AB1234",
+      make: "Maruti",
+      model: "Swift",
+    },
+    serviceOrder: null,
+    items: overrides.items ?? [
+      {
+        id: "ii-1",
+        garageId: garageA,
+        inspectionId: "insp-1",
+        key: "brakes",
+        label: "Brakes",
+        result: "NEEDS_ATTENTION",
+        notes: JSON.stringify([
+          {
+            note: "Front brake pads",
+            quantity: 1,
+            unitPricePaise: 80_000,
+          },
+        ]),
+        quantity: 1,
+        unitPricePaise: 80_000,
+        externalCheck: false,
+        sortOrder: 0,
+        isCustom: false,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        media: [],
+      },
+      {
+        id: "ii-2",
+        garageId: garageA,
+        inspectionId: "insp-1",
+        key: "tyres",
+        label: "Tyre tread",
+        result: "OK",
+        notes: null,
+        quantity: 1,
+        unitPricePaise: 0,
+        externalCheck: false,
+        sortOrder: 1,
+        isCustom: false,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        media: [],
+      },
+    ],
+    suggestedRepairs: [],
+  };
+}

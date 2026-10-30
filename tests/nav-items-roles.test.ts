@@ -19,6 +19,7 @@ describe("navItemsForRole — other roles keep full access", () => {
         "dashboard",
         "workshop",
         "orders",
+        "inspections",
         "bays",
         "customers",
         "vehicles",
@@ -47,6 +48,7 @@ describe("navItemsForRole — other roles keep full access", () => {
         "dashboard",
         "workshop",
         "orders",
+        "inspections",
         "customers",
         "vehicles",
         "invoices",
@@ -64,7 +66,7 @@ describe("navItemsForRole — other roles keep full access", () => {
     expect(keys).not.toContain("settings");
   });
 
-  it("limits technician to workshop board and job cards only", () => {
+  it("limits technician to workshop board and job cards", () => {
     expect(keysFor("TECHNICIAN")).toEqual(["workshop", "orders"]);
   });
 });

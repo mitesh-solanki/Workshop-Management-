@@ -26,14 +26,21 @@ vi.mock("@/modules/service-orders/repo", () => ({
   findServiceOrderById: vi.fn(),
 }));
 
+vi.mock("@/modules/inspections/repo", () => ({
+  findInspectionById: vi.fn(),
+}));
+
 vi.mock("@/modules/live-link/repo", () => ({
   createLiveLinkRow: vi.fn(),
   findActiveLiveLinkForOrder: vi.fn(),
+  findActiveLiveLinkForInspection: vi.fn(),
   findLiveLinkByTokenHash: vi.fn(),
   findEstimateLineForLive: vi.fn(),
   loadLiveOrderSnapshot: vi.fn(),
+  loadLiveInspectionSnapshot: vi.fn(),
   recordOnlineLineApproval: vi.fn(),
   revokeLiveLinksForOrder: vi.fn(),
+  revokeLiveLinksForInspection: vi.fn(),
 }));
 
 vi.mock("@/lib/storage", () => ({
@@ -48,10 +55,12 @@ import { hashToken } from "@/lib/otp";
 import { consumeRateLimit } from "@/lib/rate-limit";
 import { createPresignedDownloadUrl } from "@/lib/storage";
 import { findServiceOrderById } from "@/modules/service-orders/repo";
+import { findInspectionById } from "@/modules/inspections/repo";
 import {
   createLiveLinkRow,
   findEstimateLineForLive,
   findLiveLinkByTokenHash,
+  loadLiveInspectionSnapshot,
   loadLiveOrderSnapshot,
   recordOnlineLineApproval,
   revokeLiveLinksForOrder,
@@ -94,27 +103,49 @@ function sampleLink(overrides: {
   tokenHash?: string;
   expiresAt?: Date;
   revokedAt?: Date | null;
+  serviceOrderId?: string | null;
+  inspectionId?: string | null;
 } = {}) {
+  const serviceOrderId =
+    overrides.serviceOrderId !== undefined
+      ? overrides.serviceOrderId
+      : overrides.inspectionId
+        ? null
+        : "order-1";
+  const inspectionId = overrides.inspectionId ?? null;
   return {
     id: "link-1",
     garageId: garageA,
-    serviceOrderId: "order-1",
+    serviceOrderId,
+    inspectionId,
     tokenHash: overrides.tokenHash ?? "hash",
     expiresAt: overrides.expiresAt ?? new Date(Date.now() + 86_400_000),
     revokedAt: overrides.revokedAt ?? null,
     createdAt: new Date(),
     updatedAt: new Date(),
     garage: { id: garageA, name: "Prime Garage" },
-    serviceOrder: {
-      id: "order-1",
-      status: "IN_PROGRESS" as const,
-      expectedCompletion: null,
-      vehicle: {
-        registrationNumber: "GJ01AB1234",
-        make: "Maruti",
-        model: "Swift",
-      },
-    },
+    serviceOrder: serviceOrderId
+      ? {
+          id: serviceOrderId,
+          status: "IN_PROGRESS" as const,
+          expectedCompletion: null,
+          vehicle: {
+            registrationNumber: "GJ01AB1234",
+            make: "Maruti",
+            model: "Swift",
+          },
+        }
+      : null,
+    inspection: inspectionId
+      ? {
+          id: inspectionId,
+          vehicle: {
+            registrationNumber: "GJ01AB1234",
+            make: "Maruti",
+            model: "Swift",
+          },
+        }
+      : null,
   };
 }
 
@@ -164,6 +195,7 @@ describe("live link tokens", () => {
       id: "link-2",
       garageId: garageA,
       serviceOrderId: "order-1",
+      inspectionId: null,
       tokenHash: "new-hash",
       expiresAt: new Date(Date.now() + 86_400_000),
       revokedAt: null,
@@ -196,7 +228,8 @@ describe("live link tokens", () => {
     vi.mocked(createLiveLinkRow).mockImplementation(async (data) => ({
       id: "link-1",
       garageId: data.garageId,
-      serviceOrderId: data.serviceOrderId,
+      serviceOrderId: data.serviceOrderId ?? null,
+      inspectionId: data.inspectionId ?? null,
       tokenHash: data.tokenHash,
       expiresAt: data.expiresAt,
       revokedAt: null,
@@ -211,6 +244,34 @@ describe("live link tokens", () => {
     const savedHash = vi.mocked(createLiveLinkRow).mock.calls[0]?.[0]?.tokenHash;
     expect(savedHash).toBe(hashToken(created.token));
     expect(savedHash).not.toBe(created.token);
+  });
+
+  it("creates a live link for an inspection estimate", async () => {
+    vi.mocked(findInspectionById).mockResolvedValue({
+      id: "insp-1",
+      garageId: garageA,
+    } as never);
+    vi.mocked(createLiveLinkRow).mockImplementation(async (data) => ({
+      id: "link-insp",
+      garageId: data.garageId,
+      serviceOrderId: data.serviceOrderId ?? null,
+      inspectionId: data.inspectionId ?? null,
+      tokenHash: data.tokenHash,
+      expiresAt: data.expiresAt,
+      revokedAt: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }));
+
+    const created = await createLiveLink(ownerA, { inspectionId: "insp-1" });
+    expect(created.url).toContain(`/live/${created.token}`);
+    expect(createLiveLinkRow).toHaveBeenCalledWith(
+      expect.objectContaining({
+        garageId: garageA,
+        inspectionId: "insp-1",
+        serviceOrderId: null,
+      }),
+    );
   });
 
   it("revoke marks links inactive", async () => {
@@ -264,7 +325,10 @@ describe("live link public media", () => {
       order: {
         id: "order-1",
         status: "IN_PROGRESS",
+        complaint: "Noise from front",
+        createdAt: new Date("2026-10-30T10:00:00.000Z"),
         expectedCompletion: null,
+        customer: { name: "Ramesh Gohil" },
         vehicle: {
           registrationNumber: "GJ01AB1234",
           make: "Maruti",
@@ -303,6 +367,7 @@ describe("live link public media", () => {
     expect(view.ok).toBe(true);
     if (!view.ok) return;
 
+    expect(view.view.kind).toBe("order");
     expect(view.view.media).toEqual([
       {
         id: "media-photo",
@@ -320,6 +385,58 @@ describe("live link public media", () => {
       },
     ]);
     expect(createPresignedDownloadUrl).toHaveBeenCalledTimes(2);
+  });
+
+  it("inspection live link shows estimate only (no invoice)", async () => {
+    const token = randomBytes(32).toString("base64url");
+    const tokenHash = hashToken(token);
+    vi.mocked(findLiveLinkByTokenHash).mockResolvedValue(
+      sampleLink({ tokenHash, inspectionId: "insp-1", serviceOrderId: null }),
+    );
+    vi.mocked(loadLiveInspectionSnapshot).mockResolvedValue({
+      inspection: {
+        id: "insp-1",
+        complaint: "Brake noise",
+        createdAt: new Date("2026-10-30T10:00:00.000Z"),
+        customer: { name: "Priya Sharma" },
+        vehicle: {
+          registrationNumber: "GJ01AB1234",
+          make: "Maruti",
+          model: "Swift",
+        },
+        items: [],
+      },
+      estimate: {
+        id: "est-insp",
+        revisionNumber: 1,
+        askPermission: true,
+        permissionVia: "LIVE_LINK",
+        lines: [
+          {
+            id: "line-1",
+            type: "LABOUR",
+            description: "Pad replacement",
+            quantity: 1,
+            unitPricePaise: 50_000,
+            gstRatePercent: 18,
+            hsnOrSac: null,
+            approvalState: "PENDING",
+            sortOrder: 0,
+          },
+        ],
+      },
+    } as never);
+
+    const view = await getPublicLiveView(token, "1.1.1.1");
+    expect(view.ok).toBe(true);
+    if (!view.ok) return;
+    expect(view.view.kind).toBe("inspection");
+    expect(view.view.customerName).toBe("Priya Sharma");
+    expect(view.view.invoice).toBeNull();
+    expect(view.view.status).toBeNull();
+    expect(view.view.estimate?.lines).toHaveLength(1);
+    expect(view.view.estimate?.canCustomerApprove).toBe(true);
+    expect(loadLiveOrderSnapshot).not.toHaveBeenCalled();
   });
 });
 
@@ -346,7 +463,10 @@ describe("live link estimate approve / reject", () => {
       estimate: {
         id: "est-1",
         serviceOrderId: "order-1",
+        inspectionId: null,
         supersededAt: null,
+        askPermission: true,
+        permissionVia: "LIVE_LINK",
       },
     } as never);
     vi.mocked(recordOnlineLineApproval).mockResolvedValue({
@@ -363,6 +483,7 @@ describe("live link estimate approve / reject", () => {
       estimateId: "est-1",
       estimateLineId: "line-1",
       serviceOrderId: "order-1",
+      inspectionId: null,
       fromState: "PENDING",
       toState: "APPROVED",
     });
@@ -381,7 +502,10 @@ describe("live link estimate approve / reject", () => {
       estimate: {
         id: "est-1",
         serviceOrderId: "order-1",
+        inspectionId: null,
         supersededAt: null,
+        askPermission: true,
+        permissionVia: "LIVE_LINK",
       },
     } as never);
     vi.mocked(recordOnlineLineApproval).mockResolvedValue({
@@ -398,8 +522,48 @@ describe("live link estimate approve / reject", () => {
       estimateId: "est-1",
       estimateLineId: "line-2",
       serviceOrderId: "order-1",
+      inspectionId: null,
       fromState: "PENDING",
       toState: "REJECTED",
+    });
+  });
+
+  it("approves a pending inspection estimate line via live token", async () => {
+    const token = randomBytes(32).toString("base64url");
+    const tokenHash = hashToken(token);
+    vi.mocked(findLiveLinkByTokenHash).mockResolvedValue(
+      sampleLink({ tokenHash, inspectionId: "insp-1", serviceOrderId: null }),
+    );
+    vi.mocked(findEstimateLineForLive).mockResolvedValue({
+      id: "line-insp",
+      estimateId: "est-insp",
+      approvalState: "PENDING",
+      estimate: {
+        id: "est-insp",
+        serviceOrderId: null,
+        inspectionId: "insp-1",
+        supersededAt: null,
+        askPermission: true,
+        permissionVia: "LIVE_LINK",
+      },
+    } as never);
+    vi.mocked(recordOnlineLineApproval).mockResolvedValue({
+      ok: true,
+      approval: { id: "approval-insp" },
+    });
+
+    const result = await approveEstimateLineViaLiveLink(token, "2.2.2.2", {
+      lineId: "line-insp",
+      approvalState: "APPROVED",
+    });
+    expect(result).toEqual({ ok: true });
+    expect(recordOnlineLineApproval).toHaveBeenCalledWith(garageA, {
+      estimateId: "est-insp",
+      estimateLineId: "line-insp",
+      serviceOrderId: null,
+      inspectionId: "insp-1",
+      fromState: "PENDING",
+      toState: "APPROVED",
     });
   });
 

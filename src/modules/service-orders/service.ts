@@ -3,6 +3,10 @@ import "server-only";
 import { AppError, ForbiddenError, NotFoundError } from "@/lib/errors";
 import { requireRole, type RoleSession } from "@/lib/rbac";
 import { findBayById } from "@/modules/bays/repo";
+import {
+  findInspectionById,
+  linkInspectionToServiceOrder,
+} from "@/modules/inspections/repo";
 import { findVehicleById } from "@/modules/vehicles/repo";
 import {
   addServiceOrderLineSchema,
@@ -41,6 +45,10 @@ import {
   updateServiceOrderStatus,
 } from "@/modules/service-orders/repo";
 import { mirrorOrderLineOntoCurrentEstimate } from "@/modules/estimates/service";
+import {
+  isTechnicianAssignedToOrder,
+  technicianIdsFromOrder,
+} from "@/modules/service-orders/technicians";
 
 async function resolveBayFilterName(
   garageId: string,
@@ -65,24 +73,35 @@ const READ_ROLES = ["OWNER", "MANAGER", "TECHNICIAN", "ACCOUNTANT"] as const;
 
 function assertCanViewOrder(
   session: RoleSession,
-  order: { technicianId: string | null },
+  order: {
+    technicianId: string | null;
+    technicianAssignments?: Array<{ technicianId: string }>;
+  },
 ) {
-  if (session.role === "TECHNICIAN" && order.technicianId !== session.userId) {
+  if (
+    session.role === "TECHNICIAN" &&
+    !isTechnicianAssignedToOrder(order, session.userId)
+  ) {
     throw new ForbiddenError();
   }
 }
 
 function assertCanMutateOrder(
   session: RoleSession,
-  order: { technicianId: string | null; status: ServiceOrderStatusValue },
+  order: {
+    technicianId: string | null;
+    status: ServiceOrderStatusValue;
+    technicianAssignments?: Array<{ technicianId: string }>;
+  },
 ) {
   if (session.role === "ACCOUNTANT") {
     throw new ForbiddenError();
   }
-  if (session.role === "TECHNICIAN") {
-    if (order.technicianId !== session.userId) {
-      throw new ForbiddenError();
-    }
+  if (
+    session.role === "TECHNICIAN" &&
+    !isTechnicianAssignedToOrder(order, session.userId)
+  ) {
+    throw new ForbiddenError();
   }
   if (order.status === "COMPLETED") {
     throw new AppError("ORDER_COMPLETED", 409);
@@ -274,10 +293,12 @@ export async function createOrder(
     throw new NotFoundError();
   }
 
-  const technicianId =
-    session.role === "TECHNICIAN" ? session.userId : input.technicianId;
+  const technicianIds =
+    session.role === "TECHNICIAN"
+      ? [session.userId]
+      : input.technicianIds;
 
-  if (technicianId) {
+  for (const technicianId of technicianIds) {
     const technician = await findTechnicianInGarage(
       session.garageId,
       technicianId,
@@ -287,18 +308,57 @@ export async function createOrder(
     }
   }
 
-  return createServiceOrder(session.garageId, {
+  let expectedCompletion = input.expectedCompletion;
+  if (input.inspectionId) {
+    const inspection = await findInspectionById(
+      session.garageId,
+      input.inspectionId,
+    );
+    if (!inspection) {
+      throw new NotFoundError();
+    }
+    if (inspection.serviceOrderId) {
+      throw new AppError("inspections.already_linked", 400);
+    }
+    if (
+      inspection.customerId !== vehicle.customerId ||
+      inspection.vehicleId !== vehicle.id
+    ) {
+      throw new AppError("inspections.link_mismatch", 400);
+    }
+    if (expectedCompletion == null && inspection.expectedCompletion) {
+      expectedCompletion = inspection.expectedCompletion;
+    }
+  }
+
+  const order = await createServiceOrder(session.garageId, {
     vehicleId: vehicle.id,
     customerId: vehicle.customerId,
     complaint: input.complaint,
     requestedServices: input.requestedServices,
     odometerIn: input.odometerIn,
-    expectedCompletion: input.expectedCompletion,
-    technicianId,
+    expectedCompletion,
+    technicianIds,
     bay: input.bay,
     priority: input.priority,
     actorId: session.userId,
   });
+
+  if (input.inspectionId) {
+    const linked = await linkInspectionToServiceOrder(
+      session.garageId,
+      input.inspectionId,
+      {
+        serviceOrderId: order.id,
+        actorId: session.userId,
+      },
+    );
+    if (!linked) {
+      throw new AppError("inspections.link_failed", 400);
+    }
+  }
+
+  return order;
 }
 
 export async function updateOrder(
@@ -316,10 +376,15 @@ export async function updateOrder(
 
   assertCanMutateOrder(session, order);
 
-  if (input.technicianId) {
+  const technicianIds =
+    session.role === "TECHNICIAN"
+      ? technicianIdsFromOrder(order)
+      : input.technicianIds;
+
+  for (const technicianId of technicianIds) {
     const technician = await findTechnicianInGarage(
       session.garageId,
-      input.technicianId,
+      technicianId,
     );
     if (!technician) {
       throw new AppError("INVALID_TECHNICIAN", 400);
@@ -331,7 +396,7 @@ export async function updateOrder(
     requestedServices: input.requestedServices,
     odometerIn: input.odometerIn,
     expectedCompletion: input.expectedCompletion,
-    technicianId: input.technicianId,
+    technicianIds,
     bay: input.bay,
     priority: input.priority,
     vehicleId: order.vehicleId,

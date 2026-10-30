@@ -62,22 +62,24 @@ describe("estimate stock from suggested repairs", () => {
     const customer = await prisma.customer.create({
       data: { garageId, name: "Cust", phone: "9000000001" },
       select: { id: true } });
+    const customerId = customer.id;
 
     const vehicle = await prisma.vehicle.create({
       data: {
         garageId,
-        customerId: customer.id,
+        customerId,
         registrationNumber: `GJ01SR${suffix.slice(-4)}`.toUpperCase(),
         make: "Maruti",
         model: "Swift",
         stateCode: "24" },
       select: { id: true } });
+    const vehicleId = vehicle.id;
 
     const order = await prisma.serviceOrder.create({
       data: {
         garageId,
-        customerId: customer.id,
-        vehicleId: vehicle.id,
+        customerId,
+        vehicleId,
         status: "INSPECTION",
         complaint: "Test" },
       select: { id: true } });
@@ -107,7 +109,11 @@ describe("estimate stock from suggested repairs", () => {
         createdById: userId } });
 
     const inspection = await prisma.inspection.create({
-      data: { garageId, serviceOrderId },
+      data: {
+        garageId,
+        customerId,
+        vehicleId,
+        serviceOrderId },
       select: { id: true } });
 
     const repair = await prisma.suggestedRepair.create({

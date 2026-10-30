@@ -1,10 +1,10 @@
 "use client";
 
 import type { ReactNode } from "react";
-import Link from "next/link";
 import { useTranslations } from "next-intl";
 import {
   Car,
+  ClipboardList,
   FileText,
   MapPin,
   MessageSquare,
@@ -39,6 +39,8 @@ import {
   CUSTOMER_SECTION_ID_PREFIX,
   CUSTOMER_SECTIONS,
 } from "@/modules/customers/customer-sections";
+import { InspectionsList } from "@/modules/inspections/components/inspections-list";
+import type { InspectionTableRow } from "@/modules/inspections/components/inspections-table";
 import {
   ServiceHistoryList,
   type ServiceHistoryRow,
@@ -56,10 +58,12 @@ type Props = {
   customer: EditCustomerValues;
   vehicles: CustomerVehicleRow[];
   serviceHistory: ServiceHistoryRow[];
+  inspections: InspectionTableRow[];
   warrantyDocs: WarrantyDocListItem[];
   canWrite: boolean;
   canWriteWarranty: boolean;
   canCreateOrder: boolean;
+  canCreateInspection: boolean;
   canDeleteOrder?: boolean;
   locale: string;
 };
@@ -101,16 +105,19 @@ export function CustomerDetailPanel({
   customer,
   vehicles,
   serviceHistory,
+  inspections,
   warrantyDocs,
   canWrite,
   canWriteWarranty,
   canCreateOrder,
+  canCreateInspection,
   canDeleteOrder = false,
   locale,
 }: Props) {
   const t = useTranslations("customers");
   const tv = useTranslations("vehicles");
   const tw = useTranslations("warranties");
+  const ti = useTranslations("inspections");
   const to = useTranslations("orders");
   usePageDetailLabel(customer.name);
   const { activeSection, scrollToSection, setSectionRef } =
@@ -123,6 +130,11 @@ export function CustomerDetailPanel({
   const navItems = [
     { id: "details" as const, label: t("details"), icon: NotebookPen },
     { id: "vehicles" as const, label: t("vehicles"), icon: Car },
+    {
+      id: "inspections" as const,
+      label: ti("customerSectionTitle"),
+      icon: ClipboardList,
+    },
     { id: "service" as const, label: t("serviceHistory"), icon: Wrench },
     {
       id: "warranty" as const,
@@ -302,6 +314,7 @@ export function CustomerDetailPanel({
               locale={locale}
               canWrite={canWrite}
               canCreateOrder={canCreateOrder}
+              canCreateInspection={canCreateInspection}
               empty={
                 <EmptyState
                   icon={Car}
@@ -314,21 +327,28 @@ export function CustomerDetailPanel({
           </SectionBlock>
 
           <SectionBlock
+            id={sectionDomId(CUSTOMER_SECTION_ID_PREFIX, "inspections")}
+            title={ti("customerSectionTitle")}
+            subtitle={ti("customerSectionDescription")}
+            sectionRef={setSectionRef("inspections")}
+          >
+            <InspectionsList
+              inspections={inspections}
+              showCustomer={false}
+              emptyTitle={ti("sectionEmpty")}
+              emptyBody={
+                vehicles.length === 0
+                  ? t("noVehiclesDescription")
+                  : ti("emptyDescription")
+              }
+            />
+          </SectionBlock>
+
+          <SectionBlock
             id={sectionDomId(CUSTOMER_SECTION_ID_PREFIX, "service")}
             title={t("serviceHistory")}
             subtitle={t("serviceHistoryDescription")}
             sectionRef={setSectionRef("service")}
-            action={
-              canCreateOrder && vehicles.length > 0 ? (
-                <Button asChild size="md" className="text-white">
-                  <Link href={`/orders/new?customerId=${customer.id}`}>
-                    <Plus className="size-4 text-white" aria-hidden />
-                    <span className="lg:hidden">{to("createShort")}</span>
-                    <span className="hidden lg:inline">{to("createShort")}</span>
-                  </Link>
-                </Button>
-              ) : undefined
-            }
           >
             <ServiceHistoryList
               orders={serviceHistory}
@@ -341,16 +361,6 @@ export function CustomerDetailPanel({
                 vehicles.length === 0
                   ? t("noVehiclesDescription")
                   : t("serviceHistoryPlaceholder")
-              }
-              emptyAction={
-                canCreateOrder && vehicles.length > 0 ? (
-                  <Button asChild size="md" className="text-white">
-                    <Link href={`/orders/new?customerId=${customer.id}`}>
-                      <Plus className="size-4 text-white" aria-hidden />
-                      {to("createShort")}
-                    </Link>
-                  </Button>
-                ) : undefined
               }
               showRegistration
               statusLabel={(status) => to(`statuses.${status}`)}

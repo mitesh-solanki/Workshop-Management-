@@ -3,7 +3,7 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
-import { Car, FileText, Pencil, Plus, Wrench } from "lucide-react";
+import { Car, ClipboardList, FileText, Pencil, Plus, Wrench } from "lucide-react";
 import { usePageDetailLabel } from "@/components/page-chrome";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -23,6 +23,8 @@ import {
   useSectionScrollSpy,
 } from "@/hooks/use-section-scroll-spy";
 import { getDateStatus, type DateStatus } from "@/lib/date-status";
+import { InspectionsList } from "@/modules/inspections/components/inspections-list";
+import type { InspectionTableRow } from "@/modules/inspections/components/inspections-table";
 import {
   ServiceHistoryList,
   type ServiceHistoryRow,
@@ -57,10 +59,12 @@ type Props = {
   customerName: string;
   vehicle: VehicleRow;
   serviceHistory: ServiceHistoryRow[];
+  inspections: InspectionTableRow[];
   warrantyDocs: WarrantyDocListItem[];
   canWrite: boolean;
   canWriteWarranty: boolean;
   canCreateOrder: boolean;
+  canCreateInspection: boolean;
   canDeleteOrder?: boolean;
   locale: string;
 };
@@ -133,15 +137,18 @@ export function VehicleDetailPanel({
   customerName,
   vehicle,
   serviceHistory,
+  inspections,
   warrantyDocs,
   canWrite,
   canWriteWarranty,
   canCreateOrder,
+  canCreateInspection,
   canDeleteOrder = false,
   locale,
 }: Props) {
   const tv = useTranslations("vehicles");
   const tw = useTranslations("warranties");
+  const ti = useTranslations("inspections");
   const to = useTranslations("orders");
   const tGst = useTranslations("gst");
   usePageDetailLabel(vehicle.registrationNumber);
@@ -191,9 +198,9 @@ export function VehicleDetailPanel({
 
   const createJobCard =
     canCreateOrder ? (
-      <Button asChild size="sm">
+      <Button asChild size="md" className="text-white">
         <Link href={`/orders/new?vehicleId=${vehicle.id}`}>
-          <Plus className="size-3.5 shrink-0 sm:size-4" aria-hidden />
+          <Plus className="size-4 text-white" aria-hidden />
           {to("createShort")}
         </Link>
       </Button>
@@ -213,6 +220,11 @@ export function VehicleDetailPanel({
 
   const vehicleNavItems = [
     { id: "overview" as const, label: tv("overview"), icon: Car },
+    {
+      id: "inspections" as const,
+      label: ti("vehicleSectionTitle"),
+      icon: ClipboardList,
+    },
     {
       id: "warranty" as const,
       label: tw("sectionTitle"),
@@ -344,6 +356,31 @@ export function VehicleDetailPanel({
                 ))}
               </DescriptionList>
             </div>
+          </SectionBlock>
+
+          <SectionBlock
+            id={sectionDomId(VEHICLE_SECTION_ID_PREFIX, "inspections")}
+            title={ti("vehicleSectionTitle")}
+            subtitle={ti("vehicleSectionDescription")}
+            sectionRef={setSectionRef("inspections")}
+            action={
+              canCreateInspection ? (
+                <Button asChild size="md" className="text-white">
+                  <Link
+                    href={`/inspections/new?vehicleId=${vehicle.id}&customerId=${customerId}`}
+                  >
+                    <Plus className="size-4 text-white" aria-hidden />
+                    {ti("newInspection")}
+                  </Link>
+                </Button>
+              ) : undefined
+            }
+          >
+            <InspectionsList
+              inspections={inspections}
+              emptyTitle={ti("sectionEmpty")}
+              emptyBody={ti("emptyDescription")}
+            />
           </SectionBlock>
 
           <SectionBlock

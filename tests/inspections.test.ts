@@ -7,6 +7,7 @@ import {
   DEFAULT_CHECKLIST_ITEMS,
   MAX_PHOTO_BYTES,
   MAX_VIDEO_BYTES,
+  saveInspectionSchema,
 } from "@/modules/inspections/schema";
 
 vi.mock("@/lib/storage", () => ({
@@ -34,8 +35,17 @@ vi.mock("@/modules/inventory/repo", () => ({
   findPartById: vi.fn(),
 }));
 
+vi.mock("@/modules/customers/repo", () => ({
+  findCustomerById: vi.fn(),
+}));
+
+vi.mock("@/modules/vehicles/repo", () => ({
+  findVehicleById: vi.fn(),
+}));
+
 vi.mock("@/modules/inspections/repo", () => ({
   findInspectionByServiceOrderId: vi.fn(),
+  findInspectionById: vi.fn(),
   findInspectionItemById: vi.fn(),
   findSuggestedRepairById: vi.fn(),
   createInspectionWithDefaults: vi.fn(),
@@ -46,22 +56,29 @@ vi.mock("@/modules/inspections/repo", () => ({
   createMediaRecord: vi.fn(),
   findMediaById: vi.fn(),
   deleteMediaById: vi.fn(),
+  linkInspectionToServiceOrder: vi.fn(),
+  listInspections: vi.fn(),
 }));
 
 import { findServiceOrderById } from "@/modules/service-orders/repo";
 import { findPartById } from "@/modules/inventory/repo";
+import { findVehicleById } from "@/modules/vehicles/repo";
 import {
   createInspectionWithDefaults,
   createSuggestedRepair,
+  findInspectionById,
   findInspectionByServiceOrderId,
   findInspectionItemById,
   findSuggestedRepairById,
+  listInspections,
   updateInspectionItemById,
 } from "@/modules/inspections/repo";
 import {
   addSuggestedRepairLine,
+  createInspection,
   getInspectionForGarageId,
   getOrCreateInspection,
+  listGarageInspections,
   removeSuggestedRepair,
   updateInspectionItem,
 } from "@/modules/inspections/service";
@@ -123,29 +140,40 @@ const sampleOrder = {
 const sampleInspection = {
   id: "insp-1",
   garageId: garageA,
+  customerId: "cust-1",
+  vehicleId: "veh-1",
   serviceOrderId: "order-1",
   notes: null,
+  complaint: null,
+  recommendedNotes: null,
+  expectedCompletion: null,
   createdAt: new Date(),
   updatedAt: new Date(),
-  items: DEFAULT_CHECKLIST_ITEMS.map((item, index) => ({
-    id: `item-${index}`,
-    garageId: garageA,
-    inspectionId: "insp-1",
-    key: item.key,
-    label: item.label,
-    result: null,
-    notes: null,
-    sortOrder: index,
-    isCustom: false,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-    media: [],
-  })),
+  customer: { id: "cust-1", name: "Ravi", phone: "9876543210" },
+  vehicle: {
+    id: "veh-1",
+    registrationNumber: "GJ01AB1234",
+    make: "Maruti",
+    model: "Swift",
+  },
+  serviceOrder: {
+    id: "order-1",
+    status: "INSPECTION",
+    technicianId: "tech-a",
+  },
+  items: [],
   suggestedRepairs: [],
 };
 
-describe("default checklist", () => {
-  it("includes brakes, tyres, battery, lights, fluids, suspension, AC", () => {
+const standaloneInspection = {
+  ...sampleInspection,
+  id: "insp-standalone",
+  serviceOrderId: null,
+  serviceOrder: null,
+};
+
+describe("legacy default checklist keys", () => {
+  it("keeps historical keys for older seeded rows", () => {
     expect(DEFAULT_CHECKLIST_ITEMS.map((i) => i.key)).toEqual([
       "brakes",
       "tyres",
@@ -177,24 +205,81 @@ describe("inspection access", () => {
     vi.clearAllMocks();
   });
 
-  it("seeds defaults when an owner opens inspection", async () => {
-    vi.mocked(findServiceOrderById).mockResolvedValue(sampleOrder);
+  it("creates a standalone inspection without a job card", async () => {
+    vi.mocked(findVehicleById).mockResolvedValue({
+      id: "veh-1",
+      garageId: garageA,
+      customerId: "cust-1",
+      registrationNumber: "GJ01AB1234",
+      make: "Maruti",
+      model: "Swift",
+      stateCode: "24",
+      year: null,
+      odometer: null,
+      insuranceExpiry: null,
+      pucExpiry: null,
+      fitnessExpiry: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      customer: { id: "cust-1", name: "Ravi", phone: "9876543210" },
+    });
+    vi.mocked(createInspectionWithDefaults).mockResolvedValue(
+      standaloneInspection as never,
+    );
+
+    const inspection = await createInspection(ownerA, {
+      customerId: "cust-1",
+      vehicleId: "veh-1",
+    });
+
+    expect(createInspectionWithDefaults).toHaveBeenCalledWith(
+      garageA,
+      expect.objectContaining({
+        customerId: "cust-1",
+        vehicleId: "veh-1",
+      }),
+    );
+    expect(inspection.serviceOrderId).toBeNull();
+    expect(inspection.items).toHaveLength(0);
+  });
+
+  it("lists only the session garage inspections", async () => {
+    vi.mocked(listInspections).mockResolvedValue({
+      items: [standaloneInspection as never],
+      total: 1,
+      page: 1,
+      pageSize: 20,
+    });
+
+    const result = await listGarageInspections(ownerA, { page: 1 });
+    expect(listInspections).toHaveBeenCalledWith(garageA, { page: 1 });
+    expect(result.total).toBe(1);
+  });
+
+  it("seeds defaults when an owner opens inspection from a job card", async () => {
+    vi.mocked(findServiceOrderById).mockResolvedValue(sampleOrder as never);
     vi.mocked(findInspectionByServiceOrderId).mockResolvedValue(null);
-    vi.mocked(createInspectionWithDefaults).mockResolvedValue(sampleInspection);
+    vi.mocked(createInspectionWithDefaults).mockResolvedValue(
+      sampleInspection as never,
+    );
 
     const inspection = await getOrCreateInspection(ownerA, "order-1");
     expect(createInspectionWithDefaults).toHaveBeenCalledWith(
       garageA,
-      expect.objectContaining({ serviceOrderId: "order-1" }),
+      expect.objectContaining({
+        serviceOrderId: "order-1",
+        customerId: "cust-1",
+        vehicleId: "veh-1",
+      }),
     );
-    expect(inspection?.items).toHaveLength(7);
+    expect(inspection?.items).toHaveLength(0);
   });
 
   it("returns the existing inspection when create races on serviceOrderId", async () => {
-    vi.mocked(findServiceOrderById).mockResolvedValue(sampleOrder);
+    vi.mocked(findServiceOrderById).mockResolvedValue(sampleOrder as never);
     vi.mocked(findInspectionByServiceOrderId)
       .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce(sampleInspection);
+      .mockResolvedValueOnce(sampleInspection as never);
     vi.mocked(createInspectionWithDefaults).mockRejectedValue(
       new Prisma.PrismaClientKnownRequestError("Unique constraint failed", {
         code: "P2002",
@@ -208,59 +293,17 @@ describe("inspection access", () => {
     expect(findInspectionByServiceOrderId).toHaveBeenCalledTimes(2);
   });
 
-  it("blocks a technician from another assignment", async () => {
-    vi.mocked(findServiceOrderById).mockResolvedValue(sampleOrder);
+  it("blocks technicians from the inspections module", async () => {
+    vi.mocked(findServiceOrderById).mockResolvedValue(sampleOrder as never);
     await expect(getOrCreateInspection(techOther, "order-1")).rejects.toBeInstanceOf(
       ForbiddenError,
     );
-  });
-
-  it("lets the assigned technician update an item", async () => {
-    vi.mocked(findInspectionItemById).mockResolvedValue({
-      id: "item-0",
-      garageId: garageA,
-      inspectionId: "insp-1",
-      key: "brakes",
-      label: "Brakes",
-      result: null,
-      notes: null,
-      sortOrder: 0,
-      isCustom: false,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      media: [],
-      inspection: {
-        id: "insp-1",
-        garageId: garageA,
-        serviceOrderId: "order-1",
-      },
-    });
-    vi.mocked(findServiceOrderById).mockResolvedValue(sampleOrder);
-    vi.mocked(updateInspectionItemById).mockResolvedValue({
-      id: "item-0",
-      garageId: garageA,
-      inspectionId: "insp-1",
-      key: "brakes",
-      label: "Brakes",
-      result: "URGENT",
-      notes: "Pads thin",
-      sortOrder: 0,
-      isCustom: false,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      media: [],
-      inspection: {
-        id: "insp-1",
-        garageId: garageA,
-        serviceOrderId: "order-1",
-      },
-    });
-
-    const updated = await updateInspectionItem(techA, "item-0", {
-      result: "URGENT",
-      notes: "Pads thin",
-    });
-    expect(updated.result).toBe("URGENT");
+    await expect(
+      updateInspectionItem(techA, "item-0", {
+        result: "URGENT",
+        notes: "Pads thin",
+      }),
+    ).rejects.toBeInstanceOf(ForbiddenError);
   });
 
   it("denies cross-garage inspection reads", async () => {
@@ -270,11 +313,10 @@ describe("inspection access", () => {
   });
 
   it("requires part id for suggested part repairs", async () => {
-    vi.mocked(findServiceOrderById).mockResolvedValue(sampleOrder);
-    vi.mocked(findInspectionByServiceOrderId).mockResolvedValue(sampleInspection);
+    vi.mocked(findInspectionById).mockResolvedValue(sampleInspection as never);
 
     await expect(
-      addSuggestedRepairLine(ownerA, "order-1", {
+      addSuggestedRepairLine(ownerA, "insp-1", {
         type: "PART",
         description: "Brake pads",
         quantity: "1",
@@ -286,8 +328,7 @@ describe("inspection access", () => {
   });
 
   it("saves suggested part repairs with inventory partId", async () => {
-    vi.mocked(findServiceOrderById).mockResolvedValue(sampleOrder);
-    vi.mocked(findInspectionByServiceOrderId).mockResolvedValue(sampleInspection);
+    vi.mocked(findInspectionById).mockResolvedValue(sampleInspection as never);
     vi.mocked(findPartById).mockResolvedValue({
       id: "part-1",
       garageId: garageA,
@@ -317,7 +358,7 @@ describe("inspection access", () => {
       updatedAt: new Date(),
     });
 
-    const repair = await addSuggestedRepairLine(ownerA, "order-1", {
+    const repair = await addSuggestedRepairLine(ownerA, "insp-1", {
       type: "PART",
       description: "Brake pads (PAD-1)",
       quantity: "1",
@@ -338,6 +379,33 @@ describe("inspection access", () => {
     );
   });
 
+  it("parses optional expectedCompletion on save", () => {
+    const parsed = saveInspectionSchema.parse({
+      customerId: "cust-1",
+      vehicleId: "veh-1",
+      complaint: "",
+      recommendedNotes: "",
+      expectedCompletion: "2026-11-01T15:30",
+      items: [],
+    });
+    expect(parsed.expectedCompletion).toBeInstanceOf(Date);
+    expect(parsed.expectedCompletion?.getFullYear()).toBe(2026);
+    expect(parsed.expectedCompletion?.getMonth()).toBe(10);
+    expect(parsed.expectedCompletion?.getDate()).toBe(1);
+    expect(parsed.expectedCompletion?.getHours()).toBe(15);
+    expect(parsed.expectedCompletion?.getMinutes()).toBe(30);
+
+    const empty = saveInspectionSchema.parse({
+      customerId: "cust-1",
+      vehicleId: "veh-1",
+      complaint: "",
+      recommendedNotes: "",
+      expectedCompletion: "",
+      items: [],
+    });
+    expect(empty.expectedCompletion).toBeNull();
+  });
+
   it("blocks accountants from removing suggested repairs", async () => {
     vi.mocked(findSuggestedRepairById).mockResolvedValue({
       id: "rep-1",
@@ -351,8 +419,17 @@ describe("inspection access", () => {
       sortOrder: 0,
       createdAt: new Date(),
       updatedAt: new Date(),
-      inspection: { id: "insp-1", serviceOrderId: "order-1" },
-    });
+      inspection: {
+        id: "insp-1",
+        serviceOrderId: "order-1",
+        serviceOrder: {
+          id: "order-1",
+          status: "INSPECTION" as const,
+          technicianId: "tech-a",
+          technicianAssignments: [{ technicianId: "tech-a" }],
+        },
+      },
+    } as never);
 
     await expect(
       removeSuggestedRepair(accountantA, "rep-1"),

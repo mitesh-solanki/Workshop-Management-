@@ -383,7 +383,6 @@ export function EditPartModal({
                   lines={shopLines}
                   onLinesChange={handleShopLinesChange}
                   vendorErrorKeys={vendorErrorKeys}
-                  vendorCreateMode="inline"
                 />
               </>
             ) : (

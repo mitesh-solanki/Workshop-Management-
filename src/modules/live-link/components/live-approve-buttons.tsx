@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useEffect, useRef } from "react";
+import { Check, X } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -67,24 +68,31 @@ export function LiveApproveButtons({ token, lineId }: Props) {
   const busy = approvePending || rejectPending;
 
   return (
-    <div className="flex w-full shrink-0 items-center gap-2 sm:w-auto sm:justify-end">
-      <form action={approveAction} className="min-w-0 flex-1 sm:flex-none">
+    <div className="flex shrink-0 items-center gap-1.5">
+      <form action={approveAction}>
         <Button
           type="submit"
+          size="sm"
           disabled={busy}
-          className="h-11 min-h-11 w-full min-w-11 px-3 sm:w-auto sm:px-4"
+          loading={approvePending}
+          className="h-9 min-h-9 border border-emerald-600 bg-emerald-600 px-2.5 text-white hover:border-emerald-700 hover:bg-emerald-700 hover:text-white"
+          aria-label={t("approve")}
         >
-          {approvePending ? t("saving") : t("approve")}
+          <Check className="size-3.5" strokeWidth={2.5} aria-hidden />
+          {t("approve")}
         </Button>
       </form>
-      <form action={rejectAction} className="min-w-0 flex-1 sm:flex-none">
+      <form action={rejectAction}>
         <Button
           type="submit"
-          variant="outline"
+          size="sm"
           disabled={busy}
-          className="h-11 min-h-11 w-full min-w-11 px-3 sm:w-auto sm:px-4"
+          loading={rejectPending}
+          className="h-9 min-h-9 border border-red-600 bg-red-600 px-2.5 text-white hover:border-red-700 hover:bg-red-700 hover:text-white"
+          aria-label={t("reject")}
         >
-          {rejectPending ? t("saving") : t("reject")}
+          <X className="size-3.5" strokeWidth={2.5} aria-hidden />
+          {t("reject")}
         </Button>
       </form>
     </div>

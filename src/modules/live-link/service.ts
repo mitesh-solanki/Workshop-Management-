@@ -14,14 +14,18 @@ import { requireRole, type RoleSession } from "@/lib/rbac";
 import { createPresignedDownloadUrl } from "@/lib/storage";
 import { computeLineGst } from "@/lib/gst";
 import { pendingBalancePaise, sumCreditNotesPaise } from "@/modules/billing/balance";
+import { findInspectionById } from "@/modules/inspections/repo";
 import { findServiceOrderById } from "@/modules/service-orders/repo";
 import {
   createLiveLinkRow,
+  findActiveLiveLinkForInspection,
   findActiveLiveLinkForOrder,
   findEstimateLineForLive,
   findLiveLinkByTokenHash,
+  loadLiveInspectionSnapshot,
   loadLiveOrderSnapshot,
   recordOnlineLineApproval,
+  revokeLiveLinksForInspection,
   revokeLiveLinksForOrder,
 } from "@/modules/live-link/repo";
 import {
@@ -44,10 +48,17 @@ export type LiveLinkAccessFailure =
   | "rate_limited";
 
 export type PublicLiveView = {
+  /** Job-card links can show invoice/pay; inspection links are estimate-only. */
+  kind: "order" | "inspection";
   garageName: string;
+  customerName: string;
   vehicleRegistration: string;
   vehicleLabel: string;
-  status: string;
+  complaint: string | null;
+  recommendedNotes: string | null;
+  /** Inspection / job card created date (ISO). */
+  date: string;
+  status: string | null;
   expectedCompletion: string | null;
   media: Array<{
     id: string;
@@ -96,9 +107,22 @@ export async function createLiveLink(
   requireRole(session, STAFF_ROLES);
   const input = createLiveLinkSchema.parse(raw);
 
-  const order = await findServiceOrderById(session.garageId, input.serviceOrderId);
-  if (!order) {
-    throw new NotFoundError();
+  if (input.serviceOrderId) {
+    const order = await findServiceOrderById(
+      session.garageId,
+      input.serviceOrderId,
+    );
+    if (!order) {
+      throw new NotFoundError();
+    }
+  } else if (input.inspectionId) {
+    const inspection = await findInspectionById(
+      session.garageId,
+      input.inspectionId,
+    );
+    if (!inspection) {
+      throw new NotFoundError();
+    }
   }
 
   const token = randomBytes(32).toString("base64url");
@@ -110,7 +134,8 @@ export async function createLiveLink(
 
   const link = await createLiveLinkRow({
     garageId: session.garageId,
-    serviceOrderId: order.id,
+    serviceOrderId: input.serviceOrderId ?? null,
+    inspectionId: input.inspectionId ?? null,
     tokenHash,
     expiresAt,
     createdById: session.userId,
@@ -159,6 +184,47 @@ export async function revokeLiveLinkForOrder(
     throw new NotFoundError();
   }
   await revokeLiveLinksForOrder(session.garageId, serviceOrderId, session.userId);
+  return { ok: true as const };
+}
+
+export async function getLiveLinkStatusForInspection(
+  session: RoleSession,
+  inspectionId: string,
+) {
+  requireRole(session, STAFF_ROLES);
+  const inspection = await findInspectionById(session.garageId, inspectionId);
+  if (!inspection) {
+    throw new NotFoundError();
+  }
+  const active = await findActiveLiveLinkForInspection(
+    session.garageId,
+    inspectionId,
+  );
+  return {
+    active: active
+      ? {
+          id: active.id,
+          expiresAt: active.expiresAt,
+          createdAt: active.createdAt,
+        }
+      : null,
+  };
+}
+
+export async function revokeLiveLinkForInspection(
+  session: RoleSession,
+  inspectionId: string,
+) {
+  requireRole(session, STAFF_ROLES);
+  const inspection = await findInspectionById(session.garageId, inspectionId);
+  if (!inspection) {
+    throw new NotFoundError();
+  }
+  await revokeLiveLinksForInspection(
+    session.garageId,
+    inspectionId,
+    session.userId,
+  );
   return { ok: true as const };
 }
 
@@ -213,6 +279,70 @@ async function resolveLiveLink(
   return { ok: true, link };
 }
 
+type SnapshotEstimate = NonNullable<
+  Awaited<ReturnType<typeof loadLiveOrderSnapshot>>["estimate"]
+>;
+
+type SnapshotInspection = NonNullable<
+  Awaited<ReturnType<typeof loadLiveOrderSnapshot>>["inspection"]
+>;
+
+function mapEstimateForPublic(
+  estimate: SnapshotEstimate | null | undefined,
+): PublicLiveView["estimate"] {
+  if (!estimate) return null;
+  return {
+    revisionNumber: estimate.revisionNumber,
+    canCustomerApprove:
+      estimate.askPermission && estimate.permissionVia === "LIVE_LINK",
+    lines: estimate.lines.map((line) => {
+      const gst = computeLineGst({
+        unitPricePaise: line.unitPricePaise,
+        quantity: line.quantity,
+        gstRatePercent: line.gstRatePercent,
+      });
+      return {
+        id: line.id,
+        type: line.type,
+        description: line.description,
+        quantity: line.quantity,
+        unitPricePaise: line.unitPricePaise,
+        lineTotalPaise: gst.totalPaise,
+        approvalState: line.approvalState,
+      };
+    }),
+  };
+}
+
+async function mediaFromInspectionItems(
+  inspection: SnapshotInspection | null | undefined,
+): Promise<PublicLiveView["media"]> {
+  const media: PublicLiveView["media"] = [];
+  if (!inspection) return media;
+  for (const item of inspection.items) {
+    for (const m of item.media) {
+      try {
+        const url = await Promise.race([
+          createPresignedDownloadUrl(m.storageKey, 3600),
+          new Promise<never>((_, reject) => {
+            setTimeout(() => reject(new Error("storage_timeout")), 4_000);
+          }),
+        ]);
+        media.push({
+          id: m.id,
+          kind: m.kind,
+          url,
+          contentType: m.contentType,
+          itemLabel: item.label,
+        });
+      } catch {
+        // Skip media if storage is unavailable or slow; page still loads.
+      }
+    }
+  }
+  return media;
+}
+
 export async function getPublicLiveView(
   token: string,
   ip: string,
@@ -223,6 +353,41 @@ export async function getPublicLiveView(
   }
 
   const { link } = resolved;
+
+  if (link.inspectionId) {
+    const snapshot = await loadLiveInspectionSnapshot(
+      link.garageId,
+      link.inspectionId,
+    );
+    if (!snapshot.inspection) {
+      return { ok: false, reason: "wrong_token" };
+    }
+    return {
+      ok: true,
+      view: {
+        kind: "inspection",
+        garageName: link.garage.name,
+        customerName: snapshot.inspection.customer.name,
+        vehicleRegistration: snapshot.inspection.vehicle.registrationNumber,
+        vehicleLabel:
+          `${snapshot.inspection.vehicle.make} ${snapshot.inspection.vehicle.model}`.trim(),
+        complaint: snapshot.inspection.complaint?.trim() || null,
+        recommendedNotes:
+          snapshot.inspection.recommendedNotes?.trim() || null,
+        date: snapshot.inspection.createdAt.toISOString(),
+        status: null,
+        expectedCompletion: null,
+        media: await mediaFromInspectionItems(snapshot.inspection),
+        estimate: mapEstimateForPublic(snapshot.estimate),
+        invoice: null,
+      },
+    };
+  }
+
+  if (!link.serviceOrderId) {
+    return { ok: false, reason: "wrong_token" };
+  }
+
   const snapshot = await loadLiveOrderSnapshot(
     link.garageId,
     link.serviceOrderId,
@@ -230,56 +395,6 @@ export async function getPublicLiveView(
   if (!snapshot.order) {
     return { ok: false, reason: "wrong_token" };
   }
-
-  const media: PublicLiveView["media"] = [];
-  if (snapshot.inspection) {
-    for (const item of snapshot.inspection.items) {
-      for (const m of item.media) {
-        try {
-          const url = await Promise.race([
-            createPresignedDownloadUrl(m.storageKey, 3600),
-            new Promise<never>((_, reject) => {
-              setTimeout(() => reject(new Error("storage_timeout")), 4_000);
-            }),
-          ]);
-          media.push({
-            id: m.id,
-            kind: m.kind,
-            url,
-            contentType: m.contentType,
-            itemLabel: item.label,
-          });
-        } catch {
-          // Skip media if storage is unavailable or slow; page still loads.
-        }
-      }
-    }
-  }
-
-  const estimate = snapshot.estimate
-    ? {
-        revisionNumber: snapshot.estimate.revisionNumber,
-        canCustomerApprove:
-          snapshot.estimate.askPermission &&
-          snapshot.estimate.permissionVia === "LIVE_LINK",
-        lines: snapshot.estimate.lines.map((line) => {
-          const gst = computeLineGst({
-            unitPricePaise: line.unitPricePaise,
-            quantity: line.quantity,
-            gstRatePercent: line.gstRatePercent,
-          });
-          return {
-            id: line.id,
-            type: line.type,
-            description: line.description,
-            quantity: line.quantity,
-            unitPricePaise: line.unitPricePaise,
-            lineTotalPaise: gst.totalPaise,
-            approvalState: line.approvalState,
-          };
-        }),
-      }
-    : null;
 
   const inv = snapshot.invoices[0] ?? null;
   const invoice = inv
@@ -310,16 +425,22 @@ export async function getPublicLiveView(
   return {
     ok: true,
     view: {
+      kind: "order",
       garageName: link.garage.name,
+      customerName: snapshot.order.customer.name,
       vehicleRegistration: snapshot.order.vehicle.registrationNumber,
       vehicleLabel:
         `${snapshot.order.vehicle.make} ${snapshot.order.vehicle.model}`.trim(),
+      complaint: snapshot.order.complaint?.trim() || null,
+      recommendedNotes:
+        snapshot.inspection?.recommendedNotes?.trim() || null,
+      date: snapshot.order.createdAt.toISOString(),
       status: snapshot.order.status,
       expectedCompletion: snapshot.order.expectedCompletion
         ? snapshot.order.expectedCompletion.toISOString()
         : null,
-      media,
-      estimate,
+      media: await mediaFromInspectionItems(snapshot.inspection),
+      estimate: mapEstimateForPublic(snapshot.estimate),
       invoice,
     },
   };
@@ -340,7 +461,13 @@ export async function approveEstimateLineViaLiveLink(
     resolved.link.garageId,
     input.lineId,
   );
-  if (!line || line.estimate.serviceOrderId !== resolved.link.serviceOrderId) {
+  const matchesOrder =
+    Boolean(resolved.link.serviceOrderId) &&
+    line?.estimate.serviceOrderId === resolved.link.serviceOrderId;
+  const matchesInspection =
+    Boolean(resolved.link.inspectionId) &&
+    line?.estimate.inspectionId === resolved.link.inspectionId;
+  if (!line || (!matchesOrder && !matchesInspection)) {
     throw new NotFoundError();
   }
   if (line.estimate.supersededAt != null) {
@@ -360,6 +487,7 @@ export async function approveEstimateLineViaLiveLink(
     estimateId: line.estimateId,
     estimateLineId: line.id,
     serviceOrderId: resolved.link.serviceOrderId,
+    inspectionId: resolved.link.inspectionId,
     fromState: "PENDING",
     toState: input.approvalState,
   });
@@ -387,6 +515,9 @@ export async function startPayViaLiveLink(
   const resolved = await resolveLiveLink(token, ip, "action");
   if (!resolved.ok) {
     throw new AppError(`live.${resolved.reason}`, 403);
+  }
+  if (!resolved.link.serviceOrderId || resolved.link.inspectionId) {
+    throw new NotFoundError();
   }
 
   const snapshot = await loadLiveOrderSnapshot(
@@ -435,6 +566,6 @@ export async function inspectLiveTokenForTests(token: string): Promise<{
   return {
     reason: "ok",
     garageId: link.garageId,
-    serviceOrderId: link.serviceOrderId,
+    serviceOrderId: link.serviceOrderId ?? undefined,
   };
 }

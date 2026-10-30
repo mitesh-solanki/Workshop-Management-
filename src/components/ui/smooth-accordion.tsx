@@ -20,7 +20,14 @@ export function SmoothAccordion({ open, children, className }: Props) {
       )}
       aria-hidden={!open}
     >
-      <div className="min-h-0 overflow-hidden">{children}</div>
+      <div
+        className={cn(
+          "min-h-0",
+          open ? "overflow-visible" : "overflow-hidden",
+        )}
+      >
+        {children}
+      </div>
     </div>
   );
 }

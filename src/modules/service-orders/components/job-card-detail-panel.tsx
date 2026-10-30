@@ -9,6 +9,10 @@ import type { ServiceOrderStatus } from "@/lib/service-order-status";
 import { LiveLinkStaffPanel } from "@/modules/live-link/components/live-link-staff-panel";
 import { JobCardSectionJumpProvider } from "@/modules/service-orders/components/job-card-section-jump";
 import { JobCardSectionNav } from "@/modules/service-orders/components/job-card-section-nav";
+import {
+  LatestEstimateLinesCard,
+  type LatestEstimateLine,
+} from "@/modules/service-orders/components/latest-estimate-lines-card";
 import { OrderLineForm } from "@/modules/service-orders/components/order-line-form";
 import { OrderLinesTable } from "@/modules/service-orders/components/order-lines-table";
 import { OrderTimeline } from "@/modules/service-orders/components/order-timeline";
@@ -22,6 +26,10 @@ import {
   type JobCardSurface,
 } from "@/modules/service-orders/job-card-sections";
 import type { ServiceOrderStatusValue } from "@/modules/service-orders/schema";
+import {
+  formatTechniciansList,
+  technicianIdsFromOrder,
+} from "@/modules/service-orders/technicians";
 import {
   jobCardSectionDomId,
   useJobCardSections,
@@ -67,6 +75,10 @@ type OrderData = {
   customer: { name: string };
   vehicle: { registrationNumber: string; make: string; model: string };
   technician: { name: string | null; email: string } | null;
+  technicianAssignments?: Array<{
+    technicianId: string;
+    technician: { id?: string; name: string | null; email: string };
+  }>;
   lines: OrderLine[];
 };
 
@@ -88,7 +100,10 @@ type Props = {
   surface?: JobCardSurface;
   locale: string;
   initialSection?: JobCardSection;
-  inspectionContent: ReactNode;
+  /** Latest estimate lines for this customer + vehicle (display only). */
+  latestEstimate?: {
+    lines: LatestEstimateLine[];
+  } | null;
   estimateContent: ReactNode;
   billingContent: ReactNode;
   /** Owner/staff: live link controls in Customer bill header after estimate exists. */
@@ -149,14 +164,13 @@ export function JobCardDetailPanel({
   surface = FULL_JOB_CARD_SURFACE,
   locale,
   initialSection = "details",
-  inspectionContent,
+  latestEstimate = null,
   estimateContent,
   billingContent,
   liveLink,
 }: Props) {
   const t = useTranslations("orders");
   const tc = useTranslations("customers");
-  const ti = useTranslations("inspections");
   const te = useTranslations("estimates");
   const tb = useTranslations("billing");
   usePageDetailLabel(order.vehicle.registrationNumber);
@@ -199,10 +213,7 @@ export function JobCardDetailPanel({
         Boolean(line.partId) &&
         (line.catalogueSellingPricePaise ?? 0) <= 0,
     );
-  const techLabel =
-    order.technician?.name?.trim() ||
-    order.technician?.email ||
-    t("technicianUnassigned");
+  const techLabel = formatTechniciansList(order, t("technicianUnassigned"));
   const vehicleLabel = `${order.vehicle.make} ${order.vehicle.model}`.trim();
   const metaParts = hidePrices
     ? [vehicleLabel, order.bay || null].filter(Boolean)
@@ -213,7 +224,6 @@ export function JobCardDetailPanel({
   const sectionTitles: Record<JobCardSection, string> = {
     details: t("details"),
     lines: t("lines"),
-    inspection: ti("title"),
     estimate: te("title"),
     billing: tb("title"),
     timeline: t("timeline"),
@@ -222,7 +232,6 @@ export function JobCardDetailPanel({
   const sectionSubtitles: Record<JobCardSection, string | undefined> = {
     details: t("detailsHint"),
     lines: t("linesDescription"),
-    inspection: t("inspectionHint"),
     estimate: t("estimateHint"),
     billing: t("billingHint"),
     timeline: t("timelineHint"),
@@ -264,14 +273,9 @@ export function JobCardDetailPanel({
               )}
             </p>
           </div>
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            {needsPricing ? (
-              <Badge variant="warning">{t("needsPricing")}</Badge>
-            ) : null}
-            <span className="inline-flex min-h-9 items-center rounded-full border border-[#c9d8ff] bg-[#e8efff] px-3 py-1.5 text-[13px] font-extrabold text-[#1f5eff]">
-              {t(`statuses.${order.status}`)}
-            </span>
-          </div>
+          {needsPricing ? (
+            <Badge variant="warning">{t("needsPricing")}</Badge>
+          ) : null}
         </header>
 
         <div className="flex w-full flex-col gap-4 lg:flex-row lg:items-start">
@@ -286,7 +290,7 @@ export function JobCardDetailPanel({
             />
           </aside>
 
-          <div className="min-w-0 flex-1">
+          <div className={hidePrices ? "min-w-0 w-full max-w-3xl" : "min-w-0 flex-1"}>
             <section
               aria-labelledby="job-card-active-section-title"
               className="min-w-0 overflow-hidden rounded-[14px] border border-[#d7deea] bg-white shadow-[0_3px_17px_rgba(36,58,99,0.06)]"
@@ -343,7 +347,7 @@ export function JobCardDetailPanel({
                         expectedCompletion: datetimeLocalFromOrder(
                           order.expectedCompletion,
                         ),
-                        technicianId: order.technicianId ?? "",
+                        technicianIds: technicianIdsFromOrder(order),
                         bay: order.bay ?? "",
                         priority: order.priority,
                         status: order.status as ServiceOrderStatusValue,
@@ -352,21 +356,15 @@ export function JobCardDetailPanel({
                   </div>
                 </SectionPanel>
 
-                <SectionPanel
-                  id="inspection"
-                  open={activeSection === "inspection"}
-                >
-                  {inspectionContent}
-                </SectionPanel>
-
                 <SectionPanel id="lines" open={activeSection === "lines"}>
-                  <div
-                    className={
-                      hidePrices
-                        ? `${SECTION_BODY_CLASS} max-w-xl`
-                        : SECTION_BODY_CLASS
-                    }
-                  >
+                  <div className={SECTION_BODY_CLASS}>
+                    {latestEstimate ? (
+                      <LatestEstimateLinesCard
+                        lines={latestEstimate.lines}
+                        hidePrices={hidePrices}
+                      />
+                    ) : null}
+
                     {canMutate && hidePrices ? (
                       <div className="space-y-3">
                         <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">

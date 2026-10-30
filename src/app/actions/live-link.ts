@@ -8,6 +8,7 @@ import { translateError } from "@/lib/translate-error";
 import {
   approveEstimateLineViaLiveLink,
   createLiveLink,
+  revokeLiveLinkForInspection,
   revokeLiveLinkForOrder,
   startPayViaLiveLink,
 } from "@/modules/live-link/service";
@@ -23,8 +24,20 @@ export type LiveLinkActionState = {
   alreadyPaid?: boolean;
 };
 
+export type LiveLinkTarget =
+  | { serviceOrderId: string }
+  | { inspectionId: string };
+
+function revalidateLiveLinkTarget(target: LiveLinkTarget) {
+  if ("serviceOrderId" in target) {
+    revalidatePath(`/orders/${target.serviceOrderId}`);
+    return;
+  }
+  revalidatePath(`/inspections/${target.inspectionId}`);
+}
+
 export async function createLiveLinkAction(
-  orderId: string,
+  target: LiveLinkTarget,
   _prev: LiveLinkActionState,
   formData: FormData,
 ): Promise<LiveLinkActionState> {
@@ -36,12 +49,14 @@ export async function createLiveLinkAction(
         ? Number.parseInt(rawHours, 10)
         : undefined;
     const result = await createLiveLink(session, {
-      serviceOrderId: orderId,
+      ...("serviceOrderId" in target
+        ? { serviceOrderId: target.serviceOrderId }
+        : { inspectionId: target.inspectionId }),
       ...(expiresInHours != null && !Number.isNaN(expiresInHours)
         ? { expiresInHours }
         : {}),
     });
-    revalidatePath(`/orders/${orderId}`);
+    revalidateLiveLinkTarget(target);
     return {
       ok: true,
       message: "linkCreated",
@@ -60,14 +75,18 @@ export async function createLiveLinkAction(
 }
 
 export async function revokeLiveLinkAction(
-  orderId: string,
+  target: LiveLinkTarget,
   _prev: LiveLinkActionState,
   _formData: FormData,
 ): Promise<LiveLinkActionState> {
   try {
     const session = await requireSession();
-    await revokeLiveLinkForOrder(session, orderId);
-    revalidatePath(`/orders/${orderId}`);
+    if ("serviceOrderId" in target) {
+      await revokeLiveLinkForOrder(session, target.serviceOrderId);
+    } else {
+      await revokeLiveLinkForInspection(session, target.inspectionId);
+    }
+    revalidateLiveLinkTarget(target);
     return { ok: true, message: "linkRevoked" };
   } catch (error) {
     return {

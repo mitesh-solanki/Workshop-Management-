@@ -168,6 +168,7 @@ const estimateSelect = {
   id: true,
   garageId: true,
   serviceOrderId: true,
+  inspectionId: true,
   revisionNumber: true,
   notes: true,
   askPermission: true,
@@ -216,35 +217,92 @@ export async function findCurrentEstimate(
   });
 }
 
+export async function findCurrentEstimateForInspection(
+  garageId: string,
+  inspectionId: string,
+) {
+  return prisma.estimate.findFirst({
+    where: { garageId, inspectionId, supersededAt: null },
+    select: estimateSelect,
+  });
+}
+
+/** Latest current estimate for this customer + vehicle (inspection or job card). */
+export async function findLatestCurrentEstimateForCustomerVehicle(
+  garageId: string,
+  customerId: string,
+  vehicleId: string,
+) {
+  return prisma.estimate.findFirst({
+    where: {
+      garageId,
+      supersededAt: null,
+      OR: [
+        { inspection: { customerId, vehicleId } },
+        { serviceOrder: { customerId, vehicleId } },
+      ],
+    },
+    orderBy: { createdAt: "desc" },
+    select: {
+      ...estimateSelect,
+      inspection: {
+        select: {
+          id: true,
+          expectedCompletion: true,
+        },
+      },
+      serviceOrder: {
+        select: {
+          id: true,
+          expectedCompletion: true,
+        },
+      },
+    },
+  });
+}
+
+const estimateRevisionListSelect = {
+  id: true,
+  revisionNumber: true,
+  notes: true,
+  supersededAt: true,
+  createdAt: true,
+  createdBy: {
+    select: { id: true, name: true, email: true },
+  },
+  lines: {
+    select: {
+      id: true,
+      type: true,
+      description: true,
+      quantity: true,
+      unitPricePaise: true,
+      approvalState: true,
+      sortOrder: true,
+    },
+    orderBy: [{ sortOrder: "asc" as const }, { createdAt: "asc" as const }],
+  },
+  _count: { select: { lines: true } },
+};
+
 export async function listEstimatesForOrder(
   garageId: string,
   serviceOrderId: string,
 ) {
   return prisma.estimate.findMany({
     where: { garageId, serviceOrderId },
-    select: {
-      id: true,
-      revisionNumber: true,
-      notes: true,
-      supersededAt: true,
-      createdAt: true,
-      createdBy: {
-        select: { id: true, name: true, email: true },
-      },
-      lines: {
-        select: {
-          id: true,
-          type: true,
-          description: true,
-          quantity: true,
-          unitPricePaise: true,
-          approvalState: true,
-          sortOrder: true,
-        },
-        orderBy: [{ sortOrder: "asc" as const }, { createdAt: "asc" as const }],
-      },
-      _count: { select: { lines: true } },
-    },
+    select: estimateRevisionListSelect,
+    orderBy: { revisionNumber: "desc" },
+  });
+}
+
+export async function listEstimatesForInspection(
+  garageId: string,
+  inspectionId: string,
+) {
+  return prisma.estimate.findMany({
+    where: { garageId, inspectionId },
+    select: estimateRevisionListSelect,
     orderBy: { revisionNumber: "desc" },
   });
 }
@@ -265,6 +323,7 @@ export async function findEstimateLineById(garageId: string, lineId: string) {
         select: {
           id: true,
           serviceOrderId: true,
+          inspectionId: true,
           supersededAt: true,
           revisionNumber: true,
         },
@@ -276,7 +335,8 @@ export async function findEstimateLineById(garageId: string, lineId: string) {
 export async function createEstimateWithLines(
   garageId: string,
   data: {
-    serviceOrderId: string;
+    serviceOrderId?: string | null;
+    inspectionId?: string | null;
     revisionNumber: number;
     notes: string | null;
     askPermission?: boolean;
@@ -288,10 +348,17 @@ export async function createEstimateWithLines(
     /**
      * Apply stock OUT + approval history for lines created as APPROVED.
      * Only for first create with askPermission=false — not revisions.
+     * Stock is skipped for inspection-only estimates (no service order).
      */
     bootstrapApprovedLines?: boolean;
   },
 ) {
+  const serviceOrderId = data.serviceOrderId?.trim() || null;
+  const inspectionId = data.inspectionId?.trim() || null;
+  if ((serviceOrderId == null) === (inspectionId == null)) {
+    throw new Error("Estimate requires exactly one of serviceOrderId or inspectionId");
+  }
+
   return prisma.$transaction(async (tx) => {
     if (data.supersedeEstimateId) {
       const superseded = await tx.estimate.updateMany({
@@ -315,7 +382,8 @@ export async function createEstimateWithLines(
     const estimate = await tx.estimate.create({
       data: {
         garageId,
-        serviceOrderId: data.serviceOrderId,
+        serviceOrderId,
+        inspectionId,
         revisionNumber: data.revisionNumber,
         notes: data.notes,
         askPermission,
@@ -346,17 +414,19 @@ export async function createEstimateWithLines(
           continue;
         }
 
-        const linked = await findLinkedPartLine(tx, garageId, line);
-        if (linked) {
-          await applyApprovedPartStock(tx, garageId, {
-            partId: linked.partId,
-            serviceOrderId: data.serviceOrderId,
-            serviceOrderLineId: linked.serviceOrderLineId,
-            quantity: line.quantity,
-            type: "OUT",
-            actorId: data.createdById,
-            note: `Estimate auto-approved ${data.serviceOrderId} (line ${line.id})`,
-          });
+        if (serviceOrderId) {
+          const linked = await findLinkedPartLine(tx, garageId, line);
+          if (linked) {
+            await applyApprovedPartStock(tx, garageId, {
+              partId: linked.partId,
+              serviceOrderId,
+              serviceOrderLineId: linked.serviceOrderLineId,
+              quantity: line.quantity,
+              type: "OUT",
+              actorId: data.createdById,
+              note: `Estimate auto-approved ${serviceOrderId} (line ${line.id})`,
+            });
+          }
         }
 
         await tx.estimateApproval.create({
@@ -384,7 +454,8 @@ export async function createEstimateWithLines(
         entity: "Estimate",
         entityId: estimate.id,
         meta: {
-          serviceOrderId: data.serviceOrderId,
+          serviceOrderId,
+          inspectionId,
           revisionNumber: data.revisionNumber,
           lineCount: data.lines.length,
           askPermission,
@@ -406,7 +477,7 @@ export async function updateEstimateLineDetails(
   data: {
     lineId: string;
     estimateId: string;
-    serviceOrderId: string;
+    serviceOrderId: string | null;
     description: string;
     quantity: number;
     unitPricePaise: number;
@@ -440,7 +511,11 @@ export async function updateEstimateLineDetails(
     }
 
     const quantityDelta = data.quantity - existing.quantity;
-    if (existing.approvalState === "APPROVED" && quantityDelta !== 0) {
+    if (
+      data.serviceOrderId &&
+      existing.approvalState === "APPROVED" &&
+      quantityDelta !== 0
+    ) {
       const linked = await findLinkedPartLine(tx, garageId, existing);
       if (linked) {
         await applyApprovedPartStock(tx, garageId, {
@@ -499,7 +574,7 @@ export async function addEstimateLine(
   garageId: string,
   data: {
     estimateId: string;
-    serviceOrderId: string;
+    serviceOrderId: string | null;
     type: EstimateLineType;
     description: string;
     quantity: number;
@@ -553,17 +628,19 @@ export async function addEstimateLine(
     });
 
     if (autoApprove) {
-      const linked = await findLinkedPartLine(tx, garageId, line);
-      if (linked) {
-        await applyApprovedPartStock(tx, garageId, {
-          partId: linked.partId,
-          serviceOrderId: data.serviceOrderId,
-          serviceOrderLineId: linked.serviceOrderLineId,
-          quantity: line.quantity,
-          type: "OUT",
-          actorId: data.actorId,
-          note: `Estimate auto-approved ${data.serviceOrderId} (line ${line.id})`,
-        });
+      if (data.serviceOrderId) {
+        const linked = await findLinkedPartLine(tx, garageId, line);
+        if (linked) {
+          await applyApprovedPartStock(tx, garageId, {
+            partId: linked.partId,
+            serviceOrderId: data.serviceOrderId,
+            serviceOrderLineId: linked.serviceOrderLineId,
+            quantity: line.quantity,
+            type: "OUT",
+            actorId: data.actorId,
+            note: `Estimate auto-approved ${data.serviceOrderId} (line ${line.id})`,
+          });
+        }
       }
       await tx.estimateApproval.create({
         data: {
@@ -658,7 +735,7 @@ export async function deleteEstimateLine(
   data: {
     lineId: string;
     estimateId: string;
-    serviceOrderId: string;
+    serviceOrderId: string | null;
     description: string;
     actorId: string;
   },
@@ -689,7 +766,7 @@ export async function deleteEstimateLine(
         return "not_found";
       }
 
-      if (existing.approvalState === "APPROVED") {
+      if (existing.approvalState === "APPROVED" && data.serviceOrderId) {
         const linked = await findLinkedPartLine(tx, garageId, existing);
         if (linked) {
           await applyApprovedPartStock(tx, garageId, {
@@ -786,7 +863,7 @@ export async function recordLineApproval(
   data: {
     estimateId: string;
     estimateLineId: string;
-    serviceOrderId: string;
+    serviceOrderId: string | null;
     fromState: EstimateLineApprovalState;
     toState: EstimateLineApprovalState;
     method: EstimateApprovalMethod;
@@ -809,8 +886,10 @@ export async function recordLineApproval(
         return { ok: false as const, reason: "CONFLICT" as const };
       }
 
-      const linked = await findLinkedPartLine(tx, garageId, existing);
-      if (linked) {
+      const linked = data.serviceOrderId
+        ? await findLinkedPartLine(tx, garageId, existing)
+        : null;
+      if (linked && data.serviceOrderId) {
         if (data.fromState !== "APPROVED" && data.toState === "APPROVED") {
           await applyApprovedPartStock(tx, garageId, {
             partId: linked.partId,

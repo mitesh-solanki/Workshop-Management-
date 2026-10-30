@@ -7,22 +7,32 @@ import { ForbiddenError, NotFoundError } from "@/lib/errors";
 import { requireRole, requireSession } from "@/lib/session";
 import { listBaysForSelect } from "@/modules/bays/service";
 import { getCustomer, listCustomers } from "@/modules/customers/service";
+import { getInspection } from "@/modules/inspections/service";
 import { NewJobCardForm } from "@/modules/service-orders/components/new-job-card-form";
+import { datetimeLocalFromOrder } from "@/modules/service-orders/components/service-order-form";
 import { jobCardSurfaceForRole } from "@/modules/service-orders/job-card-sections";
 import { listAssignableTechnicians } from "@/modules/service-orders/service";
 
 type Props = {
-  searchParams: Promise<{ vehicleId?: string; customerId?: string }>;
+  searchParams: Promise<{
+    vehicleId?: string;
+    customerId?: string;
+    inspectionId?: string;
+  }>;
 };
 
 export const instant = false;
 
 export default async function NewJobCardPage({ searchParams }: Props) {
   const session = await requireSession();
-  const { vehicleId: rawVehicleId, customerId: rawCustomerId } =
-    await searchParams;
+  const {
+    vehicleId: rawVehicleId,
+    customerId: rawCustomerId,
+    inspectionId: rawInspectionId,
+  } = await searchParams;
   const initialVehicleId = rawVehicleId?.trim() ?? "";
   const scopedCustomerId = rawCustomerId?.trim() ?? "";
+  const inspectionId = rawInspectionId?.trim() ?? "";
   const t = await getTranslations("orders");
 
   try {
@@ -130,6 +140,18 @@ export default async function NewJobCardPage({ searchParams }: Props) {
         ? vehicles[0]!.id
         : "";
 
+  let defaultExpectedCompletion = "";
+  if (inspectionId) {
+    try {
+      const inspection = await getInspection(session, inspectionId);
+      defaultExpectedCompletion = datetimeLocalFromOrder(
+        inspection.expectedCompletion,
+      );
+    } catch {
+      defaultExpectedCompletion = "";
+    }
+  }
+
   return (
     <main className="w-full max-w-none space-y-4">
       <Link
@@ -161,6 +183,8 @@ export default async function NewJobCardPage({ searchParams }: Props) {
           technicians={technicians}
           bays={bays}
           initialVehicleId={preselectedVehicleId}
+          inspectionId={inspectionId || undefined}
+          defaultExpectedCompletion={defaultExpectedCompletion || undefined}
           surface={surface}
         />
       )}

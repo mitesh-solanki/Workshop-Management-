@@ -20,6 +20,16 @@ export type ServiceOrderActionState = {
   orderId?: string;
 };
 
+function parseTechnicianIds(formData: FormData): string[] {
+  const fromMulti = formData
+    .getAll("technicianIds")
+    .map((value) => String(value).trim())
+    .filter(Boolean);
+  if (fromMulti.length > 0) return fromMulti;
+  const legacy = String(formData.get("technicianId") ?? "").trim();
+  return legacy ? [legacy] : [];
+}
+
 function parseCreateOrderForm(formData: FormData) {
   return {
     vehicleId: String(formData.get("vehicleId") ?? ""),
@@ -27,7 +37,7 @@ function parseCreateOrderForm(formData: FormData) {
     requestedServices: String(formData.get("requestedServices") ?? ""),
     odometerIn: String(formData.get("odometerIn") ?? ""),
     expectedCompletion: String(formData.get("expectedCompletion") ?? ""),
-    technicianId: String(formData.get("technicianId") ?? ""),
+    technicianIds: parseTechnicianIds(formData),
     bay: String(formData.get("bay") ?? ""),
     priority: String(formData.get("priority") ?? "") as
       | ""
@@ -35,6 +45,7 @@ function parseCreateOrderForm(formData: FormData) {
       | "NORMAL"
       | "HIGH"
       | "URGENT",
+    inspectionId: String(formData.get("inspectionId") ?? ""),
   };
 }
 
@@ -44,7 +55,7 @@ function parseUpdateOrderForm(formData: FormData) {
     requestedServices: String(formData.get("requestedServices") ?? ""),
     odometerIn: String(formData.get("odometerIn") ?? ""),
     expectedCompletion: String(formData.get("expectedCompletion") ?? ""),
-    technicianId: String(formData.get("technicianId") ?? ""),
+    technicianIds: parseTechnicianIds(formData),
     bay: String(formData.get("bay") ?? ""),
     priority: String(formData.get("priority") ?? "") as
       | ""
@@ -75,6 +86,7 @@ export async function createServiceOrderAction(
     revalidatePath("/orders");
     revalidatePath("/workshop");
     revalidatePath("/dashboard");
+    revalidatePath("/inspections");
     revalidatePath(`/customers/${order.customerId}`);
     return { ok: true, message: t("created"), orderId: order.id };
   } catch (error) {

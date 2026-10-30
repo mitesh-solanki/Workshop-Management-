@@ -21,6 +21,7 @@ import {
   type ServiceOrderPriorityValue,
   type ServiceOrderStatusValue,
 } from "@/modules/service-orders/schema";
+import { formatTechniciansList } from "@/modules/service-orders/technicians";
 
 export type BoardOrder = {
   id: string;
@@ -32,6 +33,10 @@ export type BoardOrder = {
   vehicle: { registrationNumber: string };
   customer: { name: string };
   technician: { id: string; name: string | null; email: string } | null;
+  technicianAssignments?: Array<{
+    technicianId: string;
+    technician: { id: string; name: string | null; email: string };
+  }>;
 };
 
 export type BoardTechnician = {
@@ -101,6 +106,13 @@ function techLabel(tech: BoardTechnician | BoardOrder["technician"]): string {
     return "";
   }
   return tech.name?.trim() || tech.email;
+}
+
+function boardTechniciansLabel(
+  order: BoardOrder,
+  unassigned: string,
+): string {
+  return formatTechniciansList(order, unassigned);
 }
 
 export function WorkshopBoard({
@@ -251,7 +263,7 @@ export function WorkshopBoard({
               bays={bays}
               valueKey="id"
               emptyOptionLabel={t("filterAllBays")}
-              className={cn(boardFilterSelectClass, boardSelectTriggerClass)}
+              className={cn(boardFilterSelectClass, "min-h-9 w-auto min-w-fit")}
               placeholder={t("filterAllBays")}
               searchPlaceholder={to("baySearchPlaceholder")}
               emptyLabel={to("bayEmptyOptions")}
@@ -320,7 +332,7 @@ export function WorkshopBoard({
               {BOARD_STATUSES.map((status) => {
                 const acceptDrop = Boolean(
                   draggingOrder &&
-                    canTransitionStatus(draggingOrder.status, status),
+                  canTransitionStatus(draggingOrder.status, status),
                 );
                 return (
                   <BoardColumn
@@ -402,7 +414,7 @@ function BoardColumn({
       className={cn(
         "flex min-w-0 flex-col rounded-lg border border-slate-200 bg-slate-50/70",
         isDropTarget &&
-          "border-blue-600 bg-blue-50/50 ring-2 ring-inset ring-blue-600/25",
+        "border-blue-600 bg-blue-50/50 ring-2 ring-inset ring-blue-600/25",
         draggingId && !acceptDrop && "opacity-60",
       )}
       aria-label={to(`statuses.${status}`)}
@@ -540,11 +552,10 @@ function BoardCard({
         {order.customer.name}
       </p>
       <p className="mt-0.5 truncate text-caption text-slate-500">
-        {`${t("technicianLabel")}: ${
-          order.technician
-            ? techLabel(order.technician)
-            : to("technicianUnassigned")
-        }`}
+        {`${t("technicianLabel")}: ${boardTechniciansLabel(
+          order,
+          to("technicianUnassigned"),
+        )}`}
       </p>
       <p className="mt-0.5 truncate text-caption text-slate-500">
         {`${t("createdLabel")}: ${formatDue(order.createdAt, t("dueNone"))}`}
@@ -555,9 +566,8 @@ function BoardCard({
           overdue ? "font-medium text-danger" : "text-slate-500",
         )}
       >
-        {`${t("dueLabel")}: ${formatDue(order.expectedCompletion, t("dueNone"))}${
-          overdue ? ` · ${t("overdue")}` : ""
-        }`}
+        {`${t("dueLabel")}: ${formatDue(order.expectedCompletion, t("dueNone"))}${overdue ? ` · ${t("overdue")}` : ""
+          }`}
       </p>
       {order.bay ? (
         <p className="mt-0.5 truncate text-caption text-slate-500">

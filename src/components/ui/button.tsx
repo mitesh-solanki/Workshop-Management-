@@ -73,6 +73,7 @@ function Button({
     size === "icon-sm" ||
     size === "icon-lg";
   // Slot requires exactly one React element child — never mix a loader with asChild.
+  // When loading, show spinner in place of leading icons (not beside them).
   const content = asChild ? (
     children
   ) : loading ? (
@@ -81,7 +82,11 @@ function Button({
         className={cn("animate-spin", isIconSize ? "size-5" : "size-4")}
         aria-hidden
       />
-      {isIconSize ? null : children}
+      {isIconSize ? null : (
+        <span className="inline-flex items-center gap-2 [&_svg]:hidden">
+          {children}
+        </span>
+      )}
     </>
   ) : (
     children

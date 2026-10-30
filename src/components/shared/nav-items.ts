@@ -1,5 +1,6 @@
 import {
   Car,
+  ClipboardCheck,
   ClipboardList,
   Columns3,
   Contact,
@@ -35,6 +36,7 @@ export type NavKey =
   | "purchaseReturns"
   | "team"
   | "orders"
+  | "inspections"
   | "settings";
 
 export type NavGroupKey = "workshop" | "business" | "admin";
@@ -73,6 +75,13 @@ export const APP_NAV_ITEMS: readonly NavItem[] = [
     key: "workshop",
     icon: Kanban,
     group: "workshop",
+  },
+  {
+    href: "/inspections",
+    key: "inspections",
+    icon: ClipboardCheck,
+    group: "workshop",
+    roles: ["OWNER", "MANAGER", "ACCOUNTANT"],
   },
   {
     href: "/orders",

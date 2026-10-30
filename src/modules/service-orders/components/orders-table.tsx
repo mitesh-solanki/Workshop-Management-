@@ -17,6 +17,7 @@ import {
 } from "@/lib/service-order-status";
 import { cn } from "@/lib/utils";
 import { JobCardRowActions } from "@/modules/service-orders/components/job-card-row-actions";
+import { formatTechniciansList } from "@/modules/service-orders/technicians";
 
 type OrderSort = "newest" | "oldest" | "reg_asc" | "reg_desc";
 type StatusFilter = "" | ServiceOrderStatus | "NEEDS_PRICING";
@@ -33,6 +34,10 @@ export type OrderTableRow = {
   vehicle: { registrationNumber: string; make: string; model: string };
   customer: { name: string };
   technician: { name: string | null; email: string } | null;
+  technicianAssignments?: Array<{
+    technicianId: string;
+    technician: { id?: string; name: string | null; email: string };
+  }>;
 };
 
 type OrdersTableProps = {
@@ -130,11 +135,7 @@ export function OrdersTable({
       const complaint = order.complaint.toLowerCase();
       const makeModel =
         `${order.vehicle.make} ${order.vehicle.model}`.toLowerCase();
-      const tech = (
-        order.technician?.name?.trim() ||
-        order.technician?.email ||
-        ""
-      ).toLowerCase();
+      const tech = formatTechniciansList(order, "").toLowerCase();
       const statusLabel = t(`statuses.${order.status}`).toLowerCase();
       return (
         registration.includes(q) ||

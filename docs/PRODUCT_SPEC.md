@@ -4,10 +4,10 @@
 Help garage owners run daily workshop work in one place: customers, vehicles, service orders, inspection, estimates, parts stock, vendors, GST billing, UPI payments and reminders. Optional WhatsApp messages. Target users: independent multi-brand garages in Gujarat and other Tier-2 cities. Languages: English, Hindi, Gujarati.
 
 ## Core rule
-The **Service Order** is the spine. Inspection, estimate, parts used, invoice and payments all attach to one Service Order for one vehicle visit.
+The **Service Order** (Job Card) is the spine for workshop work, estimate (for now), parts used, invoice and payments. **Inspection** is first-class on Customer + Vehicle and may exist before a Job Card; it can be linked to a Job Card later or never. Estimate remains on the Job Card until a later phase.
 
 ## Workshop flow
-Appointment (optional) -> Customer and Vehicle -> Service Order -> Inspection -> Estimate and Approval -> Workshop Board -> Parts and Vendors (if needed) -> Billing and Payment -> Delivery -> Reminders -> Reports
+Appointment (optional) -> Customer and Vehicle -> Inspection (optional) -> Estimate and Approval (via Job Card for now) / Job Card (with or without inspection) -> Workshop Board -> Parts and Vendors (if needed) -> Billing and Payment -> Delivery -> Reminders -> Reports
 
 ## Roles
 Owner, Manager, Technician, Accountant. Technicians see only their jobs. Accountants see money, not workshop settings. Owners see everything.
@@ -16,7 +16,7 @@ Owner, Manager, Technician, Accountant. Technicians see only their jobs. Account
 
 1. **Customer and Vehicle**: customer (name, phone, address), vehicle (registration number, make, model), service history, communication history, document expiry (insurance, PUC, fitness), leads (simple CRM).
 2. **Service Order**: complaints, required services, check-in receipt (optional), assign technician, expected completion, voice note (optional).
-3. **Digital Inspection**: checklist, photos and videos, suggested repairs, parts and labour.
+3. **Digital Inspection**: checklist, photos and videos, suggested repairs, parts and labour. Own list/detail pages and Customer/Vehicle sections; Job Card optional.
 4. **Estimate and Approval**: labour + parts + GST. Approval can be manual, phone, WhatsApp or online. Full, partial or rejected. Revised estimates for extra repairs. Approval history.
 5. **Workshop Board**: live list of active orders. Statuses: Waiting, Inspection, In Progress, Waiting for Parts, Ready, Completed. Technician workload, priorities, deadlines, bay occupancy.
 6. **Inventory**: live stock, low-stock alerts, reserve parts for an order, parts requests, transfers and adjustments, batch and serial tracking, barcode (optional), direct sale without a Service Order. Stock goes down when parts are used or sold and up when received.

@@ -1,4 +1,9 @@
-export const VEHICLE_SECTIONS = ["overview", "warranty", "service"] as const;
+export const VEHICLE_SECTIONS = [
+  "overview",
+  "inspections",
+  "warranty",
+  "service",
+] as const;
 
 export type VehicleSection = (typeof VEHICLE_SECTIONS)[number];
 

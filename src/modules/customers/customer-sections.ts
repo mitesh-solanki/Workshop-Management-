@@ -1,6 +1,7 @@
 export const CUSTOMER_SECTIONS = [
   "details",
   "vehicles",
+  "inspections",
   "service",
   "warranty",
   "communication",

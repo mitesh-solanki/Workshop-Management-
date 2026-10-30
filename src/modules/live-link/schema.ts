@@ -3,11 +3,23 @@ import { z } from "zod";
 /** Default live link lifetime: 7 days. */
 export const LIVE_LINK_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
-export const createLiveLinkSchema = z.object({
-  serviceOrderId: z.string().trim().min(1),
-  /** Expiry override in hours (1–168). Default 7 days. */
-  expiresInHours: z.number().int().min(1).max(168).optional(),
-});
+export const createLiveLinkSchema = z
+  .object({
+    serviceOrderId: z.string().trim().min(1).optional(),
+    inspectionId: z.string().trim().min(1).optional(),
+    /** Expiry override in hours (1–168). Default 7 days. */
+    expiresInHours: z.number().int().min(1).max(168).optional(),
+  })
+  .superRefine((data, ctx) => {
+    const hasOrder = Boolean(data.serviceOrderId);
+    const hasInspection = Boolean(data.inspectionId);
+    if (hasOrder === hasInspection) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Provide either serviceOrderId or inspectionId",
+      });
+    }
+  });
 
 export type CreateLiveLinkInput = z.input<typeof createLiveLinkSchema>;
 

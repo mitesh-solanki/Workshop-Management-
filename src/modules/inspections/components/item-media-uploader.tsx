@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { Camera, Film, Loader2, X } from "lucide-react";
 import { useTranslations } from "next-intl";
@@ -22,7 +22,7 @@ type MediaRow = {
 };
 
 type Props = {
-  orderId: string;
+  inspectionId: string;
   itemId: string;
   media: MediaRow[];
   canEdit: boolean;
@@ -39,10 +39,12 @@ type Props = {
   showControls?: boolean;
   /** e.g. Save — sits on the right of the photo/video row. */
   trailingActions?: ReactNode;
+  /** Keep parent draft media in sync after upload/remove (client forms). */
+  onMediaChange?: (media: MediaRow[]) => void;
 };
 
 export function ItemMediaUploader({
-  orderId,
+  inspectionId,
   itemId,
   media,
   canEdit,
@@ -51,6 +53,7 @@ export function ItemMediaUploader({
   showGallery = true,
   showControls = true,
   trailingActions,
+  onMediaChange,
 }: Props) {
   const t = useTranslations("inspections");
   const router = useRouter();
@@ -64,11 +67,6 @@ export function ItemMediaUploader({
   const [removedIds, setRemovedIds] = useState<string[]>([]);
   const busy = uploading || removingId != null;
   const visibleMedia = media.filter((m) => !removedIds.includes(m.id));
-
-  useEffect(() => {
-    const live = new Set(media.map((m) => m.id));
-    setRemovedIds((prev) => prev.filter((id) => live.has(id)));
-  }, [media]);
 
   async function uploadFile(file: File, kind: "PHOTO" | "VIDEO") {
     setError(null);
@@ -97,15 +95,25 @@ export function ItemMediaUploader({
         contentType,
       });
 
-      await confirmMediaUploadAction({
+      const created = await confirmMediaUploadAction({
         inspectionItemId: itemId,
         kind,
         storageKey: uploaded.storageKey,
         contentType,
         byteSize: blob.size,
-        orderId,
+        inspectionId,
       });
 
+      const nextMedia: MediaRow[] = [
+        ...media.filter((row) => !removedIds.includes(row.id)),
+        {
+          id: created.id,
+          kind: created.kind,
+          url: created.url,
+          contentType: created.contentType,
+        },
+      ];
+      onMediaChange?.(nextMedia);
       toast.success(t("mediaUploaded"));
       router.refresh();
     } catch (err) {
@@ -145,7 +153,7 @@ export function ItemMediaUploader({
     setError(null);
     setRemovingId(mediaId);
     try {
-      const result = await removeMediaAction(mediaId, orderId);
+      const result = await removeMediaAction(mediaId, inspectionId);
       if (!result.ok) {
         const message = result.message ?? t("uploadFailed");
         setError(message);
@@ -154,6 +162,11 @@ export function ItemMediaUploader({
       }
       setRemovedIds((prev) =>
         prev.includes(mediaId) ? prev : [...prev, mediaId],
+      );
+      onMediaChange?.(
+        media.filter(
+          (row) => row.id !== mediaId && !removedIds.includes(row.id),
+        ),
       );
       toast.success(t("mediaRemoved"));
       router.refresh();

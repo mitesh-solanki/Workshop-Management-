@@ -98,7 +98,7 @@ export function QuantityStepper({
   const display = Number.isFinite(value) ? String(value) : "";
   const submitValue = Number.isFinite(value) ? value : defaultValue;
 
-  const height = compact ? "h-9 min-h-9" : "h-11 min-h-11";
+  const height = "h-11 min-h-11";
   const sideW = compact ? "w-8" : "w-10";
   const iconSize = compact ? "size-3.5" : "size-4";
   const sideBtnClass = cn(
@@ -116,7 +116,7 @@ export function QuantityStepper({
       <div
         className={cn(
           "inline-flex max-w-full items-stretch overflow-hidden rounded-md border border-input bg-card shadow-xs",
-          compact ? "w-[7.5rem]" : "w-[9.5rem]",
+          compact ? "w-32" : "w-[9.5rem]",
           height,
           disabled && "bg-muted/40",
         )}

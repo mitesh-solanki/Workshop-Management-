@@ -54,6 +54,7 @@ export default async function WorkshopPage({ searchParams }: Props) {
     vehicle: { registrationNumber: order.vehicle.registrationNumber },
     customer: { name: order.customer.name },
     technician: order.technician,
+    technicianAssignments: order.technicianAssignments,
   }));
 
   return (

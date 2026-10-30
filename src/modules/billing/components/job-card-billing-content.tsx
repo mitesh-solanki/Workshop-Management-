@@ -23,7 +23,6 @@ export type BillingPreviewContext = {
   vehicleRegistration: string;
   vehicleLabel: string;
   jobLabel: string;
-  placeOfSupplyLabel: string;
   approvedLines: Array<{
     id: string;
     description: string;
@@ -69,7 +68,6 @@ export async function JobCardBillingContent({
   preview,
 }: Props) {
   const t = await getTranslations("billing");
-  const tGst = await getTranslations("gst");
   const locale = await getLocale();
   const pdfLocale = locale === "hi" || locale === "gu" ? locale : "en";
   const session = await requireSession();
@@ -82,14 +80,6 @@ export async function JobCardBillingContent({
   const warrantyByInvoice = new Map(
     warrantyLists.map((row) => [row.invoiceId, row.docs]),
   );
-
-  function stateName(code: string) {
-    try {
-      return tGst(`states.${code}`);
-    } catch {
-      return code;
-    }
-  }
 
   const draftPreview: InvoicePreviewData | null =
     hasUnbilledApprovedLines && preview.approvedLines.length > 0
@@ -106,7 +96,6 @@ export async function JobCardBillingContent({
           customerGstin: null,
           vehicleLabel: preview.vehicleRegistration,
           jobLabel: `${preview.vehicleLabel} · ${preview.jobLabel}`,
-          placeOfSupplyLabel: preview.placeOfSupplyLabel,
           notes: null,
           lines: preview.approvedLines.map((line) => ({
             id: line.id,
@@ -209,7 +198,6 @@ export async function JobCardBillingContent({
           invoice.serviceOrder.vehicle?.registrationNumber ??
           preview.vehicleRegistration,
         jobLabel: preview.jobLabel,
-        placeOfSupplyLabel: `${t("placeOfSupply")}: ${stateName(invoice.placeOfSupplyStateCode)}`,
         notes: invoice.notes,
         warranties: (warrantyByInvoice.get(invoice.id) ?? [])
           .filter((doc) => doc.warrantyExpiresAt != null)

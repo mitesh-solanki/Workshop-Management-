@@ -44,7 +44,6 @@ import {
   updateServiceOrderLine,
   updateServiceOrderStatus,
 } from "@/modules/service-orders/repo";
-import { mirrorOrderLineOntoCurrentEstimate } from "@/modules/estimates/service";
 import {
   isTechnicianAssignedToOrder,
   technicianIdsFromOrder,
@@ -502,16 +501,6 @@ export async function addOrderLine(
     throw new NotFoundError();
   }
 
-  if (result.line.unitPricePaise > 0) {
-    await mirrorOrderLineOntoCurrentEstimate(session, order.id, {
-      id: result.line.id,
-      type: result.line.type,
-      description: result.line.description,
-      quantity: result.line.quantity,
-      unitPricePaise: result.line.unitPricePaise,
-    });
-  }
-
   return result.line;
 }
 
@@ -558,16 +547,6 @@ export async function updateOrderLine(
 
   if (!result.ok) {
     throw new NotFoundError();
-  }
-
-  if (result.line.unitPricePaise > 0) {
-    await mirrorOrderLineOntoCurrentEstimate(session, order.id, {
-      id: result.line.id,
-      type: result.line.type,
-      description: result.line.description,
-      quantity: result.line.quantity,
-      unitPricePaise: result.line.unitPricePaise,
-    });
   }
 
   return result.line;

@@ -482,6 +482,9 @@ export async function updateEstimateLineDetails(
     quantity: number;
     unitPricePaise: number;
     actorId: string;
+    type?: EstimateLineType;
+    gstRatePercent?: number;
+    hsnOrSac?: string;
   },
 ) {
   return prisma.$transaction(async (tx) => {
@@ -530,6 +533,10 @@ export async function updateEstimateLineDetails(
       }
     }
 
+    const nextType = data.type ?? existing.type;
+    const nextGstRatePercent = data.gstRatePercent ?? existing.gstRatePercent;
+    const nextHsnOrSac = data.hsnOrSac ?? existing.hsnOrSac;
+
     const updated = await tx.estimateLine.updateMany({
       where: {
         id: data.lineId,
@@ -537,9 +544,12 @@ export async function updateEstimateLineDetails(
         estimateId: data.estimateId,
       },
       data: {
+        type: nextType,
         description: data.description,
         quantity: data.quantity,
         unitPricePaise: data.unitPricePaise,
+        gstRatePercent: nextGstRatePercent,
+        hsnOrSac: nextHsnOrSac,
       },
     });
     if (updated.count === 0) {
@@ -556,9 +566,12 @@ export async function updateEstimateLineDetails(
         meta: {
           serviceOrderId: data.serviceOrderId,
           estimateId: data.estimateId,
+          type: nextType,
           description: data.description,
           quantity: data.quantity,
           unitPricePaise: data.unitPricePaise,
+          gstRatePercent: nextGstRatePercent,
+          hsnOrSac: nextHsnOrSac,
         } satisfies Prisma.InputJsonValue,
       },
     });

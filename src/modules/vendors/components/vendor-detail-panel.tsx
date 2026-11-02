@@ -40,11 +40,6 @@ import {
 import { formatRupees } from "@/lib/money";
 import { cn } from "@/lib/utils";
 
-import { CreatePartsRequestModal } from "@/modules/purchases/components/create-parts-request-modal";
-import {
-  CreatePurchaseOrderModal,
-  type OpenPartsRequestOption,
-} from "@/modules/purchases/components/create-purchase-order-modal";
 import { CreatePurchaseReturnModal } from "@/modules/purchases/components/create-purchase-return-modal";
 import { CreateVendorBillModal } from "@/modules/purchases/components/create-vendor-bill-modal";
 import {
@@ -88,7 +83,6 @@ type Props = {
   purchaseOrders: PurchaseOrderRow[];
   bills: BillRow[];
   returns: ReturnRow[];
-  openRequests: OpenPartsRequestOption[];
   parts: PartOption[];
   canWrite: boolean;
   canCreatePurchaseOrder: boolean;
@@ -202,7 +196,6 @@ export function VendorDetailPanel({
   purchaseOrders,
   bills,
   returns,
-  openRequests,
   parts,
   canWrite,
   canCreatePurchaseOrder,
@@ -241,44 +234,14 @@ export function VendorDetailPanel({
     vendorId: vendor.id,
   }));
 
-  const createRequestModal = canCreatePurchaseOrder ? (
-    <CreatePartsRequestModal
-      parts={parts}
-      stayAndRefresh
-      allowAddPart
-      size="sm"
-      trigger={
-        <Button type="button" variant="outline" size="md">
-          <Plus className="size-4" aria-hidden />
-          {t("requestPart")}
-        </Button>
-      }
-    />
+  const purchaseOrderActions = canCreatePurchaseOrder ? (
+    <Button asChild size="md">
+      <Link href={`/purchase-orders/new?vendorId=${vendor.id}`}>
+        <Plus className="size-4" aria-hidden />
+        {t("createPurchaseOrder")}
+      </Link>
+    </Button>
   ) : null;
-
-  const createPoModal = canCreatePurchaseOrder ? (
-    <CreatePurchaseOrderModal
-      vendors={vendorOption}
-      openRequests={openRequests}
-      defaultVendorId={vendor.id}
-      stayAndRefresh
-      size="sm"
-      trigger={
-        <Button type="button" size="md">
-          <Plus className="size-4" aria-hidden />
-          {t("createPurchaseOrder")}
-        </Button>
-      }
-    />
-  ) : null;
-
-  const purchaseOrderActions =
-    createRequestModal || createPoModal ? (
-      <div className="flex flex-wrap items-center gap-2">
-        {createRequestModal}
-        {createPoModal}
-      </div>
-    ) : null;
 
   const createBillModal = canCreateBill ? (
     <CreateVendorBillModal

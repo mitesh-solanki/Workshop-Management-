@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { collectInspectionEstimateSources } from "@/modules/inspections/estimate-sources";
+import {
+  collectInspectionEstimateSources,
+  diffInspectionEstimateSources,
+} from "@/modules/inspections/estimate-sources";
 
 describe("collectInspectionEstimateSources", () => {
   it("uses priced findings lines with Part Or Detail text", () => {
@@ -71,5 +74,35 @@ describe("collectInspectionEstimateSources", () => {
         },
       ]),
     ).toEqual([]);
+  });
+});
+
+describe("diffInspectionEstimateSources", () => {
+  it("flags adds, price updates, and removals", () => {
+    const diff = diffInspectionEstimateSources(
+      [
+        { description: "Pads", quantity: 1, unitPricePaise: 34_000 },
+        { description: "Drum", quantity: 1, unitPricePaise: 2_400 },
+      ],
+      [
+        { description: "Pads", quantity: 1, unitPricePaise: 3_400 },
+        { description: "Old line", quantity: 1, unitPricePaise: 100 },
+      ],
+    );
+    expect(diff.toAdd).toEqual([
+      { description: "Drum", quantity: 1, unitPricePaise: 2_400 },
+    ]);
+    expect(diff.toUpdate).toEqual([
+      {
+        description: "Pads",
+        quantity: 1,
+        unitPricePaise: 34_000,
+        previousQuantity: 1,
+        previousUnitPricePaise: 3_400,
+      },
+    ]);
+    expect(diff.toRemove).toEqual([
+      { description: "Old line", quantity: 1, unitPricePaise: 100 },
+    ]);
   });
 });

@@ -24,13 +24,17 @@ test("owner reaches bays from nav and can open add bay modal", async ({
 
   await page
     .getByRole("navigation", { name: "Main navigation" })
-    .getByRole("link", { name: "Bays" })
+    .getByRole("link", { name: "Work Stations" })
     .click();
 
-  await expect(page).toHaveURL(/\/bays/);
-  await expect(page.getByRole("heading", { name: "Bays", level: 1 })).toBeVisible();
+  await expect(page).toHaveURL(/\/work-stations/);
+  await expect(
+    page.getByRole("heading", { name: "Work Stations", level: 1 }),
+  ).toBeVisible();
 
-  await page.getByRole("button", { name: "Add Bay" }).first().click();
-  await expect(page.getByRole("heading", { name: "Add Bay" })).toBeVisible();
-  await expect(page.getByLabel("Bay name")).toBeVisible();
+  await page.getByRole("button", { name: "Add Work Station" }).first().click();
+  await expect(
+    page.getByRole("heading", { name: "Add Work Station" }),
+  ).toBeVisible();
+  await expect(page.getByLabel("Work Station Name")).toBeVisible();
 });

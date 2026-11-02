@@ -2,15 +2,16 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ChevronLeft } from "lucide-react";
 import { getLocale, getTranslations } from "next-intl/server";
-import { ForbiddenError, NotFoundError } from "@/lib/errors";
+import { AppError, ForbiddenError, NotFoundError } from "@/lib/errors";
 import { computeLineGst } from "@/lib/gst";
 import { requireSession } from "@/lib/session";
+import { translateError } from "@/lib/translate-error";
 import { JobCardBillingContent } from "@/modules/billing/components/job-card-billing-content";
 import {
+  ensureDraftInvoiceInSync,
   getGarageBillingProfile,
   getInvoicesForOrder,
 } from "@/modules/billing/service";
-import { JobCardEstimateContent } from "@/modules/estimates/components/job-card-estimate-content";
 import {
   getEstimateForOrder,
   getLatestEstimateForCustomerVehicle,
@@ -82,6 +83,7 @@ export default async function OrderEditPage({ params, searchParams }: Props) {
   let liveLinkStatus: Awaited<ReturnType<typeof getLiveLinkStatusForOrder>> = {
     active: null,
   };
+  let draftSyncError: string | null = null;
 
   try {
     if (surface.includeCommercialSections) {
@@ -90,7 +92,6 @@ export default async function OrderEditPage({ params, searchParams }: Props) {
         linkedInspection,
         estimate,
         latestCustomerVehicleEstimate,
-        invoices,
         technicians,
         bays,
         garage,
@@ -104,12 +105,27 @@ export default async function OrderEditPage({ params, searchParams }: Props) {
           order.customerId,
           order.vehicleId,
         ),
-        getInvoicesForOrder(session, id),
         listAssignableTechnicians(session),
         listBaysForSelect(session).catch(() => []),
         getGarageBillingProfile(session),
         getLiveLinkStatusForOrder(session, id).catch(() => ({ active: null })),
       ]);
+
+      if (canBill) {
+        try {
+          await ensureDraftInvoiceInSync(session, id);
+        } catch (error) {
+          if (
+            error instanceof AppError &&
+            error.code === "billing.no_priced_lines"
+          ) {
+            draftSyncError = null;
+          } else {
+            draftSyncError = await translateError(error);
+          }
+        }
+      }
+      invoices = await getInvoicesForOrder(session, id);
     } else {
       // Technicians do not use the inspections module — only the latest estimate card.
       [latestCustomerVehicleEstimate, technicians, bays] = await Promise.all([
@@ -147,19 +163,42 @@ export default async function OrderEditPage({ params, searchParams }: Props) {
     }
   }
 
-  const approvedLines =
-    estimate?.current?.lines.filter(
-      (line) => line.approvalState === "APPROVED",
-    ) ?? [];
-  const unbilledApprovedLines = approvedLines.filter(
-    (line) => !billedEstimateLineIds.has(line.id),
+  const estimateLineByOrderLineId = new Map(
+    (estimate?.current?.lines ?? [])
+      .filter((line) => line.sourceOrderLineId)
+      .map((line) => [line.sourceOrderLineId as string, line]),
   );
-  const hasUnbilledApprovedLines = unbilledApprovedLines.length > 0;
 
-  const approvedPreviewLines = unbilledApprovedLines.map((line) => {
-    const amounts = computeLineGst(line);
+  const billableOrderLines = order.lines.filter(
+    (line) =>
+      (line.type === "LABOUR" || line.type === "PART") &&
+      line.unitPricePaise > 0 &&
+      line.quantity > 0,
+  );
+
+  const unbilledOrderLines = billableOrderLines.filter((line) => {
+    const linked = estimateLineByOrderLineId.get(line.id);
+    if (!linked) return true;
+    return !billedEstimateLineIds.has(linked.id);
+  });
+  const hasUnbilledApprovedLines = unbilledOrderLines.length > 0;
+
+  const approvedPreviewLines = unbilledOrderLines.map((line) => {
     const typeKey =
       line.type === "PART" || line.type === "LABOUR" ? line.type : "LABOUR";
+    const part =
+      "part" in line && line.part
+        ? line.part
+        : null;
+    const gstRatePercent =
+      part && typeof part.gstRatePercent === "number"
+        ? part.gstRatePercent
+        : 18;
+    const amounts = computeLineGst({
+      quantity: line.quantity,
+      unitPricePaise: line.unitPricePaise,
+      gstRatePercent,
+    });
     return {
       id: line.id,
       description: line.description,
@@ -278,17 +317,6 @@ export default async function OrderEditPage({ params, searchParams }: Props) {
               }
             : undefined
         }
-        estimateContent={
-          surface.includeCommercialSections && estimate ? (
-            <JobCardEstimateContent
-              orderId={order.id}
-              canEdit={canMutate}
-              data={estimate}
-              liveLinkActive={liveLinkStatus.active}
-              canEditLiveLink={canBill}
-            />
-          ) : null
-        }
         billingContent={
           surface.includeCommercialSections ? (
             <JobCardBillingContent
@@ -298,6 +326,7 @@ export default async function OrderEditPage({ params, searchParams }: Props) {
               invoices={invoices}
               hasUnbilledApprovedLines={hasUnbilledApprovedLines}
               defaultPlaceOfSupplyStateCode={order.vehicle.stateCode}
+              draftSyncError={draftSyncError}
               preview={{
                 garageName: garage?.name ?? t("title"),
                 garageAddress: garage?.address ?? null,

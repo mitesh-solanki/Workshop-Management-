@@ -650,6 +650,55 @@ export async function linkInspectionToServiceOrder(
   return findInspectionById(garageId, inspectionId);
 }
 
+/** Apply finding field patches after estimate ↔ inspection alignment. */
+export async function patchInspectionFindingItems(
+  garageId: string,
+  data: {
+    inspectionId: string;
+    actorId: string;
+    items: Array<{
+      id: string;
+      label: string;
+      notes: string | null;
+      quantity: number;
+      unitPricePaise: number;
+    }>;
+  },
+) {
+  if (data.items.length === 0) return;
+
+  await prisma.$transaction(async (tx) => {
+    for (const item of data.items) {
+      await tx.inspectionItem.updateMany({
+        where: {
+          id: item.id,
+          garageId,
+          inspectionId: data.inspectionId,
+        },
+        data: {
+          label: item.label,
+          notes: item.notes,
+          quantity: item.quantity,
+          unitPricePaise: item.unitPricePaise,
+        },
+      });
+    }
+    await tx.auditLog.create({
+      data: {
+        garageId,
+        actorId: data.actorId,
+        action: "inspection.findings_aligned_from_estimate",
+        entity: "Inspection",
+        entityId: data.inspectionId,
+        meta: {
+          itemIds: data.items.map((item) => item.id),
+          count: data.items.length,
+        } satisfies Prisma.InputJsonValue,
+      },
+    });
+  });
+}
+
 export async function updateInspectionItemById(
   garageId: string,
   itemId: string,

@@ -5,7 +5,8 @@
  * (SearchableSelect / SearchableMultiSelect / PlaceSearchSelect).
  *
  * - mode "single" | "multiple"
- * - filter "local" (filter options in the menu) | "remote" (parent searches; trigger is the input)
+ * - filter "local" (filter options client-side) | "remote" (parent searches)
+ * - trigger "field" (type in the control) | "menu" (button + search row in list)
  * - remote: type minQueryLength chars before results are expected
  *
  * Menu portals to document.body with position:fixed so dialog overflow /
@@ -49,6 +50,11 @@ type BaseProps = {
   "aria-describedby"?: string;
   /** local = filter options client-side. remote = parent owns results via onQueryChange. */
   filter?: "local" | "remote";
+  /**
+   * field = type in the control (parts / state). menu = button + search row in the list.
+   * Defaults to field for remote, menu for local.
+   */
+  trigger?: "field" | "menu";
   /**
    * Local only: keep the menu empty until the user types a search.
    * Selected value still shows on the trigger.
@@ -102,9 +108,11 @@ export function SearchableSelect(props: SearchableSelectProps) {
   const filter = props.filter ?? (props.onQueryChange ? "remote" : "local");
   const remote = filter === "remote";
   const requireSearch = Boolean(props.requireSearch) && !remote;
-  /** Remote (parts): type in the field. Local: button + search as first row in menu. */
-  const inputTrigger = remote;
-  const minQueryLength = props.minQueryLength ?? 2;
+  /** field = type in the control; menu = button + search row inside the list. */
+  const inputTrigger =
+    props.trigger === "field" ||
+    (props.trigger !== "menu" && remote);
+  const minQueryLength = props.minQueryLength ?? (remote ? 2 : 0);
   const {
     id,
     name,
@@ -312,24 +320,30 @@ export function SearchableSelect(props: SearchableSelectProps) {
   }, [query, remote, minQueryLength]);
 
   const filtered = useMemo(() => {
+    let source: SearchableSelectOption[];
     if (remote) {
       if (query.trim().length < minQueryLength && query.trim().length > 0) {
-        return [];
+        source = [];
+      } else {
+        source = [...options];
       }
-      return [...options];
+    } else {
+      const q = query.trim().toLowerCase();
+      if (requireSearch && !q) return [];
+      source = q ? options.filter((opt) => matchesOption(opt, q)) : [...options];
     }
-    const q = query.trim().toLowerCase();
-    if (requireSearch && !q) return [];
-    const source = q ? options.filter((opt) => matchesOption(opt, q)) : [...options];
 
-    if (!multiple) return source;
+    // Keep current selection(s) pinned at the top while searching / browsing.
+    if (selectedValues.length === 0) return source;
 
     const seen = new Set<string>();
     const selected: SearchableSelectOption[] = [];
     const rest: SearchableSelectOption[] = [];
     for (const value of selectedValues) {
-      if (seen.has(value)) continue;
-      const match = source.find((opt) => opt.value === value);
+      if (!value || seen.has(value)) continue;
+      const match =
+        source.find((opt) => opt.value === value) ??
+        options.find((opt) => opt.value === value);
       selected.push(match ?? { value, label: value });
       seen.add(value);
     }
@@ -345,7 +359,6 @@ export function SearchableSelect(props: SearchableSelectProps) {
     remote,
     requireSearch,
     minQueryLength,
-    multiple,
     selectedValues,
   ]);
 
@@ -384,7 +397,7 @@ export function SearchableSelect(props: SearchableSelectProps) {
     mounted &&
     portalRoot != null &&
     !(requireSearch && queryTrim.length === 0) &&
-    !(inputTrigger && queryTrim.length < minQueryLength);
+    !(inputTrigger && remote && queryTrim.length < minQueryLength);
 
   const menu =
     showMenu && portalRoot ? (

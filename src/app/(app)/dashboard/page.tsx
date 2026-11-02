@@ -230,6 +230,7 @@ export default async function DashboardPage() {
               parts={lowStock}
               canRequest={canManageStock}
               requestLabel={t("requestPart")}
+              limit={5}
             />
           )}
         </div>

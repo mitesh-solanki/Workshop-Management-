@@ -88,7 +88,7 @@ export const partsRequestSearchSchema = z.object({
     .default(10),
 });
 
-export const createPurchaseOrderSchema = z.object({
+export const createPurchaseOrderFromRequestsSchema = z.object({
   vendorId: z.string().trim().min(1, { error: "validation.required" }),
   notes: optionalText(1000),
   partsRequestIds: z
@@ -96,10 +96,68 @@ export const createPurchaseOrderSchema = z.object({
     .min(1, { error: "validation.required" }),
 });
 
+const purchaseOrderLineInputSchema = z.object({
+  partId: z.string().trim().min(1, { error: "validation.required" }),
+  quantity: z.coerce.number().int().min(1, { error: "validation.invalidInput" }),
+});
+
+function uniquePurchaseOrderParts<
+  T extends { lines: Array<{ partId: string }> },
+>(schema: z.ZodType<T>) {
+  return schema.superRefine((data, ctx) => {
+    const seen = new Set<string>();
+    for (const line of data.lines) {
+      if (!line.partId) continue;
+      if (seen.has(line.partId)) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["lines"],
+          message: "purchases.duplicate_part",
+        });
+        return;
+      }
+      seen.add(line.partId);
+    }
+  });
+}
+
+export const createPurchaseOrderSchema = uniquePurchaseOrderParts(
+  z.object({
+    vendorId: optionalId,
+    notes: optionalText(1000),
+    lines: z.array(purchaseOrderLineInputSchema).min(1, {
+      error: "validation.required",
+    }),
+    serviceOrderId: optionalId,
+  }),
+);
+
+export const updatePurchaseOrderSchema = uniquePurchaseOrderParts(
+  z.object({
+    purchaseOrderId: z.string().trim().min(1, { error: "validation.required" }),
+    vendorId: optionalId,
+    notes: optionalText(1000),
+    lines: z.array(purchaseOrderLineInputSchema).min(1, {
+      error: "validation.required",
+    }),
+  }),
+);
+
+export const markPurchaseOrderOrderedSchema = z.object({
+  purchaseOrderId: z.string().trim().min(1, { error: "validation.required" }),
+  vendorId: optionalId,
+});
+
+export const cancelPurchaseOrderSchema = z.object({
+  purchaseOrderId: z.string().trim().min(1, { error: "validation.required" }),
+});
+
 export const PURCHASE_ORDER_STATUSES = [
+  "OPEN",
   "PENDING",
   "PARTIALLY_RECEIVED",
   "RECEIVED",
+  "CANCELLED",
 ] as const;
 
 export const PURCHASE_ORDER_SORTS = ["newest", "oldest"] as const;
@@ -245,6 +303,14 @@ export const purchaseReturnSearchSchema = z.object({
 
 export type CreatePartsRequestInput = z.input<typeof createPartsRequestSchema>;
 export type CreatePurchaseOrderInput = z.input<typeof createPurchaseOrderSchema>;
+export type CreatePurchaseOrderFromRequestsInput = z.input<
+  typeof createPurchaseOrderFromRequestsSchema
+>;
+export type UpdatePurchaseOrderInput = z.input<typeof updatePurchaseOrderSchema>;
+export type MarkPurchaseOrderOrderedInput = z.input<
+  typeof markPurchaseOrderOrderedSchema
+>;
+export type CancelPurchaseOrderInput = z.input<typeof cancelPurchaseOrderSchema>;
 export type ReceiveGoodsInput = z.input<typeof receiveGoodsSchema>;
 export const MAX_VENDOR_BILL_ATTACHMENT_BYTES = 8 * 1024 * 1024;
 

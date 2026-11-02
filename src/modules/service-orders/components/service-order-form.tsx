@@ -1,7 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useActionState,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import {
@@ -56,6 +63,10 @@ type CreateProps = {
   lockTechnicianId?: string;
   /** Link this standalone inspection after the job card is created. */
   inspectionId?: string;
+  /** Vehicle picker rendered beside Customer on create. */
+  vehiclePicker?: ReactNode;
+  /** Customer name for the selected vehicle (create). */
+  customerName?: string;
   className?: string;
 };
 
@@ -244,12 +255,38 @@ export function ServiceOrderForm(props: Props) {
       </FormField>
     ) : null;
 
+  const createCustomerName =
+    props.mode === "create" ? (props.customerName ?? "").trim() : "";
   const customerField =
-    props.mode === "edit" ? (
+    props.mode === "edit" && !technicianFieldsOnly ? (
       <FormField id="locked-customer" label={t("customer")}>
         <Input
           id="locked-customer"
           value={props.locked.customerName}
+          disabled
+          readOnly
+          className="h-11 min-h-11"
+        />
+      </FormField>
+    ) : props.mode === "create" ? (
+      <FormField id="locked-customer" label={t("customer")}>
+        <Input
+          id="locked-customer"
+          value={createCustomerName}
+          placeholder={t("selectVehiclePlaceholder")}
+          disabled
+          readOnly
+          className="h-11 min-h-11"
+        />
+      </FormField>
+    ) : null;
+
+  const createStatusField =
+    props.mode === "create" ? (
+      <FormField id="create-status" label={t("statusField")}>
+        <Input
+          id="create-status"
+          value={t("statuses.WAITING")}
           disabled
           readOnly
           className="h-11 min-h-11"
@@ -354,7 +391,7 @@ export function ServiceOrderForm(props: Props) {
         <p className="text-caption text-slate-500">
           {t("baysEmptyHint")}{" "}
           <Link
-            href="/bays"
+            href="/work-stations"
             className="font-medium text-teal-700 underline-offset-4 hover:underline"
           >
             {t("goToBays")}
@@ -457,16 +494,14 @@ export function ServiceOrderForm(props: Props) {
             value={defaults.requestedServices}
           />
           <div className="space-y-4">
-            {props.mode === "edit" ? (
-              <div className="grid gap-4 sm:grid-cols-2">
-                {vehicleField}
-                {customerField}
-              </div>
-            ) : null}
+            <div className="grid gap-4 sm:grid-cols-2">
+              {props.mode === "edit" ? vehicleField : props.vehiclePicker}
+              {customerField}
+            </div>
 
             <div className="grid gap-4 sm:grid-cols-2">
               {expectedCompletionField}
-              {props.mode === "edit" ? statusField : null}
+              {props.mode === "edit" ? statusField : createStatusField}
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2">
@@ -483,7 +518,12 @@ export function ServiceOrderForm(props: Props) {
       )}
       {!readOnly ? (
         <div className="flex flex-wrap justify-end gap-2 border-t border-border pt-4">
-          <Button type="submit" size="md" loading={pending}>
+          <Button
+            type="submit"
+            size="md"
+            loading={pending}
+            disabled={props.mode === "create" && !props.vehicleId}
+          >
             {pending
               ? t("saving")
               : props.mode === "create"

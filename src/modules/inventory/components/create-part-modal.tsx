@@ -34,7 +34,6 @@ import {
   PART_UNIT_OPTIONS,
 } from "@/modules/inventory/schema";
 import { NameSkuFields } from "@/modules/inventory/components/name-sku-fields";
-import { PartNameSuggestInput } from "@/modules/inventory/components/part-name-suggest-input";
 import { QuantityStepper } from "@/modules/inventory/components/quantity-stepper";
 import {
   ShopReceiveFields,
@@ -96,7 +95,6 @@ function CreatePartFormFields({
   nameOnly?: boolean;
 }) {
   const t = useTranslations("inventory");
-  const [nameOnlyValue, setNameOnlyValue] = useState(initialName);
   const [vendorErrorKeys, setVendorErrorKeys] = useState<string[]>([]);
   const [manualStock, setManualStock] = useState(0);
   const vendorStockQty = shopLines
@@ -126,18 +124,26 @@ function CreatePartFormFields({
       }}
     >
       {nameOnly ? (
-        <FormField id={`${idPrefix}-name`} label={t("name")}>
-          <PartNameSuggestInput
-            id={`${idPrefix}-name`}
-            name="name"
-            required
-            maxLength={200}
-            autoFocus
-            value={nameOnlyValue}
-            onValueChange={setNameOnlyValue}
-            className="h-11 min-h-11"
+        <>
+          <NameSkuFields
+            idPrefix={idPrefix}
+            autoSku
+            autoFocusName
+            defaultName={initialName}
           />
-        </FormField>
+          <FormField id={`${idPrefix}-unit`} label={t("unit")}>
+            <FormSelect
+              id={`${idPrefix}-unit`}
+              name="unit"
+              required
+              defaultValue="pcs"
+              options={PART_UNIT_OPTIONS.map((unit) => ({
+                value: unit,
+                label: t(`units.${unit}`),
+              }))}
+            />
+          </FormField>
+        </>
       ) : (
         <NameSkuFields
           idPrefix={idPrefix}
@@ -267,6 +273,7 @@ function CreatePartFormFields({
                   onShopLinesChange(next);
                 }}
                 vendorErrorKeys={vendorErrorKeys}
+                vendorCreateMode="inline"
               />
             </>
           ) : (

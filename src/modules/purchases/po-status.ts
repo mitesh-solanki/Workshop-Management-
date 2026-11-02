@@ -1,5 +1,6 @@
 import type { PurchaseOrderStatus } from "@prisma/client";
 
+/** Status after goods are received (never OPEN / CANCELLED). */
 export function purchaseOrderStatusFromLines(
   lines: Array<{ quantityOrdered: number; quantityReceived: number }>,
 ): PurchaseOrderStatus {
@@ -17,4 +18,12 @@ export function purchaseOrderStatusFromLines(
     return "PARTIALLY_RECEIVED";
   }
   return "PENDING";
+}
+
+export function purchaseOrderIsEditable(status: PurchaseOrderStatus): boolean {
+  return status === "OPEN" || status === "PENDING";
+}
+
+export function purchaseOrderCanReceive(status: PurchaseOrderStatus): boolean {
+  return status === "PENDING" || status === "PARTIALLY_RECEIVED";
 }

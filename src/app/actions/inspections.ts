@@ -5,6 +5,7 @@ import { ZodError } from "zod";
 import { AppError } from "@/lib/errors";
 import { requireSession } from "@/lib/session";
 import { translateError } from "@/lib/translate-error";
+import { syncInspectionEstimateFromItems } from "@/modules/estimates/service";
 import {
   addChecklistItem,
   addSuggestedRepairLine,
@@ -120,6 +121,18 @@ export async function saveInspectionAction(
     const inspection = inspectionId
       ? await saveExistingInspection(session, inspectionId, payload)
       : await saveNewInspection(session, payload);
+    if (
+      inspectionId &&
+      (session.role === "OWNER" || session.role === "MANAGER")
+    ) {
+      try {
+        await syncInspectionEstimateFromItems(session, inspection.id);
+      } catch (error) {
+        if (!(error instanceof AppError) || error.code !== "ESTIMATE_MISSING") {
+          throw error;
+        }
+      }
+    }
     revalidatePath("/inspections");
     revalidatePath(`/inspections/${inspection.id}`);
     revalidatePath(`/customers/${inspection.customerId}`);

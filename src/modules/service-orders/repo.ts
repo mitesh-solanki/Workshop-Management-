@@ -290,7 +290,13 @@ export async function findServiceOrderById(
       lines: {
         select: {
           ...lineSelect,
-          part: { select: { sellingPricePaise: true } },
+          part: {
+            select: {
+              sellingPricePaise: true,
+              gstRatePercent: true,
+              hsn: true,
+            },
+          },
         },
         orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
       },
@@ -721,6 +727,7 @@ export async function updateServiceOrderLine(
             quantity: updated.quantity,
             unitPricePaise: updated.unitPricePaise,
             partId: updated.partId,
+            previousDescription: existing.description,
             previousQuantity: existing.quantity,
             previousUnitPricePaise: existing.unitPricePaise,
             previousPartId: existing.partId,
@@ -892,11 +899,27 @@ export async function listServiceOrderAuditLogs(
   garageId: string,
   orderId: string,
 ) {
+  const invoices = await prisma.invoice.findMany({
+    where: { garageId, serviceOrderId: orderId },
+    select: { id: true },
+  });
+  const invoiceIds = invoices.map((invoice) => invoice.id);
+
   return prisma.auditLog.findMany({
     where: {
       garageId,
-      entity: "ServiceOrder",
-      entityId: orderId,
+      OR: [
+        { entity: "ServiceOrder", entityId: orderId },
+        { meta: { path: ["serviceOrderId"], equals: orderId } },
+        ...(invoiceIds.length > 0
+          ? [
+              { entity: "Invoice" as const, entityId: { in: invoiceIds } },
+              ...invoiceIds.map((invoiceId) => ({
+                meta: { path: ["invoiceId"], equals: invoiceId },
+              })),
+            ]
+          : []),
+      ],
     },
     select: {
       id: true,

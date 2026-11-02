@@ -27,7 +27,7 @@ export async function createBayModalAction(
     const bay = await createBayRecord(session, {
       name: String(formData.get("name") ?? ""),
     });
-    revalidatePath("/bays");
+    revalidatePath("/work-stations");
     return {
       ok: true,
       message: t("created"),
@@ -49,7 +49,7 @@ export async function updateBayModalAction(
     await updateBayRecord(session, bayId, {
       name: String(formData.get("name") ?? ""),
     });
-    revalidatePath("/bays");
+    revalidatePath("/work-stations");
     return { ok: true, message: t("updated"), bayId };
   } catch (error) {
     return { ok: false, message: await translateError(error) };
@@ -61,7 +61,7 @@ export async function deleteBayAction(bayId: string): Promise<BayActionState> {
   try {
     const session = await requireSession();
     await deleteBayRecord(session, bayId);
-    revalidatePath("/bays");
+    revalidatePath("/work-stations");
     return { ok: true, message: t("deleted") };
   } catch (error) {
     return { ok: false, message: await translateError(error) };

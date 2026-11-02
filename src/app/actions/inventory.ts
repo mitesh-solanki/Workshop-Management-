@@ -563,9 +563,12 @@ export async function createPartByNameModalAction(
     const session = await requireSession();
     const part = await createPartByNameRecord(session, {
       name: String(formData.get("name") ?? ""),
+      sku: String(formData.get("sku") ?? ""),
+      unit: String(formData.get("unit") ?? "pcs"),
     });
     revalidatePath("/inventory");
     revalidatePath("/orders");
+    revalidatePath("/purchase-orders");
     return {
       ok: true,
       message: t("createdByName"),

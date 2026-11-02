@@ -222,6 +222,53 @@ describe("purchases against Postgres", () => {
     expect(foreignPayment).toBeNull();
   });
 
+  it("creates purchase order with lines; optional vendor stays OPEN until marked ordered", async () => {
+    requireDb();
+    const {
+      createPurchaseOrderWithLines,
+      markPurchaseOrderOrdered,
+      receiveAgainstPurchaseOrder,
+    } = await import("@/modules/purchases/repo");
+    const { getPartStock } = await import("@/modules/inventory/repo");
+
+    const before = await getPartStock(garageA, partA);
+    const openPo = await createPurchaseOrderWithLines(garageA, {
+      vendorId: null,
+      notes: null,
+      lines: [{ partId: partA, quantity: 5 }],
+      serviceOrderId: null,
+      actorId: userA,
+    });
+    expect(openPo.status).toBe("OPEN");
+    expect(openPo.vendorId).toBeNull();
+
+    await expect(
+      receiveAgainstPurchaseOrder(garageA, {
+        purchaseOrderId: openPo.id,
+        notes: null,
+        lines: [{ purchaseOrderLineId: openPo.lines[0]!.id, quantity: 1 }],
+        actorId: userA,
+      }),
+    ).rejects.toMatchObject({ code: "purchases.po_not_receivable" });
+
+    const ordered = await markPurchaseOrderOrdered(garageA, {
+      purchaseOrderId: openPo.id,
+      vendorId: vendorA,
+      actorId: userA,
+    });
+    expect(ordered.status).toBe("PENDING");
+    expect(ordered.vendorId).toBe(vendorA);
+
+    await receiveAgainstPurchaseOrder(garageA, {
+      purchaseOrderId: openPo.id,
+      notes: null,
+      lines: [{ purchaseOrderLineId: openPo.lines[0]!.id, quantity: 2 }],
+      actorId: userA,
+    });
+    const after = await getPartStock(garageA, partA);
+    expect(after).toBe(before + 2);
+  });
+
   it("parts request becomes a purchase order; partial receipt raises stock once", async () => {
     requireDb();
     const {

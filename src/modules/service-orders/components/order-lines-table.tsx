@@ -56,6 +56,10 @@ import {
   type CreatedPartSummary,
 } from "@/modules/inventory/components/create-part-modal";
 import {
+  EditPartModal,
+  type EditPartValues,
+} from "@/modules/inventory/components/edit-part-modal";
+import {
   PartPickerSelect,
   type PartPickerItem,
 } from "@/modules/inventory/components/part-picker-select";
@@ -188,7 +192,34 @@ function OrderLineItem({
   const wasPending = useRef(false);
   const [saving, setSaving] = useState(false);
   const savePending = pending || saving;
-  const savedTotal = multiplyByQuantity(line.unitPricePaise, line.quantity);
+  /** Keep last saved values until router.refresh brings matching props (no flicker). */
+  const [optimistic, setOptimistic] = useState<{
+    description: string;
+    quantity: number;
+    unitPricePaise: number;
+    partId: string | null;
+  } | null>(null);
+
+  useEffect(() => {
+    if (!optimistic) return;
+    if (
+      line.description === optimistic.description &&
+      line.quantity === optimistic.quantity &&
+      line.unitPricePaise === optimistic.unitPricePaise &&
+      (line.partId ?? null) === optimistic.partId
+    ) {
+      setOptimistic(null);
+    }
+  }, [line, optimistic]);
+
+  const displayDescription = optimistic?.description ?? line.description;
+  const displayQuantity = optimistic?.quantity ?? line.quantity;
+  const displayUnitPricePaise =
+    optimistic?.unitPricePaise ?? line.unitPricePaise;
+  const savedTotal = multiplyByQuantity(
+    displayUnitPricePaise as Paise,
+    displayQuantity,
+  );
 
   const [draftQty, setDraftQty] = useState(line.quantity);
   const [draftPricePaise, setDraftPricePaise] = useState(
@@ -202,20 +233,34 @@ function OrderLineItem({
   const [createInitialName, setCreateInitialName] = useState("");
   const [creatingPart, setCreatingPart] = useState(false);
   const [applyingPrice, startApplyPrice] = useTransition();
+  const [inventoryPart, setInventoryPart] = useState<EditPartValues | null>(
+    null,
+  );
+  const [inventoryOpen, setInventoryOpen] = useState(false);
+  const [openingInventory, startOpenInventory] = useTransition();
+  /** Stock of the part currently chosen in edit; null = still the saved line. */
+  const [editPartStock, setEditPartStock] = useState<number | null>(null);
+  const [editCataloguePaise, setEditCataloguePaise] = useState(
+    line.catalogueSellingPricePaise ?? 0,
+  );
   const liveTotal = multiplyByQuantity(draftPricePaise, draftQty);
   const isPart = line.type === "PART";
   const cataloguePrice = line.catalogueSellingPricePaise ?? 0;
+  const activeCataloguePaise =
+    editing && editPartStock != null ? editCataloguePaise : cataloguePrice;
   const needsPricing =
     !hidePrices &&
     isPart &&
-    line.unitPricePaise === 0 &&
-    Boolean(line.partId) &&
+    displayUnitPricePaise === 0 &&
+    Boolean(line.partId || optimistic?.partId) &&
     cataloguePrice <= 0;
+  /** Prefill only when stock is available — 0-stock uses the inventory modal instead. */
   const canPrefillFromInventory =
     !hidePrices &&
     isPart &&
-    Boolean(line.partId) &&
-    cataloguePrice > 0 &&
+    Boolean(editing ? editPartId : line.partId) &&
+    activeCataloguePaise > 0 &&
+    (editPartStock == null || editPartStock > 0) &&
     (editing ? draftPricePaise === 0 : line.unitPricePaise === 0);
   const formId = `line-edit-${line.id}`;
 
@@ -225,14 +270,39 @@ function OrderLineItem({
     setPriceInputKey((key) => key + 1);
     setEditPartId(line.partId ?? "");
     setEditDescription(line.description);
+    setEditPartStock(null);
+    setEditCataloguePaise(line.catalogueSellingPricePaise ?? 0);
     setEditing(true);
+  }
+
+  function openInventoryForPart(partId: string) {
+    startOpenInventory(async () => {
+      const values = await getPartEditValuesAction(partId);
+      if (!values) {
+        toast.error(tc("notFound"));
+        return;
+      }
+      setInventoryPart(values);
+      setInventoryOpen(true);
+    });
   }
 
   function handleEditPartChange(nextId: string, part: PartPickerItem | null) {
     setEditPartId(nextId);
-    if (!part) return;
+    if (!part) {
+      setEditPartStock(null);
+      return;
+    }
     setEditDescription(part.name);
+    setEditPartStock(part.quantityOnHand);
+    setEditCataloguePaise(part.sellingPricePaise);
     if (!hidePrices) {
+      if (part.quantityOnHand <= 0) {
+        setDraftPricePaise(0 as Paise);
+        setPriceInputKey((key) => key + 1);
+        openInventoryForPart(part.id);
+        return;
+      }
       setDraftPricePaise(part.sellingPricePaise as Paise);
       setPriceInputKey((key) => key + 1);
     }
@@ -246,6 +316,8 @@ function OrderLineItem({
   function handlePartCreated(part: CreatedPartSummary) {
     setEditPartId(part.id);
     setEditDescription(part.name);
+    setEditPartStock(0);
+    setEditCataloguePaise(0);
     if (!hidePrices) {
       setDraftPricePaise(0 as Paise);
       setPriceInputKey((key) => key + 1);
@@ -283,6 +355,44 @@ function OrderLineItem({
     }
   }
 
+  async function applySellingPriceFromPart(part: {
+    name: string;
+    sellingPricePaise: number;
+  }) {
+    if (!line.partId) return;
+    if (part.sellingPricePaise <= 0) {
+      toast.error(t("inventoryPriceMissing"));
+      return;
+    }
+    if (editing) {
+      setEditDescription(part.name);
+      setDraftPricePaise(part.sellingPricePaise as Paise);
+      setPriceInputKey((key) => key + 1);
+      toast.success(t("inventoryPricePrefill"));
+      return;
+    }
+    const formData = new FormData();
+    formData.set("description", part.name || line.description);
+    formData.set("quantity", String(line.quantity));
+    formData.set(
+      "unitPriceRupees",
+      paiseToRupeesInput(part.sellingPricePaise),
+    );
+    formData.set("partId", line.partId);
+    const result = await updateServiceOrderLineAction(
+      orderId,
+      line.id,
+      { ok: false },
+      formData,
+    );
+    if (result.ok) {
+      toast.success(result.message ?? t("inventoryPriceApplied"));
+      router.refresh();
+      return;
+    }
+    toast.error(result.message ?? t("errors.deleteFailed"));
+  }
+
   function applyInventoryPrice() {
     if (!line.partId) return;
     startApplyPrice(async () => {
@@ -291,38 +401,67 @@ function OrderLineItem({
         toast.error(tc("notFound"));
         return;
       }
-      if (part.sellingPricePaise <= 0) {
-        toast.error(t("inventoryPriceMissing"));
-        return;
-      }
-      if (editing) {
+      await applySellingPriceFromPart(part);
+    });
+  }
+
+  function openInventoryEditor() {
+    const partId = editing ? editPartId || line.partId : line.partId;
+    if (!partId) return;
+    openInventoryForPart(partId);
+  }
+
+  async function handleInventorySaved() {
+    const partId = editing ? editPartId || line.partId : line.partId;
+    if (!partId) return;
+    const part = await getPartEditValuesAction(partId);
+    if (!part) {
+      toast.error(tc("notFound"));
+      return;
+    }
+    setInventoryPart(part);
+    if (editing) {
+      setEditDescription(part.name);
+      setEditPartStock(part.quantityOnHand);
+      setEditCataloguePaise(part.sellingPricePaise);
+      if (part.sellingPricePaise > 0) {
         setDraftPricePaise(part.sellingPricePaise as Paise);
         setPriceInputKey((key) => key + 1);
         toast.success(t("inventoryPricePrefill"));
-        return;
       }
-      const formData = new FormData();
-      formData.set("description", line.description);
-      formData.set("quantity", String(line.quantity));
-      formData.set(
-        "unitPriceRupees",
-        paiseToRupeesInput(part.sellingPricePaise),
-      );
-      formData.set("partId", line.partId!);
-      const result = await updateServiceOrderLineAction(
-        orderId,
-        line.id,
-        { ok: false },
-        formData,
-      );
-      if (result.ok) {
-        toast.success(result.message ?? t("inventoryPriceApplied"));
-        router.refresh();
-        return;
-      }
-      toast.error(result.message ?? t("errors.deleteFailed"));
-    });
+      return;
+    }
+    await applySellingPriceFromPart(part);
   }
+
+  const needsPricingHint = needsPricing ? (
+    <p
+      id={`line-price-hint-${line.id}`}
+      className="text-[12px] leading-snug text-amber-900"
+    >
+      {t("setPriceHereOrInventory")}{" "}
+      <button
+        type="button"
+        disabled={openingInventory}
+        onClick={openInventoryEditor}
+        className="font-semibold text-blue-700 underline-offset-2 hover:underline disabled:opacity-60"
+      >
+        {openingInventory ? t("saving") : t("openInventory")}
+      </button>
+    </p>
+  ) : null;
+
+  const inventoryEditModal =
+    !hidePrices && inventoryPart ? (
+      <EditPartModal
+        part={inventoryPart}
+        trigger={null}
+        open={inventoryOpen}
+        onOpenChange={setInventoryOpen}
+        onSaved={handleInventorySaved}
+        resetPrices
+      />
+    ) : null;
 
   useEffect(() => {
     const finished = wasPending.current && !pending;
@@ -330,26 +469,43 @@ function OrderLineItem({
     if (!finished) return;
     if (state.ok) {
       if (state.message) toast.success(state.message);
+      setOptimistic({
+        description: editDescription.trim() || line.description,
+        quantity: isPart ? draftQty : 1,
+        unitPricePaise: hidePrices ? line.unitPricePaise : draftPricePaise,
+        partId: isPart ? editPartId || null : null,
+      });
       setEditing(false);
+      router.refresh();
       return;
     }
     if (state.message) toast.error(state.message);
-  }, [pending, state]);
+  }, [
+    pending,
+    state,
+    editDescription,
+    draftQty,
+    draftPricePaise,
+    editPartId,
+    hidePrices,
+    isPart,
+    line.description,
+    line.unitPricePaise,
+    router,
+  ]);
 
   async function saveEdit() {
     if (isPart && !editPartId) return;
     if (saving) return;
     setSaving(true);
+    const nextDescription = editDescription.trim() || line.description;
+    const nextQuantity = isPart ? draftQty : 1;
+    const nextPricePaise = hidePrices ? line.unitPricePaise : draftPricePaise;
     try {
       const formData = new FormData();
-      formData.set("description", editDescription.trim() || line.description);
-      formData.set("quantity", isPart ? String(draftQty) : "1");
-      formData.set(
-        "unitPriceRupees",
-        hidePrices
-          ? paiseToRupeesInput(line.unitPricePaise)
-          : paiseToRupeesInput(draftPricePaise),
-      );
+      formData.set("description", nextDescription);
+      formData.set("quantity", String(nextQuantity));
+      formData.set("unitPriceRupees", paiseToRupeesInput(nextPricePaise));
       formData.set("partId", isPart ? editPartId : "");
       const result = await updateServiceOrderLineAction(
         orderId,
@@ -359,6 +515,12 @@ function OrderLineItem({
       );
       if (result.ok) {
         toast.success(result.message ?? t("lineUpdated"));
+        setOptimistic({
+          description: nextDescription,
+          quantity: nextQuantity,
+          unitPricePaise: nextPricePaise,
+          partId: isPart ? editPartId || null : null,
+        });
         setEditing(false);
         router.refresh();
         return;
@@ -667,9 +829,9 @@ function OrderLineItem({
       {!hidePrices ? (
         <div className="flex min-h-8 items-center">
           {needsPricing ? (
-            <p className="rounded-md bg-amber-50 px-2.5 py-1.5 text-[12px] leading-snug text-amber-900">
-              {t("setPriceHereOrInventory")}
-            </p>
+            <div className="rounded-md bg-amber-50 px-2.5 py-1.5">
+              {needsPricingHint}
+            </div>
           ) : canPrefillFromInventory ? (
             <button
               type="button"
@@ -697,13 +859,17 @@ function OrderLineItem({
       : canMutate
         ? 6
         : 5;
-    /** Same footer height for every edit row so labour / priced parts do not jump. */
-    const showEditFooter = inlineEditing && !hidePrices;
+    /** Only when a pricing hint or inventory prefill link is actually shown. */
+    const showEditFooter =
+      inlineEditing &&
+      !hidePrices &&
+      (needsPricing || canPrefillFromInventory);
 
     return (
       <>
         {deleteDialog}
         {createPartModal}
+        {inventoryEditModal}
         <TableRow
           className={cn(
             needsPricing
@@ -748,7 +914,7 @@ function OrderLineItem({
             ) : (
               <div className="flex min-w-0 flex-wrap items-center gap-2">
                 <span className="truncate font-medium text-slate-900">
-                  {line.description}
+                  {displayDescription}
                 </span>
                 {needsPricing ? (
                   <Badge variant="warning">{t("needsPricing")}</Badge>
@@ -769,7 +935,7 @@ function OrderLineItem({
                   id={`line-qty-${line.id}`}
                   name={`qty-display-${line.id}`}
                   label={t("quantity")}
-                  defaultValue={line.quantity}
+                  defaultValue={displayQuantity}
                   min={1}
                   hideLabel
                   onValueChange={setDraftQty}
@@ -777,7 +943,7 @@ function OrderLineItem({
               </div>
             ) : (
               <span className="inline-flex h-11 min-h-11 w-full items-center justify-center tabular-nums">
-                {isPart ? line.quantity : "—"}
+                {isPart ? displayQuantity : "—"}
               </span>
             )}
           </TableCell>
@@ -809,7 +975,9 @@ function OrderLineItem({
                       needsPricing ? `line-price-hint-${line.id}` : undefined
                     }
                     title={
-                      needsPricing ? t("setPriceHereOrInventory") : undefined
+                      needsPricing
+                        ? `${t("setPriceHereOrInventory")} ${t("openInventory")}`
+                        : undefined
                     }
                     onFocus={(event) => {
                       if (isZeroRupeesInput(event.currentTarget.value)) {
@@ -832,7 +1000,7 @@ function OrderLineItem({
                   />
                 ) : (
                   <span className="inline-flex h-11 min-h-11 items-center tabular-nums">
-                    {formatRupees(line.unitPricePaise)}
+                    {formatRupees(displayUnitPricePaise)}
                   </span>
                 )}
               </TableCell>
@@ -872,15 +1040,10 @@ function OrderLineItem({
               colSpan={hintColSpan}
               className="border-t-0 py-0"
             >
-              <div className="flex min-h-8 items-center pb-2.5">
+              <div className="flex items-center pb-2.5">
                 {needsPricing ? (
-                  <p
-                    id={`line-price-hint-${line.id}`}
-                    className="text-[12px] leading-snug text-amber-900"
-                  >
-                    {t("setPriceHereOrInventory")}
-                  </p>
-                ) : canPrefillFromInventory ? (
+                  needsPricingHint
+                ) : (
                   <button
                     type="button"
                     disabled={applyingPrice}
@@ -889,8 +1052,6 @@ function OrderLineItem({
                   >
                     {applyingPrice ? t("saving") : t("prefillFromInventory")}
                   </button>
-                ) : (
-                  <span className="sr-only">{t("editPartQtyHint")}</span>
                 )}
               </div>
             </TableCell>
@@ -904,6 +1065,7 @@ function OrderLineItem({
     return (
       <>
         {deleteDialog}
+        {inventoryEditModal}
         <div className="rounded-[10px] border border-blue-200 bg-blue-50/40 p-3.5 sm:p-4">
           {editFormFields}
           {createPartModal}
@@ -915,6 +1077,7 @@ function OrderLineItem({
   return (
     <>
       {deleteDialog}
+      {inventoryEditModal}
       <div
         className={cn(
           "rounded-[10px] border p-3.5 sm:p-4",
@@ -941,19 +1104,19 @@ function OrderLineItem({
               ) : null}
             </div>
             <h4 className="text-[15px] font-semibold leading-snug text-slate-900">
-              {line.description}
+              {displayDescription}
             </h4>
           </div>
 
           {isPart ? (
-            <LineStat value={String(line.quantity)} label={t("quantity")} />
+            <LineStat value={String(displayQuantity)} label={t("quantity")} />
           ) : (
             <div className="hidden sm:block" aria-hidden />
           )}
           {!hidePrices ? (
             <>
               <LineStat
-                value={formatRupees(line.unitPricePaise)}
+                value={formatRupees(displayUnitPricePaise)}
                 label={t("unitPrice")}
               />
               <LineStat
@@ -971,9 +1134,9 @@ function OrderLineItem({
           ) : null}
         </div>
         {needsPricing ? (
-          <p className="mt-2 text-[13px] text-amber-800">
-            {t("setPriceHereOrInventory")}
-          </p>
+          <div className="mt-2 text-[13px] text-amber-800">
+            {needsPricingHint}
+          </div>
         ) : null}
       </div>
     </>

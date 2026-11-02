@@ -273,7 +273,12 @@ export async function finalizeInvoiceInTransaction(
   return prisma.$transaction(async (tx) => {
     const existing = await tx.invoice.findFirst({
       where: { id: invoiceId, garageId },
-      select: { id: true, status: true },
+      select: {
+        id: true,
+        status: true,
+        serviceOrderId: true,
+        totalPaise: true,
+      },
     });
     if (!existing) {
       return null;
@@ -310,6 +315,8 @@ export async function finalizeInvoiceInTransaction(
           invoiceNumber: allocated.invoiceNumber,
           financialYearStart: allocated.financialYearStart,
           sequenceNumber: allocated.sequenceNumber,
+          serviceOrderId: existing.serviceOrderId,
+          totalPaise: existing.totalPaise,
         },
       },
     });
@@ -465,6 +472,7 @@ export async function recordPaymentRow(
       select: {
         id: true,
         status: true,
+        serviceOrderId: true,
         totalPaise: true,
         amountPaidPaise: true,
         creditNotes: { select: { totalPaise: true } },
@@ -522,6 +530,7 @@ export async function recordPaymentRow(
         entityId: payment.id,
         meta: {
           invoiceId: data.invoiceId,
+          serviceOrderId: invoice.serviceOrderId,
           method: data.method,
           amountPaise: data.amountPaise,
         },
@@ -553,6 +562,7 @@ export async function recordRefundRow(
       select: {
         id: true,
         status: true,
+        serviceOrderId: true,
         totalPaise: true,
         amountPaidPaise: true,
         creditNotes: { select: { totalPaise: true } },
@@ -610,6 +620,7 @@ export async function recordRefundRow(
         entityId: payment.id,
         meta: {
           invoiceId: data.invoiceId,
+          serviceOrderId: invoice.serviceOrderId,
           method: data.method,
           amountPaise: data.amountPaise,
         },
@@ -658,6 +669,7 @@ export async function createCreditNoteRow(
       select: {
         id: true,
         status: true,
+        serviceOrderId: true,
         totalPaise: true,
         amountPaidPaise: true,
         gstSplit: true,
@@ -725,6 +737,7 @@ export async function createCreditNoteRow(
         entityId: note.id,
         meta: {
           invoiceId: data.invoiceId,
+          serviceOrderId: invoice.serviceOrderId,
           creditNoteNumber: allocated.creditNoteNumber,
           reason: data.reason,
           totalPaise: data.totalPaise,

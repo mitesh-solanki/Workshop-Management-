@@ -77,7 +77,7 @@ export function BaySearch({ className, actions }: BaySearchProps) {
     params.delete("page");
     const query = params.toString();
     startTransition(() => {
-      router.replace(query ? `/bays?${query}` : "/bays");
+      router.replace(query ? `/work-stations?${query}` : "/work-stations");
     });
   }
 
@@ -126,7 +126,7 @@ export function BaySearch({ className, actions }: BaySearchProps) {
           onReset={() => {
             setValue("");
             startTransition(() => {
-              router.replace("/bays");
+              router.replace("/work-stations");
             });
           }}
         />

@@ -1,19 +1,18 @@
+import Link from "next/link";
 import { Suspense } from "react";
-import { ShoppingCart } from "lucide-react";
+import { Plus, ShoppingCart } from "lucide-react";
 import { getTranslations } from "next-intl/server";
+import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
 import { TableSpinner } from "@/components/shared/page-spinner";
 import { ForbiddenError } from "@/lib/errors";
 import { requireSession } from "@/lib/session";
-import { CreatePurchaseOrderModal } from "@/modules/purchases/components/create-purchase-order-modal";
 import { PurchaseOrdersTable } from "@/modules/purchases/components/purchase-orders-table";
 import {
   assertCanAccessPurchaseOps,
-  getOpenPartsRequests,
   listPurchaseOrders,
 } from "@/modules/purchases/service";
-import { getVendorOptions } from "@/modules/vendors/service";
 
 type Props = {
   searchParams: Promise<{
@@ -22,7 +21,6 @@ type Props = {
     sort?: string;
     page?: string;
     pageSize?: string;
-    requestId?: string;
   }>;
 };
 
@@ -51,27 +49,22 @@ export default async function PurchaseOrdersPage({ searchParams }: Props) {
     throw error;
   }
 
-  const [result, vendors, openRequests] = await Promise.all([
-    listPurchaseOrders(session, {
-      q: params.q,
-      status: params.status,
-      sort: params.sort,
-      page: params.page,
-      pageSize: params.pageSize,
-    }),
-    getVendorOptions(session),
-    getOpenPartsRequests(session),
-  ]);
+  const result = await listPurchaseOrders(session, {
+    q: params.q,
+    status: params.status,
+    sort: params.sort,
+    page: params.page,
+    pageSize: params.pageSize,
+  });
 
   const hasQuery = Boolean(params.q?.trim() || params.status);
-  const preselected = params.requestId ? [params.requestId] : [];
-  const createModal = (
-    <CreatePurchaseOrderModal
-      vendors={vendors}
-      openRequests={openRequests}
-      preselectedRequestIds={preselected}
-      defaultOpen={Boolean(params.requestId)}
-    />
+  const createButton = (
+    <Button asChild size="md">
+      <Link href="/purchase-orders/new">
+        <Plus className="size-4" aria-hidden />
+        {t("add")}
+      </Link>
+    </Button>
   );
 
   return (
@@ -79,7 +72,7 @@ export default async function PurchaseOrdersPage({ searchParams }: Props) {
       <PageHeader
         title={t("title")}
         description={t("subtitle")}
-        actions={createModal}
+        actions={createButton}
       />
 
       <Suspense fallback={<TableSpinner />}>
@@ -95,15 +88,7 @@ export default async function PurchaseOrdersPage({ searchParams }: Props) {
               description={
                 hasQuery ? t("emptySearchDescription") : t("emptyDescription")
               }
-              action={
-                !hasQuery ? (
-                  <CreatePurchaseOrderModal
-                    vendors={vendors}
-                    openRequests={openRequests}
-                    size="sm"
-                  />
-                ) : undefined
-              }
+              action={!hasQuery ? createButton : undefined}
             />
           }
         />

@@ -16,9 +16,8 @@ type Props = {
 const SECTION_NUMBERS: Record<JobCardSection, string> = {
   details: "01",
   lines: "02",
-  estimate: "03",
-  billing: "04",
-  timeline: "05",
+  billing: "03",
+  timeline: "04",
 };
 
 export function JobCardSectionNav({
@@ -27,13 +26,11 @@ export function JobCardSectionNav({
   sections = JOB_CARD_SECTIONS,
 }: Props) {
   const t = useTranslations("orders");
-  const te = useTranslations("estimates");
   const tb = useTranslations("billing");
 
   const labels: Record<JobCardSection, string> = {
     details: t("details"),
     lines: t("lines"),
-    estimate: te("title"),
     billing: tb("title"),
     timeline: t("timeline"),
   };
@@ -41,7 +38,6 @@ export function JobCardSectionNav({
   const subs: Record<JobCardSection, string> = {
     details: t("sectionNav.details"),
     lines: t("sectionNav.lines"),
-    estimate: t("sectionNav.estimate"),
     billing: t("sectionNav.billing"),
     timeline: t("sectionNav.timeline"),
   };

@@ -11,6 +11,7 @@ import {
   assertCanAccessPurchaseOps,
   getPurchaseOrder,
 } from "@/modules/purchases/service";
+import { getVendorOptions } from "@/modules/vendors/service";
 
 type Props = {
   params: Promise<{ id: string }>;
@@ -51,6 +52,8 @@ export default async function PurchaseOrderDetailPage({ params }: Props) {
     throw error;
   }
 
+  const vendors = await getVendorOptions(session);
+
   return (
     <main className="w-full space-y-4">
       <Link
@@ -60,7 +63,7 @@ export default async function PurchaseOrderDetailPage({ params }: Props) {
         <ChevronLeft className="size-3.5 shrink-0" aria-hidden />
         {t("backToList")}
       </Link>
-      <PurchaseOrderDetailPanel purchaseOrder={po} />
+      <PurchaseOrderDetailPanel purchaseOrder={po} vendors={vendors} />
     </main>
   );
 }

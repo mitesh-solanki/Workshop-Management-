@@ -1,23 +1,16 @@
 "use client";
 
-import { useActionState, useEffect, useId, useMemo, useRef, useState } from "react";
+import { useActionState, useEffect, useRef } from "react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
-import { SearchableSelect } from "@/components/ui/searchable-select";
 import { toast } from "@/components/ui/toast";
 import { GST_STATE_CODES } from "@/lib/gstin";
-import { cn } from "@/lib/utils";
 import {
   createInvoiceAction,
   type BillingActionState,
 } from "@/app/actions/billing";
 
 const initial: BillingActionState = { ok: false };
-
-const controlClass =
-  "h-11 min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-[14px] shadow-xs outline-none focus-visible:border-blue-600 focus-visible:ring-2 focus-visible:ring-blue-600/25";
-
-const labelClass = "mb-1.5 block text-[13px] font-bold text-slate-700";
 
 type Props = {
   orderId: string;
@@ -29,28 +22,14 @@ export function CreateInvoiceForm({
   defaultPlaceOfSupplyStateCode,
 }: Props) {
   const t = useTranslations("billing");
-  const tGst = useTranslations("gst");
-  const idPrefix = useId();
   const bound = createInvoiceAction.bind(null, orderId);
   const [state, formAction, pending] = useActionState(bound, initial);
   const handledMessage = useRef<string | null>(null);
-  const defaultCode = GST_STATE_CODES.includes(
+  const placeOfSupplyStateCode = GST_STATE_CODES.includes(
     defaultPlaceOfSupplyStateCode as (typeof GST_STATE_CODES)[number],
   )
     ? defaultPlaceOfSupplyStateCode
     : "24";
-  const [placeOfSupplyStateCode, setPlaceOfSupplyStateCode] =
-    useState(defaultCode);
-
-  const stateOptions = useMemo(
-    () =>
-      GST_STATE_CODES.map((code) => ({
-        value: code,
-        label: tGst(`states.${code}`),
-        keywords: code,
-      })),
-    [tGst],
-  );
 
   useEffect(() => {
     if (!state.message || state.message === handledMessage.current) return;
@@ -68,39 +47,11 @@ export function CreateInvoiceForm({
 
   return (
     <form action={formAction} className="space-y-4">
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:items-start">
-        <div className="min-w-0">
-          <label htmlFor={`${idPrefix}-pos`} className={labelClass}>
-            {t("placeOfSupply")}
-          </label>
-          <SearchableSelect
-            id={`${idPrefix}-pos`}
-            name="placeOfSupplyStateCode"
-            value={placeOfSupplyStateCode}
-            onChange={setPlaceOfSupplyStateCode}
-            options={stateOptions}
-            clearable={false}
-            placeholder={t("placeOfSupplyPlaceholder")}
-            searchPlaceholder={t("placeOfSupplySearchPlaceholder")}
-            emptyLabel={t("placeOfSupplyEmpty")}
-          />
-          <p className="mt-1.5 text-[13px] leading-snug text-slate-500">
-            {t("placeOfSupplyHint")}
-          </p>
-        </div>
-        <div className="min-w-0">
-          <label htmlFor={`${idPrefix}-notes`} className={labelClass}>
-            {t("notes")}
-          </label>
-          <textarea
-            id={`${idPrefix}-notes`}
-            name="notes"
-            rows={3}
-            className={cn(controlClass, "min-h-22 py-2.5 leading-snug")}
-            placeholder={t("notesPlaceholder")}
-          />
-        </div>
-      </div>
+      <input
+        type="hidden"
+        name="placeOfSupplyStateCode"
+        value={placeOfSupplyStateCode}
+      />
 
       <p className="rounded-lg border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-[13px] text-amber-950">
         {t("createDraftHint")}

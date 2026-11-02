@@ -20,11 +20,19 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Card, CardDescription } from "@/components/ui/card";
 import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
   sectionDomId,
   useSectionScrollSpy,
 } from "@/hooks/use-section-scroll-spy";
 import { cn } from "@/lib/utils";
-import { ReceiveGoodsModal } from "@/modules/purchases/components/receive-goods-modal";
+import { PurchaseOrderDetailActions } from "@/modules/purchases/components/purchase-order-detail-actions";
 import {
   PURCHASE_ORDER_SECTION_ID_PREFIX,
   PURCHASE_ORDER_SECTIONS,
@@ -41,7 +49,11 @@ type ReceiptRow = {
   id: string;
   notes: string | null;
   createdAt: Date | string;
-  lines: Array<{ id: string; quantity: number }>;
+  lines: Array<{
+    id: string;
+    quantity: number;
+    part: { id: string; name: string; sku: string; unit: string };
+  }>;
 };
 
 type Props = {
@@ -51,18 +63,22 @@ type Props = {
     status: string;
     notes: string | null;
     createdAt: Date | string;
-    vendor: { id: string; name: string };
+    vendorId: string | null;
+    vendor: { id: string; name: string } | null;
     lines: PoLine[];
     goodsReceipts: ReceiptRow[];
   };
+  vendors: { id: string; name: string }[];
 };
 
 function statusVariant(
   status: string,
 ): "warning" | "secondary" | "success" | "outline" {
+  if (status === "OPEN") return "outline";
   if (status === "PENDING") return "warning";
   if (status === "PARTIALLY_RECEIVED") return "secondary";
   if (status === "RECEIVED") return "success";
+  if (status === "CANCELLED") return "outline";
   return "outline";
 }
 
@@ -165,7 +181,10 @@ function SectionEmpty({
   );
 }
 
-export function PurchaseOrderDetailPanel({ purchaseOrder: po }: Props) {
+export function PurchaseOrderDetailPanel({
+  purchaseOrder: po,
+  vendors,
+}: Props) {
   const t = useTranslations("purchaseOrders");
   const locale = useLocale();
   usePageDetailLabel(po.number);
@@ -196,15 +215,6 @@ export function PurchaseOrderDetailPanel({ purchaseOrder: po }: Props) {
   const linesComplete = po.lines.filter(
     (line) => line.quantityReceived >= line.quantityOrdered,
   ).length;
-
-  const receiveAction =
-    po.status !== "RECEIVED" ? (
-      <ReceiveGoodsModal
-        purchaseOrderId={po.id}
-        poNumber={po.number}
-        lines={po.lines}
-      />
-    ) : null;
 
   const navItems = [
     {
@@ -244,12 +254,16 @@ export function PurchaseOrderDetailPanel({ purchaseOrder: po }: Props) {
             {po.number}
           </h1>
           <p className="mt-1 truncate text-[14px] text-[#5c6b7e]">
-            <Link
-              href={`/vendors/${po.vendor.id}`}
-              className="font-medium text-blue-700 hover:underline"
-            >
-              {po.vendor.name}
-            </Link>
+            {po.vendor ? (
+              <Link
+                href={`/vendors/${po.vendor.id}`}
+                className="font-medium text-blue-700 hover:underline"
+              >
+                {po.vendor.name}
+              </Link>
+            ) : (
+              <span className="font-medium text-slate-500">{t("vendorNotSet")}</span>
+            )}
             <span className="text-slate-300"> · </span>
             {dateFmt.format(new Date(po.createdAt))}
           </p>
@@ -258,7 +272,10 @@ export function PurchaseOrderDetailPanel({ purchaseOrder: po }: Props) {
           <Badge variant={statusVariant(po.status)} className="min-h-9 px-3">
             {t(`statuses.${po.status}`)}
           </Badge>
-          {receiveAction}
+          <PurchaseOrderDetailActions
+            purchaseOrder={po}
+            vendors={vendors}
+          />
         </div>
       </header>
 
@@ -315,8 +332,8 @@ export function PurchaseOrderDetailPanel({ purchaseOrder: po }: Props) {
                     {t("progressSummary", {
                       received: receivedTotal,
                       ordered: orderedTotal,
-                      linesDone: linesComplete,
-                      linesTotal: po.lines.length,
+                      itemsDone: linesComplete,
+                      itemsTotal: po.lines.length,
                     })}
                   </p>
                   <p className="text-sm tabular-nums text-muted-foreground">
@@ -356,13 +373,18 @@ export function PurchaseOrderDetailPanel({ purchaseOrder: po }: Props) {
                 icon={Truck}
                 label={t("vendor")}
                 value={
-                  <Link
-                    href={`/vendors/${po.vendor.id}`}
-                    className="font-medium text-blue-700 hover:underline"
-                  >
-                    {po.vendor.name}
-                  </Link>
+                  po.vendor ? (
+                    <Link
+                      href={`/vendors/${po.vendor.id}`}
+                      className="font-medium text-blue-700 hover:underline"
+                    >
+                      {po.vendor.name}
+                    </Link>
+                  ) : (
+                    t("vendorNotSet")
+                  )
                 }
+                muted={!po.vendor}
               />
               <Fact
                 icon={CalendarDays}
@@ -380,7 +402,6 @@ export function PurchaseOrderDetailPanel({ purchaseOrder: po }: Props) {
                 value={po.notes?.trim() ? po.notes : t("notSet")}
                 muted={!po.notes?.trim()}
                 multiline
-                className="sm:col-span-2"
               />
             </dl>
           </SectionBlock>
@@ -403,86 +424,79 @@ export function PurchaseOrderDetailPanel({ purchaseOrder: po }: Props) {
                 body={t("linesEmptyHint")}
               />
             ) : (
-              <ul className="divide-y divide-border">
-                {po.lines.map((line) => {
-                  const remaining = Math.max(
-                    0,
-                    line.quantityOrdered - line.quantityReceived,
-                  );
-                  const percent = lineProgressPercent(
-                    line.quantityReceived,
-                    line.quantityOrdered,
-                  );
-                  const complete = remaining === 0;
+              <div className="overflow-x-auto">
+                <Table className="table-fixed min-w-[36rem]">
+                  <TableHeader className="bg-slate-100 [&_tr]:border-border">
+                    <TableRow className="hover:bg-transparent">
+                      <TableHead className="min-w-0 text-slate-700">
+                        {t("part")}
+                      </TableHead>
+                      <TableHead className="w-28 whitespace-nowrap text-slate-700">
+                        {t("qtyOrdered")}
+                      </TableHead>
+                      <TableHead className="w-28 whitespace-nowrap text-slate-700">
+                        {t("qtyReceived")}
+                      </TableHead>
+                      <TableHead className="w-28 whitespace-nowrap text-slate-700">
+                        {t("qtyRemaining")}
+                      </TableHead>
+                      <TableHead className="w-32 text-slate-700">
+                        {t("columns.status")}
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {po.lines.map((line) => {
+                      const remaining = Math.max(
+                        0,
+                        line.quantityOrdered - line.quantityReceived,
+                      );
+                      const complete = remaining === 0;
 
-                  return (
-                    <li key={line.id} className="px-5 py-4 sm:px-6">
-                      <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="font-semibold text-slate-900">
-                            {line.part.name}
-                          </p>
-                          <p className="text-caption text-muted-foreground">
-                            {line.part.sku}
-                          </p>
-                        </div>
-                        <Badge variant={complete ? "success" : "secondary"}>
-                          {complete
-                            ? t("lineComplete")
-                            : t("lineWaiting", { count: remaining })}
-                        </Badge>
-                      </div>
-
-                      <div className="mt-3 grid grid-cols-3 gap-3">
-                        <div>
-                          <p className="text-caption text-muted-foreground">
-                            {t("qtyOrdered")}
-                          </p>
-                          <p className="mt-0.5 text-base font-semibold tabular-nums">
+                      return (
+                        <TableRow key={line.id} className="align-middle">
+                          <TableCell className="min-w-0 py-3">
+                            <p className="truncate font-semibold text-slate-900">
+                              {line.part.name}
+                            </p>
+                            <p className="truncate text-caption text-muted-foreground">
+                              {line.part.sku}
+                            </p>
+                          </TableCell>
+                          <TableCell className="py-3 tabular-nums text-slate-900">
                             {line.quantityOrdered}{" "}
-                            <span className="text-sm font-normal text-muted-foreground">
+                            <span className="text-sm text-muted-foreground">
                               {line.part.unit}
                             </span>
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-caption text-muted-foreground">
-                            {t("qtyReceived")}
-                          </p>
-                          <p className="mt-0.5 text-base font-semibold tabular-nums text-emerald-700">
+                          </TableCell>
+                          <TableCell className="py-3 font-semibold tabular-nums text-emerald-700">
                             {line.quantityReceived}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-caption text-muted-foreground">
-                            {t("qtyRemaining")}
-                          </p>
-                          <p
+                          </TableCell>
+                          <TableCell
                             className={cn(
-                              "mt-0.5 text-base font-semibold tabular-nums",
+                              "py-3 font-semibold tabular-nums",
                               remaining > 0
                                 ? "text-amber-700"
                                 : "text-emerald-700",
                             )}
                           >
                             {remaining}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100">
-                        <div
-                          className={cn(
-                            "h-full rounded-full",
-                            complete ? "bg-emerald-500" : "bg-blue-500",
-                          )}
-                          style={{ width: `${percent}%` }}
-                        />
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
+                          </TableCell>
+                          <TableCell className="py-3">
+                            <Badge
+                              variant={complete ? "success" : "secondary"}
+                            >
+                              {complete
+                                ? t("lineComplete")
+                                : t("lineWaiting", { count: remaining })}
+                            </Badge>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
             )}
           </SectionBlock>
 
@@ -499,35 +513,41 @@ export function PurchaseOrderDetailPanel({ purchaseOrder: po }: Props) {
                 body={t("receiptsEmptyHint")}
               />
             ) : (
-              <ul className="divide-y divide-border">
-                {po.goodsReceipts.map((receipt, index) => {
-                  const qty = receipt.lines.reduce(
-                    (sum, line) => sum + line.quantity,
-                    0,
-                  );
-                  return (
-                    <li
-                      key={receipt.id}
-                      className="flex flex-wrap items-center justify-between gap-2 px-5 py-3.5 sm:px-6"
-                    >
-                      <div className="min-w-0">
-                        <p className="font-medium text-slate-900">
-                          {t("receiptNumber", { number: index + 1 })}
-                        </p>
-                        <p className="text-caption text-muted-foreground">
-                          {dateFmt.format(new Date(receipt.createdAt))}
-                          {receipt.notes ? ` · ${receipt.notes}` : null}
-                        </p>
-                      </div>
-                      <p className="text-sm tabular-nums text-foreground">
-                        {t("receiptQty", {
-                          count: qty,
-                          lines: receipt.lines.length,
-                        })}
+              <ul className="grid gap-3 p-4 sm:grid-cols-2 sm:p-5 lg:grid-cols-3 sm:px-6">
+                {po.goodsReceipts.map((receipt, index) => (
+                  <li
+                    key={receipt.id}
+                    className="flex min-w-0 flex-col gap-2.5 rounded-xl border border-slate-200 bg-slate-50/60 p-3.5"
+                  >
+                    <div className="min-w-0 border-b border-slate-200/80 pb-2">
+                      <p className="text-sm font-semibold text-slate-900">
+                        {dateFmt.format(new Date(receipt.createdAt))}
                       </p>
-                    </li>
-                  );
-                })}
+                      <p className="text-caption text-muted-foreground">
+                        {t("receiptNumber", { number: index + 1 })}
+                        {receipt.notes ? ` · ${receipt.notes}` : null}
+                      </p>
+                    </div>
+                    <ul className="min-w-0 space-y-1.5">
+                      {receipt.lines.map((line) => (
+                        <li
+                          key={line.id}
+                          className="flex items-baseline justify-between gap-2 text-sm"
+                        >
+                          <span className="min-w-0 truncate text-slate-800">
+                            {line.part.name}
+                          </span>
+                          <span className="shrink-0 tabular-nums font-medium text-emerald-700">
+                            {t("receiptPartQty", {
+                              count: line.quantity,
+                              unit: line.part.unit,
+                            })}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </li>
+                ))}
               </ul>
             )}
           </SectionBlock>

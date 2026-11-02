@@ -36,6 +36,11 @@ describe("job card surface by role", () => {
     ).toBe("details");
     expect(
       clampJobCardSection("estimate", FULL_JOB_CARD_SURFACE.sections),
-    ).toBe("estimate");
+    ).toBe("details");
+  });
+
+  it("does not include the prices and permissions section on the job card", () => {
+    expect(JOB_CARD_SECTIONS).not.toContain("estimate");
+    expect(FULL_JOB_CARD_SURFACE.sections).not.toContain("estimate");
   });
 });

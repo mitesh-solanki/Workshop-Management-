@@ -46,7 +46,7 @@ import {
   type InvoiceLineCreateRow,
 } from "@/modules/billing/repo";
 import { findCurrentEstimate } from "@/modules/estimates/repo";
-import { syncMissingOrderLinesOntoEstimate } from "@/modules/estimates/service";
+import { ensureEstimateReadyForBilling } from "@/modules/estimates/service";
 import { findServiceOrderById } from "@/modules/service-orders/repo";
 import { partRequiresWarrantyCard } from "@/modules/warranties/part-requires-warranty";
 import {
@@ -176,8 +176,116 @@ export async function getInvoice(
   return withBalance(invoice);
 }
 
+function pricedOrderLineIdSet(
+  lines: Array<{ id: string; type: string; unitPricePaise: number; quantity: number }>,
+) {
+  return new Set(
+    lines
+      .filter(
+        (line) =>
+          (line.type === "LABOUR" || line.type === "PART") &&
+          line.unitPricePaise > 0 &&
+          line.quantity > 0,
+      )
+      .map((line) => line.id),
+  );
+}
+
+function draftMatchesExpectedLines(
+  draft: {
+    estimateId: string;
+    lines: Array<{
+      estimateLineId: string | null;
+      description: string;
+      type: string;
+      quantity: number;
+      unitPricePaise: number;
+      gstRatePercent: number;
+      hsnOrSac: string;
+    }>;
+  },
+  estimateId: string,
+  expected: Array<{
+    id: string;
+    description: string;
+    type: string;
+    quantity: number;
+    unitPricePaise: number;
+    gstRatePercent: number;
+    hsnOrSac: string;
+  }>,
+) {
+  return (
+    estimateId === draft.estimateId &&
+    draft.lines.length === expected.length &&
+    expected.every((line) => {
+      const snapshot = draft.lines.find(
+        (item) => item.estimateLineId === line.id,
+      );
+      return (
+        snapshot != null &&
+        snapshot.description === line.description &&
+        snapshot.type === line.type &&
+        snapshot.quantity === line.quantity &&
+        snapshot.unitPricePaise === line.unitPricePaise &&
+        snapshot.gstRatePercent === line.gstRatePercent &&
+        snapshot.hsnOrSac === line.hsnOrSac
+      );
+    })
+  );
+}
+
 /**
- * Build an invoice from approved lines on the current estimate.
+ * Keep one DRAFT invoice in sync with priced job-card labour/parts.
+ * Creates it when missing; remakes it when lines changed. No-op when empty.
+ */
+export async function ensureDraftInvoiceInSync(
+  session: RoleSession,
+  serviceOrderId: string,
+) {
+  requireRole(session, WRITE_ROLES);
+  const order = await loadOrder(session, serviceOrderId);
+  const pricedIds = pricedOrderLineIdSet(order.lines);
+  if (pricedIds.size === 0) {
+    return null;
+  }
+
+  const invoices = await listInvoicesForOrder(session.garageId, order.id);
+  const draft = invoices.find((invoice) => invoice.status === "DRAFT");
+
+  if (!draft) {
+    return createInvoiceFromApprovedEstimate(session, order.id, {
+      finalize: false,
+    });
+  }
+
+  const estimate = await ensureEstimateReadyForBilling(session, order.id);
+  const alreadyIssued = new Set(
+    invoices
+      .filter((invoice) => invoice.status === "FINALIZED")
+      .flatMap((invoice) => invoice.lines.map((line) => line.estimateLineId))
+      .filter((id): id is string => id !== null),
+  );
+  const expected = estimate.lines.filter(
+    (line) =>
+      line.sourceOrderLineId != null &&
+      pricedIds.has(line.sourceOrderLineId) &&
+      !alreadyIssued.has(line.id),
+  );
+
+  if (draftMatchesExpectedLines(draft, estimate.id, expected)) {
+    return withBalance(draft);
+  }
+
+  return remakeDraftInvoice(session, order.id, draft.id, {
+    placeOfSupplyStateCode: draft.placeOfSupplyStateCode,
+    notes: draft.notes ?? "",
+    finalize: false,
+  });
+}
+
+/**
+ * Build an invoice from priced labour/parts on the job card.
  * Optional finalize allocates the sequential FY number under a counter lock.
  */
 export async function createInvoiceFromApprovedEstimate(
@@ -189,25 +297,11 @@ export async function createInvoiceFromApprovedEstimate(
   const input = createInvoiceFromEstimateSchema.parse(raw);
   const order = await loadOrder(session, serviceOrderId);
 
-  let estimate = await findCurrentEstimate(
-    session.garageId,
-    order.id,
-  );
-  if (!estimate) {
-    throw new AppError("billing.estimate_missing");
-  }
+  // Job card is the source of truth. Estimate rows are kept in sync only so
+  // invoice FKs and remake/finalize still work — no customer approval step.
+  const estimate = await ensureEstimateReadyForBilling(session, order.id);
   if (estimate.supersededAt != null) {
     throw new AppError("billing.estimate_superseded");
-  }
-
-  // Later-added job parts (e.g. battery) are not on Prices until synced.
-  // Remake / create draft pulls them onto the estimate as agreed so they bill.
-  await syncMissingOrderLinesOntoEstimate(session, order.id, {
-    autoApprove: true,
-  });
-  estimate = await findCurrentEstimate(session.garageId, order.id);
-  if (!estimate || estimate.supersededAt != null) {
-    throw new AppError("billing.estimate_missing");
   }
 
   const garage = await findGarageBillingProfile(session.garageId);
@@ -239,9 +333,25 @@ export async function createInvoiceFromApprovedEstimate(
     }
   }
 
+  const pricedOrderLineIds = new Set(
+    order.lines
+      .filter(
+        (line) =>
+          (line.type === "LABOUR" || line.type === "PART") &&
+          line.unitPricePaise > 0 &&
+          line.quantity > 0,
+      )
+      .map((line) => line.id),
+  );
+
   const lineRows = buildLinesFromApproved(
     estimate.lines
-      .filter((line) => !billedEstimateLineIds.has(line.id))
+      .filter(
+        (line) =>
+          line.sourceOrderLineId != null &&
+          pricedOrderLineIds.has(line.sourceOrderLineId) &&
+          !billedEstimateLineIds.has(line.id),
+      )
       .map((line) => ({
         id: line.id,
         type: line.type,
@@ -250,7 +360,7 @@ export async function createInvoiceFromApprovedEstimate(
         unitPricePaise: line.unitPricePaise,
         gstRatePercent: line.gstRatePercent,
         hsnOrSac: line.hsnOrSac,
-        approvalState: line.approvalState,
+        approvalState: "APPROVED",
       })),
     sameState,
   );
@@ -259,7 +369,7 @@ export async function createInvoiceFromApprovedEstimate(
     throw new AppError(
       billedEstimateLineIds.size > 0
         ? "billing.no_unbilled_approved_lines"
-        : "billing.no_approved_lines",
+        : "billing.no_priced_lines",
     );
   }
 
@@ -324,13 +434,17 @@ export async function finalizeInvoice(
     throw error;
   }
 
-  // A draft is a snapshot. If the estimate changed while it was open,
-  // require the user to remake the draft before it can be finalized.
+  // Draft must match current job-card labour/parts. Remake if lines changed.
   const draft = await findInvoiceById(session.garageId, input.invoiceId);
   if (!draft) {
     throw new NotFoundError();
   }
-  const estimate = await findCurrentEstimate(session.garageId, draft.serviceOrderId);
+  const estimate = await ensureEstimateReadyForBilling(
+    session,
+    draft.serviceOrderId,
+  );
+  const order = await loadOrder(session, draft.serviceOrderId);
+  const pricedOrderLineIds = pricedOrderLineIdSet(order.lines);
   const issuedInvoices = await listInvoicesForOrder(
     session.garageId,
     draft.serviceOrderId,
@@ -341,25 +455,13 @@ export async function finalizeInvoice(
       .flatMap((invoice) => invoice.lines.map((line) => line.estimateLineId))
       .filter((id): id is string => id !== null),
   );
-  const expected = (estimate?.lines ?? []).filter(
-    (line) => line.approvalState === "APPROVED" && !alreadyIssued.has(line.id),
+  const expected = estimate.lines.filter(
+    (line) =>
+      line.sourceOrderLineId != null &&
+      pricedOrderLineIds.has(line.sourceOrderLineId) &&
+      !alreadyIssued.has(line.id),
   );
-  const sameLines =
-    estimate?.id === draft.estimateId &&
-    draft.lines.length === expected.length &&
-    expected.every((line) => {
-      const snapshot = draft.lines.find((item) => item.estimateLineId === line.id);
-      return (
-        snapshot != null &&
-        snapshot.description === line.description &&
-        snapshot.type === line.type &&
-        snapshot.quantity === line.quantity &&
-        snapshot.unitPricePaise === line.unitPricePaise &&
-        snapshot.gstRatePercent === line.gstRatePercent &&
-        snapshot.hsnOrSac === line.hsnOrSac
-      );
-    });
-  if (!sameLines) {
+  if (!draftMatchesExpectedLines(draft, estimate.id, expected)) {
     throw new AppError("billing.invoice_draft_outdated");
   }
 
@@ -415,8 +517,8 @@ export async function deleteDraftInvoice(
 }
 
 /**
- * Rebuild the draft from agreed estimate lines, keeping warranty cards that
- * still match a part on the new draft (by estimate line, then part name).
+ * Rebuild the draft from current job-card labour/parts, keeping warranty cards
+ * that still match a part on the new draft (by estimate line, then part name).
  */
 export async function remakeDraftInvoice(
   session: RoleSession,

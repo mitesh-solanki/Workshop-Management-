@@ -11,9 +11,11 @@ import {
 } from "@/lib/storage";
 import {
   cancelPartsRequest,
+  cancelPurchaseOrder,
   clearVendorBillAttachment,
   createPartsRequest,
   createPurchaseOrderFromRequests,
+  createPurchaseOrderWithLines,
   createPurchaseReturn,
   createVendorBill,
   findPartsRequestById,
@@ -24,6 +26,7 @@ import {
   listOpenPartsRequests,
   listPartsRequestsForPart,
   listRecentVendorBillsForShopReceiveMatch,
+  markPurchaseOrderOrdered,
   PurchasesTxError,
   receiveAgainstPurchaseOrder,
   recordVendorBillPayment,
@@ -32,31 +35,40 @@ import {
   searchPurchaseReturns,
   searchVendorBills,
   setVendorBillAttachment,
+  updatePurchaseOrderWithLines,
 } from "@/modules/purchases/repo";
 import {
   assertVendorBillAttachmentLimits,
   cancelPartsRequestSchema,
+  cancelPurchaseOrderSchema,
   confirmVendorBillAttachmentSchema,
   createPartsRequestSchema,
+  createPurchaseOrderFromRequestsSchema,
   createPurchaseOrderSchema,
   createPurchaseReturnSchema,
   createVendorBillAttachmentUploadUrlSchema,
   createVendorBillSchema,
+  markPurchaseOrderOrderedSchema,
   partsRequestSearchSchema,
   purchaseOrderSearchSchema,
   purchaseReturnSearchSchema,
   receiveGoodsSchema,
   recordVendorBillPaymentSchema,
   removeVendorBillAttachmentSchema,
+  updatePurchaseOrderSchema,
   vendorBillSearchSchema,
+  type CancelPurchaseOrderInput,
   type ConfirmVendorBillAttachmentInput,
   type CreatePartsRequestInput,
+  type CreatePurchaseOrderFromRequestsInput,
   type CreatePurchaseOrderInput,
   type CreatePurchaseReturnInput,
   type CreateVendorBillAttachmentUploadUrlInput,
   type CreateVendorBillInput,
+  type MarkPurchaseOrderOrderedInput,
   type ReceiveGoodsInput,
   type RecordVendorBillPaymentInput,
+  type UpdatePurchaseOrderInput,
 } from "@/modules/purchases/schema";
 import { getGarageVendorOutstandingTotal } from "@/modules/vendors/repo";
 
@@ -202,12 +214,85 @@ export async function createPurchaseOrderRecord(
   requireRole(session, OPS_ROLES);
   const input = createPurchaseOrderSchema.parse(raw);
   try {
+    const po = await createPurchaseOrderWithLines(session.garageId, {
+      vendorId: input.vendorId,
+      notes: input.notes,
+      lines: input.lines,
+      serviceOrderId: input.serviceOrderId,
+      actorId: session.userId,
+    });
+    return po;
+  } catch (error) {
+    mapPurchasesError(error);
+  }
+}
+
+export async function createPurchaseOrderFromRequestsRecord(
+  session: RoleSession,
+  raw: CreatePurchaseOrderFromRequestsInput,
+) {
+  requireRole(session, OPS_ROLES);
+  const input = createPurchaseOrderFromRequestsSchema.parse(raw);
+  try {
     return await createPurchaseOrderFromRequests(session.garageId, {
       vendorId: input.vendorId,
       notes: input.notes,
       partsRequestIds: input.partsRequestIds,
       actorId: session.userId,
     });
+  } catch (error) {
+    mapPurchasesError(error);
+  }
+}
+
+export async function updatePurchaseOrderRecord(
+  session: RoleSession,
+  raw: UpdatePurchaseOrderInput,
+) {
+  requireRole(session, OPS_ROLES);
+  const input = updatePurchaseOrderSchema.parse(raw);
+  try {
+    return await updatePurchaseOrderWithLines(session.garageId, {
+      purchaseOrderId: input.purchaseOrderId,
+      vendorId: input.vendorId,
+      notes: input.notes,
+      lines: input.lines,
+      actorId: session.userId,
+    });
+  } catch (error) {
+    mapPurchasesError(error);
+  }
+}
+
+export async function markPurchaseOrderOrderedRecord(
+  session: RoleSession,
+  raw: MarkPurchaseOrderOrderedInput,
+) {
+  requireRole(session, OPS_ROLES);
+  const input = markPurchaseOrderOrderedSchema.parse(raw);
+  try {
+    return await markPurchaseOrderOrdered(session.garageId, {
+      purchaseOrderId: input.purchaseOrderId,
+      vendorId: input.vendorId,
+      actorId: session.userId,
+    });
+  } catch (error) {
+    mapPurchasesError(error);
+  }
+}
+
+export async function cancelPurchaseOrderRecord(
+  session: RoleSession,
+  raw: CancelPurchaseOrderInput,
+) {
+  requireRole(session, OPS_ROLES);
+  const input = cancelPurchaseOrderSchema.parse(raw);
+  try {
+    return await cancelPurchaseOrder(
+      session.garageId,
+      input.purchaseOrderId,
+      session.userId,
+    );
   } catch (error) {
     mapPurchasesError(error);
   }

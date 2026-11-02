@@ -4,15 +4,42 @@ import { useMemo } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { Badge } from "@/components/ui/badge";
 import { DataTable, type ColumnDef } from "@/components/ui/data-table";
+import { cn } from "@/lib/utils";
+import { PurchaseOrderRowActions } from "@/modules/purchases/components/purchase-order-row-actions";
 import { PurchaseOrderSearch } from "@/modules/purchases/components/purchase-order-search";
+
+const VISIBLE_PART_BADGES = 3;
+
+const PART_BADGE_COLORS = [
+  "border-blue-200 bg-blue-50 text-blue-800",
+  "border-emerald-200 bg-emerald-50 text-emerald-800",
+  "border-amber-200 bg-amber-50 text-amber-900",
+  "border-sky-200 bg-sky-50 text-sky-800",
+  "border-rose-200 bg-rose-50 text-rose-800",
+  "border-teal-200 bg-teal-50 text-teal-800",
+  "border-orange-200 bg-orange-50 text-orange-900",
+  "border-indigo-200 bg-indigo-50 text-indigo-800",
+] as const;
+
+function partBadgeColor(name: string): string {
+  let hash = 0;
+  for (let i = 0; i < name.length; i += 1) {
+    hash = (hash * 31 + name.charCodeAt(i)) >>> 0;
+  }
+  return PART_BADGE_COLORS[hash % PART_BADGE_COLORS.length]!;
+}
 
 export type PurchaseOrderTableRow = {
   id: string;
   number: string;
   status: string;
   createdAt: Date | string;
-  vendor: { id: string; name: string };
-  lines: { quantityOrdered: number; quantityReceived: number }[];
+  vendor: { id: string; name: string } | null;
+  lines: {
+    quantityOrdered: number;
+    quantityReceived: number;
+    part: { name: string };
+  }[];
 };
 
 type PurchaseOrdersTableProps = {
@@ -27,10 +54,53 @@ type PurchaseOrdersTableProps = {
 function statusVariant(
   status: string,
 ): "warning" | "secondary" | "success" | "outline" {
+  if (status === "OPEN") return "outline";
   if (status === "PENDING") return "warning";
   if (status === "PARTIALLY_RECEIVED") return "secondary";
   if (status === "RECEIVED") return "success";
   return "outline";
+}
+
+function PartNameBadges({
+  lines,
+  moreLabel,
+}: {
+  lines: PurchaseOrderTableRow["lines"];
+  moreLabel: (count: number) => string;
+}) {
+  if (lines.length === 0) {
+    return <span className="text-muted-foreground">—</span>;
+  }
+
+  const visible = lines.slice(0, VISIBLE_PART_BADGES);
+  const remaining = lines.length - visible.length;
+
+  return (
+    <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+      {visible.map((line, index) => (
+        <Badge
+          key={`${line.part.name}-${index}`}
+          variant="outline"
+          className={cn(
+            "max-w-[14rem] truncate border",
+            partBadgeColor(line.part.name),
+          )}
+          title={line.part.name}
+        >
+          {line.part.name}
+        </Badge>
+      ))}
+      {remaining > 0 ? (
+        <Badge
+          variant="outline"
+          className="border-slate-200 bg-slate-50 text-slate-700"
+          title={moreLabel(remaining)}
+        >
+          {moreLabel(remaining)}
+        </Badge>
+      ) : null}
+    </div>
+  );
 }
 
 export function PurchaseOrdersTable({
@@ -66,10 +136,24 @@ export function PurchaseOrdersTable({
       },
       {
         id: "vendor",
-        accessorFn: (row) => row.vendor.name,
+        accessorFn: (row) => row.vendor?.name ?? "",
         header: t("columns.vendor"),
         cell: ({ row }) => (
-          <span className="text-muted-foreground">{row.original.vendor.name}</span>
+          <span className="text-muted-foreground">
+            {row.original.vendor?.name ?? t("vendorNotSet")}
+          </span>
+        ),
+      },
+      {
+        id: "parts",
+        accessorFn: (row) =>
+          row.lines.map((line) => line.part.name).join(" "),
+        header: t("columns.parts"),
+        cell: ({ row }) => (
+          <PartNameBadges
+            lines={row.original.lines}
+            moreLabel={(count) => t("partsMore", { count })}
+          />
         ),
       },
       {
@@ -110,6 +194,12 @@ export function PurchaseOrdersTable({
           </span>
         ),
       },
+      {
+        id: "actions",
+        header: t("columns.actions"),
+        enableSorting: false,
+        cell: ({ row }) => <PurchaseOrderRowActions order={row.original} />,
+      },
     ],
     [t, dateFmt],
   );
@@ -145,18 +235,25 @@ export function PurchaseOrdersTable({
                   {order.number}
                 </p>
                 <p className="truncate text-sm text-muted-foreground">
-                  {order.vendor.name}
+                  {order.vendor?.name ?? t("vendorNotSet")}
                 </p>
               </div>
               <Badge variant={statusVariant(order.status)}>
                 {t(`statuses.${order.status}`)}
               </Badge>
             </div>
+            <PartNameBadges
+              lines={order.lines}
+              moreLabel={(count) => t("partsMore", { count })}
+            />
             <div className="flex justify-between text-sm text-muted-foreground">
               <span>
                 {received}/{ordered}
               </span>
               <span>{dateFmt.format(new Date(order.createdAt))}</span>
+            </div>
+            <div className="flex justify-end">
+              <PurchaseOrderRowActions order={order} />
             </div>
           </div>
         );

@@ -53,7 +53,6 @@ import {
   PART_SECTIONS,
   type PartSection,
 } from "@/modules/inventory/part-sections";
-import { CreatePartsRequestModal } from "@/modules/purchases/components/create-parts-request-modal";
 
 type MovementRow = {
   id: string;
@@ -75,7 +74,7 @@ type PartsRequestRow = {
   purchaseOrder: {
     id: string;
     number: string;
-    vendor: { id: string; name: string };
+    vendor: { id: string; name: string } | null;
   } | null;
   serviceOrder: { id: string } | null;
 };
@@ -226,24 +225,12 @@ export function PartDetailPanel({
   });
 
   const requestModal = canManageRequests ? (
-    <CreatePartsRequestModal
-      parts={[
-        {
-          id: part.id,
-          name: part.name,
-          sku: part.sku,
-          unit: part.unit,
-        },
-      ]}
-      defaultPartId={part.id}
-      stayAndRefresh
-      trigger={
-        <Button type="button" size="md">
-          <PackagePlus className="size-4" aria-hidden />
-          {t("requestPart")}
-        </Button>
-      }
-    />
+    <Button asChild size="md">
+      <Link href={`/purchase-orders/new?partId=${part.id}`}>
+        <PackagePlus className="size-4" aria-hidden />
+        {t("requestPart")}
+      </Link>
+    </Button>
   ) : null;
 
   const navItems = [
@@ -610,11 +597,15 @@ export function PartDetailPanel({
                     const statusLine =
                       request.status === "CANCELLED"
                         ? t("requestCancelledLine")
-                        : request.purchaseOrder?.vendor
-                          ? t("requestOrderedLine", {
-                              vendor: request.purchaseOrder.vendor.name,
-                              number: request.purchaseOrder.number,
-                            })
+                        : request.purchaseOrder
+                          ? request.purchaseOrder.vendor
+                            ? t("requestOrderedLine", {
+                                vendor: request.purchaseOrder.vendor.name,
+                                number: request.purchaseOrder.number,
+                              })
+                            : t("requestOrderedNoVendor", {
+                                number: request.purchaseOrder.number,
+                              })
                           : t("requestWaitingVendor");
                     const subtitleParts = [
                       statusLine,
@@ -629,7 +620,7 @@ export function PartDetailPanel({
                     return (
                       <li key={request.id}>
                         <ListCard
-                          href="/parts-requests"
+                          href="/purchase-orders"
                           title={t("requestQty", {
                             count: request.quantity,
                             unit: unitLabel,

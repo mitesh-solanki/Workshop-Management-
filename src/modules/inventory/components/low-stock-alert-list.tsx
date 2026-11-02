@@ -26,7 +26,7 @@ export async function LowStockAlertList({
   parts,
   canRequest = false,
   requestLabel,
-  limit = 8,
+  limit = 5,
 }: LowStockAlertListProps) {
   const ti = await getTranslations("inventory");
   const items = parts.slice(0, limit);
@@ -100,7 +100,7 @@ export async function LowStockAlertList({
                   size="sm"
                   className="w-full shrink-0 sm:w-auto"
                 >
-                  <Link href={`/parts-requests?partId=${part.id}`}>
+                  <Link href={`/purchase-orders/new?partId=${part.id}`}>
                     {requestLabel}
                   </Link>
                 </Button>

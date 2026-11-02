@@ -22,6 +22,7 @@ vi.mock("@/modules/estimates/repo", () => ({
   findEstimateLineById: vi.fn(),
   createEstimateWithLines: vi.fn(),
   addEstimateLine: vi.fn(),
+  updateEstimateLineDetails: vi.fn(),
   recordLineApproval: vi.fn(),
   EstimateStockTxError: class EstimateStockTxError extends Error {
     reason: string;
@@ -44,15 +45,18 @@ import {
   createEstimateRevision,
   createInspectionEstimateRevision,
   getEstimateForGarageId,
+  mirrorOrderLineOntoCurrentEstimate,
   setEstimateLineApproval,
 } from "@/modules/estimates/service";
 import {
+  addEstimateLine,
   createEstimateWithLines,
   findCurrentEstimate,
   findCurrentEstimateForInspection,
   findEstimateLineById,
   listEstimatesForOrder,
   recordLineApproval,
+  updateEstimateLineDetails,
 } from "@/modules/estimates/repo";
 
 const garageA = "garage-a";
@@ -595,6 +599,91 @@ describe("estimates service", () => {
     );
     const call = vi.mocked(createEstimateWithLines).mock.calls[0]?.[1];
     expect(call?.lines).toHaveLength(1);
+  });
+
+  it("does not overwrite linked estimate lines when job-card lines change", async () => {
+    const order = sampleOrder({ status: "IN_PROGRESS" });
+    const linkedLine = {
+      id: "el-1",
+      garageId: garageA,
+      estimateId: "est-1",
+      type: "LABOUR" as const,
+      description: "Brake pad labour",
+      quantity: 1,
+      unitPricePaise: 50_000,
+      gstRatePercent: 18,
+      hsnOrSac: "998714",
+      approvalState: "APPROVED" as const,
+      sourceOrderLineId: "sol-1",
+      sourceSuggestedRepairId: null,
+      sortOrder: 0,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    vi.mocked(findServiceOrderById).mockResolvedValue(order);
+    vi.mocked(findCurrentEstimate).mockResolvedValue({
+      id: "est-1",
+      garageId: garageA,
+      serviceOrderId: order.id,
+      inspectionId: null,
+      revisionNumber: 1,
+      notes: null,
+      askPermission: false,
+      permissionVia: null,
+      supersededAt: null,
+      createdById: ownerA.userId,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      createdBy: { id: ownerA.userId, name: "Owner", email: "o@a.test" },
+      lines: [linkedLine],
+      approvals: [],
+    });
+
+    const result = await mirrorOrderLineOntoCurrentEstimate(ownerA, order.id, {
+      id: "sol-1",
+      type: "LABOUR",
+      description: "Brake pad labour — extra work",
+      quantity: 2,
+      unitPricePaise: 75_000,
+    });
+
+    expect(result).toEqual(linkedLine);
+    expect(updateEstimateLineDetails).not.toHaveBeenCalled();
+    expect(addEstimateLine).not.toHaveBeenCalled();
+  });
+
+  it("does not add estimate lines for new job-card parts or labour", async () => {
+    const order = sampleOrder({ status: "IN_PROGRESS" });
+    vi.mocked(findServiceOrderById).mockResolvedValue(order);
+    vi.mocked(findCurrentEstimate).mockResolvedValue({
+      id: "est-1",
+      garageId: garageA,
+      serviceOrderId: order.id,
+      inspectionId: null,
+      revisionNumber: 1,
+      notes: null,
+      askPermission: false,
+      permissionVia: null,
+      supersededAt: null,
+      createdById: ownerA.userId,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      createdBy: { id: ownerA.userId, name: "Owner", email: "o@a.test" },
+      lines: [],
+      approvals: [],
+    });
+
+    const result = await mirrorOrderLineOntoCurrentEstimate(ownerA, order.id, {
+      id: "sol-new",
+      type: "PART",
+      description: "Oil filter",
+      quantity: 1,
+      unitPricePaise: 20_000,
+    });
+
+    expect(result).toBeNull();
+    expect(addEstimateLine).not.toHaveBeenCalled();
+    expect(updateEstimateLineDetails).not.toHaveBeenCalled();
   });
 
   it("rejects cross-garage estimate reads", async () => {

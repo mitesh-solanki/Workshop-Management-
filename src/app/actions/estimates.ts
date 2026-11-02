@@ -12,10 +12,12 @@ import {
   createEstimateFromInspection,
   createEstimateFromSources,
   createEstimateRevision,
+  deleteJobCardEstimateLine,
   removeEstimateLine,
   savePermissionLine,
   setEstimateLineApproval,
   syncInspectionEstimateFromItems,
+  updateJobCardEstimateLine,
 } from "@/modules/estimates/service";
 import type {
   EstimateApprovalMethodValue,
@@ -197,7 +199,9 @@ export async function syncInspectionEstimateFromItemsAction(
     return {
       ok: true,
       message:
-        result.addedCount > 0 || result.updatedCount > 0
+        result.addedCount > 0 ||
+        result.updatedCount > 0 ||
+        result.removedCount > 0
           ? "linesSynced"
           : "linesAlreadySynced",
     };
@@ -359,6 +363,42 @@ export async function deleteEstimateLineAction(
     const session = await requireSession();
     await removeEstimateLine(session, lineId);
     revalidateEstimate(orderId);
+    return { ok: true, message: "lineRemoved" };
+  } catch (error) {
+    return failEstimateAction(error);
+  }
+}
+
+export async function updateJobCardEstimateLineAction(
+  orderId: string,
+  lineId: string,
+  _prev: EstimateActionState,
+  formData: FormData,
+): Promise<EstimateActionState> {
+  try {
+    const session = await requireSession();
+    await updateJobCardEstimateLine(session, lineId, {
+      description: String(formData.get("description") ?? ""),
+      quantity: String(formData.get("quantity") ?? "1"),
+      unitPricePaise: String(formData.get("unitPriceRupees") ?? "0"),
+    });
+    revalidateEstimate(orderId);
+    revalidatePath("/inspections");
+    return { ok: true, message: "lineSaved" };
+  } catch (error) {
+    return failEstimateAction(error);
+  }
+}
+
+export async function deleteJobCardEstimateLineAction(
+  orderId: string,
+  lineId: string,
+): Promise<EstimateActionState> {
+  try {
+    const session = await requireSession();
+    await deleteJobCardEstimateLine(session, lineId);
+    revalidateEstimate(orderId);
+    revalidatePath("/inspections");
     return { ok: true, message: "lineRemoved" };
   } catch (error) {
     return failEstimateAction(error);

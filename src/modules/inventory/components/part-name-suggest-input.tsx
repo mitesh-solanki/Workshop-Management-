@@ -17,6 +17,10 @@ type Props = {
   autoFocus?: boolean;
   placeholder?: string;
   className?: string;
+  "aria-invalid"?: boolean | "true" | "false";
+  "aria-describedby"?: string;
+  /** Override listbox aria-label (defaults to inventory part suggestions). */
+  suggestionsLabel?: string;
   /** Override inventory common-part filter (e.g. inspection main spares only). */
   filterSuggestions?: (query: string) => string[];
 };
@@ -31,6 +35,9 @@ export function PartNameSuggestInput({
   autoFocus,
   placeholder,
   className,
+  "aria-invalid": ariaInvalid,
+  "aria-describedby": ariaDescribedBy,
+  suggestionsLabel,
   filterSuggestions = filterCommonPartNames,
 }: Props) {
   const t = useTranslations("inventory");
@@ -47,7 +54,9 @@ export function PartNameSuggestInput({
     maxHeight: 240,
   });
 
-  const suggestions = filterSuggestions(value);
+  const query = value.trim();
+  /** Only after the user types a search — not on focus with the existing name. */
+  const suggestions = query.length >= 2 ? filterSuggestions(value) : [];
   const showList = open && suggestions.length > 0;
 
   useEffect(() => {
@@ -122,15 +131,21 @@ export function PartNameSuggestInput({
             ref={listRef}
             id={listboxId}
             role="listbox"
-            aria-label={t("nameSuggestionsLabel")}
+            data-slot="searchable-select-dropdown"
+            aria-label={suggestionsLabel ?? t("nameSuggestionsLabel")}
             style={{
               position: "fixed",
               top: menuPos.top,
               left: menuPos.left,
               width: menuPos.width,
               maxHeight: menuPos.maxHeight,
+              overflowY: "auto",
+              WebkitOverflowScrolling: "touch",
+              touchAction: "pan-y",
             }}
-            className="z-80 overflow-y-auto rounded-md border border-border bg-card py-1 shadow-lg"
+            className="pointer-events-auto z-10020 overscroll-contain rounded-md border border-border bg-card py-1 shadow-lg"
+            onWheel={(event) => event.stopPropagation()}
+            onTouchMove={(event) => event.stopPropagation()}
           >
             {suggestions.map((suggestion, index) => {
               const active = index === activeIndex;
@@ -179,6 +194,8 @@ export function PartNameSuggestInput({
         aria-expanded={showList}
         aria-controls={listboxId}
         aria-autocomplete="list"
+        aria-invalid={ariaInvalid}
+        aria-describedby={ariaDescribedBy}
         aria-activedescendant={
           showList && activeIndex >= 0
             ? `${listboxId}-option-${activeIndex}`
@@ -187,11 +204,15 @@ export function PartNameSuggestInput({
         value={value}
         placeholder={placeholder}
         onChange={(event) => {
-          onValueChange(event.target.value);
-          setOpen(true);
+          const next = event.target.value;
+          onValueChange(next);
+          setOpen(next.trim().length >= 2);
           setActiveIndex(-1);
         }}
-        onFocus={() => setOpen(true)}
+        onFocus={() => {
+          setOpen(false);
+          setActiveIndex(-1);
+        }}
         onKeyDown={(event) => {
           if (!showList) return;
 

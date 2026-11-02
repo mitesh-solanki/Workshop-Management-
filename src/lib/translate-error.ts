@@ -57,6 +57,7 @@ const APP_ERROR_MESSAGE_KEYS: Record<string, readonly [string, string]> = {
   "inventory.sku_exists": ["inventory", "errors.skuExists"],
   "inventory.part_required": ["inventory", "errors.partRequired"],
   "inventory.part_in_use": ["inventory", "cannotDeleteInUse"],
+  "purchases.duplicate_part": ["purchaseOrders", "duplicatePart"],
   "import.empty_file": ["dataImport", "errors.emptyFile"],
   "import.too_many_rows": ["dataImport", "errors.tooManyRows"],
   "import.file_too_large": ["dataImport", "errors.fileTooLarge"],
@@ -73,6 +74,7 @@ const APP_ERROR_MESSAGE_KEYS: Record<string, readonly [string, string]> = {
   ESTIMATE_EXISTS: ["estimates", "errors.estimateExists"],
   ESTIMATE_CREATE_FAILED: ["estimates", "errors.createFailed"],
   "billing.garage_gstin_required": ["billing", "errors.garageGstinRequired"],
+  "billing.no_priced_lines": ["billing", "errors.noPricedLines"],
   "billing.estimate_missing": ["billing", "errors.estimateMissing"],
   "billing.estimate_superseded": ["billing", "errors.estimateSuperseded"],
   "billing.no_approved_lines": ["billing", "errors.noApprovedLines"],
@@ -116,6 +118,11 @@ const APP_ERROR_MESSAGE_KEYS: Record<string, readonly [string, string]> = {
   "purchases.requests_not_open": ["purchases", "errors.requestsNotOpen"],
   "purchases.po_not_found": ["purchases", "errors.poNotFound"],
   "purchases.po_already_received": ["purchases", "errors.poAlreadyReceived"],
+  "purchases.po_not_editable": ["purchases", "errors.poNotEditable"],
+  "purchases.po_not_open": ["purchases", "errors.poNotOpen"],
+  "purchases.po_not_cancellable": ["purchases", "errors.poNotCancellable"],
+  "purchases.po_not_receivable": ["purchases", "errors.poNotReceivable"],
+  "purchases.vendor_required": ["purchases", "errors.vendorRequired"],
   "purchases.receive_qty_required": ["purchases", "errors.receiveQtyRequired"],
   "purchases.po_line_not_found": ["purchases", "errors.poLineNotFound"],
   "purchases.receive_exceeds_ordered": [
@@ -192,6 +199,9 @@ async function translateAppErrorCode(
 }
 
 async function translateZodIssue(issue: ZodIssue): Promise<string> {
+  const mapped = await translateAppErrorCode(issue.message);
+  if (mapped) return mapped;
+
   const t = await getTranslations("errors");
 
   if (isI18nZodMessage(issue.message)) {

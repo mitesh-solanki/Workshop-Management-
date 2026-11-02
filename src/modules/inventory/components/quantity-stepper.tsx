@@ -13,6 +13,7 @@ type Props = {
   label: string;
   defaultValue?: number;
   min?: number;
+  max?: number;
   step?: number;
   /** Allow negative values (stock adjust). */
   allowNegative?: boolean;
@@ -39,6 +40,7 @@ export function QuantityStepper({
   label,
   defaultValue = 1,
   min,
+  max,
   step = 1,
   allowNegative = false,
   className,
@@ -57,14 +59,17 @@ export function QuantityStepper({
   const resolvedMin = min ?? (allowNegative ? undefined : 1);
 
   function clamp(n: number): number {
-    if (resolvedMin !== undefined && n < resolvedMin) return resolvedMin;
-    return n;
+    let next = n;
+    if (resolvedMin !== undefined && next < resolvedMin) next = resolvedMin;
+    if (max !== undefined && next > max) next = max;
+    return next;
   }
 
   function commit(next: number) {
     if (disabled) return;
-    setValue(next);
-    if (Number.isFinite(next)) onValueChange?.(next);
+    const clamped = clamp(next);
+    setValue(clamped);
+    if (Number.isFinite(clamped)) onValueChange?.(clamped);
   }
 
   function bump(delta: number) {
@@ -92,11 +97,12 @@ export function QuantityStepper({
       commit(clamp(defaultValue));
       return;
     }
-    commit(clamp(value));
+    commit(value);
   }
 
   const display = Number.isFinite(value) ? String(value) : "";
-  const submitValue = Number.isFinite(value) ? value : defaultValue;
+  const submitValue = Number.isFinite(value) ? clamp(value) : clamp(defaultValue);
+  const atMax = max !== undefined && Number.isFinite(value) && value >= max;
 
   const height = "h-11 min-h-11";
   const sideW = compact ? "w-8" : "w-10";
@@ -136,6 +142,7 @@ export function QuantityStepper({
           inputMode="numeric"
           value={display}
           min={resolvedMin}
+          max={max}
           step={step}
           disabled={disabled}
           readOnly={disabled}
@@ -153,7 +160,7 @@ export function QuantityStepper({
           type="button"
           className={sideBtnClass}
           aria-label={t("increaseQty")}
-          disabled={disabled}
+          disabled={disabled || atMax}
           onClick={() => bump(step)}
         >
           <Plus className={iconSize} aria-hidden strokeWidth={2.5} />

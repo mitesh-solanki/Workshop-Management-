@@ -68,11 +68,6 @@ export const VEHICLE_IMPORT_FIELDS: readonly ImportFieldDef[] = [
     aliases: ["insuranceexpiry", "insurance", "insurance date"],
   },
   { key: "pucExpiry", required: false, aliases: ["pucexpiry", "puc", "puc date"] },
-  {
-    key: "fitnessExpiry",
-    required: false,
-    aliases: ["fitnessexpiry", "fitness", "fitness date"],
-  },
 ];
 
 export const PART_IMPORT_FIELDS: readonly ImportFieldDef[] = [

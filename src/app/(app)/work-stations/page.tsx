@@ -25,7 +25,7 @@ type Props = {
 
 export const instant = false;
 
-export default async function BaysPage({ searchParams }: Props) {
+export default async function WorkStationsPage({ searchParams }: Props) {
   const session = await requireSession();
   const params = await searchParams;
   const t = await getTranslations("bays");

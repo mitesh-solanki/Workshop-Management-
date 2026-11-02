@@ -62,11 +62,13 @@ export default async function VendorBillsPage({ searchParams }: Props) {
   ]);
 
   const purchaseOrders =
-    poResult?.items.map((po) => ({
-      id: po.id,
-      number: po.number,
-      vendorId: po.vendor.id,
-    })) ?? [];
+    poResult?.items
+      .filter((po) => po.vendorId && po.vendor)
+      .map((po) => ({
+        id: po.id,
+        number: po.number,
+        vendorId: po.vendorId as string,
+      })) ?? [];
 
   const canWrite =
     session.role === "OWNER" ||

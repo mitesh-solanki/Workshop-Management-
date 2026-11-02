@@ -15,7 +15,7 @@ import {
 } from "@/modules/service-orders/components/latest-estimate-lines-card";
 import { OrderLineForm } from "@/modules/service-orders/components/order-line-form";
 import { OrderLinesTable } from "@/modules/service-orders/components/order-lines-table";
-import { OrderTimeline } from "@/modules/service-orders/components/order-timeline";
+import { JobCardTimeline } from "@/modules/service-orders/components/job-card-timeline";
 import {
   datetimeLocalFromOrder,
   ServiceOrderForm,
@@ -100,11 +100,10 @@ type Props = {
   surface?: JobCardSurface;
   locale: string;
   initialSection?: JobCardSection;
-  /** Latest estimate lines for this customer + vehicle (display only). */
+  /** Latest customer-confirmed estimate lines for this customer + vehicle. */
   latestEstimate?: {
     lines: LatestEstimateLine[];
   } | null;
-  estimateContent: ReactNode;
   billingContent: ReactNode;
   /** Owner/staff: live link controls in Customer bill header after estimate exists. */
   liveLink?: {
@@ -120,17 +119,6 @@ function asDate(value: Date | string | null): Date | null {
   if (!value) return null;
   const date = value instanceof Date ? value : new Date(value);
   return Number.isNaN(date.getTime()) ? null : date;
-}
-
-function formatDateTime(value: Date | null, locale: string, empty: string) {
-  if (!value) return empty;
-  return new Intl.DateTimeFormat(locale, {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(value);
 }
 
 function SectionPanel({
@@ -162,16 +150,13 @@ export function JobCardDetailPanel({
   bays,
   canMutate,
   surface = FULL_JOB_CARD_SURFACE,
-  locale,
+  locale: _locale,
   initialSection = "details",
   latestEstimate = null,
-  estimateContent,
   billingContent,
   liveLink,
 }: Props) {
   const t = useTranslations("orders");
-  const tc = useTranslations("customers");
-  const te = useTranslations("estimates");
   const tb = useTranslations("billing");
   usePageDetailLabel(order.vehicle.registrationNumber);
   const sections = surface.sections;
@@ -224,7 +209,6 @@ export function JobCardDetailPanel({
   const sectionTitles: Record<JobCardSection, string> = {
     details: t("details"),
     lines: t("lines"),
-    estimate: te("title"),
     billing: tb("title"),
     timeline: t("timeline"),
   };
@@ -232,7 +216,6 @@ export function JobCardDetailPanel({
   const sectionSubtitles: Record<JobCardSection, string | undefined> = {
     details: t("detailsHint"),
     lines: t("linesDescription"),
-    estimate: t("estimateHint"),
     billing: t("billingHint"),
     timeline: t("timelineHint"),
   };
@@ -360,8 +343,10 @@ export function JobCardDetailPanel({
                   <div className={SECTION_BODY_CLASS}>
                     {latestEstimate ? (
                       <LatestEstimateLinesCard
+                        orderId={order.id}
                         lines={latestEstimate.lines}
                         hidePrices={hidePrices}
+                        canEdit={canMutate && !hidePrices}
                       />
                     ) : null}
 
@@ -446,12 +431,6 @@ export function JobCardDetailPanel({
                 </SectionPanel>
 
                 {showCommercial ? (
-                  <SectionPanel id="estimate" open={activeSection === "estimate"}>
-                    {estimateContent}
-                  </SectionPanel>
-                ) : null}
-
-                {showCommercial ? (
                   <SectionPanel id="billing" open={activeSection === "billing"}>
                     {billingContent}
                   </SectionPanel>
@@ -460,74 +439,11 @@ export function JobCardDetailPanel({
                 {showCommercial ? (
                   <SectionPanel id="timeline" open={activeSection === "timeline"}>
                     <div className={SECTION_BODY_CLASS}>
-                      <OrderTimeline
+                      <JobCardTimeline
                         events={timeline.map((event) => ({
                           ...event,
                           createdAt: asDate(event.createdAt) ?? new Date(0),
                         }))}
-                        emptyLabel={t("timelineEmpty")}
-                        formatActor={(actor) =>
-                          actor
-                            ? actor.name?.trim() || actor.email
-                            : t("timelineUnknownActor")
-                        }
-                        formatWhen={(date) =>
-                          formatDateTime(date, locale, tc("notSet"))
-                        }
-                        formatEvent={(event) => {
-                          const meta =
-                            event.meta && typeof event.meta === "object"
-                              ? (event.meta as Record<string, unknown>)
-                              : {};
-                          if (event.action === "service_order.status_changed") {
-                            const to =
-                              typeof meta.to === "string" ? meta.to : null;
-                            if (meta.created === true && to) {
-                              return t("timelineCreated", {
-                                status: t(
-                                  `statuses.${to as ServiceOrderStatusValue}`,
-                                ),
-                              });
-                            }
-                            const from =
-                              typeof meta.from === "string" ? meta.from : null;
-                            if (from && to) {
-                              return t("timelineStatusChanged", {
-                                from: t(
-                                  `statuses.${from as ServiceOrderStatusValue}`,
-                                ),
-                                to: t(
-                                  `statuses.${to as ServiceOrderStatusValue}`,
-                                ),
-                              });
-                            }
-                          }
-                          if (event.action === "service_order.line_added") {
-                            const description =
-                              typeof meta.description === "string"
-                                ? meta.description
-                                : t("lineDescription");
-                            return t("timelineLineAdded", { description });
-                          }
-                          if (event.action === "service_order.line_updated") {
-                            const description =
-                              typeof meta.description === "string"
-                                ? meta.description
-                                : t("lineDescription");
-                            return t("timelineLineUpdated", { description });
-                          }
-                          if (event.action === "service_order.line_removed") {
-                            const description =
-                              typeof meta.description === "string"
-                                ? meta.description
-                                : t("lineDescription");
-                            return t("timelineLineRemoved", { description });
-                          }
-                          if (event.action === "service_order.updated") {
-                            return t("timelineUpdated");
-                          }
-                          return event.action;
-                        }}
                       />
                     </div>
                   </SectionPanel>

@@ -60,23 +60,21 @@ export function NameSkuFields({
         autoFocus={autoFocusName}
         value={name}
         onValueChange={updateName}
+        placeholder={t("namePlaceholder")}
         className={nameClassName}
       />
     </FormField>
   );
 
   const skuField = (
-    <FormField
-      id={skuId}
-      label={t("sku")}
-      hint={autoSku && !skuManual ? t("skuAutoHint") : undefined}
-    >
+    <FormField id={skuId} label={t("sku")}>
       <Input
         id={skuId}
         name="sku"
         required
         maxLength={64}
         value={sku}
+        placeholder={t("skuPlaceholder")}
         onChange={(event) => {
           setSkuManual(true);
           setSku(event.target.value.toUpperCase());

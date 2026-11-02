@@ -4,7 +4,6 @@ import { useMemo, useState, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FormField } from "@/components/ui/form-field";
-import { Input } from "@/components/ui/input";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { JobCardSectionNav } from "@/modules/service-orders/components/job-card-section-nav";
 import { ServiceOrderForm } from "@/modules/service-orders/components/service-order-form";
@@ -125,7 +124,6 @@ export function NewJobCardForm({
   surface = FULL_JOB_CARD_SURFACE,
 }: Props) {
   const t = useTranslations("orders");
-  const te = useTranslations("estimates");
   const tb = useTranslations("billing");
   const [vehicleId, setVehicleId] = useState(initialVehicleId);
   const [vehicleQuery, setVehicleQuery] = useState("");
@@ -149,7 +147,7 @@ export function NewJobCardForm({
   const vehicleOptions = useMemo(() => {
     const options = vehicles.map((vehicle) => ({
       value: vehicle.id,
-      label: `${vehicle.registrationNumber} · ${vehicle.customerName}`,
+      label: `${vehicle.registrationNumber} · ${vehicle.make} ${vehicle.model}`.trim(),
       keywords: `${vehicle.registrationNumber} ${vehicle.customerName} ${vehicle.make} ${vehicle.model}`,
     }));
     const ordered = (() => {
@@ -191,58 +189,42 @@ export function NewJobCardForm({
           sectionNumber={sectionNumbers.details}
         >
           <div className="space-y-6 px-5 py-5 sm:px-6">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <FormField
-                id="vehicleId-picker"
-                label={t("selectVehicle")}
-                hint={t("selectVehicleHint")}
-              >
-                <SearchableSelect
+            <ServiceOrderForm
+              key={selected?.id ?? "new-job-card"}
+              mode="create"
+              vehicleId={selected?.id ?? ""}
+              customerName={selected?.customerName ?? ""}
+              defaultOdometer={selected?.odometer ?? null}
+              defaultExpectedCompletion={defaultExpectedCompletion}
+              technicians={technicians}
+              bays={bays}
+              lockTechnicianId={lockTechnicianId}
+              inspectionId={inspectionId}
+              vehiclePicker={
+                <FormField
                   id="vehicleId-picker"
-                  value={vehicleId}
-                  onChange={setVehicleId}
-                  options={vehicleOptions}
-                  filter="remote"
-                  minQueryLength={0}
-                  onQueryChange={setVehicleQuery}
-                  onOpenChange={(open) => {
-                    if (!open) setVehicleQuery("");
-                  }}
-                  clearable={false}
-                  placeholder={t("selectVehiclePlaceholder")}
-                  searchPlaceholder={t("selectVehicleSearchPlaceholder")}
-                  emptyLabel={t("selectVehicleEmpty")}
-                />
-              </FormField>
-              <FormField id="locked-customer" label={t("customer")}>
-                <Input
-                  id="locked-customer"
-                  value={selected?.customerName ?? ""}
-                  placeholder={t("selectVehiclePlaceholder")}
-                  disabled
-                  readOnly
-                  className="h-11 min-h-11"
-                />
-              </FormField>
-            </div>
-
-            {selected ? (
-              <ServiceOrderForm
-                key={selected.id}
-                mode="create"
-                vehicleId={selected.id}
-                defaultOdometer={selected.odometer}
-                defaultExpectedCompletion={defaultExpectedCompletion}
-                technicians={technicians}
-                bays={bays}
-                lockTechnicianId={lockTechnicianId}
-                inspectionId={inspectionId}
-              />
-            ) : (
-              <p className="rounded-lg border border-dashed border-slate-200 bg-slate-50/80 px-4 py-8 text-center text-body text-slate-600">
-                {t("selectVehicleHint")}
-              </p>
-            )}
+                  label={t("selectVehicle")}
+                  hint={t("selectVehicleHint")}
+                >
+                  <SearchableSelect
+                    id="vehicleId-picker"
+                    value={vehicleId}
+                    onChange={setVehicleId}
+                    options={vehicleOptions}
+                    filter="remote"
+                    minQueryLength={0}
+                    onQueryChange={setVehicleQuery}
+                    onOpenChange={(open) => {
+                      if (!open) setVehicleQuery("");
+                    }}
+                    clearable={false}
+                    placeholder={t("selectVehiclePlaceholder")}
+                    searchPlaceholder={t("selectVehicleSearchPlaceholder")}
+                    emptyLabel={t("selectVehicleEmpty")}
+                  />
+                </FormField>
+              }
+            />
           </div>
         </SectionBlock>
 
@@ -255,18 +237,6 @@ export function NewJobCardForm({
         >
           <LockedBody onGoDetails={goToDetails} />
         </SectionBlock>
-
-        {showCommercial ? (
-          <SectionBlock
-            id="estimate"
-            title={te("title")}
-            subtitle={t("estimateHint")}
-            sectionRef={setSectionRef("estimate")}
-            sectionNumber={sectionNumbers.estimate}
-          >
-            <LockedBody onGoDetails={goToDetails} />
-          </SectionBlock>
-        ) : null}
 
         {showCommercial ? (
           <SectionBlock

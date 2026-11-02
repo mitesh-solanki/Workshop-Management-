@@ -10,7 +10,6 @@ import { listParts } from "@/modules/inventory/service";
 import {
   canWritePurchaseOps,
   canWriteVendorMoney,
-  getOpenPartsRequests,
 } from "@/modules/purchases/service";
 import { VendorDetailPanel } from "@/modules/vendors/components/vendor-detail-panel";
 import {
@@ -78,14 +77,10 @@ export default async function VendorDetailPage({
   const canCreatePurchaseOrder = canWritePurchaseOps(session);
   const canCreateBill = canWriteVendorMoney(session);
 
-  const [openRequests, parts] = await Promise.all([
-    canCreatePurchaseOrder
-      ? getOpenPartsRequests(session)
-      : Promise.resolve([]),
+  const parts =
     canCreatePurchaseOrder || canCreateBill
-      ? listParts(session)
-      : Promise.resolve([]),
-  ]);
+      ? await listParts(session)
+      : [];
 
   return (
     <main className="w-full space-y-4">
@@ -111,7 +106,6 @@ export default async function VendorDetailPage({
         purchaseOrders={vendor.purchaseOrders}
         bills={vendor.vendorBills}
         returns={vendor.purchaseReturns}
-        openRequests={openRequests}
         parts={parts.map((part) => ({
           id: part.id,
           name: part.name,

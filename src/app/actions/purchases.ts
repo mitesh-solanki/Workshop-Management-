@@ -7,16 +7,31 @@ import { translateError } from "@/lib/translate-error";
 import { requireSession } from "@/lib/session";
 import {
   cancelPartsRequestRecord,
+  cancelPurchaseOrderRecord,
   confirmVendorBillAttachment,
   createPartsRequestRecord,
+  createPurchaseOrderFromRequestsRecord,
   createPurchaseOrderRecord,
   createPurchaseReturnRecord,
   createVendorBillAttachmentUploadUrl,
   createVendorBillRecord,
+  markPurchaseOrderOrderedRecord,
   receiveGoodsRecord,
   recordVendorBillPaymentRecord,
   removeVendorBillAttachment,
+  updatePurchaseOrderRecord,
 } from "@/modules/purchases/service";
+
+function parsePurchaseOrderLines(formData: FormData) {
+  const partIds = formData.getAll("partId").map(String);
+  const quantities = formData.getAll("quantity").map(String);
+  return partIds
+    .map((partId, index) => ({
+      partId: partId.trim(),
+      quantity: Number(quantities[index] ?? 0),
+    }))
+    .filter((line) => line.partId.length > 0);
+}
 
 export type PurchasesActionState = {
   ok: boolean;
@@ -92,7 +107,7 @@ export async function createPurchaseOrderModalAction(
   try {
     const session = await requireSession();
     const ids = formData.getAll("partsRequestIds").map(String).filter(Boolean);
-    const po = await createPurchaseOrderRecord(session, {
+    const po = await createPurchaseOrderFromRequestsRecord(session, {
       vendorId: String(formData.get("vendorId") ?? ""),
       notes: String(formData.get("notes") ?? ""),
       partsRequestIds: ids,
@@ -101,6 +116,85 @@ export async function createPurchaseOrderModalAction(
     revalidatePath("/parts-requests");
     revalidatePath("/vendors");
     return { ok: true, message: t("created"), id: po.id };
+  } catch (error) {
+    return { ok: false, message: await translateError(error) };
+  }
+}
+
+export async function createPurchaseOrderPageAction(
+  _prev: PurchasesActionState,
+  formData: FormData,
+): Promise<PurchasesActionState> {
+  const t = await getTranslations("purchaseOrders");
+  try {
+    const session = await requireSession();
+    const po = await createPurchaseOrderRecord(session, {
+      vendorId: String(formData.get("vendorId") ?? ""),
+      notes: String(formData.get("notes") ?? ""),
+      serviceOrderId: String(formData.get("serviceOrderId") ?? ""),
+      lines: parsePurchaseOrderLines(formData),
+    });
+    revalidatePath("/purchase-orders");
+    revalidatePath("/vendors");
+    revalidatePath("/inventory");
+    return { ok: true, message: t("created"), id: po.id };
+  } catch (error) {
+    return { ok: false, message: await translateError(error) };
+  }
+}
+
+export async function updatePurchaseOrderPageAction(
+  _prev: PurchasesActionState,
+  formData: FormData,
+): Promise<PurchasesActionState> {
+  const t = await getTranslations("purchaseOrders");
+  try {
+    const session = await requireSession();
+    const purchaseOrderId = String(formData.get("purchaseOrderId") ?? "");
+    const po = await updatePurchaseOrderRecord(session, {
+      purchaseOrderId,
+      vendorId: String(formData.get("vendorId") ?? ""),
+      notes: String(formData.get("notes") ?? ""),
+      lines: parsePurchaseOrderLines(formData),
+    });
+    revalidatePath("/purchase-orders");
+    revalidatePath(`/purchase-orders/${po.id}`);
+    revalidatePath("/vendors");
+    return { ok: true, message: t("updated"), id: po.id };
+  } catch (error) {
+    return { ok: false, message: await translateError(error) };
+  }
+}
+
+export async function markPurchaseOrderOrderedAction(
+  purchaseOrderId: string,
+  vendorId?: string,
+): Promise<PurchasesActionState> {
+  const t = await getTranslations("purchaseOrders");
+  try {
+    const session = await requireSession();
+    const po = await markPurchaseOrderOrderedRecord(session, {
+      purchaseOrderId,
+      vendorId: vendorId ?? "",
+    });
+    revalidatePath("/purchase-orders");
+    revalidatePath(`/purchase-orders/${po.id}`);
+    return { ok: true, message: t("markedOrdered"), id: po.id };
+  } catch (error) {
+    return { ok: false, message: await translateError(error) };
+  }
+}
+
+export async function cancelPurchaseOrderAction(
+  purchaseOrderId: string,
+): Promise<PurchasesActionState> {
+  const t = await getTranslations("purchaseOrders");
+  try {
+    const session = await requireSession();
+    await cancelPurchaseOrderRecord(session, { purchaseOrderId });
+    revalidatePath("/purchase-orders");
+    revalidatePath(`/purchase-orders/${purchaseOrderId}`);
+    return { ok: true, message: t("cancelled"), id: purchaseOrderId };
   } catch (error) {
     return { ok: false, message: await translateError(error) };
   }

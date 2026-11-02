@@ -1,12 +1,10 @@
 "use client";
 
-import { useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { Plus } from "lucide-react";
 import { syncInspectionEstimateFromItemsAction } from "@/app/actions/estimates";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import {
   Table,
   TableBody,
@@ -53,10 +51,24 @@ type DraftPayload = {
   itemsJson: string;
 };
 
-type PendingSource = {
-  description: string;
-  quantity: number;
-  unitPricePaise: number;
+type SyncDiff = {
+  toAdd: Array<{
+    description: string;
+    quantity: number;
+    unitPricePaise: number;
+  }>;
+  toUpdate: Array<{
+    description: string;
+    quantity: number;
+    unitPricePaise: number;
+    previousQuantity: number;
+    previousUnitPricePaise: number;
+  }>;
+  toRemove: Array<{
+    description: string;
+    quantity: number;
+    unitPricePaise: number;
+  }>;
 };
 
 type Props = {
@@ -66,7 +78,7 @@ type Props = {
   liveLinkActive: { id: string; expiresAt: Date | string } | null;
   pricedLineCount: number;
   draft: DraftPayload;
-  pendingSources: PendingSource[];
+  syncDiff: SyncDiff;
   current: CurrentEstimate | null;
 };
 
@@ -93,7 +105,7 @@ export function InspectionEstimatePanel({
   liveLinkActive,
   pricedLineCount,
   draft,
-  pendingSources,
+  syncDiff,
   current,
 }: Props) {
   const t = useTranslations("estimates");
@@ -115,25 +127,70 @@ export function InspectionEstimatePanel({
   const rejectedCount =
     current?.lines.filter((line) => line.approvalState === "REJECTED").length ??
     0;
+  const syncChangeCount =
+    syncDiff.toAdd.length + syncDiff.toUpdate.length + syncDiff.toRemove.length;
+  const [stickyDiff, setStickyDiff] = useState<SyncDiff | null>(null);
+  const displayDiff = syncChangeCount > 0 ? syncDiff : stickyDiff;
+  const displayChangeCount = displayDiff
+    ? displayDiff.toAdd.length +
+      displayDiff.toUpdate.length +
+      displayDiff.toRemove.length
+    : 0;
+  const syncFingerprint = [
+    draft.itemsJson,
+    ...syncDiff.toAdd.map(
+      (row) => `a:${row.description}:${row.quantity}:${row.unitPricePaise}`,
+    ),
+    ...syncDiff.toUpdate.map(
+      (row) =>
+        `u:${row.description}:${row.previousQuantity}:${row.quantity}:${row.previousUnitPricePaise}:${row.unitPricePaise}`,
+    ),
+    ...syncDiff.toRemove.map(
+      (row) => `r:${row.description}:${row.quantity}:${row.unitPricePaise}`,
+    ),
+  ].join("|");
+  const lastSyncedFingerprint = useRef<string>("");
 
-  function onAddPending() {
-    startTransition(async () => {
-      const result = await syncInspectionEstimateFromItemsAction(
-        inspectionId,
-        draft,
-      );
-      if (!result.ok) {
-        toast.error(result.message ?? t("errors.createFailed"));
-        return;
-      }
-      toast.success(
-        result.message === "linesSynced"
-          ? ti("estimateLinesSynced")
-          : ti("estimateLinesAlreadySynced"),
-      );
-      router.refresh();
+  useEffect(() => {
+    if (syncChangeCount === 0) return;
+    setStickyDiff({
+      toAdd: [...syncDiff.toAdd],
+      toUpdate: [...syncDiff.toUpdate],
+      toRemove: [...syncDiff.toRemove],
     });
-  }
+  }, [syncChangeCount, syncDiff]);
+
+  useEffect(() => {
+    if (!canEdit || !current || syncChangeCount === 0) return;
+    if (lastSyncedFingerprint.current === syncFingerprint) return;
+
+    const timer = window.setTimeout(() => {
+      startTransition(async () => {
+        const result = await syncInspectionEstimateFromItemsAction(
+          inspectionId,
+          draft,
+        );
+        if (!result.ok) {
+          toast.error(result.message ?? t("errors.createFailed"));
+          return;
+        }
+        lastSyncedFingerprint.current = syncFingerprint;
+        router.refresh();
+      });
+    }, 700);
+
+    return () => window.clearTimeout(timer);
+  }, [
+    canEdit,
+    current,
+    syncChangeCount,
+    syncFingerprint,
+    inspectionId,
+    draft,
+    router,
+    startTransition,
+    t,
+  ]);
 
   return (
     <div className="space-y-5 border-t border-[#d7deea] pt-5">
@@ -217,41 +274,119 @@ export function InspectionEstimatePanel({
             </p>
           ) : null}
 
-          {canEdit && pendingSources.length > 0 ? (
+          {canEdit && displayDiff && displayChangeCount > 0 ? (
             <div className="space-y-3 rounded-[12px] border border-[#c9d8ff] bg-[#edf4ff]/70 px-4 py-4">
               <div>
                 <p className="text-[14px] font-semibold text-slate-900">
-                  {ti("estimatePendingTitle", {
-                    count: pendingSources.length,
-                  })}
+                  {pending || syncChangeCount > 0
+                    ? ti("estimateSyncUpdating")
+                    : ti("estimateSyncAppliedTitle")}
                 </p>
                 <p className="mt-1 text-[13px] text-slate-600">
-                  {ti("estimatePendingBody")}
+                  {pending || syncChangeCount > 0
+                    ? ti("estimateSyncAutoBody")
+                    : ti("estimateSyncAppliedBody")}
                 </p>
               </div>
-              <ul className="space-y-1.5">
-                {pendingSources.map((source) => (
-                  <li
-                    key={source.description}
-                    className="text-[15px] font-medium text-slate-800"
-                  >
-                    {source.description}{" "}
-                    <span className="tabular-nums text-slate-600">
-                      ({formatRupees(source.unitPricePaise as Paise)})
-                    </span>
-                  </li>
-                ))}
-              </ul>
-              <Button
-                type="button"
-                size="sm"
-                loading={pending}
-                className="bg-blue-600 text-white hover:bg-blue-700 hover:text-white"
-                onClick={onAddPending}
-              >
-                <Plus className="size-4" aria-hidden />
-                {ti("estimateAddNewItems", { count: pendingSources.length })}
-              </Button>
+              {displayDiff.toAdd.length > 0 ? (
+                <div className="space-y-1.5">
+                  <p className="text-[12px] font-semibold text-slate-500">
+                    {ti("estimateSyncAdded", {
+                      count: displayDiff.toAdd.length,
+                    })}
+                  </p>
+                  <ul className="space-y-1.5">
+                    {displayDiff.toAdd.map((source) => (
+                      <li
+                        key={`add-${source.description}`}
+                        className="text-[15px] font-medium text-slate-800"
+                      >
+                        {source.description}{" "}
+                        <span className="tabular-nums text-slate-600">
+                          ({ti("estimateSyncQty", { value: source.quantity })}
+                          {" · "}
+                          {formatRupees(source.unitPricePaise as Paise)})
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+              {displayDiff.toUpdate.length > 0 ? (
+                <div className="space-y-1.5">
+                  <p className="text-[12px] font-semibold text-slate-500">
+                    {ti("estimateSyncUpdated", {
+                      count: displayDiff.toUpdate.length,
+                    })}
+                  </p>
+                  <ul className="space-y-1.5">
+                    {displayDiff.toUpdate.map((source) => {
+                      const qtyChanged =
+                        source.previousQuantity !== source.quantity;
+                      const priceChanged =
+                        source.previousUnitPricePaise !== source.unitPricePaise;
+                      return (
+                        <li
+                          key={`upd-${source.description}`}
+                          className="text-[15px] font-medium text-slate-800"
+                        >
+                          {source.description}{" "}
+                          <span className="tabular-nums text-slate-600">
+                            (
+                            {qtyChanged
+                              ? ti("estimateSyncQtyChange", {
+                                  from: source.previousQuantity,
+                                  to: source.quantity,
+                                })
+                              : ti("estimateSyncQty", {
+                                  value: source.quantity,
+                                })}
+                            {priceChanged ? (
+                              <>
+                                {" · "}
+                                {formatRupees(
+                                  source.previousUnitPricePaise as Paise,
+                                )}{" "}
+                                → {formatRupees(source.unitPricePaise as Paise)}
+                              </>
+                            ) : (
+                              <>
+                                {" · "}
+                                {formatRupees(source.unitPricePaise as Paise)}
+                              </>
+                            )}
+                            )
+                          </span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              ) : null}
+              {displayDiff.toRemove.length > 0 ? (
+                <div className="space-y-1.5">
+                  <p className="text-[12px] font-semibold text-slate-500">
+                    {ti("estimateSyncRemoved", {
+                      count: displayDiff.toRemove.length,
+                    })}
+                  </p>
+                  <ul className="space-y-1.5">
+                    {displayDiff.toRemove.map((line) => (
+                      <li
+                        key={`rm-${line.description}`}
+                        className="text-[15px] font-medium text-slate-800 line-through"
+                      >
+                        {line.description}{" "}
+                        <span className="tabular-nums text-slate-600 no-underline">
+                          ({ti("estimateSyncQty", { value: line.quantity })}
+                          {" · "}
+                          {formatRupees(line.unitPricePaise as Paise)})
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
             </div>
           ) : null}
 

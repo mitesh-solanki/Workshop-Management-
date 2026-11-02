@@ -12,12 +12,14 @@ import {
   DEFAULT_GST_RATE_PERCENT,
   defaultHsnOrSac,
   setLineApprovalSchema,
+  updateJobCardEstimateLineSchema,
   updatePermissionLineSchema,
   type AddEstimateLineInput,
   type CreateEstimateInput,
   type CreateEstimateRevisionInput,
   type EstimateLineTypeValue,
   type SetLineApprovalInput,
+  type UpdateJobCardEstimateLineInput,
   type UpdatePermissionLineInput,
 } from "@/modules/estimates/schema";
 import {
@@ -37,10 +39,15 @@ import {
   type EstimateLineCreateInput,
 } from "@/modules/estimates/repo";
 import { computeEstimateTotals } from "@/modules/estimates/totals";
+import { alignInspectionFindingWithEstimateLine } from "@/modules/inspections/align-estimate-finding";
 import { collectInspectionEstimateSources as collectInspectionEstimateSourceLines } from "@/modules/inspections/estimate-sources";
-import { findInspectionById } from "@/modules/inspections/repo";
+import {
+  findInspectionById,
+  patchInspectionFindingItems,
+} from "@/modules/inspections/repo";
 
 const WRITE_ROLES = ["OWNER", "MANAGER", "TECHNICIAN"] as const;
+const COMMERCIAL_WRITE_ROLES = ["OWNER", "MANAGER"] as const;
 const READ_ROLES = ["OWNER", "MANAGER", "TECHNICIAN", "ACCOUNTANT"] as const;
 
 function assertCanViewOrder(
@@ -313,10 +320,14 @@ export async function syncInspectionEstimateFromItems(
       line,
     ]),
   );
+  const sourceKeys = new Set(
+    sources.map((source) => source.description.trim().toLowerCase()),
+  );
 
   const autoApprove = !current.askPermission;
   let addedCount = 0;
   let updatedCount = 0;
+  let removedCount = 0;
 
   for (const source of sources) {
     const key = source.description.trim().toLowerCase();
@@ -358,7 +369,22 @@ export async function syncInspectionEstimateFromItems(
     }
   }
 
-  return { addedCount, updatedCount };
+  for (const line of current.lines) {
+    const key = line.description.trim().toLowerCase();
+    if (sourceKeys.has(key)) continue;
+    const result = await deleteEstimateLine(session.garageId, {
+      lineId: line.id,
+      estimateId: current.id,
+      serviceOrderId: null,
+      description: line.description,
+      actorId: session.userId,
+    });
+    if (result === "ok") {
+      removedCount += 1;
+    }
+  }
+
+  return { addedCount, updatedCount, removedCount };
 }
 
 export async function createInspectionEstimateRevision(
@@ -656,10 +682,9 @@ export async function agreeAllPendingInspectionEstimateLines(
 }
 
 /**
- * When a priced job-card line is added/updated and a current estimate exists,
- * mirror it onto the permission / pricing list so staff can ask the customer
- * (or bill) without waiting for invoice create. Skips lines already linked.
- * Does nothing if there is no current estimate or the line is still unpriced.
+ * Job-card labour/parts must not change the customer-facing estimate.
+ * Returns an already-linked line if present; never adds or updates estimate
+ * lines. Billing uses syncMissingOrderLinesOntoEstimate when drafting an invoice.
  */
 export async function mirrorOrderLineOntoCurrentEstimate(
   session: RoleSession,
@@ -698,60 +723,46 @@ export async function mirrorOrderLineOntoCurrentEstimate(
   const linked = current.lines.find(
     (line) => line.sourceOrderLineId === orderLine.id,
   );
-  if (linked) {
-    try {
-      const updated = await updateEstimateLineDetails(session.garageId, {
-        lineId: linked.id,
-        estimateId: current.id,
-        serviceOrderId: order.id,
-        description: orderLine.description,
-        quantity: orderLine.quantity,
-        unitPricePaise: orderLine.unitPricePaise,
-        actorId: session.userId,
-      });
-      if (updated === "billed" || updated == null) {
-        return linked;
-      }
-      return updated;
-    } catch (error) {
-      if (
-        error instanceof EstimateStockTxError &&
-        error.reason === "INSUFFICIENT_STOCK"
-      ) {
-        throw insufficientStockError(error.partName, error.partId);
-      }
-      throw error;
-    }
-  }
+  return linked ?? null;
+}
 
-  try {
-    return await addEstimateLine(session.garageId, {
-      estimateId: current.id,
-      serviceOrderId: order.id,
-      type: orderLine.type,
-      description: orderLine.description,
-      quantity: orderLine.quantity,
-      unitPricePaise: orderLine.unitPricePaise,
-      gstRatePercent: DEFAULT_GST_RATE_PERCENT,
-      hsnOrSac: defaultHsnOrSac(orderLine.type),
-      sourceOrderLineId: orderLine.id,
-      actorId: session.userId,
-      autoApprove: !current.askPermission,
-    });
-  } catch (error) {
-    if (
-      error instanceof EstimateStockTxError &&
-      error.reason === "INSUFFICIENT_STOCK"
-    ) {
-      throw insufficientStockError(error.partName, error.partId);
-    }
-    throw error;
-  }
+function orderLineBillingFields(line: {
+  type: string;
+  description: string;
+  quantity: number;
+  unitPricePaise: number;
+  part?: { gstRatePercent: number; hsn: string } | null;
+}): {
+  type: EstimateLineTypeValue;
+  description: string;
+  quantity: number;
+  unitPricePaise: number;
+  gstRatePercent: number;
+  hsnOrSac: string;
+} {
+  const type: EstimateLineTypeValue =
+    line.type === "PART" || line.type === "LABOUR" ? line.type : "LABOUR";
+  const part = line.part ?? null;
+  return {
+    type,
+    description: line.description,
+    quantity: line.quantity,
+    unitPricePaise: line.unitPricePaise,
+    gstRatePercent:
+      part && typeof part.gstRatePercent === "number"
+        ? part.gstRatePercent
+        : DEFAULT_GST_RATE_PERCENT,
+    hsnOrSac:
+      part && typeof part.hsn === "string" && part.hsn.trim()
+        ? part.hsn.trim()
+        : defaultHsnOrSac(type),
+  };
 }
 
 /**
- * Pull priced job-card lines that are not yet on the current estimate onto it.
- * Used before draft create / remake so later-added parts (e.g. battery) bill automatically.
+ * Keep current estimate lines aligned with priced job-card labour/parts:
+ * add missing, update changed, drop removed (when not on a finalized bill).
+ * Used before draft create / remake.
  */
 export async function syncMissingOrderLinesOntoEstimate(
   session: RoleSession,
@@ -778,38 +789,71 @@ export async function syncMissingOrderLinesOntoEstimate(
     throw new AppError("ESTIMATE_MISSING");
   }
 
-  const alreadyLinked = new Set(
-    current.lines
-      .map((line) => line.sourceOrderLineId)
-      .filter((id): id is string => Boolean(id)),
-  );
-
-  const missing = order.lines.filter(
-    (line) =>
-      !alreadyLinked.has(line.id) &&
-      line.unitPricePaise > 0,
-  );
-
+  const orderById = new Map(order.lines.map((line) => [line.id, line]));
   const autoApprove = options?.autoApprove ?? !current.askPermission;
-  const added = [];
+  let addedCount = 0;
+  let updatedCount = 0;
+  let removedCount = 0;
 
-  for (const line of missing) {
+  for (const estLine of current.lines) {
+    if (!estLine.sourceOrderLineId) continue;
+    const orderLine = orderById.get(estLine.sourceOrderLineId);
+    const stillBillable =
+      orderLine &&
+      (orderLine.type === "LABOUR" || orderLine.type === "PART") &&
+      orderLine.unitPricePaise > 0 &&
+      orderLine.quantity > 0;
+
+    if (!stillBillable) {
+      try {
+        const result = await deleteEstimateLine(session.garageId, {
+          lineId: estLine.id,
+          estimateId: current.id,
+          serviceOrderId: order.id,
+          description: estLine.description,
+          actorId: session.userId,
+        });
+        if (result === "ok") {
+          removedCount += 1;
+        }
+      } catch (error) {
+        if (
+          error instanceof EstimateStockTxError &&
+          error.reason === "INSUFFICIENT_STOCK"
+        ) {
+          throw insufficientStockError(error.partName, error.partId);
+        }
+        throw error;
+      }
+      continue;
+    }
+
+    const next = orderLineBillingFields(orderLine);
+    const changed =
+      estLine.type !== next.type ||
+      estLine.description !== next.description ||
+      estLine.quantity !== next.quantity ||
+      estLine.unitPricePaise !== next.unitPricePaise ||
+      estLine.gstRatePercent !== next.gstRatePercent ||
+      estLine.hsnOrSac !== next.hsnOrSac;
+
+    if (!changed) continue;
+
     try {
-      const created = await addEstimateLine(session.garageId, {
+      const updated = await updateEstimateLineDetails(session.garageId, {
+        lineId: estLine.id,
         estimateId: current.id,
         serviceOrderId: order.id,
-        type: line.type,
-        description: line.description,
-        quantity: line.quantity,
-        unitPricePaise: line.unitPricePaise,
-        gstRatePercent: DEFAULT_GST_RATE_PERCENT,
-        hsnOrSac: defaultHsnOrSac(line.type),
-        sourceOrderLineId: line.id,
+        description: next.description,
+        quantity: next.quantity,
+        unitPricePaise: next.unitPricePaise,
+        type: next.type,
+        gstRatePercent: next.gstRatePercent,
+        hsnOrSac: next.hsnOrSac,
         actorId: session.userId,
-        autoApprove,
       });
-      if (created) {
-        added.push(created);
+      if (updated && updated !== "billed") {
+        updatedCount += 1;
       }
     } catch (error) {
       if (
@@ -822,7 +866,182 @@ export async function syncMissingOrderLinesOntoEstimate(
     }
   }
 
-  return { estimateId: current.id, addedCount: added.length };
+  const refreshedForAdd = await findCurrentEstimate(session.garageId, order.id);
+  const alreadyLinked = new Set(
+    (refreshedForAdd?.lines ?? [])
+      .map((line) => line.sourceOrderLineId)
+      .filter((id): id is string => Boolean(id)),
+  );
+
+  const missing = order.lines.filter(
+    (line) =>
+      !alreadyLinked.has(line.id) &&
+      line.unitPricePaise > 0 &&
+      line.quantity > 0 &&
+      (line.type === "LABOUR" || line.type === "PART"),
+  );
+
+  for (const line of missing) {
+    try {
+      const next = orderLineBillingFields(line);
+      const created = await addEstimateLine(session.garageId, {
+        estimateId: current.id,
+        serviceOrderId: order.id,
+        type: next.type,
+        description: next.description,
+        quantity: next.quantity,
+        unitPricePaise: next.unitPricePaise,
+        gstRatePercent: next.gstRatePercent,
+        hsnOrSac: next.hsnOrSac,
+        sourceOrderLineId: line.id,
+        actorId: session.userId,
+        autoApprove,
+      });
+      if (created) {
+        addedCount += 1;
+      }
+    } catch (error) {
+      if (
+        error instanceof EstimateStockTxError &&
+        error.reason === "INSUFFICIENT_STOCK"
+      ) {
+        throw insufficientStockError(error.partName, error.partId);
+      }
+      throw error;
+    }
+  }
+
+  if (autoApprove) {
+    const refreshed = await findCurrentEstimate(session.garageId, order.id);
+    for (const line of refreshed?.lines ?? []) {
+      if (line.approvalState !== "PENDING" || !line.sourceOrderLineId) {
+        continue;
+      }
+      const result = await recordLineApproval(session.garageId, {
+        estimateId: current.id,
+        estimateLineId: line.id,
+        serviceOrderId: order.id,
+        fromState: "PENDING",
+        toState: "APPROVED",
+        method: "MANUAL",
+        note: null,
+        recordedById: session.userId,
+      });
+      if (!result.ok) {
+        if (result.reason === "INSUFFICIENT_STOCK") {
+          throw insufficientStockError(
+            result.partName ?? line.description,
+            result.partId,
+          );
+        }
+        if (result.reason === "PART_NOT_FOUND") {
+          throw new NotFoundError();
+        }
+      }
+    }
+  }
+
+  return {
+    estimateId: current.id,
+    addedCount,
+    updatedCount,
+    removedCount,
+  };
+}
+
+/**
+ * Billing from the job card: ensure a current estimate exists and every priced
+ * labour/part line is on it as APPROVED. Creates the estimate when the job
+ * was opened without inspection/estimate.
+ */
+export async function ensureEstimateReadyForBilling(
+  session: RoleSession,
+  serviceOrderId: string,
+) {
+  requireRole(session, [
+    "OWNER",
+    "MANAGER",
+    "TECHNICIAN",
+    "ACCOUNTANT",
+  ] as const);
+  const order = await loadOrderForSession(session, serviceOrderId);
+  if (session.role === "ACCOUNTANT") {
+    if (order.status === "COMPLETED") {
+      throw new AppError("ORDER_COMPLETED");
+    }
+  } else {
+    assertCanMutateOrder(session, order);
+  }
+
+  const priced = order.lines.filter(
+    (line) =>
+      (line.type === "LABOUR" || line.type === "PART") &&
+      line.unitPricePaise > 0 &&
+      line.quantity > 0,
+  );
+  if (priced.length === 0) {
+    throw new AppError("billing.no_priced_lines");
+  }
+
+  let current = await findCurrentEstimate(session.garageId, order.id);
+  if (!current) {
+    const lines: EstimateLineCreateInput[] = priced.map((line, index) => {
+      const part =
+        "part" in line && line.part
+          ? line.part
+          : null;
+      return {
+        type: line.type,
+        description: line.description,
+        quantity: line.quantity,
+        unitPricePaise: line.unitPricePaise,
+        gstRatePercent:
+          part && typeof part.gstRatePercent === "number"
+            ? part.gstRatePercent
+            : DEFAULT_GST_RATE_PERCENT,
+        hsnOrSac:
+          part && typeof part.hsn === "string" && part.hsn.trim()
+            ? part.hsn.trim()
+            : defaultHsnOrSac(line.type),
+        approvalState: "APPROVED",
+        sourceOrderLineId: line.id,
+        sortOrder: index,
+      };
+    });
+
+    try {
+      current = await createEstimateWithLines(session.garageId, {
+        serviceOrderId: order.id,
+        revisionNumber: 1,
+        notes: null,
+        askPermission: false,
+        createdById: session.userId,
+        lines,
+        bootstrapApprovedLines: true,
+      });
+    } catch (error) {
+      if (
+        error instanceof EstimateStockTxError &&
+        error.reason === "INSUFFICIENT_STOCK"
+      ) {
+        throw insufficientStockError(error.partName, error.partId);
+      }
+      throw error;
+    }
+    if (!current) {
+      throw new AppError("ESTIMATE_CREATE_FAILED");
+    }
+    return current;
+  }
+
+  await syncMissingOrderLinesOntoEstimate(session, order.id, {
+    autoApprove: true,
+  });
+  const refreshed = await findCurrentEstimate(session.garageId, order.id);
+  if (!refreshed || refreshed.supersededAt != null) {
+    throw new AppError("billing.estimate_missing");
+  }
+  return refreshed;
 }
 
 export async function removeEstimateLine(
@@ -1093,6 +1312,146 @@ export async function savePermissionLine(
   }
 
   return { line: existing };
+}
+
+async function syncInspectionFindingForEstimateLine(
+  session: RoleSession,
+  inspectionId: string,
+  matchDescription: string,
+  next: {
+    description: string;
+    quantity: number;
+    unitPricePaise: number;
+  } | null,
+) {
+  const inspection = await findInspectionById(session.garageId, inspectionId);
+  if (!inspection) {
+    throw new NotFoundError();
+  }
+  const aligned = alignInspectionFindingWithEstimateLine(
+    inspection.items.map((item) => ({
+      id: item.id,
+      label: item.label,
+      notes: item.notes,
+      quantity: item.quantity,
+      unitPricePaise: item.unitPricePaise,
+    })),
+    { matchDescription, next },
+  );
+  if (!aligned.changed) return;
+  const changedItems = aligned.items.filter((item, index) => {
+    const before = inspection.items[index];
+    if (!before) return true;
+    return (
+      before.label !== item.label ||
+      before.notes !== item.notes ||
+      before.quantity !== item.quantity ||
+      before.unitPricePaise !== item.unitPricePaise
+    );
+  });
+  await patchInspectionFindingItems(session.garageId, {
+    inspectionId,
+    actorId: session.userId,
+    items: changedItems,
+  });
+}
+
+/** Owner/Manager: edit an agreed estimate line from the job card and keep findings aligned. */
+export async function updateJobCardEstimateLine(
+  session: RoleSession,
+  lineId: string,
+  raw: UpdateJobCardEstimateLineInput,
+) {
+  requireRole(session, COMMERCIAL_WRITE_ROLES);
+  const input = updateJobCardEstimateLineSchema.parse(raw);
+  const existing = await findEstimateLineById(session.garageId, lineId);
+  if (!existing) {
+    throw new NotFoundError();
+  }
+  if (existing.estimate.supersededAt != null) {
+    throw new AppError("ESTIMATE_SUPERSEDED");
+  }
+
+  const serviceOrderId = existing.estimate.serviceOrderId;
+  if (serviceOrderId) {
+    const order = await loadOrderForSession(session, serviceOrderId);
+    assertCanMutateOrder(session, order);
+  } else if (existing.estimate.inspectionId) {
+    const inspection = await findInspectionById(
+      session.garageId,
+      existing.estimate.inspectionId,
+    );
+    if (!inspection) {
+      throw new NotFoundError();
+    }
+  } else {
+    throw new NotFoundError();
+  }
+
+  try {
+    const updated = await updateEstimateLineDetails(session.garageId, {
+      lineId: existing.id,
+      estimateId: existing.estimateId,
+      serviceOrderId,
+      description: input.description,
+      quantity: input.quantity,
+      unitPricePaise: input.unitPricePaise,
+      actorId: session.userId,
+    });
+    if (updated === "billed") {
+      throw new AppError("ESTIMATE_LINE_BILLED");
+    }
+    if (!updated) {
+      throw new NotFoundError();
+    }
+  } catch (error) {
+    if (
+      error instanceof EstimateStockTxError &&
+      error.reason === "INSUFFICIENT_STOCK"
+    ) {
+      throw insufficientStockError(error.partName, error.partId);
+    }
+    throw error;
+  }
+
+  if (existing.estimate.inspectionId) {
+    await syncInspectionFindingForEstimateLine(
+      session,
+      existing.estimate.inspectionId,
+      existing.description,
+      {
+        description: input.description,
+        quantity: input.quantity,
+        unitPricePaise: input.unitPricePaise,
+      },
+    );
+  }
+
+  return { ok: true as const };
+}
+
+/** Owner/Manager: delete an agreed estimate line from the job card and keep findings aligned. */
+export async function deleteJobCardEstimateLine(
+  session: RoleSession,
+  lineId: string,
+) {
+  requireRole(session, COMMERCIAL_WRITE_ROLES);
+  const existing = await findEstimateLineById(session.garageId, lineId);
+  if (!existing) {
+    throw new NotFoundError();
+  }
+  const inspectionId = existing.estimate.inspectionId;
+  const matchDescription = existing.description;
+  await removeEstimateLine(session, lineId);
+  if (inspectionId) {
+    await syncInspectionFindingForEstimateLine(
+      session,
+      inspectionId,
+      matchDescription,
+      null,
+    );
+  }
+  return { ok: true as const };
 }
 
 /** Test helper: cross-garage read attempt. */

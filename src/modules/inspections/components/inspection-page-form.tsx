@@ -44,7 +44,10 @@ import {
   clampInspectionSection,
   type InspectionSection,
 } from "@/modules/inspections/inspection-sections";
-import { collectInspectionEstimateSources } from "@/modules/inspections/estimate-sources";
+import {
+  collectInspectionEstimateSources,
+  diffInspectionEstimateSources,
+} from "@/modules/inspections/estimate-sources";
 import type { InspectionItemResultValue } from "@/modules/inspections/schema";
 import { filterInspectionMainPartNames } from "@/modules/inspections/sub-spare-suggestions";
 import { datetimeLocalFromOrder } from "@/modules/service-orders/components/service-order-form";
@@ -510,15 +513,13 @@ export function InspectionPageForm(props: Props) {
   );
   // Same priced findings the Report tab shows (live draft).
   const pricedLineCount = draftEstimateSources.length;
-  const pendingEstimateSources = useMemo(() => {
-    if (props.mode !== "edit" || !props.estimate?.current) return [];
-    const existing = new Set(
-      props.estimate.current.lines.map((line) =>
-        line.description.trim().toLowerCase(),
-      ),
-    );
-    return draftEstimateSources.filter(
-      (source) => !existing.has(source.description.trim().toLowerCase()),
+  const estimateSyncDiff = useMemo(() => {
+    if (props.mode !== "edit" || !props.estimate?.current) {
+      return { toAdd: [], toUpdate: [], toRemove: [] };
+    }
+    return diffInspectionEstimateSources(
+      draftEstimateSources,
+      props.estimate.current.lines,
     );
   }, [props, draftEstimateSources]);
   const estimateDraft = useMemo(
@@ -632,7 +633,7 @@ export function InspectionPageForm(props: Props) {
                     liveLinkActive={props.estimate?.liveLinkActive ?? null}
                     pricedLineCount={pricedLineCount}
                     draft={estimateDraft}
-                    pendingSources={pendingEstimateSources}
+                    syncDiff={estimateSyncDiff}
                     current={props.estimate?.current ?? null}
                   />
                 </div>

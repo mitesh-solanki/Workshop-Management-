@@ -178,13 +178,35 @@ export const createPartSchema = z.object({
     }),
 });
 
-/** Job-card quick add — name only; SKU and catalogue defaults applied in the service. */
+/**
+ * Quick catalogue row for job cards / purchase orders.
+ * Name required; SKU and unit optional (defaults applied in the service).
+ * No prices, GST, or stock.
+ */
 export const createPartByNameSchema = z.object({
   name: z
     .string()
     .trim()
     .min(1, { error: "validation.required" })
     .max(200, { error: "validation.tooLong" }),
+  sku: z
+    .union([z.string(), z.null(), z.undefined()])
+    .optional()
+    .transform((value) => {
+      if (value == null) return null;
+      const trimmed = value.trim().toUpperCase();
+      return trimmed.length > 0 ? trimmed.slice(0, 64) : null;
+    }),
+  unit: z
+    .union([z.string(), z.null(), z.undefined()])
+    .optional()
+    .transform((value) => {
+      if (value == null || String(value).trim() === "") return "pcs";
+      const trimmed = String(value).trim();
+      return (PART_UNIT_OPTIONS as readonly string[]).includes(trimmed)
+        ? (trimmed as PartUnitValue)
+        : "pcs";
+    }),
 });
 
 export type CreatePartByNameInput = z.input<typeof createPartByNameSchema>;

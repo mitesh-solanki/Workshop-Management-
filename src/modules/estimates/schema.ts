@@ -138,6 +138,12 @@ export const updatePermissionLineSchema = z.object({
   note: optionalNotes,
 });
 
+export const updateJobCardEstimateLineSchema = z.object({
+  description: z.string().trim().min(1).max(500),
+  quantity: quantityField,
+  unitPricePaise: rupeesToPaiseSchema,
+});
+
 export type CreateEstimateInput = z.input<typeof createEstimateSchema>;
 export type CreateEstimateRevisionInput = z.input<
   typeof createEstimateRevisionSchema
@@ -146,6 +152,9 @@ export type AddEstimateLineInput = z.input<typeof addEstimateLineSchema>;
 export type SetLineApprovalInput = z.input<typeof setLineApprovalSchema>;
 export type UpdatePermissionLineInput = z.input<
   typeof updatePermissionLineSchema
+>;
+export type UpdateJobCardEstimateLineInput = z.input<
+  typeof updateJobCardEstimateLineSchema
 >;
 
 export function defaultHsnOrSac(type: EstimateLineTypeValue): string {

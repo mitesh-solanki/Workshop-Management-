@@ -6,6 +6,11 @@ import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { GST_STATE_CODES } from "@/lib/gstin";
+import { PartNameSuggestInput } from "@/modules/inventory/components/part-name-suggest-input";
+import {
+  filterCommonVehicleMakes,
+  filterCommonVehicleModels,
+} from "@/modules/vehicles/common-vehicle-names";
 import {
   DEFAULT_VEHICLE_STATE_CODE,
   getVehicleYearMax,
@@ -96,11 +101,14 @@ export function VehicleFields({
 
   const stateOptions = useMemo(
     () =>
-      GST_STATE_CODES.map((code) => ({
-        value: code,
-        label: tGst(`states.${code}`),
-        keywords: code,
-      })),
+      GST_STATE_CODES.map((code) => {
+        const label = tGst(`states.${code}`);
+        return {
+          value: code,
+          label,
+          keywords: `${code} ${label}`,
+        };
+      }),
     [tGst],
   );
 
@@ -211,6 +219,7 @@ export function VehicleFields({
             value={values.stateCode}
             onChange={(code) => setField("stateCode", code)}
             options={stateOptions}
+            trigger="field"
             clearable={false}
             placeholder={t("statePlaceholder")}
             searchPlaceholder={t("stateSearchPlaceholder")}
@@ -225,13 +234,15 @@ export function VehicleFields({
           label={t("make")}
           error={fieldErrors.make}
         >
-          <Input
+          <PartNameSuggestInput
             id={`${idPrefix}-make`}
             name="make"
             value={values.make}
-            onChange={(e) => setField("make", e.target.value)}
+            onValueChange={(next) => setField("make", next)}
             required
-            aria-invalid={Boolean(fieldErrors.make)}
+            maxLength={100}
+            suggestionsLabel={t("makeSuggestionsLabel")}
+            filterSuggestions={filterCommonVehicleMakes}
             className="h-11 min-h-11"
           />
         </FormField>
@@ -240,13 +251,17 @@ export function VehicleFields({
           label={t("model")}
           error={fieldErrors.model}
         >
-          <Input
+          <PartNameSuggestInput
             id={`${idPrefix}-model`}
             name="model"
             value={values.model}
-            onChange={(e) => setField("model", e.target.value)}
+            onValueChange={(next) => setField("model", next)}
             required
-            aria-invalid={Boolean(fieldErrors.model)}
+            maxLength={100}
+            suggestionsLabel={t("modelSuggestionsLabel")}
+            filterSuggestions={(query) =>
+              filterCommonVehicleModels(query, values.make)
+            }
             className="h-11 min-h-11"
           />
         </FormField>
@@ -295,7 +310,7 @@ export function VehicleFields({
         </FormField>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <FormField id={`${idPrefix}-insurance`} label={t("insuranceExpiry")}>
           <Input
             id={`${idPrefix}-insurance`}
@@ -316,17 +331,12 @@ export function VehicleFields({
             className="h-11 min-h-11"
           />
         </FormField>
-        <FormField id={`${idPrefix}-fitness`} label={t("fitnessExpiry")}>
-          <Input
-            id={`${idPrefix}-fitness`}
-            name="fitnessExpiry"
-            type="date"
-            value={values.fitnessExpiry}
-            onChange={(e) => setField("fitnessExpiry", e.target.value)}
-            className="h-11 min-h-11"
-          />
-        </FormField>
       </div>
+      <input
+        type="hidden"
+        name="fitnessExpiry"
+        value={values.fitnessExpiry}
+      />
     </>
   );
 }

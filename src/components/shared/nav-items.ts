@@ -9,9 +9,9 @@ import {
   LayoutDashboard,
   Package,
   PackageMinus,
-  PackagePlus,
   Settings,
   ShoppingCart,
+  Ticket,
   Truck,
   Users,
   Wallet,
@@ -30,12 +30,12 @@ export type NavKey =
   | "inventory"
   | "counterSales"
   | "vendors"
-  | "partsRequests"
   | "purchaseOrders"
   | "vendorBills"
   | "purchaseReturns"
   | "team"
   | "orders"
+  | "jobSlips"
   | "inspections"
   | "settings";
 
@@ -90,7 +90,14 @@ export const APP_NAV_ITEMS: readonly NavItem[] = [
     group: "workshop",
   },
   {
-    href: "/bays",
+    href: "/job-slips",
+    key: "jobSlips",
+    icon: Ticket,
+    group: "workshop",
+    roles: ["OWNER", "MANAGER", "ACCOUNTANT"],
+  },
+  {
+    href: "/work-stations",
     key: "bays",
     icon: Columns3,
     group: "workshop",
@@ -137,13 +144,6 @@ export const APP_NAV_ITEMS: readonly NavItem[] = [
     icon: Truck,
     group: "business",
     roles: ["OWNER", "MANAGER", "ACCOUNTANT"],
-  },
-  {
-    href: "/parts-requests",
-    key: "partsRequests",
-    icon: PackagePlus,
-    group: "business",
-    roles: ["OWNER", "MANAGER"],
   },
   {
     href: "/purchase-orders",

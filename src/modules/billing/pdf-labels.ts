@@ -16,8 +16,6 @@ export type InvoicePdfLabels = {
   supplyType: string;
   supplyTypeIntra: string;
   supplyTypeInter: string;
-  reverseCharge: string;
-  reverseChargeNo: string;
   hsnOrSac: string;
   description: string;
   qty: string;
@@ -63,8 +61,6 @@ const LABELS: Record<PdfLocale, Omit<InvoicePdfLabels, "locale">> = {
     supplyType: "Supply",
     supplyTypeIntra: "Intra-state (CGST + SGST)",
     supplyTypeInter: "Inter-state (IGST)",
-    reverseCharge: "Reverse charge",
-    reverseChargeNo: "No",
     hsnOrSac: "HSN/SAC",
     description: "Description",
     qty: "Qty",
@@ -108,8 +104,6 @@ const LABELS: Record<PdfLocale, Omit<InvoicePdfLabels, "locale">> = {
     supplyType: "आपूर्ति",
     supplyTypeIntra: "अंतःराज्यीय (CGST + SGST)",
     supplyTypeInter: "अंतरराज्यीय (IGST)",
-    reverseCharge: "रिवर्स चार्ज",
-    reverseChargeNo: "नहीं",
     hsnOrSac: "HSN/SAC",
     description: "विवरण",
     qty: "मात्रा",
@@ -153,8 +147,6 @@ const LABELS: Record<PdfLocale, Omit<InvoicePdfLabels, "locale">> = {
     supplyType: "સપ્લાય",
     supplyTypeIntra: "અંતઃરાજ્ય (CGST + SGST)",
     supplyTypeInter: "આંતરરાજ્ય (IGST)",
-    reverseCharge: "રિવર્સ ચાર્જ",
-    reverseChargeNo: "ના",
     hsnOrSac: "HSN/SAC",
     description: "વિગત",
     qty: "જથ્થો",

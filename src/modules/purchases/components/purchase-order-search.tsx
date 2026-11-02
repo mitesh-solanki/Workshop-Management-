@@ -5,14 +5,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { ListFiltersResetButton } from "@/components/ui/list-filters-reset-button";
 import { ListSortMenu } from "@/components/ui/list-sort-menu";
+import { FormSelect } from "@/components/ui/form-select";
 import { SearchInput } from "@/components/ui/search-input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import {
   PURCHASE_ORDER_SORTS,
@@ -127,106 +121,55 @@ export function PurchaseOrderSearch({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- debounce only on typed value
   }, [value, urlQuery]);
 
-  const statusPills = (
-    <div
-      className="flex flex-wrap gap-1.5"
-      role="group"
-      aria-label={t("filterStatusLabel")}
-      aria-busy={pending || undefined}
-    >
-      {statusOptions.map((option) => {
-        const active = urlStatus === option.value;
-        return (
-          <button
-            key={option.value}
-            type="button"
-            onClick={() => replaceParams({ status: option.value })}
-            className={cn(
-              "inline-flex min-h-11 items-center rounded-lg border px-3 text-[13px] font-semibold transition-colors",
-              active
-                ? "border-blue-200 bg-blue-50 text-blue-700"
-                : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:text-blue-700",
-            )}
-          >
-            {option.label}
-          </button>
-        );
-      })}
-    </div>
-  );
-
-  const sortMenu = (
-    <ListSortMenu
-      value={urlSort}
-      options={sortOptions}
-      onChange={(sort) => replaceParams({ sort })}
-      ariaLabel={t("sortLabel")}
-      disabled={pending}
-    />
-  );
-
-  const resetButton = (
-    <ListFiltersResetButton
-      label={tc("resetFilters")}
-      disabled={!filtersActive || pending}
-      onReset={() => {
-        setValue("");
-        startTransition(() => {
-          router.replace("/purchase-orders");
-        });
-      }}
-    />
-  );
-
   return (
-    <div className={cn("flex w-full flex-col gap-3", className)}>
-      <div className="flex w-full flex-col gap-3 md:flex-row md:items-end md:justify-between">
-        <div className="min-w-0 w-full max-w-md">
-          <SearchInput
-            id="purchase-order-search"
-            value={value}
-            onValueChange={setValue}
-            label={t("searchLabel")}
-            placeholder={t("searchPlaceholder")}
-            aria-busy={pending || undefined}
+    <div
+      className={cn(
+        "flex w-full flex-wrap items-center justify-between gap-2",
+        className,
+      )}
+    >
+      <SearchInput
+        id="purchase-order-search"
+        value={value}
+        onValueChange={setValue}
+        label={t("searchLabel")}
+        placeholder={t("searchPlaceholder")}
+        className="w-full min-w-0 flex-1 md:max-w-md"
+        aria-busy={pending || undefined}
+      />
+      <div className="flex shrink-0 flex-wrap items-center gap-2">
+        {actions}
+        <div className="min-w-0">
+          <label htmlFor="purchase-order-status-filter" className="sr-only">
+            {t("filterStatusLabel")}
+          </label>
+          <FormSelect
+            id="purchase-order-status-filter"
+            value={urlStatus}
+            onValueChange={(status) => replaceParams({ status })}
+            options={statusOptions}
+            disabled={pending}
+            className="w-auto min-w-42"
+            triggerClassName="h-11 min-h-11 w-auto min-w-42 rounded-lg border-slate-200 bg-white px-3 text-[13px] font-semibold shadow-xs"
           />
         </div>
-        <div className="hidden flex-wrap items-center justify-end gap-2 md:flex">
-          {actions}
-          {statusPills}
-          {sortMenu}
-          {resetButton}
-        </div>
-      </div>
-
-      <div className="flex w-full items-center gap-2 md:hidden">
-        <Select
-          value={urlStatus}
-          onValueChange={(status) => replaceParams({ status })}
+        <ListSortMenu
+          value={urlSort}
+          options={sortOptions}
+          onChange={(sort) => replaceParams({ sort })}
+          ariaLabel={t("sortLabel")}
           disabled={pending}
-        >
-          <SelectTrigger
-            className="min-h-11 w-full min-w-0 flex-1"
-            aria-label={t("filterStatusLabel")}
-            aria-busy={pending || undefined}
-          >
-            <SelectValue placeholder={t("filters.all")} />
-          </SelectTrigger>
-          <SelectContent>
-            {statusOptions.map((option) => (
-              <SelectItem key={option.value} value={option.value}>
-                {option.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        {sortMenu}
-        {resetButton}
-        {actions ? (
-          <div className="flex shrink-0 flex-wrap items-center gap-2">
-            {actions}
-          </div>
-        ) : null}
+        />
+        <ListFiltersResetButton
+          label={tc("resetFilters")}
+          disabled={!filtersActive || pending}
+          onReset={() => {
+            setValue("");
+            startTransition(() => {
+              router.replace("/purchase-orders");
+            });
+          }}
+        />
       </div>
     </div>
   );

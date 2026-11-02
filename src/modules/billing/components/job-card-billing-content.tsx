@@ -4,7 +4,6 @@ import {
   BillingInvoiceWorkspace,
   type BillingInvoiceCardModel,
 } from "@/modules/billing/components/billing-invoice-workspace";
-import { CreateInvoiceForm } from "@/modules/billing/components/create-invoice-form";
 import { InvoicePreviewButton } from "@/modules/billing/components/invoice-preview-button";
 import type { InvoicePreviewData } from "@/modules/billing/components/invoice-preview-dialog";
 import { PricingLinesTable } from "@/modules/billing/components/pricing-lines-table";
@@ -47,6 +46,7 @@ type Props = {
   invoices: InvoiceList;
   hasUnbilledApprovedLines: boolean;
   defaultPlaceOfSupplyStateCode: string;
+  draftSyncError?: string | null;
   preview: BillingPreviewContext;
 };
 
@@ -65,6 +65,7 @@ export async function JobCardBillingContent({
   invoices,
   hasUnbilledApprovedLines,
   defaultPlaceOfSupplyStateCode,
+  draftSyncError = null,
   preview,
 }: Props) {
   const t = await getTranslations("billing");
@@ -81,8 +82,8 @@ export async function JobCardBillingContent({
     warrantyLists.map((row) => [row.invoiceId, row.docs]),
   );
 
-  const draftPreview: InvoicePreviewData | null =
-    hasUnbilledApprovedLines && preview.approvedLines.length > 0
+  const livePreview: InvoicePreviewData | null =
+    preview.approvedLines.length > 0
       ? {
           heading: t("previewTitle"),
           invoiceNumber: null,
@@ -235,106 +236,83 @@ export async function JobCardBillingContent({
     };
   });
 
+  const showLiveDraft =
+    invoices.length === 0 && preview.approvedLines.length > 0;
+
   return (
     <div className="space-y-5">
       {invoices.length === 0 ? (
         <section className="space-y-5">
-          {hasUnbilledApprovedLines ? (
-            <>
-              <div className="overflow-hidden rounded-xl border border-slate-300 bg-white shadow-[0_3px_17px_rgba(36,58,99,0.06)]">
-                <div className="border-b border-slate-200 bg-[#f8fafc] px-4 py-3.5">
+          {showLiveDraft ? (
+            <div className="overflow-hidden rounded-xl border border-slate-300 bg-white shadow-[0_3px_17px_rgba(36,58,99,0.06)]">
+              <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-200 bg-[#f8fafc] px-4 py-3.5">
+                <div className="min-w-0">
                   <strong className="block text-[15px] text-slate-900">
-                    {t("stepCheckWork")}
+                    {t("liveDraftTitle")}
                   </strong>
                   <p className="mt-1 text-[13px] text-slate-500">
-                    {t("stepCheckWorkHint")}
+                    {t("liveDraftHint")}
                   </p>
                 </div>
-                <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3 text-[13px]">
-                  <b className="text-slate-800">{t("workIncluded")}</b>
-                  <small className="text-slate-500">
-                    {t("itemCount", { count: preview.approvedLines.length })}
-                  </small>
-                </div>
-                <PricingLinesTable
-                  showType
-                  emptyLabel={t("invoiceEmpty")}
-                  lines={preview.approvedLines.map((line) => ({
-                    id: line.id,
-                    description: line.description,
-                    type: line.type,
-                    typeLabel: line.typeLabel,
-                    quantity: line.quantity,
-                    unitPricePaise: line.unitPricePaise,
-                    totalPaise: line.totalPaise,
-                  }))}
-                />
-                <dl className="flex flex-wrap items-start justify-between gap-3 border-t border-slate-200 bg-slate-50 px-4 py-3.5">
-                  <div>
-                    <dt className="text-[13px] text-slate-500">{t("taxable")}</dt>
-                    <dd className="mt-0.5 text-[14px] font-semibold text-slate-900">
-                      {formatRupees(preview.approvedTaxablePaise)}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="text-[13px] text-slate-500">
-                      {preview.approvedTaxLabel}
-                    </dt>
-                    <dd className="mt-0.5 text-[14px] font-semibold text-slate-900">
-                      {formatRupees(preview.approvedTaxPaise)}
-                    </dd>
-                  </div>
-                  <div className="text-right">
-                    <dt className="text-[13px] text-slate-500">
-                      {t("customerPays")}
-                    </dt>
-                    <dd className="mt-0.5 text-[15px] font-bold text-blue-700">
-                      {formatRupees(preview.approvedTotalPaise)}
-                    </dd>
-                  </div>
-                </dl>
+                {livePreview ? (
+                  <InvoicePreviewButton data={livePreview} variant="soft" />
+                ) : null}
               </div>
-
-              <div className="overflow-hidden rounded-xl border border-slate-300 bg-white shadow-[0_3px_17px_rgba(36,58,99,0.06)]">
-                <div className="border-b border-slate-200 bg-[#f8fafc] px-4 py-3.5">
-                  <strong className="block text-[15px] text-slate-900">
-                    {t("stepConfirmBill")}
-                  </strong>
-                  <p className="mt-1 text-[13px] text-slate-500">
-                    {t("stepConfirmBillHint")}
-                  </p>
-                </div>
-                <div className="p-4 sm:p-5">
-                  {canEdit ? (
-                    <CreateInvoiceForm
-                      orderId={orderId}
-                      defaultPlaceOfSupplyStateCode={
-                        defaultPlaceOfSupplyStateCode
-                      }
-                    />
-                  ) : (
-                    <p className="text-sm text-slate-600">{t("emptyReadOnly")}</p>
-                  )}
-                </div>
+              <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3 text-[13px]">
+                <b className="text-slate-800">{t("workIncluded")}</b>
+                <small className="text-slate-500">
+                  {t("itemCount", { count: preview.approvedLines.length })}
+                </small>
               </div>
-
-              {draftPreview && canEdit ? (
-                <div className="flex flex-col gap-3 rounded-xl border border-blue-200 bg-blue-50/70 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
-                  <div>
-                    <strong className="text-[13px] text-slate-900">
-                      {t("previewBeforeCreate")}
-                    </strong>
-                    <p className="mt-1 text-[13px] text-slate-600">
-                      {t("previewBeforeCreateHint")}
-                    </p>
-                  </div>
-                  <InvoicePreviewButton data={draftPreview} variant="soft" />
+              <PricingLinesTable
+                showType
+                emptyLabel={t("invoiceEmpty")}
+                lines={preview.approvedLines.map((line) => ({
+                  id: line.id,
+                  description: line.description,
+                  type: line.type,
+                  typeLabel: line.typeLabel,
+                  quantity: line.quantity,
+                  unitPricePaise: line.unitPricePaise,
+                  totalPaise: line.totalPaise,
+                }))}
+              />
+              <dl className="flex flex-wrap items-start justify-between gap-3 border-t border-slate-200 bg-slate-50 px-4 py-3.5">
+                <div>
+                  <dt className="text-[13px] text-slate-500">{t("taxable")}</dt>
+                  <dd className="mt-0.5 text-[14px] font-semibold text-slate-900">
+                    {formatRupees(preview.approvedTaxablePaise)}
+                  </dd>
                 </div>
+                <div>
+                  <dt className="text-[13px] text-slate-500">
+                    {preview.approvedTaxLabel}
+                  </dt>
+                  <dd className="mt-0.5 text-[14px] font-semibold text-slate-900">
+                    {formatRupees(preview.approvedTaxPaise)}
+                  </dd>
+                </div>
+                <div className="text-right">
+                  <dt className="text-[13px] text-slate-500">
+                    {t("customerPays")}
+                  </dt>
+                  <dd className="mt-0.5 text-[15px] font-bold text-blue-700">
+                    {formatRupees(preview.approvedTotalPaise)}
+                  </dd>
+                </div>
+              </dl>
+              {draftSyncError ? (
+                <p
+                  className="border-t border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950"
+                  role="status"
+                >
+                  {draftSyncError}
+                </p>
               ) : null}
-            </>
+            </div>
           ) : (
             <p className="text-sm text-slate-600">
-              {canEdit ? t("emptyNeedApproval") : t("emptyReadOnly")}
+              {canEdit ? t("emptyNeedPricedLines") : t("emptyReadOnly")}
             </p>
           )}
         </section>

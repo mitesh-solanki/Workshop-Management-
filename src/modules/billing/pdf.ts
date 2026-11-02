@@ -316,30 +316,6 @@ function drawLineRow(
   return y + maxH;
 }
 
-function drawMetaPair(
-  doc: Doc,
-  label: string,
-  value: string,
-  x: number,
-  y: number,
-  labelW: number,
-  valueW: number,
-  fontPath: string | null,
-): number {
-  setBodyFont(doc, fontPath, 8);
-  doc.fillColor(COLORS.muted).text(`${label}:`, x, y, {
-    width: labelW,
-    lineBreak: false,
-  });
-  setBoldFont(doc, fontPath, 9);
-  doc.fillColor(COLORS.text).text(value, x + labelW, y, {
-    width: valueW,
-    align: "right",
-    lineBreak: false,
-  });
-  return y + 14;
-}
-
 /**
  * Build a tax-invoice PDF (not an e-invoice). Uses locale label set;
  * Hindi/Gujarati need a Unicode TTF when available, otherwise labels
@@ -447,18 +423,6 @@ export async function generateInvoicePdf(
     align: "right",
     lineBreak: false,
   });
-  rightY += 12;
-  rightY = drawMetaPair(
-    doc,
-    labels.reverseCharge,
-    labels.reverseChargeNo,
-    rightX,
-    rightY,
-    rightW * 0.55,
-    rightW * 0.45,
-    fontPath,
-  );
-
   const headerBottom = Math.max(leftY, rightY, PAGE.margin + markSize) + 12;
   drawHRule(doc, headerBottom, COLORS.brandRule);
   doc.y = headerBottom + 16;

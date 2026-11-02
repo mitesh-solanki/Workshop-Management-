@@ -4,7 +4,11 @@ import type { PartsRequestStatus, Prisma, PurchaseOrderStatus } from "@prisma/cl
 import { prisma } from "@/lib/db";
 import { applyStockMovement } from "@/modules/inventory/repo";
 import { billOutstandingPaise } from "@/modules/purchases/outstanding";
-import { purchaseOrderStatusFromLines } from "@/modules/purchases/po-status";
+import {
+  purchaseOrderCanReceive,
+  purchaseOrderIsEditable,
+  purchaseOrderStatusFromLines,
+} from "@/modules/purchases/po-status";
 import {
   purchaseOrderReceiptStockNote,
   purchaseReturnStockNote,
@@ -357,6 +361,367 @@ export async function createPurchaseOrderFromRequests(
   });
 }
 
+async function resolvePurchaseOrderLineParts(
+  tx: Prisma.TransactionClient,
+  garageId: string,
+  lines: Array<{ partId: string; quantity: number }>,
+) {
+  const partIds = [...new Set(lines.map((line) => line.partId))];
+  const parts = await tx.part.findMany({
+    where: { garageId, id: { in: partIds } },
+    select: { id: true, purchasePricePaise: true },
+  });
+  if (parts.length !== partIds.length) {
+    throw new PurchasesTxError("purchases.part_not_found");
+  }
+  const partById = new Map(parts.map((part) => [part.id, part]));
+
+  const merged = new Map<
+    string,
+    { partId: string; quantity: number; unitCostPaise: number }
+  >();
+  for (const line of lines) {
+    const part = partById.get(line.partId)!;
+    const prev = merged.get(line.partId);
+    if (prev) {
+      prev.quantity += line.quantity;
+    } else {
+      merged.set(line.partId, {
+        partId: line.partId,
+        quantity: line.quantity,
+        unitCostPaise: part.purchasePricePaise,
+      });
+    }
+  }
+  return Array.from(merged.values());
+}
+
+async function createOnePurchaseOrderWithLines(
+  tx: Prisma.TransactionClient,
+  garageId: string,
+  data: {
+    vendorId: string | null;
+    notes: string | null;
+    lines: Array<{ partId: string; quantity: number }>;
+    serviceOrderId: string | null;
+    actorId: string;
+  },
+) {
+  if (data.vendorId) {
+    const vendor = await tx.vendor.findFirst({
+      where: { id: data.vendorId, garageId },
+      select: { id: true },
+    });
+    if (!vendor) {
+      throw new PurchasesTxError("purchases.vendor_not_found");
+    }
+  }
+
+  const mergedLines = await resolvePurchaseOrderLineParts(
+    tx,
+    garageId,
+    data.lines,
+  );
+  const number = await nextPurchaseOrderNumber(tx, garageId);
+  const status = data.vendorId ? "PENDING" : "OPEN";
+
+  const po = await tx.purchaseOrder.create({
+    data: {
+      garageId,
+      vendorId: data.vendorId,
+      number,
+      notes: data.notes,
+      createdById: data.actorId,
+      status,
+      lines: {
+        create: mergedLines.map((line, index) => ({
+          garageId,
+          partId: line.partId,
+          quantityOrdered: line.quantity,
+          quantityReceived: 0,
+          unitCostPaise: line.unitCostPaise,
+          sortOrder: index,
+        })),
+      },
+    },
+    include: { lines: true },
+  });
+
+  if (data.serviceOrderId) {
+    for (const line of mergedLines) {
+      await tx.partsRequest.create({
+        data: {
+          garageId,
+          partId: line.partId,
+          quantity: line.quantity,
+          status: data.vendorId ? "ORDERED" : "OPEN",
+          serviceOrderId: data.serviceOrderId,
+          purchaseOrderId: po.id,
+          createdById: data.actorId,
+        },
+      });
+    }
+  }
+
+  await tx.auditLog.create({
+    data: {
+      garageId,
+      actorId: data.actorId,
+      action: "purchases.purchase_order_created",
+      entity: "PurchaseOrder",
+      entityId: po.id,
+      meta: {
+        vendorId: data.vendorId,
+        number,
+        lineCount: mergedLines.length,
+        status,
+      },
+    },
+  });
+
+  return po;
+}
+
+/** One purchase order for one vendor (optional) and one or more part lines. */
+export async function createPurchaseOrderWithLines(
+  garageId: string,
+  data: {
+    vendorId: string | null;
+    notes: string | null;
+    lines: Array<{ partId: string; quantity: number }>;
+    serviceOrderId: string | null;
+    actorId: string;
+  },
+) {
+  return prisma.$transaction(async (tx) => {
+    if (data.serviceOrderId) {
+      const order = await tx.serviceOrder.findFirst({
+        where: { id: data.serviceOrderId, garageId },
+        select: { id: true },
+      });
+      if (!order) {
+        throw new PurchasesTxError("purchases.order_not_found");
+      }
+    }
+
+    return createOnePurchaseOrderWithLines(tx, garageId, data);
+  });
+}
+
+export async function updatePurchaseOrderWithLines(
+  garageId: string,
+  data: {
+    purchaseOrderId: string;
+    vendorId: string | null;
+    notes: string | null;
+    lines: Array<{ partId: string; quantity: number }>;
+    actorId: string;
+  },
+) {
+  return prisma.$transaction(async (tx) => {
+    const existing = await tx.purchaseOrder.findFirst({
+      where: { id: data.purchaseOrderId, garageId },
+      include: {
+        lines: {
+          select: { quantityReceived: true },
+        },
+      },
+    });
+    if (!existing) {
+      throw new PurchasesTxError("purchases.po_not_found");
+    }
+    if (!purchaseOrderIsEditable(existing.status)) {
+      throw new PurchasesTxError("purchases.po_not_editable");
+    }
+    if (existing.lines.some((line) => line.quantityReceived > 0)) {
+      throw new PurchasesTxError("purchases.po_not_editable");
+    }
+
+    if (data.vendorId) {
+      const vendor = await tx.vendor.findFirst({
+        where: { id: data.vendorId, garageId },
+        select: { id: true },
+      });
+      if (!vendor) {
+        throw new PurchasesTxError("purchases.vendor_not_found");
+      }
+    }
+
+    const mergedLines = await resolvePurchaseOrderLineParts(
+      tx,
+      garageId,
+      data.lines,
+    );
+
+    let nextStatus = existing.status;
+    if (existing.status === "OPEN" && data.vendorId) {
+      nextStatus = "PENDING";
+    } else if (existing.status === "PENDING" && !data.vendorId) {
+      nextStatus = "OPEN";
+    }
+
+    await tx.purchaseOrderLine.deleteMany({
+      where: { purchaseOrderId: existing.id, garageId },
+    });
+
+    const po = await tx.purchaseOrder.update({
+      where: { id: existing.id },
+      data: {
+        vendorId: data.vendorId,
+        notes: data.notes,
+        status: nextStatus,
+        lines: {
+          create: mergedLines.map((line, index) => ({
+            garageId,
+            partId: line.partId,
+            quantityOrdered: line.quantity,
+            quantityReceived: 0,
+            unitCostPaise: line.unitCostPaise,
+            sortOrder: index,
+          })),
+        },
+      },
+      include: { lines: true },
+    });
+
+    await tx.auditLog.create({
+      data: {
+        garageId,
+        actorId: data.actorId,
+        action: "purchases.purchase_order_updated",
+        entity: "PurchaseOrder",
+        entityId: po.id,
+        meta: {
+          vendorId: data.vendorId,
+          lineCount: mergedLines.length,
+          status: nextStatus,
+        },
+      },
+    });
+
+    return po;
+  });
+}
+
+export async function markPurchaseOrderOrdered(
+  garageId: string,
+  data: {
+    purchaseOrderId: string;
+    vendorId: string | null;
+    actorId: string;
+  },
+) {
+  return prisma.$transaction(async (tx) => {
+    const existing = await tx.purchaseOrder.findFirst({
+      where: { id: data.purchaseOrderId, garageId },
+      select: { id: true, status: true, vendorId: true, number: true },
+    });
+    if (!existing) {
+      throw new PurchasesTxError("purchases.po_not_found");
+    }
+    if (existing.status !== "OPEN") {
+      throw new PurchasesTxError("purchases.po_not_open");
+    }
+
+    const vendorId = data.vendorId ?? existing.vendorId;
+    if (!vendorId) {
+      throw new PurchasesTxError("purchases.vendor_required");
+    }
+    const vendor = await tx.vendor.findFirst({
+      where: { id: vendorId, garageId },
+      select: { id: true },
+    });
+    if (!vendor) {
+      throw new PurchasesTxError("purchases.vendor_not_found");
+    }
+
+    const result = await tx.purchaseOrder.updateMany({
+      where: { id: existing.id, garageId, status: "OPEN" },
+      data: { vendorId, status: "PENDING" },
+    });
+    if (result.count === 0) {
+      throw new PurchasesTxError("purchases.po_not_open");
+    }
+
+    await tx.partsRequest.updateMany({
+      where: { purchaseOrderId: existing.id, garageId, status: "OPEN" },
+      data: { status: "ORDERED" },
+    });
+
+    await tx.auditLog.create({
+      data: {
+        garageId,
+        actorId: data.actorId,
+        action: "purchases.purchase_order_ordered",
+        entity: "PurchaseOrder",
+        entityId: existing.id,
+        meta: { vendorId, number: existing.number },
+      },
+    });
+
+    return tx.purchaseOrder.findFirstOrThrow({
+      where: { id: existing.id, garageId },
+      include: { lines: true },
+    });
+  });
+}
+
+export async function cancelPurchaseOrder(
+  garageId: string,
+  purchaseOrderId: string,
+  actorId: string,
+) {
+  return prisma.$transaction(async (tx) => {
+    const existing = await tx.purchaseOrder.findFirst({
+      where: { id: purchaseOrderId, garageId },
+      include: {
+        lines: { select: { quantityReceived: true } },
+      },
+    });
+    if (!existing) {
+      throw new PurchasesTxError("purchases.po_not_found");
+    }
+    if (existing.status !== "OPEN" && existing.status !== "PENDING") {
+      throw new PurchasesTxError("purchases.po_not_cancellable");
+    }
+    if (existing.lines.some((line) => line.quantityReceived > 0)) {
+      throw new PurchasesTxError("purchases.po_not_cancellable");
+    }
+
+    const result = await tx.purchaseOrder.updateMany({
+      where: { id: purchaseOrderId, garageId },
+      data: { status: "CANCELLED" },
+    });
+    if (result.count === 0) {
+      throw new PurchasesTxError("purchases.po_not_found");
+    }
+
+    await tx.partsRequest.updateMany({
+      where: {
+        purchaseOrderId,
+        garageId,
+        status: { in: ["OPEN", "ORDERED"] },
+      },
+      data: { status: "CANCELLED" },
+    });
+
+    await tx.auditLog.create({
+      data: {
+        garageId,
+        actorId,
+        action: "purchases.purchase_order_cancelled",
+        entity: "PurchaseOrder",
+        entityId: purchaseOrderId,
+        meta: { number: existing.number },
+      },
+    });
+
+    return tx.purchaseOrder.findFirstOrThrow({
+      where: { id: purchaseOrderId, garageId },
+    });
+  });
+}
+
 export async function searchPurchaseOrders(
   garageId: string,
   q: string | undefined,
@@ -376,6 +741,13 @@ export async function searchPurchaseOrders(
             { number: { contains: q, mode: "insensitive" } },
             { vendor: { name: { contains: q, mode: "insensitive" } } },
             { notes: { contains: q, mode: "insensitive" } },
+            {
+              lines: {
+                some: {
+                  part: { name: { contains: q, mode: "insensitive" } },
+                },
+              },
+            },
           ],
         }
       : {}),
@@ -391,7 +763,12 @@ export async function searchPurchaseOrders(
       include: {
         vendor: { select: { id: true, name: true } },
         lines: {
-          select: { quantityOrdered: true, quantityReceived: true },
+          orderBy: { sortOrder: "asc" },
+          select: {
+            quantityOrdered: true,
+            quantityReceived: true,
+            part: { select: { name: true } },
+          },
         },
       },
     }),
@@ -432,6 +809,9 @@ export async function findPurchaseOrderById(garageId: string, id: string) {
               quantity: true,
               partId: true,
               purchaseOrderLineId: true,
+              part: {
+                select: { id: true, name: true, sku: true, unit: true },
+              },
             },
           },
         },
@@ -452,13 +832,22 @@ export async function receiveAgainstPurchaseOrder(
   return prisma.$transaction(async (tx) => {
     const po = await tx.purchaseOrder.findFirst({
       where: { id: data.purchaseOrderId, garageId },
-      select: { id: true, number: true, status: true },
+      select: { id: true, number: true, status: true, vendorId: true },
     });
     if (!po) {
       throw new PurchasesTxError("purchases.po_not_found");
     }
     if (po.status === "RECEIVED") {
       throw new PurchasesTxError("purchases.po_already_received");
+    }
+    if (po.status === "CANCELLED" || po.status === "OPEN") {
+      throw new PurchasesTxError("purchases.po_not_receivable");
+    }
+    if (!purchaseOrderCanReceive(po.status)) {
+      throw new PurchasesTxError("purchases.po_not_receivable");
+    }
+    if (!po.vendorId) {
+      throw new PurchasesTxError("purchases.vendor_required");
     }
 
     const lockedLines = await tx.$queryRaw<

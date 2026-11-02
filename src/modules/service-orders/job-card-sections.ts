@@ -1,7 +1,6 @@
 export const JOB_CARD_SECTIONS = [
   "details",
   "lines",
-  "estimate",
   "billing",
   "timeline",
 ] as const;

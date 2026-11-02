@@ -11,11 +11,13 @@ import {
   createEstimateFromInspection,
   createInspectionEstimateRevision,
   getEstimateForInspection,
+  syncInspectionEstimateFromItems,
 } from "@/modules/estimates/service";
 import {
   findCurrentEstimateForInspection,
   listEstimatesForInspection,
 } from "@/modules/estimates/repo";
+import { saveExistingInspection } from "@/modules/inspections/service";
 
 if (!process.env.DATABASE_URL) {
   process.env.DATABASE_URL =
@@ -184,5 +186,42 @@ describe("inspection estimates against Postgres", () => {
     const bundle = await getEstimateForInspection(session, inspectionId);
     expect(bundle.current?.id).toBe(revision.id);
     expect(bundle.revisions).toHaveLength(2);
+  });
+
+  it("removes estimate lines when matching inspection findings are deleted", async () => {
+    if (!ready) return;
+
+    const session: RoleSession = {
+      userId,
+      garageId,
+      role: "OWNER",
+    };
+
+    const current = await findCurrentEstimateForInspection(
+      garageId,
+      inspectionId,
+    );
+    expect(current).not.toBeNull();
+    expect(current!.lines.length).toBeGreaterThan(0);
+
+    await saveExistingInspection(session, inspectionId, {
+      customerId,
+      vehicleId,
+      complaint: "Noise",
+      recommendedNotes: "",
+      items: [],
+    });
+
+    const result = await syncInspectionEstimateFromItems(
+      session,
+      inspectionId,
+    );
+    expect(result.removedCount).toBeGreaterThan(0);
+
+    const after = await findCurrentEstimateForInspection(
+      garageId,
+      inspectionId,
+    );
+    expect(after?.lines).toHaveLength(0);
   });
 });

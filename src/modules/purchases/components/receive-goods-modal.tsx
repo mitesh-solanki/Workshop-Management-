@@ -21,11 +21,22 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { FormField } from "@/components/ui/form-field";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/toast";
+import { cn } from "@/lib/utils";
 import { QuantityStepper } from "@/modules/inventory/components/quantity-stepper";
 
 const initial: PurchasesActionState = { ok: false };
+
+const qtyColClass = "w-[10.5rem] min-w-[10.5rem] max-w-[10.5rem]";
 
 export type ReceiveGoodsLine = {
   id: string;
@@ -94,7 +105,7 @@ export function ReceiveGoodsModal({
           </Button>
         )}
       </DialogTrigger>
-      <DialogContent className="gap-0 overflow-hidden p-0 sm:max-w-lg">
+      <DialogContent className="gap-0 overflow-hidden p-0 sm:max-w-2xl">
         <DialogHeader className="border-b border-border px-5 py-4 text-left sm:px-6">
           <DialogTitle>{t("receiveTitle")}</DialogTitle>
           <DialogDescription>
@@ -118,43 +129,72 @@ export function ReceiveGoodsModal({
                 <p className="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2.5 text-sm text-blue-900">
                   {t("receivePartialTip")}
                 </p>
-                <ul className="space-y-3">
-                  {receivable.map((line) => {
-                    const remaining =
-                      line.quantityOrdered - line.quantityReceived;
-                    return (
-                      <li
-                        key={line.id}
-                        className="space-y-3 overflow-hidden rounded-xl border border-border bg-card shadow-xs"
-                      >
-                        <input type="hidden" name="lineId" value={line.id} />
-                        <div className="border-b border-border bg-muted/40 px-4 py-3">
-                          <p className="font-semibold text-foreground">
-                            {line.part.name}
-                          </p>
-                          <p className="text-caption text-muted-foreground">
-                            {line.part.sku} ·{" "}
-                            {t("alreadyReceived", {
-                              received: line.quantityReceived,
-                              ordered: line.quantityOrdered,
-                              unit: line.part.unit,
-                            })}
-                          </p>
-                        </div>
-                        <div className="px-4 pb-4">
-                          <QuantityStepper
-                            id={`recv-qty-${line.id}`}
-                            name="quantity"
-                            label={t("receiveQuantity")}
-                            defaultValue={remaining}
-                            min={0}
-                            hint={t("remaining", { count: remaining })}
-                          />
-                        </div>
-                      </li>
-                    );
-                  })}
-                </ul>
+                <div className="overflow-hidden rounded-lg border border-slate-200">
+                  <Table className="table-fixed">
+                    <TableHeader className="bg-slate-100 [&_tr]:border-border">
+                      <TableRow className="hover:bg-transparent">
+                        <TableHead className="min-w-0 text-slate-700">
+                          {t("part")}
+                        </TableHead>
+                        <TableHead className="w-28 whitespace-nowrap text-slate-700">
+                          {t("qtyReceived")}
+                        </TableHead>
+                        <TableHead
+                          className={cn(
+                            qtyColClass,
+                            "whitespace-nowrap text-slate-700",
+                          )}
+                        >
+                          {t("receiveQuantity")}
+                        </TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {receivable.map((line) => {
+                        const remaining =
+                          line.quantityOrdered - line.quantityReceived;
+                        return (
+                          <TableRow key={line.id} className="align-middle">
+                            <TableCell className="min-w-0 py-2">
+                              <input
+                                type="hidden"
+                                name="lineId"
+                                value={line.id}
+                              />
+                              <p className="truncate font-medium text-slate-900">
+                                {line.part.name}
+                              </p>
+                              <p className="truncate text-caption text-muted-foreground">
+                                {line.part.sku} ·{" "}
+                                {t("alreadyReceived", {
+                                  received: line.quantityReceived,
+                                  ordered: line.quantityOrdered,
+                                  unit: line.part.unit,
+                                })}
+                              </p>
+                            </TableCell>
+                            <TableCell className="py-2 tabular-nums text-muted-foreground">
+                              {line.quantityReceived}/{line.quantityOrdered}
+                            </TableCell>
+                            <TableCell className={cn(qtyColClass, "py-2")}>
+                              <QuantityStepper
+                                id={`recv-qty-${line.id}`}
+                                name="quantity"
+                                label={t("receiveQuantity")}
+                                hideLabel
+                                defaultValue={remaining}
+                                min={0}
+                                max={remaining}
+                                compact
+                                hint={t("remaining", { count: remaining })}
+                              />
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
               </>
             )}
 

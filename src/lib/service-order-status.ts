@@ -22,3 +22,14 @@ export const serviceOrderStatusClass: Record<ServiceOrderStatus, string> = {
   COMPLETED:
     "border-transparent bg-status-completed/20 text-status-completed",
 };
+
+/** High-contrast pills for dark surfaces (e.g. Job Slip header). */
+export const serviceOrderStatusOnDarkClass: Record<ServiceOrderStatus, string> =
+  {
+    WAITING: "border-transparent bg-amber-200 text-amber-950",
+    INSPECTION: "border-transparent bg-sky-200 text-sky-950",
+    IN_PROGRESS: "border-transparent bg-blue-200 text-blue-950",
+    WAITING_FOR_PARTS: "border-transparent bg-orange-200 text-orange-950",
+    READY: "border-transparent bg-emerald-200 text-emerald-950",
+    COMPLETED: "border-transparent bg-green-200 text-green-950",
+  };

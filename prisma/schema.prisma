@@ -82,9 +82,11 @@ enum PartsRequestStatus {
 }
 
 enum PurchaseOrderStatus {
+  OPEN
   PENDING
   PARTIALLY_RECEIVED
   RECEIVED
+  CANCELLED
 }
 
 enum InvoiceStatus {
@@ -517,10 +519,10 @@ model PurchaseOrder {
   id          String              @id @default(cuid())
   garageId    String
   garage      Garage              @relation(fields: [garageId], references: [id], onDelete: Cascade)
-  vendorId    String
-  vendor      Vendor              @relation(fields: [vendorId], references: [id], onDelete: Restrict)
+  vendorId    String?
+  vendor      Vendor?             @relation(fields: [vendorId], references: [id], onDelete: Restrict)
   number      String
-  status      PurchaseOrderStatus @default(PENDING)
+  status      PurchaseOrderStatus @default(OPEN)
   notes       String?
   createdById String?
   createdBy   User?               @relation("PurchaseOrderCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)

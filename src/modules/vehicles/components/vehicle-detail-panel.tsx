@@ -172,12 +172,6 @@ export function VehicleDetailPanel({
       value: asDate(vehicle.pucExpiry),
       status: getDateStatus(asDate(vehicle.pucExpiry)),
     },
-    {
-      key: "fitness",
-      term: tv("fitnessExpiry"),
-      value: asDate(vehicle.fitnessExpiry),
-      status: getDateStatus(asDate(vehicle.fitnessExpiry)),
-    },
   ] as const;
 
   const vehicleLabel = `${vehicle.make} ${vehicle.model}`.trim();

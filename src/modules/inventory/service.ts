@@ -285,7 +285,7 @@ export async function createPartRecord(
 }
 
 /**
- * Name-only catalogue row for job cards (technician-friendly).
+ * Light catalogue row for job cards / purchase orders.
  * No prices, stock, or bills — owner fills those later.
  */
 export async function createPartByNameRecord(
@@ -294,12 +294,20 @@ export async function createPartByNameRecord(
 ) {
   requireRole(session, NAME_CREATE_ROLES);
   const input = createPartByNameSchema.parse(raw);
-  const sku = await allocateUniqueSku(session.garageId, input.name);
+  const sku =
+    input.sku ?? (await allocateUniqueSku(session.garageId, input.name));
+
+  if (input.sku) {
+    const existing = await findPartBySku(session.garageId, sku);
+    if (existing) {
+      throw new AppError("inventory.sku_exists", 409);
+    }
+  }
 
   return createPart(session.garageId, {
     name: input.name,
     sku,
-    unit: "pcs",
+    unit: input.unit,
     purchasePricePaise: 0,
     sellingPricePaise: 0,
     gstRatePercent: DEFAULT_GST_RATE_PERCENT,

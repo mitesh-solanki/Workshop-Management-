@@ -146,14 +146,14 @@ export function InvoicePreviewDialog({
                     {t("paperBillTo")}
                   </small>
                   <strong className="block text-[13px]">{data.customerName}</strong>
-                  <p className="mt-1 text-[11px] text-[#67788c]">
-                    {data.customerPhone}
-                  </p>
                   {data.customerGstin ? (
-                    <p className="mt-1 text-[11px] text-[#67788c]">
+                    <p className="mt-1 text-[11px] font-medium text-[#2a3a4f]">
                       {t("paperGstin", { gstin: data.customerGstin })}
                     </p>
                   ) : null}
+                  <p className="mt-1 text-[11px] font-medium text-[#2a3a4f]">
+                    {t("paperContact", { phone: data.customerPhone })}
+                  </p>
                 </div>
                 <div>
                   <small className="mb-2 block text-[10px] font-extrabold tracking-[1px] text-[#7a8899]">

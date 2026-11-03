@@ -23,6 +23,20 @@ export function isTechnicianAssignedToOrder(
   );
 }
 
+/** Job-card UI edit gate — any assigned technician, not only the primary. */
+export function canMutateAssignedJobCard(
+  role: string,
+  order: OrderWithTechnicians & { status: string },
+  userId: string,
+): boolean {
+  if (order.status === "COMPLETED") return false;
+  if (role === "OWNER" || role === "MANAGER") return true;
+  if (role === "TECHNICIAN") {
+    return isTechnicianAssignedToOrder(order, userId);
+  }
+  return false;
+}
+
 export function assignedTechniciansFromOrder(
   order: OrderWithTechnicians,
 ): OrderTechnicianRef[] {

@@ -25,12 +25,14 @@ type StatusFilter = "" | ServiceOrderStatus | "NEEDS_PRICING";
 export type OrderTableRow = {
   id: string;
   customerId: string;
+  vehicleId: string;
   status: ServiceOrderStatus;
   complaint: string;
   bay: string | null;
   createdAt: string | Date;
   expectedCompletion: string | Date | null;
   needsPricing?: boolean;
+  paperCopyCount?: number;
   vehicle: { registrationNumber: string; make: string; model: string };
   customer: { name: string };
   technician: { name: string | null; email: string } | null;
@@ -44,7 +46,9 @@ type OrdersTableProps = {
   orders: OrderTableRow[];
   canWrite?: boolean;
   canDelete?: boolean;
+  canUploadPaper?: boolean;
   showNeedsPricing?: boolean;
+  showReport?: boolean;
   emptyAction?: React.ReactNode;
 };
 
@@ -52,6 +56,7 @@ function formatDueDate(
   value: Date | string | null,
   locale: string,
   empty: string,
+  withTime = false,
 ): string {
   if (!value) {
     return empty;
@@ -64,8 +69,9 @@ function formatDueDate(
     day: "numeric",
     month: "short",
     year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
+    ...(withTime
+      ? { hour: "2-digit" as const, minute: "2-digit" as const }
+      : {}),
   }).format(date);
 }
 
@@ -81,7 +87,9 @@ export function OrdersTable({
   orders,
   canWrite = false,
   canDelete = false,
+  canUploadPaper = false,
   showNeedsPricing = false,
+  showReport = false,
   emptyAction,
 }: OrdersTableProps) {
   const t = useTranslations("orders");
@@ -195,7 +203,7 @@ export function OrdersTable({
         header: t("columns.createdOn"),
         cell: ({ row }) => (
           <span className="text-muted-foreground">
-            {formatDueDate(row.original.createdAt, locale, t("dueNone"))}
+            {formatDueDate(row.original.createdAt, locale, t("dueNone"), true)}
           </span>
         ),
       },
@@ -249,15 +257,19 @@ export function OrdersTable({
           <JobCardRowActions
             orderId={row.original.id}
             customerId={row.original.customerId}
+            vehicleId={row.original.vehicleId}
             label={row.original.vehicle.registrationNumber}
             canWrite={canWrite}
             canDelete={canDelete}
+            canUploadPaper={canUploadPaper}
+            hasPaperCopy={(row.original.paperCopyCount ?? 0) > 0}
             status={row.original.status}
+            showReport={showReport}
           />
         ),
       },
     ],
-    [t, canWrite, canDelete, locale, showNeedsPricing],
+    [t, canWrite, canDelete, canUploadPaper, locale, showNeedsPricing, showReport],
   );
 
   useEffect(() => {
@@ -371,6 +383,7 @@ export function OrdersTable({
                   order.createdAt,
                   locale,
                   t("dueNone"),
+                  true,
                 )}`}
               </span>
               <span
@@ -393,10 +406,14 @@ export function OrdersTable({
               <JobCardRowActions
                 orderId={order.id}
                 customerId={order.customerId}
+                vehicleId={order.vehicleId}
                 label={order.vehicle.registrationNumber}
                 canWrite={canWrite}
                 canDelete={canDelete}
+                canUploadPaper={canUploadPaper}
+                hasPaperCopy={(order.paperCopyCount ?? 0) > 0}
                 status={order.status}
+                showReport={showReport}
               />
             </div>
           </div>

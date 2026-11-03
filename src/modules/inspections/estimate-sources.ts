@@ -5,12 +5,15 @@ export type InspectionEstimateSourceItem = {
   notes: string | null;
   quantity: number;
   unitPricePaise: number;
+  externalCheck?: boolean;
 };
 
 export type InspectionEstimateSourceLine = {
   description: string;
   quantity: number;
   unitPricePaise: number;
+  /** Outside Work finding — estimate line type OUTSIDE, not PART. */
+  externalCheck: boolean;
 };
 
 /** Priced findings used to seed an inspection estimate (same rules client + server). */
@@ -25,6 +28,7 @@ export function collectInspectionEstimateSources(
           description: line.description.trim() || item.label.trim(),
           quantity: line.quantity,
           unitPricePaise: line.unitPricePaise,
+          externalCheck: Boolean(item.externalCheck),
         }))
         .filter((line) => line.description.length > 0),
   );
@@ -37,6 +41,7 @@ export function collectInspectionEstimateSources(
       description: item.label.trim(),
       quantity: item.quantity >= 1 ? item.quantity : 1,
       unitPricePaise: item.unitPricePaise,
+      externalCheck: Boolean(item.externalCheck),
     }));
 }
 
@@ -44,6 +49,7 @@ export type EstimateLineSnapshot = {
   description: string;
   quantity: number;
   unitPricePaise: number;
+  type?: string;
 };
 
 export type InspectionEstimateSyncDiff = {
@@ -61,7 +67,13 @@ function lineKey(description: string): string {
   return description.trim().toLowerCase();
 }
 
-/** Compare live findings to current estimate lines (add / price-qty change / remove). */
+function expectedEstimateType(
+  externalCheck: boolean,
+): "OUTSIDE" | "PART" {
+  return externalCheck ? "OUTSIDE" : "PART";
+}
+
+/** Compare live findings to current estimate lines (add / price-qty/type change / remove). */
 export function diffInspectionEstimateSources(
   sources: InspectionEstimateSourceLine[],
   estimateLines: EstimateLineSnapshot[],
@@ -80,9 +92,13 @@ export function diffInspectionEstimateSources(
       toAdd.push(source);
       continue;
     }
+    const expectedType = expectedEstimateType(source.externalCheck);
+    const typeMismatch =
+      existing.type != null && existing.type !== expectedType;
     if (
       existing.quantity !== source.quantity ||
-      existing.unitPricePaise !== source.unitPricePaise
+      existing.unitPricePaise !== source.unitPricePaise ||
+      typeMismatch
     ) {
       toUpdate.push({
         ...source,

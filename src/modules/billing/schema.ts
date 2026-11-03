@@ -5,8 +5,15 @@ import { rupeesToPaiseSchema } from "@/lib/money";
 export const INVOICE_STATUSES = ["DRAFT", "FINALIZED"] as const;
 export type InvoiceStatusValue = (typeof INVOICE_STATUSES)[number];
 
-export const INVOICE_LINE_TYPES = ["LABOUR", "PART"] as const;
+export const INVOICE_LINE_TYPES = ["LABOUR", "PART", "OUTSIDE"] as const;
 export type InvoiceLineTypeValue = (typeof INVOICE_LINE_TYPES)[number];
+
+/** Priced job-card lines that can appear on an invoice. */
+export function isBillableOrderLineType(
+  type: string,
+): type is InvoiceLineTypeValue {
+  return (INVOICE_LINE_TYPES as readonly string[]).includes(type);
+}
 
 export const GST_SPLIT_KINDS = ["CGST_SGST", "IGST"] as const;
 export type GstSplitKindSchemaValue = (typeof GST_SPLIT_KINDS)[number];

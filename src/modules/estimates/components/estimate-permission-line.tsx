@@ -70,6 +70,9 @@ function approvalTone(state: string) {
 
 function TypeBadge({ type }: { type: string }) {
   const t = useTranslations("estimates");
+  if (type === "OUTSIDE") {
+    return <span className="text-slate-400">—</span>;
+  }
   const typeKey = type === "PART" || type === "LABOUR" ? type : "LABOUR";
   return (
     <span
@@ -132,7 +135,9 @@ export function EstimatePermissionLine({
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [removing, startRemove] = useTransition();
   const typeKey =
-    line.type === "PART" || line.type === "LABOUR" ? line.type : "LABOUR";
+    line.type === "PART" || line.type === "LABOUR" || line.type === "OUTSIDE"
+      ? line.type
+      : "LABOUR";
 
   function openDelete(event: MouseEvent) {
     event.preventDefault();
@@ -382,7 +387,9 @@ export function EstimatePermissionLine({
               {line.description}
             </b>
             <small className="mt-0.5 block text-[13px] text-slate-500">
-              {`${t(`lineTypes.${typeKey as EstimateLineTypeValue}`)} · ${line.quantity} × ${formatRupees(line.unitPricePaise)}`}
+              {typeKey === "OUTSIDE"
+                ? formatRupees(line.unitPricePaise)
+                : `${t(`lineTypes.${typeKey as EstimateLineTypeValue}`)} · ${line.quantity} × ${formatRupees(line.unitPricePaise)}`}
               {line.hsnOrSac ? ` · ${line.hsnOrSac}` : null}
               {` · GST ${line.gstRatePercent}%`}
             </small>

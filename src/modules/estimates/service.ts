@@ -43,6 +43,7 @@ import { alignInspectionFindingWithEstimateLine } from "@/modules/inspections/al
 import { collectInspectionEstimateSources as collectInspectionEstimateSourceLines } from "@/modules/inspections/estimate-sources";
 import {
   findInspectionById,
+  findInspectionByServiceOrderId,
   patchInspectionFindingItems,
 } from "@/modules/inspections/repo";
 
@@ -100,14 +101,21 @@ async function collectSourceLines(
     return [];
   }
 
-  return order.lines.map((line) => ({
-    type: line.type,
-    description: line.description,
-    quantity: line.quantity,
-    unitPricePaise: line.unitPricePaise,
-    sourceOrderLineId: line.id,
-    sourceSuggestedRepairId: null,
-  }));
+  return order.lines
+    .filter(
+      (line): line is typeof line & { type: EstimateLineTypeValue } =>
+        line.type === "LABOUR" ||
+        line.type === "PART" ||
+        line.type === "OUTSIDE",
+    )
+    .map((line) => ({
+      type: line.type,
+      description: line.description,
+      quantity: line.quantity,
+      unitPricePaise: line.unitPricePaise,
+      sourceOrderLineId: line.id,
+      sourceSuggestedRepairId: null,
+    }));
 }
 
 function toCreateInput(
@@ -165,19 +173,150 @@ export async function getEstimateForOrder(
   };
 }
 
-/** Latest current estimate for this customer + vehicle (any inspection or job card). */
+/** Latest inspection estimate for this customer + vehicle (estimate exists only from inspection). */
 export async function getLatestEstimateForCustomerVehicle(
   session: RoleSession,
   customerId: string,
   vehicleId: string,
 ) {
   requireRole(session, READ_ROLES);
-  const estimate = await findLatestCurrentEstimateForCustomerVehicle(
+  let estimate = await findLatestCurrentEstimateForCustomerVehicle(
     session.garageId,
     customerId,
     vehicleId,
   );
-  return estimate ? withTotals(estimate) : null;
+  if (!estimate) {
+    return null;
+  }
+
+  if (estimate.inspectionId) {
+    const inspection = await findInspectionById(
+      session.garageId,
+      estimate.inspectionId,
+    );
+    if (inspection) {
+      await repairOutsideEstimateLineTypes(session.garageId, estimate, {
+        actorId: session.userId,
+        inspectionItems: inspection.items,
+      });
+      estimate = await findLatestCurrentEstimateForCustomerVehicle(
+        session.garageId,
+        customerId,
+        vehicleId,
+      );
+      if (!estimate) {
+        return null;
+      }
+    }
+  }
+
+  return withTotals(estimate);
+}
+
+/**
+ * Ensure Outside Work inspection findings are typed OUTSIDE on the estimate.
+ * Does not read job-card lines — estimate stays independent of workshop work.
+ */
+async function repairOutsideEstimateLineTypes(
+  garageId: string,
+  estimate: {
+    id: string;
+    lines: Array<{
+      id: string;
+      type: string;
+      description: string;
+      quantity: number;
+      unitPricePaise: number;
+      sourceOrderLineId: string | null;
+    }>;
+  },
+  options: {
+    actorId: string;
+    inspectionItems?: Array<{
+      label: string;
+      notes: string | null;
+      quantity: number;
+      unitPricePaise: number;
+      externalCheck: boolean;
+    }>;
+  },
+) {
+  const byDescription = new Map(
+    (options.inspectionItems
+      ? collectInspectionEstimateSourceLines(options.inspectionItems)
+      : []
+    ).map((line) => [line.description.trim().toLowerCase(), line]),
+  );
+  if (byDescription.size === 0) return;
+
+  for (const line of estimate.lines) {
+    const source = byDescription.get(line.description.trim().toLowerCase());
+    if (!source) continue;
+    const expected: EstimateLineTypeValue = source.externalCheck
+      ? "OUTSIDE"
+      : "PART";
+    if (line.type === expected) continue;
+
+    await updateEstimateLineDetails(garageId, {
+      lineId: line.id,
+      estimateId: estimate.id,
+      serviceOrderId: null,
+      description: line.description,
+      quantity: line.quantity,
+      unitPricePaise: line.unitPricePaise,
+      type: expected,
+      hsnOrSac: defaultHsnOrSac(expected),
+      actorId: options.actorId,
+    });
+  }
+}
+
+/** Inspection estimate for a job card — never labour/parts-generated rows. */
+export async function getInspectionEstimateForOrder(
+  session: RoleSession,
+  serviceOrderId: string,
+) {
+  requireRole(session, READ_ROLES);
+  const order = await loadOrderForSession(session, serviceOrderId);
+  assertCanViewOrder(session, order);
+
+  const inspection = await findInspectionByServiceOrderId(
+    session.garageId,
+    order.id,
+  );
+  if (!inspection) {
+    return null;
+  }
+
+  let estimate = await findCurrentEstimateForInspection(
+    session.garageId,
+    inspection.id,
+  );
+  if (!estimate) {
+    return null;
+  }
+
+  await repairOutsideEstimateLineTypes(session.garageId, estimate, {
+    actorId: session.userId,
+    inspectionItems: inspection.items,
+  });
+
+  estimate = await findCurrentEstimateForInspection(
+    session.garageId,
+    inspection.id,
+  );
+  if (!estimate) {
+    return null;
+  }
+
+  return withTotals({
+    ...estimate,
+    inspection: {
+      id: inspection.id,
+      expectedCompletion: inspection.expectedCompletion,
+    },
+    serviceOrder: null,
+  });
 }
 
 export async function getEstimateById(session: RoleSession, estimateId: string) {
@@ -213,10 +352,20 @@ export async function getEstimateForInspection(
     throw new NotFoundError();
   }
 
-  const current = await findCurrentEstimateForInspection(
+  let current = await findCurrentEstimateForInspection(
     session.garageId,
     inspection.id,
   );
+  if (current) {
+    await repairOutsideEstimateLineTypes(session.garageId, current, {
+      actorId: session.userId,
+      inspectionItems: inspection.items,
+    });
+    current = await findCurrentEstimateForInspection(
+      session.garageId,
+      inspection.id,
+    );
+  }
   const revisions = await listEstimatesForInspection(
     session.garageId,
     inspection.id,
@@ -234,7 +383,7 @@ function collectInspectionEstimateSources(
 ): SourceLine[] {
   return collectInspectionEstimateSourceLines(inspection.items).map(
     (line) => ({
-      type: "PART" as const,
+      type: line.externalCheck ? ("OUTSIDE" as const) : ("PART" as const),
       description: line.description,
       quantity: line.quantity,
       unitPricePaise: line.unitPricePaise,
@@ -352,7 +501,8 @@ export async function syncInspectionEstimateFromItems(
     }
     if (
       existing.quantity !== source.quantity ||
-      existing.unitPricePaise !== source.unitPricePaise
+      existing.unitPricePaise !== source.unitPricePaise ||
+      existing.type !== source.type
     ) {
       const updated = await updateEstimateLineDetails(session.garageId, {
         lineId: existing.id,
@@ -361,6 +511,8 @@ export async function syncInspectionEstimateFromItems(
         description: existing.description,
         quantity: source.quantity,
         unitPricePaise: source.unitPricePaise,
+        type: source.type,
+        hsnOrSac: defaultHsnOrSac(source.type),
         actorId: session.userId,
       });
       if (updated && updated !== "billed") {
@@ -682,9 +834,10 @@ export async function agreeAllPendingInspectionEstimateLines(
 }
 
 /**
- * Job-card labour/parts must not change the customer-facing estimate.
- * Returns an already-linked line if present; never adds or updates estimate
- * lines. Billing uses syncMissingOrderLinesOntoEstimate when drafting an invoice.
+ * Job-card labour / parts / outside work must not change the customer-facing
+ * estimate. Returns an already-linked line if present; never adds or updates
+ * estimate lines. Billing invoices from order lines and keeps the inspection
+ * estimate untouched.
  */
 export async function mirrorOrderLineOntoCurrentEstimate(
   session: RoleSession,
@@ -726,48 +879,14 @@ export async function mirrorOrderLineOntoCurrentEstimate(
   return linked ?? null;
 }
 
-function orderLineBillingFields(line: {
-  type: string;
-  description: string;
-  quantity: number;
-  unitPricePaise: number;
-  part?: { gstRatePercent: number; hsn: string } | null;
-}): {
-  type: EstimateLineTypeValue;
-  description: string;
-  quantity: number;
-  unitPricePaise: number;
-  gstRatePercent: number;
-  hsnOrSac: string;
-} {
-  const type: EstimateLineTypeValue =
-    line.type === "PART" || line.type === "LABOUR" ? line.type : "LABOUR";
-  const part = line.part ?? null;
-  return {
-    type,
-    description: line.description,
-    quantity: line.quantity,
-    unitPricePaise: line.unitPricePaise,
-    gstRatePercent:
-      part && typeof part.gstRatePercent === "number"
-        ? part.gstRatePercent
-        : DEFAULT_GST_RATE_PERCENT,
-    hsnOrSac:
-      part && typeof part.hsn === "string" && part.hsn.trim()
-        ? part.hsn.trim()
-        : defaultHsnOrSac(type),
-  };
-}
-
 /**
- * Keep current estimate lines aligned with priced job-card labour/parts:
- * add missing, update changed, drop removed (when not on a finalized bill).
- * Used before draft create / remake.
+ * Job-card labour / parts / outside work must not rewrite the estimate.
+ * Kept as a no-op for older callers; billing uses order lines directly.
  */
 export async function syncMissingOrderLinesOntoEstimate(
   session: RoleSession,
   serviceOrderId: string,
-  options?: { autoApprove?: boolean },
+  _options?: { autoApprove?: boolean },
 ) {
   requireRole(session, [
     "OWNER",
@@ -789,157 +908,9 @@ export async function syncMissingOrderLinesOntoEstimate(
     throw new AppError("ESTIMATE_MISSING");
   }
 
-  const orderById = new Map(order.lines.map((line) => [line.id, line]));
-  const autoApprove = options?.autoApprove ?? !current.askPermission;
-  let addedCount = 0;
-  let updatedCount = 0;
-  let removedCount = 0;
-
-  for (const estLine of current.lines) {
-    if (!estLine.sourceOrderLineId) continue;
-    const orderLine = orderById.get(estLine.sourceOrderLineId);
-    const stillBillable =
-      orderLine &&
-      (orderLine.type === "LABOUR" || orderLine.type === "PART") &&
-      orderLine.unitPricePaise > 0 &&
-      orderLine.quantity > 0;
-
-    if (!stillBillable) {
-      try {
-        const result = await deleteEstimateLine(session.garageId, {
-          lineId: estLine.id,
-          estimateId: current.id,
-          serviceOrderId: order.id,
-          description: estLine.description,
-          actorId: session.userId,
-        });
-        if (result === "ok") {
-          removedCount += 1;
-        }
-      } catch (error) {
-        if (
-          error instanceof EstimateStockTxError &&
-          error.reason === "INSUFFICIENT_STOCK"
-        ) {
-          throw insufficientStockError(error.partName, error.partId);
-        }
-        throw error;
-      }
-      continue;
-    }
-
-    const next = orderLineBillingFields(orderLine);
-    const changed =
-      estLine.type !== next.type ||
-      estLine.description !== next.description ||
-      estLine.quantity !== next.quantity ||
-      estLine.unitPricePaise !== next.unitPricePaise ||
-      estLine.gstRatePercent !== next.gstRatePercent ||
-      estLine.hsnOrSac !== next.hsnOrSac;
-
-    if (!changed) continue;
-
-    try {
-      const updated = await updateEstimateLineDetails(session.garageId, {
-        lineId: estLine.id,
-        estimateId: current.id,
-        serviceOrderId: order.id,
-        description: next.description,
-        quantity: next.quantity,
-        unitPricePaise: next.unitPricePaise,
-        type: next.type,
-        gstRatePercent: next.gstRatePercent,
-        hsnOrSac: next.hsnOrSac,
-        actorId: session.userId,
-      });
-      if (updated && updated !== "billed") {
-        updatedCount += 1;
-      }
-    } catch (error) {
-      if (
-        error instanceof EstimateStockTxError &&
-        error.reason === "INSUFFICIENT_STOCK"
-      ) {
-        throw insufficientStockError(error.partName, error.partId);
-      }
-      throw error;
-    }
-  }
-
-  const refreshedForAdd = await findCurrentEstimate(session.garageId, order.id);
-  const alreadyLinked = new Set(
-    (refreshedForAdd?.lines ?? [])
-      .map((line) => line.sourceOrderLineId)
-      .filter((id): id is string => Boolean(id)),
-  );
-
-  const missing = order.lines.filter(
-    (line) =>
-      !alreadyLinked.has(line.id) &&
-      line.unitPricePaise > 0 &&
-      line.quantity > 0 &&
-      (line.type === "LABOUR" || line.type === "PART"),
-  );
-
-  for (const line of missing) {
-    try {
-      const next = orderLineBillingFields(line);
-      const created = await addEstimateLine(session.garageId, {
-        estimateId: current.id,
-        serviceOrderId: order.id,
-        type: next.type,
-        description: next.description,
-        quantity: next.quantity,
-        unitPricePaise: next.unitPricePaise,
-        gstRatePercent: next.gstRatePercent,
-        hsnOrSac: next.hsnOrSac,
-        sourceOrderLineId: line.id,
-        actorId: session.userId,
-        autoApprove,
-      });
-      if (created) {
-        addedCount += 1;
-      }
-    } catch (error) {
-      if (
-        error instanceof EstimateStockTxError &&
-        error.reason === "INSUFFICIENT_STOCK"
-      ) {
-        throw insufficientStockError(error.partName, error.partId);
-      }
-      throw error;
-    }
-  }
-
-  if (autoApprove) {
-    const refreshed = await findCurrentEstimate(session.garageId, order.id);
-    for (const line of refreshed?.lines ?? []) {
-      if (line.approvalState !== "PENDING" || !line.sourceOrderLineId) {
-        continue;
-      }
-      const result = await recordLineApproval(session.garageId, {
-        estimateId: current.id,
-        estimateLineId: line.id,
-        serviceOrderId: order.id,
-        fromState: "PENDING",
-        toState: "APPROVED",
-        method: "MANUAL",
-        note: null,
-        recordedById: session.userId,
-      });
-      if (!result.ok) {
-        if (result.reason === "INSUFFICIENT_STOCK") {
-          throw insufficientStockError(
-            result.partName ?? line.description,
-            result.partId,
-          );
-        }
-        if (result.reason === "PART_NOT_FOUND") {
-          throw new NotFoundError();
-        }
-      }
-    }
-  }
+  const addedCount = 0;
+  const updatedCount = 0;
+  const removedCount = 0;
 
   return {
     estimateId: current.id,
@@ -949,100 +920,6 @@ export async function syncMissingOrderLinesOntoEstimate(
   };
 }
 
-/**
- * Billing from the job card: ensure a current estimate exists and every priced
- * labour/part line is on it as APPROVED. Creates the estimate when the job
- * was opened without inspection/estimate.
- */
-export async function ensureEstimateReadyForBilling(
-  session: RoleSession,
-  serviceOrderId: string,
-) {
-  requireRole(session, [
-    "OWNER",
-    "MANAGER",
-    "TECHNICIAN",
-    "ACCOUNTANT",
-  ] as const);
-  const order = await loadOrderForSession(session, serviceOrderId);
-  if (session.role === "ACCOUNTANT") {
-    if (order.status === "COMPLETED") {
-      throw new AppError("ORDER_COMPLETED");
-    }
-  } else {
-    assertCanMutateOrder(session, order);
-  }
-
-  const priced = order.lines.filter(
-    (line) =>
-      (line.type === "LABOUR" || line.type === "PART") &&
-      line.unitPricePaise > 0 &&
-      line.quantity > 0,
-  );
-  if (priced.length === 0) {
-    throw new AppError("billing.no_priced_lines");
-  }
-
-  let current = await findCurrentEstimate(session.garageId, order.id);
-  if (!current) {
-    const lines: EstimateLineCreateInput[] = priced.map((line, index) => {
-      const part =
-        "part" in line && line.part
-          ? line.part
-          : null;
-      return {
-        type: line.type,
-        description: line.description,
-        quantity: line.quantity,
-        unitPricePaise: line.unitPricePaise,
-        gstRatePercent:
-          part && typeof part.gstRatePercent === "number"
-            ? part.gstRatePercent
-            : DEFAULT_GST_RATE_PERCENT,
-        hsnOrSac:
-          part && typeof part.hsn === "string" && part.hsn.trim()
-            ? part.hsn.trim()
-            : defaultHsnOrSac(line.type),
-        approvalState: "APPROVED",
-        sourceOrderLineId: line.id,
-        sortOrder: index,
-      };
-    });
-
-    try {
-      current = await createEstimateWithLines(session.garageId, {
-        serviceOrderId: order.id,
-        revisionNumber: 1,
-        notes: null,
-        askPermission: false,
-        createdById: session.userId,
-        lines,
-        bootstrapApprovedLines: true,
-      });
-    } catch (error) {
-      if (
-        error instanceof EstimateStockTxError &&
-        error.reason === "INSUFFICIENT_STOCK"
-      ) {
-        throw insufficientStockError(error.partName, error.partId);
-      }
-      throw error;
-    }
-    if (!current) {
-      throw new AppError("ESTIMATE_CREATE_FAILED");
-    }
-    return current;
-  }
-
-  await syncMissingOrderLinesOntoEstimate(session, order.id, {
-    autoApprove: true,
-  });
-  const refreshed = await findCurrentEstimate(session.garageId, order.id);
-  if (!refreshed || refreshed.supersededAt != null) {
-    throw new AppError("billing.estimate_missing");
-  }
-  return refreshed;
-}
 
 export async function removeEstimateLine(
   session: RoleSession,

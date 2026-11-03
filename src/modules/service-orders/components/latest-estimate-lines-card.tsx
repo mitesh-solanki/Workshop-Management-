@@ -1,7 +1,8 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { Check, ChevronDown, Pencil, Trash2, X } from "lucide-react";
+import { Check, Pencil, Trash2, X } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import {
@@ -38,15 +39,17 @@ import {
   type Paise,
 } from "@/lib/money";
 import { cn } from "@/lib/utils";
+import { NoteSuggestInput } from "@/modules/inspections/components/note-suggest-input";
 import { QuantityStepper } from "@/modules/inventory/components/quantity-stepper";
 
 export type LatestEstimateLine = {
   id: string;
-  type: "LABOUR" | "PART";
+  type: "LABOUR" | "PART" | "OUTSIDE";
   description: string;
   quantity: number;
   unitPricePaise: number;
   approvalState: "PENDING" | "APPROVED" | "REJECTED";
+  sourceOrderLineId?: string | null;
 };
 
 type Props = {
@@ -55,6 +58,13 @@ type Props = {
   hidePrices?: boolean;
   canEdit?: boolean;
   defaultOpen?: boolean;
+  /** Outside work: description + amount only (quantity fixed at 1). */
+  hideQuantity?: boolean;
+  amountLabel?: string;
+  /** Override the blue header hint (e.g. Outside Work wording). */
+  hint?: string;
+  /** Link to the full estimate page for deeper edits. */
+  estimateHref?: string | null;
 };
 
 const actionBtnClass =
@@ -77,6 +87,10 @@ export function LatestEstimateLinesCard({
   hidePrices = false,
   canEdit = false,
   defaultOpen = true,
+  hideQuantity = false,
+  amountLabel,
+  hint,
+  estimateHref = null,
 }: Props) {
   const t = useTranslations("orders");
   const te = useTranslations("estimates");
@@ -91,6 +105,8 @@ export function LatestEstimateLinesCard({
   const [draftPricePaise, setDraftPricePaise] = useState<Paise>(0);
   const [priceInputKey, setPriceInputKey] = useState(0);
   const [pending, startTransition] = useTransition();
+  const priceColumnLabel = amountLabel ?? t("unitPrice");
+  const headerHint = hint ?? t("latestEstimateHint");
 
   const approvedLines = useMemo(
     () => lines.filter((line) => line.approvalState === "APPROVED"),
@@ -102,7 +118,7 @@ export function LatestEstimateLinesCard({
   function beginEdit(line: LatestEstimateLine) {
     setEditingId(line.id);
     setDraftDescription(line.description);
-    setDraftQty(line.quantity);
+    setDraftQty(hideQuantity ? 1 : line.quantity);
     setDraftPricePaise(line.unitPricePaise as Paise);
     setPriceInputKey((key) => key + 1);
   }
@@ -114,7 +130,7 @@ export function LatestEstimateLinesCard({
   function saveEdit(line: LatestEstimateLine) {
     const formData = new FormData();
     formData.set("description", draftDescription.trim());
-    formData.set("quantity", String(draftQty));
+    formData.set("quantity", String(hideQuantity ? 1 : draftQty));
     formData.set("unitPriceRupees", paiseToRupeesInput(draftPricePaise));
     startTransition(async () => {
       const result = await updateJobCardEstimateLineAction(
@@ -157,27 +173,30 @@ export function LatestEstimateLinesCard({
     <div className="w-full max-w-3xl overflow-hidden rounded-xl border border-blue-200">
       <button
         type="button"
-        className="flex w-full items-center justify-between gap-3 bg-blue-50 px-4 py-3 text-left"
         aria-expanded={open}
+        aria-label={
+          open ? t("latestEstimateCollapse") : t("latestEstimateExpand")
+        }
+        className="flex w-full cursor-pointer items-start gap-3 bg-blue-50 px-4 py-3 text-left hover:bg-blue-100/60"
         onClick={() => setOpen((value) => !value)}
       >
-        <span className="min-w-0">
+        <span className="min-w-0 flex-1">
           <span className="block text-[14px] font-semibold text-blue-950">
             {t("latestEstimateTitle")}
           </span>
           <span className="mt-0.5 block text-[13px] font-medium text-blue-900/75">
-            {t("latestEstimateHint")}
+            {headerHint}
           </span>
         </span>
-        <span className="inline-flex shrink-0 items-center gap-1 text-[13px] font-medium text-blue-900/80">
-          {t("latestEstimateCount", { count: approvedLines.length })}
-          <ChevronDown
-            className={cn(
-              "size-4 transition-transform duration-300",
-              open && "rotate-180",
-            )}
-          />
-        </span>
+        {estimateHref ? (
+          <Link
+            href={estimateHref}
+            className="inline-flex h-11 min-h-11 shrink-0 items-center rounded-lg border border-blue-300 bg-white px-3 text-[13px] font-semibold text-blue-800 hover:bg-blue-50"
+            onClick={(event) => event.stopPropagation()}
+          >
+            {t("openEstimate")}
+          </Link>
+        ) : null}
       </button>
       <SmoothAccordion open={open}>
         <div className="border-t border-slate-300 bg-white">
@@ -187,19 +206,21 @@ export function LatestEstimateLinesCard({
                 <TableHead className="min-w-0 text-left text-slate-700">
                   {t("lineDescription")}
                 </TableHead>
-                <TableHead
-                  className={cn(
-                    qtyColClass,
-                    "whitespace-nowrap text-center text-slate-700",
-                  )}
-                >
-                  {t("quantity")}
-                </TableHead>
+                {hideQuantity ? null : (
+                  <TableHead
+                    className={cn(
+                      qtyColClass,
+                      "whitespace-nowrap text-center text-slate-700",
+                    )}
+                  >
+                    {t("quantity")}
+                  </TableHead>
+                )}
                 {!hidePrices ? (
                   <TableHead
                     className={cn(priceColClass, "text-center text-slate-700")}
                   >
-                    {t("unitPrice")}
+                    {priceColumnLabel}
                   </TableHead>
                 ) : null}
                 {canEdit ? (
@@ -225,48 +246,63 @@ export function LatestEstimateLinesCard({
                       className={cn("min-w-0 max-w-0 whitespace-normal", cellPad)}
                     >
                       {editing ? (
-                        <Input
-                          id={`estimate-desc-${line.id}`}
-                          required
-                          maxLength={500}
-                          value={draftDescription}
-                          onChange={(event) =>
-                            setDraftDescription(event.target.value)
-                          }
-                          className={controlClass}
-                          aria-label={t("lineDescription")}
-                        />
+                        hideQuantity ? (
+                          <NoteSuggestInput
+                            id={`estimate-desc-${line.id}`}
+                            required
+                            maxLength={500}
+                            value={draftDescription}
+                            suggestionMode="outsideWork"
+                            onValueChange={setDraftDescription}
+                            className={controlClass}
+                            placeholder={t("outsideWorkDescriptionPlaceholder")}
+                          />
+                        ) : (
+                          <Input
+                            id={`estimate-desc-${line.id}`}
+                            required
+                            maxLength={500}
+                            value={draftDescription}
+                            onChange={(event) =>
+                              setDraftDescription(event.target.value)
+                            }
+                            className={controlClass}
+                            aria-label={t("lineDescription")}
+                          />
+                        )
                       ) : (
                         <span className="truncate text-[14px] font-medium text-slate-900">
                           {line.description}
                         </span>
                       )}
                     </TableCell>
-                    <TableCell
-                      className={cn(
-                        qtyColClass,
-                        cellPad,
-                        "text-center tabular-nums text-slate-700",
-                      )}
-                    >
-                      {editing ? (
-                        <div className="flex h-11 min-h-11 items-center justify-center">
-                          <QuantityStepper
-                            id={`estimate-qty-${line.id}`}
-                            name={`estimate-qty-${line.id}`}
-                            label={t("quantity")}
-                            defaultValue={line.quantity}
-                            min={1}
-                            hideLabel
-                            onValueChange={setDraftQty}
-                          />
-                        </div>
-                      ) : (
-                        <span className="inline-flex h-11 min-h-11 w-full items-center justify-center tabular-nums">
-                          {line.quantity}
-                        </span>
-                      )}
-                    </TableCell>
+                    {hideQuantity ? null : (
+                      <TableCell
+                        className={cn(
+                          qtyColClass,
+                          cellPad,
+                          "text-center tabular-nums text-slate-700",
+                        )}
+                      >
+                        {editing ? (
+                          <div className="flex h-11 min-h-11 items-center justify-center">
+                            <QuantityStepper
+                              id={`estimate-qty-${line.id}`}
+                              name={`estimate-qty-${line.id}`}
+                              label={t("quantity")}
+                              defaultValue={line.quantity}
+                              min={1}
+                              hideLabel
+                              onValueChange={setDraftQty}
+                            />
+                          </div>
+                        ) : (
+                          <span className="inline-flex h-11 min-h-11 w-full items-center justify-center tabular-nums">
+                            {line.quantity}
+                          </span>
+                        )}
+                      </TableCell>
+                    )}
                     {!hidePrices ? (
                       <TableCell
                         className={cn(
@@ -284,7 +320,7 @@ export function LatestEstimateLinesCard({
                             required
                             defaultValue={paiseToRupeesInput(draftPricePaise)}
                             className={cn(controlClass, "tabular-nums")}
-                            aria-label={t("unitPrice")}
+                            aria-label={priceColumnLabel}
                             onFocus={(event) => {
                               if (
                                 isZeroRupeesInput(event.currentTarget.value)

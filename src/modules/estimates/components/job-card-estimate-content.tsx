@@ -80,7 +80,7 @@ export async function JobCardEstimateContent({
                     const typeKey =
                       line.type === "PART" || line.type === "LABOUR"
                         ? line.type
-                        : "LABOUR";
+                        : null;
                     const missingPrice = line.unitPricePaise <= 0;
                     const lineTotal = multiplyByQuantity(
                       line.unitPricePaise,
@@ -92,16 +92,18 @@ export async function JobCardEstimateContent({
                         className="flex items-center justify-between gap-3 px-3.5 py-3"
                       >
                         <div className="flex min-w-0 flex-1 items-center gap-2">
-                          <span
-                            className={cn(
-                              "inline-flex shrink-0 rounded-md border px-2 py-0.5 text-[11px] font-semibold",
-                              typeKey === "PART"
-                                ? "border-blue-200 bg-blue-50 text-blue-800"
-                                : "border-orange-200 bg-orange-50 text-orange-800",
-                            )}
-                          >
-                            {t(`lineTypes.${typeKey}`)}
-                          </span>
+                          {typeKey ? (
+                            <span
+                              className={cn(
+                                "inline-flex shrink-0 rounded-md border px-2 py-0.5 text-[11px] font-semibold",
+                                typeKey === "PART"
+                                  ? "border-blue-200 bg-blue-50 text-blue-800"
+                                  : "border-orange-200 bg-orange-50 text-orange-800",
+                              )}
+                            >
+                              {t(`lineTypes.${typeKey}`)}
+                            </span>
+                          ) : null}
                           <p className="truncate text-[14px] font-medium text-slate-900">
                             {line.description}
                           </p>
@@ -447,7 +449,7 @@ export async function JobCardEstimateContent({
                       const typeKey =
                         line.type === "PART" || line.type === "LABOUR"
                           ? line.type
-                          : "LABOUR";
+                          : null;
                       const lineTotal = multiplyByQuantity(
                         line.unitPricePaise,
                         line.quantity,
@@ -458,16 +460,18 @@ export async function JobCardEstimateContent({
                           className="flex flex-wrap items-center justify-between gap-3 px-3.5 py-3"
                         >
                           <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-                            <span
-                              className={cn(
-                                "inline-flex shrink-0 rounded-md border px-2 py-0.5 text-[11px] font-semibold",
-                                typeKey === "PART"
-                                  ? "border-blue-200 bg-blue-50 text-blue-800"
-                                  : "border-orange-200 bg-orange-50 text-orange-800",
-                              )}
-                            >
-                              {t(`lineTypes.${typeKey}`)}
-                            </span>
+                            {typeKey ? (
+                              <span
+                                className={cn(
+                                  "inline-flex shrink-0 rounded-md border px-2 py-0.5 text-[11px] font-semibold",
+                                  typeKey === "PART"
+                                    ? "border-blue-200 bg-blue-50 text-blue-800"
+                                    : "border-orange-200 bg-orange-50 text-orange-800",
+                                )}
+                              >
+                                {t(`lineTypes.${typeKey}`)}
+                              </span>
+                            ) : null}
                             <p className="min-w-0 truncate text-[14px] font-medium text-slate-900">
                               {line.description}
                             </p>

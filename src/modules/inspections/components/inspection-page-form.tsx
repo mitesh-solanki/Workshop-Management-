@@ -742,7 +742,7 @@ export function InspectionPageForm(props: Props) {
                     <Input
                       id="inspection-expected-completion"
                       name="expectedCompletion"
-                      type="datetime-local"
+                      type="date"
                       value={expectedCompletion}
                       onChange={(event) => {
                         setExpectedCompletion(event.target.value);

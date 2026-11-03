@@ -24,7 +24,14 @@ const invoiceInclude = {
     include: { lines: { orderBy: { sortOrder: "asc" as const } } },
   },
   customer: {
-    select: { id: true, name: true, phone: true, address: true },
+    select: {
+      id: true,
+      name: true,
+      phone: true,
+      address: true,
+      gstin: true,
+      stateCode: true,
+    },
   },
   serviceOrder: {
     select: {
@@ -99,7 +106,7 @@ export async function createDraftInvoice(
   garageId: string,
   data: {
     serviceOrderId: string;
-    estimateId: string;
+    estimateId: string | null;
     customerId: string;
     sellerStateCode: string;
     placeOfSupplyStateCode: string;
@@ -368,7 +375,7 @@ export async function createAndFinalizeInvoice(
   garageId: string,
   data: {
     serviceOrderId: string;
-    estimateId: string;
+    estimateId: string | null;
     customerId: string;
     sellerStateCode: string;
     placeOfSupplyStateCode: string;

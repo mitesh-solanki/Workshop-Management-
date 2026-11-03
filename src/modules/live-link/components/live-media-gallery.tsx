@@ -90,7 +90,7 @@ type LightboxProps = {
   onIndexChange: (index: number) => void;
 };
 
-function LiveMediaLightbox({
+export function LiveMediaLightbox({
   items,
   activeIndex,
   onClose,
@@ -184,13 +184,15 @@ function LiveMediaLightbox({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-black/95 px-2 pt-[max(0.75rem,env(safe-area-inset-top))] pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-4 sm:py-4"
+      data-slot="live-media-lightbox"
+      className="pointer-events-auto fixed inset-0 z-[100] flex flex-col items-center justify-center bg-black/95 px-2 pt-[max(0.75rem,env(safe-area-inset-top))] pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-4 sm:py-4"
       role="dialog"
       aria-modal="true"
       aria-label={active.itemLabel}
       onClick={(event) => {
         if (event.target === event.currentTarget) onClose();
       }}
+      onPointerDown={(event) => event.stopPropagation()}
     >
       <button
         type="button"
@@ -222,7 +224,7 @@ function LiveMediaLightbox({
       </button>
 
       <div
-        className="relative mx-10 flex h-[min(70vh,720px)] w-full max-w-5xl items-center justify-center sm:mx-14 sm:h-[min(78vh,720px)]"
+        className="relative mx-12 flex h-[min(82vh,920px)] w-full max-w-[min(100%,92vw)] items-center justify-center sm:mx-16 sm:h-[min(88vh,960px)]"
         onTouchStart={(event) => {
           touchStartX.current = event.touches[0]?.clientX ?? null;
         }}

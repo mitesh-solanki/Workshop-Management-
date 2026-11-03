@@ -213,3 +213,71 @@ export async function searchInvoicesForGlobal(
     },
   });
 }
+
+export async function searchInspectionsForGlobal(
+  garageId: string,
+  query: string,
+) {
+  const regQuery = registrationNeedle(query);
+  return prisma.inspection.findMany({
+    where: {
+      garageId,
+      OR: [
+        { complaint: textContains(query) },
+        { notes: textContains(query) },
+        {
+          customer: {
+            OR: [
+              { name: textContains(query) },
+              { phone: { contains: query } },
+            ],
+          },
+        },
+        {
+          vehicle: {
+            OR: [
+              {
+                registrationNumber: {
+                  contains: regQuery,
+                  mode: "insensitive",
+                },
+              },
+              { make: textContains(query) },
+              { model: textContains(query) },
+            ],
+          },
+        },
+      ],
+    },
+    orderBy: { updatedAt: "desc" },
+    take,
+    select: {
+      id: true,
+      complaint: true,
+      customer: { select: { name: true, phone: true } },
+      vehicle: {
+        select: { registrationNumber: true, make: true, model: true },
+      },
+    },
+  });
+}
+
+export async function searchTeamForGlobal(garageId: string, query: string) {
+  return prisma.user.findMany({
+    where: {
+      garageId,
+      OR: [
+        { name: textContains(query) },
+        { email: textContains(query) },
+      ],
+    },
+    orderBy: { updatedAt: "desc" },
+    take,
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      role: true,
+    },
+  });
+}

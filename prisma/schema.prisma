@@ -33,6 +33,7 @@ enum ServiceOrderPriority {
 enum ServiceOrderLineType {
   LABOUR
   PART
+  OUTSIDE
 }
 
 enum InspectionItemResult {
@@ -54,6 +55,7 @@ enum SuggestedRepairType {
 enum EstimateLineType {
   LABOUR
   PART
+  OUTSIDE
 }
 
 enum EstimateLineApprovalState {
@@ -97,6 +99,7 @@ enum InvoiceStatus {
 enum InvoiceLineType {
   LABOUR
   PART
+  OUTSIDE
 }
 
 /// How GST on the invoice is split for place of supply.
@@ -177,6 +180,7 @@ model Garage {
   bays              Bay[]
   vehicleWarrantyDocuments VehicleWarrantyDocument[]
   serviceOrderTechnicianAssignments ServiceOrderTechnicianAssignment[]
+  serviceOrderPaperCopies ServiceOrderPaperCopy[]
 }
 
 /// Physical service bay in the workshop (master list for job cards).
@@ -203,6 +207,10 @@ model Customer {
   name      String
   phone     String
   address   String?
+  /// Optional customer GSTIN shown on invoices under the customer name.
+  gstin     String?
+  /// GST state / UT code for place of supply (e.g. "24" Gujarat). Default Gujarat.
+  stateCode String   @default("24")
   notes     String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -305,12 +313,33 @@ model ServiceOrder {
   stockMovements StockMovement[]
   liveLinks      LiveLink[]
   partsRequests  PartsRequest[]
+  paperCopies    ServiceOrderPaperCopy[]
 
   @@index([garageId])
   @@index([garageId, status])
   @@index([garageId, technicianId])
   @@index([vehicleId])
   @@index([customerId])
+}
+
+/// Photo or PDF of the signed physical job card, archived on the digital Job Card.
+model ServiceOrderPaperCopy {
+  id             String       @id @default(cuid())
+  garageId       String
+  garage         Garage       @relation(fields: [garageId], references: [id], onDelete: Cascade)
+  serviceOrderId String
+  serviceOrder   ServiceOrder @relation(fields: [serviceOrderId], references: [id], onDelete: Cascade)
+  storageKey     String
+  contentType    String
+  fileName       String?
+  byteSize       Int
+  createdById    String?
+  createdBy      User?        @relation("ServiceOrderPaperCopyCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt      DateTime     @default(now())
+
+  @@index([garageId])
+  @@index([garageId, serviceOrderId])
+  @@index([serviceOrderId])
 }
 
 /** Many technicians can be assigned to one job card. */
@@ -883,15 +912,16 @@ model CreditNoteNumberCounter {
   @@index([garageId])
 }
 
-/// Tax invoice built from approved estimate lines. Finalized rows are immutable.
+/// Tax invoice built from job-card labour/parts. Finalized rows are immutable.
 model Invoice {
   id                     String        @id @default(cuid())
   garageId               String
   garage                 Garage        @relation(fields: [garageId], references: [id], onDelete: Cascade)
   serviceOrderId         String
   serviceOrder           ServiceOrder  @relation(fields: [serviceOrderId], references: [id], onDelete: Restrict)
-  estimateId             String
-  estimate               Estimate      @relation(fields: [estimateId], references: [id], onDelete: Restrict)
+  /// Optional link to the inspection estimate (display only). Billing lines come from the job card.
+  estimateId             String?
+  estimate               Estimate?     @relation(fields: [estimateId], references: [id], onDelete: SetNull)
   customerId             String
   customer               Customer      @relation(fields: [customerId], references: [id], onDelete: Restrict)
   status                 InvoiceStatus @default(DRAFT)
@@ -1106,6 +1136,7 @@ model User {
   vendorBillPaymentsCreated VendorBillPayment[] @relation("VendorBillPaymentCreatedBy")
   purchaseReturnsCreated PurchaseReturn[]   @relation("PurchaseReturnCreatedBy")
   warrantyDocumentsCreated VehicleWarrantyDocument[] @relation("WarrantyDocumentCreatedBy")
+  serviceOrderPaperCopiesCreated ServiceOrderPaperCopy[] @relation("ServiceOrderPaperCopyCreatedBy")
 
   @@index([garageId])
 }

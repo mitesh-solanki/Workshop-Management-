@@ -103,7 +103,13 @@ const sampleVehicle = {
   fitnessExpiry: null,
   createdAt: new Date(),
   updatedAt: new Date(),
-  customer: { id: "cust-1", name: "Ravi", phone: "9876543210" },
+  customer: {
+    id: "cust-1",
+    name: "Ravi",
+    phone: "9876543210",
+    gstin: null,
+    stateCode: "24",
+  },
 };
 
 function sampleOrder(
@@ -140,7 +146,13 @@ function sampleOrder(
       model: "Swift",
       stateCode: "24",
     },
-    customer: { id: customerId, name: "Ravi", phone: "9876543210" },
+    customer: {
+      id: customerId,
+      name: "Ravi",
+      phone: "9876543210",
+      gstin: null,
+      stateCode: "24",
+    },
     technician:
       (overrides.technicianId === undefined ? "tech-a" : overrides.technicianId)
         ? {
@@ -173,32 +185,26 @@ function sampleOrder(
         ]
       : [],
     lines: [],
+    paperCopies: [] as { id: string }[],
   };
 }
 
 describe("status transition rules", () => {
-  it("allows the documented workshop flow", () => {
+  it("allows any different status including skips and reopen", () => {
     expect(canTransitionStatus("WAITING", "INSPECTION")).toBe(true);
     expect(canTransitionStatus("WAITING", "IN_PROGRESS")).toBe(true);
-    expect(canTransitionStatus("INSPECTION", "IN_PROGRESS")).toBe(true);
-    expect(canTransitionStatus("IN_PROGRESS", "WAITING_FOR_PARTS")).toBe(true);
-    expect(canTransitionStatus("WAITING_FOR_PARTS", "READY")).toBe(true);
-    expect(canTransitionStatus("READY", "COMPLETED")).toBe(true);
-  });
-
-  it("rejects skips and reverse from completed", () => {
-    expect(canTransitionStatus("WAITING", "READY")).toBe(false);
-    expect(canTransitionStatus("WAITING", "COMPLETED")).toBe(false);
-    expect(canTransitionStatus("COMPLETED", "READY")).toBe(false);
-    expect(canTransitionStatus("COMPLETED", "WAITING")).toBe(false);
-    expect(canTransitionStatus("READY", "WAITING")).toBe(false);
+    expect(canTransitionStatus("WAITING", "READY")).toBe(true);
+    expect(canTransitionStatus("WAITING", "COMPLETED")).toBe(true);
+    expect(canTransitionStatus("COMPLETED", "READY")).toBe(true);
+    expect(canTransitionStatus("COMPLETED", "WAITING")).toBe(true);
+    expect(canTransitionStatus("READY", "WAITING")).toBe(true);
   });
 
   it("does not allow staying on the same status", () => {
     expect(canTransitionStatus("WAITING", "WAITING")).toBe(false);
   });
 
-  it("has no outgoing transitions from COMPLETED", () => {
+  it("keeps board next-step map without outgoing from COMPLETED", () => {
     expect(STATUS_TRANSITIONS.COMPLETED).toEqual([]);
   });
 });
@@ -208,7 +214,7 @@ describe("create and status change", () => {
     vi.clearAllMocks();
   });
 
-  it("creates an order with session garageId and initial WAITING audit", async () => {
+  it("creates an order with session garageId and initial IN_PROGRESS audit", async () => {
     vi.mocked(findVehicleById).mockResolvedValue(sampleVehicle);
     vi.mocked(findTechnicianInGarage).mockResolvedValue({
       id: "tech-a",
@@ -278,16 +284,31 @@ describe("create and status change", () => {
     );
   });
 
-  it("rejects invalid status transitions", async () => {
+  it("rejects setting the same status again", async () => {
     vi.mocked(findServiceOrderById).mockResolvedValue(sampleOrder());
 
     await expect(
-      changeOrderStatus(ownerA, "order-1", { status: "COMPLETED" }),
+      changeOrderStatus(ownerA, "order-1", { status: "WAITING" }),
     ).rejects.toMatchObject({
       code: "INVALID_STATUS_TRANSITION",
     } satisfies Partial<AppError>);
 
     expect(updateServiceOrderStatus).not.toHaveBeenCalled();
+  });
+
+  it("allows skipping to any status from the job card", async () => {
+    vi.mocked(findServiceOrderById).mockResolvedValue(sampleOrder());
+    vi.mocked(updateServiceOrderStatus).mockResolvedValue(
+      sampleOrder({ status: "COMPLETED" }),
+    );
+
+    await changeOrderStatus(ownerA, "order-1", { status: "COMPLETED" });
+
+    expect(updateServiceOrderStatus).toHaveBeenCalledWith(garageA, "order-1", {
+      from: "WAITING",
+      to: "COMPLETED",
+      actorId: "owner-a",
+    });
   });
 
   it("writes a status change through the repo with actor id", async () => {
@@ -715,47 +736,90 @@ describe("listCustomerServiceHistory", () => {
         id: "order-1",
         status: "WAITING" as const,
         complaint: "Noise",
+        bay: null,
+        odometerIn: null,
         createdAt: new Date("2026-01-01"),
         expectedCompletion: null,
-        vehicle: { id: "veh-1", registrationNumber: "GJ01AB1234" },
+        vehicle: {
+          id: "veh-1",
+          registrationNumber: "GJ01AB1234",
+          make: "Maruti",
+          model: "Swift",
+        },
+        customer: {
+          name: "Asha",
+          phone: "9999999999",
+          address: null,
+        },
+        technician: null,
+        technicianAssignments: [],
+        lines: [],
+        paperCopies: [] as {
+          id: string;
+          storageKey: string;
+          contentType: string;
+          fileName: string | null;
+        }[],
       },
     ];
     vi.mocked(listServiceOrdersByCustomer).mockResolvedValue(history);
 
     const result = await listCustomerServiceHistory(ownerA, "cust-1");
 
-    expect(listServiceOrdersByCustomer).toHaveBeenCalledWith(garageA, "cust-1");
-    expect(result).toEqual(history);
+    expect(listServiceOrdersByCustomer).toHaveBeenCalledWith(garageA, "cust-1", {});
+    expect(result).toEqual([
+      {
+        ...history[0],
+        paperCopies: [],
+        paperCopyCount: 0,
+      },
+    ]);
   });
 
   it("returns only assigned orders for a technician on that customer", async () => {
-    vi.mocked(listServiceOrders).mockResolvedValue([
-      sampleOrder({
+    const history = [
+      {
         id: "mine",
-        technicianId: "tech-a",
-        customerId: "cust-1",
-      }),
-      sampleOrder({
-        id: "other-customer",
-        technicianId: "tech-a",
-        customerId: "cust-2",
-      }),
-    ]);
+        status: "WAITING" as const,
+        complaint: "Engine noise",
+        bay: null,
+        odometerIn: null,
+        createdAt: new Date("2026-01-01"),
+        expectedCompletion: null,
+        vehicle: {
+          id: "veh-1",
+          registrationNumber: "GJ01AB1234",
+          make: "Maruti",
+          model: "Swift",
+        },
+        customer: {
+          name: "Asha",
+          phone: "9999999999",
+          address: null,
+        },
+        technician: null,
+        technicianAssignments: [],
+        lines: [],
+        paperCopies: [] as {
+          id: string;
+          storageKey: string;
+          contentType: string;
+          fileName: string | null;
+        }[],
+      },
+    ];
+    vi.mocked(listServiceOrdersByCustomer).mockResolvedValue(history);
 
     const result = await listCustomerServiceHistory(techA, "cust-1");
 
-    expect(listServiceOrders).toHaveBeenCalledWith(garageA, {
+    expect(listServiceOrdersByCustomer).toHaveBeenCalledWith(garageA, "cust-1", {
       technicianId: "tech-a",
     });
-    expect(listServiceOrdersByCustomer).not.toHaveBeenCalled();
     expect(result).toEqual([
       {
-        id: "mine",
-        status: "WAITING",
-        complaint: "Engine noise",
-        createdAt: expect.any(Date),
-        expectedCompletion: null,
-        vehicle: { id: "veh-1", registrationNumber: "GJ01AB1234" },
+        ...history[0],
+        paperCopies: [],
+        paperCopyCount: 0,
       },
     ]);
   });
@@ -824,5 +888,72 @@ describe("service order schema i18n messages", () => {
         "validation.invalidQuantity",
       );
     }
+
+    const outside = addServiceOrderLineSchema.safeParse({
+      type: "OUTSIDE",
+      description: "Wheel alignment at tyre shop",
+      quantity: 2,
+      unitPricePaise: "500",
+      partId: "",
+    });
+    expect(outside.success).toBe(true);
+  });
+
+  it("adds outside work lines without a part link", async () => {
+    vi.mocked(findServiceOrderById).mockResolvedValue(sampleOrder());
+    vi.mocked(createServiceOrderLine).mockResolvedValue({
+      ok: true,
+      line: {
+        id: "line-out-1",
+        garageId: garageA,
+        serviceOrderId: "order-1",
+        type: "OUTSIDE",
+        description: "Wheel alignment",
+        quantity: 1,
+        unitPricePaise: 50000,
+        partId: null,
+        sortOrder: 0,
+        createdAt: new Date("2026-01-01T00:00:00.000Z"),
+        updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+      },
+    });
+
+    await addOrderLine(ownerA, "order-1", {
+      type: "OUTSIDE",
+      description: "Wheel alignment",
+      quantity: 1,
+      unitPricePaise: "500",
+      partId: null,
+    });
+
+    expect(createServiceOrderLine).toHaveBeenCalledWith(
+      garageA,
+      expect.objectContaining({
+        type: "OUTSIDE",
+        description: "Wheel alignment",
+        quantity: 1,
+        unitPricePaise: 50000,
+        partId: null,
+        actorId: "owner-a",
+      }),
+    );
+  });
+
+  it("blocks technicians from adding outside work", async () => {
+    vi.mocked(findServiceOrderById).mockResolvedValue(
+      sampleOrder({ technicianId: "tech-a" }),
+    );
+
+    await expect(
+      addOrderLine(techA, "order-1", {
+        type: "OUTSIDE",
+        description: "Paint work",
+        quantity: 1,
+        unitPricePaise: "1000",
+        partId: null,
+      }),
+    ).rejects.toMatchObject({
+      code: "orders.technician_parts_only",
+    } satisfies Partial<AppError>);
   });
 });

@@ -2,6 +2,13 @@ import "server-only";
 
 import { AppError, ForbiddenError, NotFoundError } from "@/lib/errors";
 import { requireRole, type RoleSession } from "@/lib/rbac";
+import {
+  buildServiceOrderPaperCopyKey,
+  createPresignedDownloadUrl,
+  createPresignedUploadUrl,
+  deleteStoredObject,
+  storageKeyBelongsToGarage,
+} from "@/lib/storage";
 import { findBayById } from "@/modules/bays/repo";
 import {
   findInspectionById,
@@ -10,14 +17,24 @@ import {
 import { findVehicleById } from "@/modules/vehicles/repo";
 import {
   addServiceOrderLineSchema,
+  assertPaperCopyLimits,
   canTransitionStatus,
   computeBayOccupancy,
+  confirmPaperCopySchema,
+  createPaperCopyUploadUrlSchema,
   createServiceOrderSchema,
+  MAX_PAPER_COPIES_PER_ORDER,
+  removePaperCopySchema,
+  replacePaperCopySchema,
   updateServiceOrderLineSchema,
   updateServiceOrderSchema,
   updateServiceOrderStatusSchema,
   type AddServiceOrderLineInput,
+  type ConfirmPaperCopyInput,
+  type CreatePaperCopyUploadUrlInput,
   type CreateServiceOrderInput,
+  type RemovePaperCopyInput,
+  type ReplacePaperCopyInput,
   type ServiceOrderStatusValue,
   type UpdateServiceOrderInput,
   type UpdateServiceOrderLineInput,
@@ -26,20 +43,25 @@ import {
 import { calendarDayBoundsUtc } from "@/lib/calendar-day";
 import {
   countOverdueServiceOrders,
+  countPaperCopiesForOrder,
   countServiceOrdersByStatus,
+  createPaperCopy,
   createServiceOrder,
   createServiceOrderLine,
+  deletePaperCopy,
   deleteServiceOrderById,
   deleteServiceOrderLine,
   applyCataloguePricesToUnpricedPartLines,
   findServiceOrderById,
   findTechnicianInGarage,
+  listPaperCopiesForOrder,
   listServiceOrderAuditLogs,
   listServiceOrders,
   listServiceOrdersByCustomer,
   listServiceOrdersByVehicle,
   listServiceOrdersForToday,
   listTechniciansInGarage,
+  replacePaperCopy,
   updateServiceOrderDetails,
   updateServiceOrderLine,
   updateServiceOrderStatus,
@@ -190,26 +212,36 @@ export async function listCustomerServiceHistory(
 ) {
   requireRole(session, READ_ROLES);
 
-  if (session.role === "TECHNICIAN") {
-    const assigned = await listServiceOrders(session.garageId, {
-      technicianId: session.userId,
-    });
-    return assigned
-      .filter((order) => order.customerId === customerId)
-      .map((order) => ({
-        id: order.id,
-        status: order.status,
-        complaint: order.complaint,
-        createdAt: order.createdAt,
-        expectedCompletion: order.expectedCompletion,
-        vehicle: {
-          id: order.vehicle.id,
-          registrationNumber: order.vehicle.registrationNumber,
-        },
-      }));
-  }
-
-  return listServiceOrdersByCustomer(session.garageId, customerId);
+  const rows = await listServiceOrdersByCustomer(
+    session.garageId,
+    customerId,
+    session.role === "TECHNICIAN" ? { technicianId: session.userId } : {},
+  );
+  return Promise.all(
+    rows.map(async (order) => {
+      const paperCopies = await Promise.all(
+        order.paperCopies.map(async (copy) => {
+          let url: string | null = null;
+          try {
+            url = await createPresignedDownloadUrl(copy.storageKey);
+          } catch {
+            url = null;
+          }
+          return {
+            id: copy.id,
+            contentType: copy.contentType,
+            fileName: copy.fileName,
+            url,
+          };
+        }),
+      );
+      return {
+        ...order,
+        paperCopies,
+        paperCopyCount: paperCopies.length,
+      };
+    }),
+  );
 }
 
 /** Vehicle service history, scoped for technicians to their assignments. */
@@ -224,26 +256,36 @@ export async function listVehicleServiceHistory(
     throw new NotFoundError();
   }
 
-  if (session.role === "TECHNICIAN") {
-    const assigned = await listServiceOrders(session.garageId, {
-      technicianId: session.userId,
-    });
-    return assigned
-      .filter((order) => order.vehicleId === vehicleId)
-      .map((order) => ({
-        id: order.id,
-        status: order.status,
-        complaint: order.complaint,
-        createdAt: order.createdAt,
-        expectedCompletion: order.expectedCompletion,
-        vehicle: {
-          id: order.vehicle.id,
-          registrationNumber: order.vehicle.registrationNumber,
-        },
-      }));
-  }
-
-  return listServiceOrdersByVehicle(session.garageId, vehicleId);
+  const rows = await listServiceOrdersByVehicle(
+    session.garageId,
+    vehicleId,
+    session.role === "TECHNICIAN" ? { technicianId: session.userId } : {},
+  );
+  return Promise.all(
+    rows.map(async (order) => {
+      const paperCopies = await Promise.all(
+        order.paperCopies.map(async (copy) => {
+          let url: string | null = null;
+          try {
+            url = await createPresignedDownloadUrl(copy.storageKey);
+          } catch {
+            url = null;
+          }
+          return {
+            id: copy.id,
+            contentType: copy.contentType,
+            fileName: copy.fileName,
+            url,
+          };
+        }),
+      );
+      return {
+        ...order,
+        paperCopies,
+        paperCopyCount: paperCopies.length,
+      };
+    }),
+  );
 }
 
 export async function getOrder(session: RoleSession, orderId: string) {
@@ -340,6 +382,7 @@ export async function createOrder(
     technicianIds,
     bay: input.bay,
     priority: input.priority,
+    status: input.status,
     actorId: session.userId,
   });
 
@@ -475,7 +518,10 @@ export async function addOrderLine(
 
   assertCanMutateOrder(session, order);
 
-  if (session.role === "TECHNICIAN" && input.type === "LABOUR") {
+  if (
+    session.role === "TECHNICIAN" &&
+    (input.type === "LABOUR" || input.type === "OUTSIDE")
+  ) {
     throw new AppError("orders.technician_parts_only", 403);
   }
 
@@ -483,9 +529,14 @@ export async function addOrderLine(
     throw new AppError("inventory.part_required", 400);
   }
 
+  if (input.type === "OUTSIDE" && input.partId) {
+    throw new AppError("validation.invalidInput", 400);
+  }
+
   const unitPricePaise =
     session.role === "TECHNICIAN" ? 0 : input.unitPricePaise;
-  const quantity = input.type === "LABOUR" ? 1 : input.quantity;
+  const quantity =
+    input.type === "LABOUR" || input.type === "OUTSIDE" ? 1 : input.quantity;
 
   const result = await createServiceOrderLine(session.garageId, {
     serviceOrderId: order.id,
@@ -493,7 +544,7 @@ export async function addOrderLine(
     description: input.description,
     quantity,
     unitPricePaise,
-    partId: input.partId,
+    partId: input.type === "PART" ? input.partId : null,
     actorId: session.userId,
   });
 
@@ -523,7 +574,10 @@ export async function updateOrderLine(
   if (!existing) {
     throw new NotFoundError();
   }
-  if (session.role === "TECHNICIAN" && existing.type === "LABOUR") {
+  if (
+    session.role === "TECHNICIAN" &&
+    (existing.type === "LABOUR" || existing.type === "OUTSIDE")
+  ) {
     throw new AppError("orders.technician_parts_only", 403);
   }
 
@@ -531,7 +585,10 @@ export async function updateOrderLine(
     session.role === "TECHNICIAN"
       ? (existing.unitPricePaise ?? 0)
       : input.unitPricePaise;
-  const quantity = existing.type === "LABOUR" ? 1 : input.quantity;
+  const quantity =
+    existing.type === "LABOUR" || existing.type === "OUTSIDE"
+      ? 1
+      : input.quantity;
 
   const result = await updateServiceOrderLine(session.garageId, {
     lineId,
@@ -566,7 +623,10 @@ export async function removeOrderLine(
   assertCanMutateOrder(session, order);
 
   const existing = order.lines.find((line) => line.id === lineId);
-  if (session.role === "TECHNICIAN" && existing?.type === "LABOUR") {
+  if (
+    session.role === "TECHNICIAN" &&
+    (existing?.type === "LABOUR" || existing?.type === "OUTSIDE")
+  ) {
     throw new AppError("orders.technician_parts_only", 403);
   }
 
@@ -592,6 +652,8 @@ export async function deleteOrder(session: RoleSession, orderId: string) {
     throw new NotFoundError();
   }
 
+  const paperCopies = await listPaperCopiesForOrder(session.garageId, orderId);
+
   const deleted = await deleteServiceOrderById(session.garageId, orderId, {
     actorId: session.userId,
     vehicleId: order.vehicleId,
@@ -603,7 +665,253 @@ export async function deleteOrder(session: RoleSession, orderId: string) {
     throw new NotFoundError();
   }
 
+  for (const copy of paperCopies) {
+    try {
+      await deleteStoredObject(copy.storageKey);
+    } catch {
+      /* best-effort cleanup */
+    }
+  }
+
   return deleted;
+}
+
+export async function listPaperCopies(
+  session: RoleSession,
+  serviceOrderId: string,
+) {
+  requireRole(session, READ_ROLES);
+  const order = await findServiceOrderById(session.garageId, serviceOrderId);
+  if (!order) {
+    throw new NotFoundError();
+  }
+  assertCanViewOrder(session, order);
+
+  const rows = await listPaperCopiesForOrder(session.garageId, serviceOrderId);
+  return Promise.all(
+    rows.map(async (row) => {
+      let url: string | null = null;
+      try {
+        url = await createPresignedDownloadUrl(row.storageKey);
+      } catch {
+        url = null;
+      }
+      return { ...row, url };
+    }),
+  );
+}
+
+export async function createPaperCopyUploadUrl(
+  session: RoleSession,
+  raw: CreatePaperCopyUploadUrlInput,
+) {
+  requireRole(session, MANAGE_ROLES);
+  const input = createPaperCopyUploadUrlSchema.parse(raw);
+  try {
+    assertPaperCopyLimits(input.contentType, input.byteSize);
+  } catch (error) {
+    const code =
+      error instanceof Error ? error.message : "orders.paper_copy_type";
+    throw new AppError(code, 400);
+  }
+
+  const order = await findServiceOrderById(session.garageId, input.serviceOrderId);
+  if (!order) {
+    throw new NotFoundError();
+  }
+
+  if (input.replacePaperCopyId) {
+    const existing = await listPaperCopiesForOrder(
+      session.garageId,
+      input.serviceOrderId,
+    );
+    if (!existing.some((row) => row.id === input.replacePaperCopyId)) {
+      throw new NotFoundError();
+    }
+  } else {
+    const count = await countPaperCopiesForOrder(
+      session.garageId,
+      input.serviceOrderId,
+    );
+    if (count >= MAX_PAPER_COPIES_PER_ORDER) {
+      throw new AppError("orders.paper_copy_limit", 400);
+    }
+  }
+
+  const storageKey = buildServiceOrderPaperCopyKey({
+    garageId: session.garageId,
+    serviceOrderId: order.id,
+    contentType: input.contentType,
+  });
+
+  try {
+    const signed = await createPresignedUploadUrl({
+      storageKey,
+      contentType: input.contentType,
+    });
+    return {
+      uploadUrl: signed.uploadUrl,
+      storageKey: signed.storageKey,
+      method: signed.method,
+      fields: signed.fields,
+      contentType: input.contentType,
+      serviceOrderId: order.id,
+      replacePaperCopyId: input.replacePaperCopyId,
+    };
+  } catch (error) {
+    if (error instanceof AppError && error.code === "STORAGE_NOT_CONFIGURED") {
+      throw new AppError("STORAGE_NOT_CONFIGURED", 500);
+    }
+    throw error;
+  }
+}
+
+export async function confirmPaperCopyUpload(
+  session: RoleSession,
+  raw: ConfirmPaperCopyInput,
+) {
+  requireRole(session, MANAGE_ROLES);
+  const input = confirmPaperCopySchema.parse(raw);
+  try {
+    assertPaperCopyLimits(input.contentType, input.byteSize);
+  } catch (error) {
+    const code =
+      error instanceof Error ? error.message : "orders.paper_copy_type";
+    throw new AppError(code, 400);
+  }
+
+  if (!storageKeyBelongsToGarage(input.storageKey, session.garageId)) {
+    throw new ForbiddenError();
+  }
+  if (
+    !input.storageKey.includes(`/service-orders/${input.serviceOrderId}/paper/`)
+  ) {
+    throw new ForbiddenError();
+  }
+
+  const order = await findServiceOrderById(session.garageId, input.serviceOrderId);
+  if (!order) {
+    throw new NotFoundError();
+  }
+
+  const count = await countPaperCopiesForOrder(
+    session.garageId,
+    input.serviceOrderId,
+  );
+  if (count >= MAX_PAPER_COPIES_PER_ORDER) {
+    throw new AppError("orders.paper_copy_limit", 400);
+  }
+
+  try {
+    const row = await createPaperCopy(session.garageId, {
+      serviceOrderId: input.serviceOrderId,
+      storageKey: input.storageKey,
+      contentType: input.contentType,
+      fileName: input.fileName,
+      byteSize: input.byteSize,
+      actorId: session.userId,
+    });
+    let url: string | null = null;
+    try {
+      url = await createPresignedDownloadUrl(row.storageKey);
+    } catch {
+      url = null;
+    }
+    return { ...row, url };
+  } catch (error) {
+    if (error instanceof Error && error.message === "NOT_FOUND") {
+      throw new NotFoundError();
+    }
+    throw error;
+  }
+}
+
+export async function removePaperCopyUpload(
+  session: RoleSession,
+  raw: RemovePaperCopyInput,
+) {
+  requireRole(session, MANAGE_ROLES);
+  const input = removePaperCopySchema.parse(raw);
+
+  const order = await findServiceOrderById(session.garageId, input.serviceOrderId);
+  if (!order) {
+    throw new NotFoundError();
+  }
+
+  const removed = await deletePaperCopy(session.garageId, {
+    serviceOrderId: input.serviceOrderId,
+    paperCopyId: input.paperCopyId,
+    actorId: session.userId,
+  });
+  if (!removed) {
+    throw new NotFoundError();
+  }
+
+  try {
+    await deleteStoredObject(removed.storageKey);
+  } catch {
+    /* best-effort */
+  }
+
+  return removed;
+}
+
+export async function replacePaperCopyUpload(
+  session: RoleSession,
+  raw: ReplacePaperCopyInput,
+) {
+  requireRole(session, MANAGE_ROLES);
+  const input = replacePaperCopySchema.parse(raw);
+  try {
+    assertPaperCopyLimits(input.contentType, input.byteSize);
+  } catch (error) {
+    const code =
+      error instanceof Error ? error.message : "orders.paper_copy_type";
+    throw new AppError(code, 400);
+  }
+
+  if (!storageKeyBelongsToGarage(input.storageKey, session.garageId)) {
+    throw new ForbiddenError();
+  }
+  if (
+    !input.storageKey.includes(`/service-orders/${input.serviceOrderId}/paper/`)
+  ) {
+    throw new ForbiddenError();
+  }
+
+  const order = await findServiceOrderById(session.garageId, input.serviceOrderId);
+  if (!order) {
+    throw new NotFoundError();
+  }
+
+  const replaced = await replacePaperCopy(session.garageId, {
+    serviceOrderId: input.serviceOrderId,
+    paperCopyId: input.paperCopyId,
+    storageKey: input.storageKey,
+    contentType: input.contentType,
+    fileName: input.fileName,
+    byteSize: input.byteSize,
+    actorId: session.userId,
+  });
+  if (!replaced) {
+    throw new NotFoundError();
+  }
+
+  if (replaced.previousStorageKey !== input.storageKey) {
+    try {
+      await deleteStoredObject(replaced.previousStorageKey);
+    } catch {
+      /* best-effort */
+    }
+  }
+
+  let url: string | null = null;
+  try {
+    url = await createPresignedDownloadUrl(replaced.row.storageKey);
+  } catch {
+    url = null;
+  }
+  return { ...replaced.row, url };
 }
 
 /** Test helper: attempt to read while scoped to another garage id. */

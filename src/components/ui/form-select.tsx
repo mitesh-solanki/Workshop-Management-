@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { X } from "lucide-react";
 import {
   Select,
@@ -72,6 +72,19 @@ export function FormSelect({
     () => defaultValue ?? "",
   );
   const current = (isControlled ? value : uncontrolled) ?? "";
+
+  // React 19 form actions call form.reset() after success — restore default.
+  useEffect(() => {
+    if (isControlled) return;
+    const node = document.getElementById(selectId);
+    const form = node?.closest("form");
+    if (!form) return;
+    function handleReset() {
+      setUncontrolled(defaultValue ?? "");
+    }
+    form.addEventListener("reset", handleReset);
+    return () => form.removeEventListener("reset", handleReset);
+  }, [isControlled, selectId, defaultValue]);
 
   const listOptions = options.filter(
     (option) => !(option.value === "" && option.disabled),

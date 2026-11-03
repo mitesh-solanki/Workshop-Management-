@@ -152,7 +152,18 @@ const optionalDateTime = z
       }
       return value;
     }
-    const parsed = new Date(value);
+    const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value.trim());
+    const parsed = dateOnly
+      ? new Date(
+          Number(dateOnly[1]),
+          Number(dateOnly[2]) - 1,
+          Number(dateOnly[3]),
+          23,
+          59,
+          59,
+          999,
+        )
+      : new Date(value);
     if (Number.isNaN(parsed.getTime())) {
       ctx.addIssue({ code: "custom", message: "validation.invalidDate" });
       return z.NEVER;

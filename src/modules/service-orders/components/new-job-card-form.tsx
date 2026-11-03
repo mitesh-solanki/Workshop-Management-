@@ -252,6 +252,18 @@ export function NewJobCardForm({
 
         {showCommercial ? (
           <SectionBlock
+            id="paper"
+            title={t("paperTitle")}
+            subtitle={t("paperHint")}
+            sectionRef={setSectionRef("paper")}
+            sectionNumber={sectionNumbers.paper}
+          >
+            <LockedBody onGoDetails={goToDetails} />
+          </SectionBlock>
+        ) : null}
+
+        {showCommercial ? (
+          <SectionBlock
             id="timeline"
             title={t("timeline")}
             subtitle={t("timelineHint")}

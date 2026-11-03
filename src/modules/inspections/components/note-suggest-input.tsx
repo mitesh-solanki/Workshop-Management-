@@ -5,27 +5,37 @@ import { createPortal } from "react-dom";
 import { useTranslations } from "next-intl";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { filterOutsideWorkSuggestions } from "@/modules/inspections/outside-work-suggestions";
 import { filterSubSpareSuggestions } from "@/modules/inspections/sub-spare-suggestions";
 
 type Props = {
   id: string;
   value: string;
-  mainSpareLabel: string;
+  mainSpareLabel?: string;
+  /** Sub-spare suggestions for a main part, or outside-work service suggestions. */
+  suggestionMode?: "subSpare" | "outsideWork";
   onValueChange: (value: string) => void;
   placeholder?: string;
   disabled?: boolean;
   className?: string;
+  name?: string;
+  required?: boolean;
+  maxLength?: number;
 };
 
-/** Notes field with sub-spare autocomplete (portaled so accordion/table never clips it). */
+/** Notes field with autocomplete (portaled so accordion/table never clips it). */
 export function NoteSuggestInput({
   id,
   value,
-  mainSpareLabel,
+  mainSpareLabel = "",
+  suggestionMode = "subSpare",
   onValueChange,
   placeholder,
   disabled,
   className,
+  name,
+  required,
+  maxLength = 500,
 }: Props) {
   const t = useTranslations("inspections");
   const listboxId = useId();
@@ -41,8 +51,15 @@ export function NoteSuggestInput({
     maxHeight: 240,
   });
 
-  const suggestions = filterSubSpareSuggestions(mainSpareLabel, value);
+  const suggestions =
+    suggestionMode === "outsideWork"
+      ? filterOutsideWorkSuggestions(value)
+      : filterSubSpareSuggestions(mainSpareLabel, value);
   const showList = open && !disabled && suggestions.length > 0;
+  const listAriaLabel =
+    suggestionMode === "outsideWork"
+      ? t("outsideWorkSuggestions")
+      : t("subSpareSuggestions");
 
   useEffect(() => {
     setMounted(true);
@@ -116,7 +133,7 @@ export function NoteSuggestInput({
             ref={listRef}
             id={listboxId}
             role="listbox"
-            aria-label={t("subSpareSuggestions")}
+            aria-label={listAriaLabel}
             style={{
               position: "fixed",
               top: menuPos.top,
@@ -164,9 +181,11 @@ export function NoteSuggestInput({
     <div ref={rootRef} className="relative min-w-0 flex-1">
       <Input
         id={id}
+        name={name}
         type="text"
         autoComplete="off"
         disabled={disabled}
+        required={required}
         role="combobox"
         aria-expanded={showList}
         aria-controls={listboxId}
@@ -178,7 +197,7 @@ export function NoteSuggestInput({
         }
         value={value}
         placeholder={placeholder}
-        maxLength={500}
+        maxLength={maxLength}
         onChange={(event) => {
           onValueChange(event.target.value);
           setOpen(true);

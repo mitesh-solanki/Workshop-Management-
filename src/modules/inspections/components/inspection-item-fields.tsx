@@ -294,7 +294,11 @@ export function InspectionItemFields({
         type="button"
         disabled={!canEdit}
         title={t("externalCheckHint")}
-        onClick={() => patch({ externalCheck: !item.externalCheck })}
+        onClick={() => {
+          const next = !item.externalCheck;
+          patch({ externalCheck: next });
+          if (next) setNotesOpen(true);
+        }}
         aria-pressed={item.externalCheck}
         className={cn(
           "inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg border px-3 text-[13px] font-bold transition-colors disabled:opacity-60",
@@ -475,10 +479,17 @@ export function InspectionItemFields({
                           id={`note-${item.clientId}-${line.key}`}
                           value={line.text}
                           mainSpareLabel={item.label}
+                          suggestionMode={
+                            item.externalCheck ? "outsideWork" : "subSpare"
+                          }
                           onValueChange={(text) =>
                             updateLine(line.key, { text })
                           }
-                          placeholder={t("notesPlaceholder")}
+                          placeholder={
+                            item.externalCheck
+                              ? t("outsideWorkNotesPlaceholder")
+                              : t("notesPlaceholder")
+                          }
                         />
                         <button
                           type="button"
@@ -555,10 +566,17 @@ export function InspectionItemFields({
                           id={`note-${item.clientId}-${line.key}`}
                           value={line.text}
                           mainSpareLabel={item.label}
+                          suggestionMode={
+                            item.externalCheck ? "outsideWork" : "subSpare"
+                          }
                           onValueChange={(text) =>
                             updateLine(line.key, { text })
                           }
-                          placeholder={t("notesPlaceholder")}
+                          placeholder={
+                            item.externalCheck
+                              ? t("outsideWorkNotesPlaceholder")
+                              : t("notesPlaceholder")
+                          }
                         />
                       </td>
                       <td className="px-1.5 py-1.5 align-middle">

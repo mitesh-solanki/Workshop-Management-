@@ -93,14 +93,12 @@ export const STATUS_TRANSITIONS: Record<
   COMPLETED: [],
 };
 
+/** Job card status field may set any status; board still uses STATUS_TRANSITIONS for next steps. */
 export function canTransitionStatus(
   from: ServiceOrderStatusValue,
   to: ServiceOrderStatusValue,
 ): boolean {
-  if (from === to) {
-    return false;
-  }
-  return STATUS_TRANSITIONS[from].includes(to);
+  return from !== to;
 }
 
 const optionalOdometer = z
@@ -130,7 +128,18 @@ const optionalDateTime = z
       }
       return value;
     }
-    const parsed = new Date(value);
+    const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value.trim());
+    const parsed = dateOnly
+      ? new Date(
+          Number(dateOnly[1]),
+          Number(dateOnly[2]) - 1,
+          Number(dateOnly[3]),
+          23,
+          59,
+          59,
+          999,
+        )
+      : new Date(value);
     if (Number.isNaN(parsed.getTime())) {
       ctx.addIssue({ code: "custom", message: "validation.invalidDate" });
       return z.NEVER;
@@ -230,6 +239,19 @@ export const createServiceOrderSchema = z.object({
   technicianId: optionalTechnicianId.optional(),
   bay: optionalBay,
   priority: priorityField,
+  status: z
+    .union([z.enum(SERVICE_ORDER_STATUSES), z.literal(""), z.undefined()])
+    .optional()
+    .transform((value, ctx) => {
+      if (value == null || value === "") {
+        return "IN_PROGRESS" as const;
+      }
+      if (value === "WAITING") {
+        ctx.addIssue({ code: "custom", message: "validation.invalidStatus" });
+        return z.NEVER;
+      }
+      return value;
+    }),
   inspectionId: z
     .union([z.string(), z.null(), z.undefined()])
     .optional()
@@ -284,8 +306,10 @@ export const updateServiceOrderSchema = z
     };
   });
 
+export const SERVICE_ORDER_LINE_TYPES = ["LABOUR", "PART", "OUTSIDE"] as const;
+
 export const addServiceOrderLineSchema = z.object({
-  type: z.enum(["LABOUR", "PART"]),
+  type: z.enum(SERVICE_ORDER_LINE_TYPES),
   description: z.string().trim().min(1).max(500),
   quantity: quantityField,
   unitPricePaise: rupeesToPaiseSchema,
@@ -314,6 +338,88 @@ export const updateServiceOrderLineSchema = z.object({
     .optional(),
 });
 
+export const MAX_PAPER_COPY_BYTES = 8 * 1024 * 1024;
+export const MAX_PAPER_COPIES_PER_ORDER = 5;
+
+const PAPER_COPY_TYPES = new Set([
+  "image/jpeg",
+  "image/jpg",
+  "image/png",
+  "image/webp",
+  "application/pdf",
+]);
+
+const paperByteSizeField = z
+  .union([z.string(), z.number()])
+  .transform((value, ctx) => {
+    const n = typeof value === "number" ? value : Number(value);
+    if (!Number.isInteger(n) || n < 1) {
+      ctx.addIssue({ code: "custom", message: "validation.invalidInput" });
+      return z.NEVER;
+    }
+    return n;
+  });
+
+export const createPaperCopyUploadUrlSchema = z.object({
+  serviceOrderId: z.string().trim().min(1),
+  contentType: z.string().trim().min(3).max(120),
+  byteSize: paperByteSizeField,
+  fileName: z
+    .string()
+    .trim()
+    .max(255)
+    .optional()
+    .transform((value) => (value && value.length > 0 ? value : undefined)),
+  /** When set, the upload replaces this copy and does not count toward the limit. */
+  replacePaperCopyId: z
+    .string()
+    .trim()
+    .min(1)
+    .optional()
+    .transform((value) => (value && value.length > 0 ? value : undefined)),
+});
+
+export const confirmPaperCopySchema = z.object({
+  serviceOrderId: z.string().trim().min(1),
+  storageKey: z.string().trim().min(1).max(500),
+  contentType: z.string().trim().min(3).max(120),
+  byteSize: paperByteSizeField,
+  fileName: z
+    .string()
+    .trim()
+    .max(255)
+    .optional()
+    .transform((value) => (value && value.length > 0 ? value : undefined)),
+});
+
+export const replacePaperCopySchema = z.object({
+  serviceOrderId: z.string().trim().min(1),
+  paperCopyId: z.string().trim().min(1),
+  storageKey: z.string().trim().min(1).max(500),
+  contentType: z.string().trim().min(3).max(120),
+  byteSize: paperByteSizeField,
+  fileName: z
+    .string()
+    .trim()
+    .max(255)
+    .optional()
+    .transform((value) => (value && value.length > 0 ? value : undefined)),
+});
+
+export const removePaperCopySchema = z.object({
+  serviceOrderId: z.string().trim().min(1),
+  paperCopyId: z.string().trim().min(1),
+});
+
+export function assertPaperCopyLimits(contentType: string, byteSize: number) {
+  if (!PAPER_COPY_TYPES.has(contentType.toLowerCase())) {
+    throw new Error("orders.paper_copy_type");
+  }
+  if (byteSize > MAX_PAPER_COPY_BYTES) {
+    throw new Error("orders.paper_copy_too_large");
+  }
+}
+
 export type CreateServiceOrderInput = z.input<typeof createServiceOrderSchema>;
 export type UpdateServiceOrderInput = z.input<typeof updateServiceOrderSchema>;
 export type UpdateServiceOrderStatusInput = z.input<
@@ -323,3 +429,9 @@ export type AddServiceOrderLineInput = z.input<typeof addServiceOrderLineSchema>
 export type UpdateServiceOrderLineInput = z.input<
   typeof updateServiceOrderLineSchema
 >;
+export type CreatePaperCopyUploadUrlInput = z.input<
+  typeof createPaperCopyUploadUrlSchema
+>;
+export type ConfirmPaperCopyInput = z.input<typeof confirmPaperCopySchema>;
+export type ReplacePaperCopyInput = z.input<typeof replacePaperCopySchema>;
+export type RemovePaperCopyInput = z.input<typeof removePaperCopySchema>;

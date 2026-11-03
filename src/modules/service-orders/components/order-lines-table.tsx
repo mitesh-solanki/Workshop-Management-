@@ -42,6 +42,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { toast } from "@/components/ui/toast";
+import { NoteSuggestInput } from "@/modules/inspections/components/note-suggest-input";
 import {
   formatRupees,
   isZeroRupeesInput,
@@ -82,6 +83,12 @@ type Props = {
   canMutate: boolean;
   lines: Line[];
   hidePrices?: boolean;
+  /** Outside work: no type badge column. */
+  hideType?: boolean;
+  /** Outside work: description + amount only. */
+  hideQuantity?: boolean;
+  /** Optional label for the unit-price column (e.g. Amount). */
+  amountLabel?: string;
 };
 
 const initial: ServiceOrderActionState = { ok: false };
@@ -124,7 +131,10 @@ function parsePricePaise(raw: string, fallback: Paise): Paise {
 
 function TypeBadge({ type }: { type: string }) {
   const t = useTranslations("orders");
-  const typeKey = type === "PART" || type === "LABOUR" ? type : "LABOUR";
+  const typeKey =
+    type === "PART" || type === "LABOUR" || type === "OUTSIDE"
+      ? type
+      : "LABOUR";
 
   return (
     <span
@@ -132,7 +142,9 @@ function TypeBadge({ type }: { type: string }) {
         "inline-flex w-max rounded-md border px-2 py-0.5 text-[11px] font-semibold",
         typeKey === "PART"
           ? "border-blue-200 bg-blue-50 text-blue-800"
-          : "border-orange-200 bg-orange-50 text-orange-800",
+          : typeKey === "OUTSIDE"
+            ? "border-violet-200 bg-violet-50 text-violet-800"
+            : "border-orange-200 bg-orange-50 text-orange-800",
       )}
     >
       {t(`lineTypes.${typeKey}`)}
@@ -168,12 +180,18 @@ function OrderLineItem({
   orderId,
   canMutate,
   hidePrices,
+  hideType = false,
+  hideQuantity = false,
+  amountLabel,
   line,
   layout,
 }: {
   orderId: string;
   canMutate: boolean;
   hidePrices: boolean;
+  hideType?: boolean;
+  hideQuantity?: boolean;
+  amountLabel?: string;
   line: Line;
   layout: "card" | "table";
 }) {
@@ -245,6 +263,8 @@ function OrderLineItem({
   );
   const liveTotal = multiplyByQuantity(draftPricePaise, draftQty);
   const isPart = line.type === "PART";
+  const hasQuantity = line.type === "PART" && !hideQuantity;
+  const priceLabel = amountLabel ?? t("unitPrice");
   const cataloguePrice = line.catalogueSellingPricePaise ?? 0;
   const activeCataloguePaise =
     editing && editPartStock != null ? editCataloguePaise : cataloguePrice;
@@ -471,7 +491,7 @@ function OrderLineItem({
       if (state.message) toast.success(state.message);
       setOptimistic({
         description: editDescription.trim() || line.description,
-        quantity: isPart ? draftQty : 1,
+        quantity: hasQuantity ? draftQty : 1,
         unitPricePaise: hidePrices ? line.unitPricePaise : draftPricePaise,
         partId: isPart ? editPartId || null : null,
       });
@@ -488,6 +508,7 @@ function OrderLineItem({
     draftPricePaise,
     editPartId,
     hidePrices,
+    hasQuantity,
     isPart,
     line.description,
     line.unitPricePaise,
@@ -499,7 +520,7 @@ function OrderLineItem({
     if (saving) return;
     setSaving(true);
     const nextDescription = editDescription.trim() || line.description;
-    const nextQuantity = isPart ? draftQty : 1;
+    const nextQuantity = hasQuantity ? draftQty : 1;
     const nextPricePaise = hidePrices ? line.unitPricePaise : draftPricePaise;
     try {
       const formData = new FormData();
@@ -685,23 +706,25 @@ function OrderLineItem({
           <p className="text-[13px] font-semibold text-slate-600">
             {isPart ? ti("part") : t("lineDescription")}
           </p>
-          {!hidePrices ? <TypeBadge type={line.type} /> : null}
+          {!hidePrices && !hideType ? <TypeBadge type={line.type} /> : null}
         </div>
-        {isPart ? (
+        {hasQuantity ? (
           <p className="hidden min-h-7 items-center text-[13px] font-semibold text-slate-600 lg:flex">
             {t("quantity")}
           </p>
-        ) : (
+        ) : hideQuantity ? null : (
           <div className="hidden min-h-7 lg:block" aria-hidden />
         )}
         {!hidePrices ? (
           <>
             <p className="hidden min-h-7 items-center text-[13px] font-semibold text-slate-600 lg:flex">
-              {t("unitPrice")}
+              {priceLabel}
             </p>
-            <p className="hidden min-h-7 items-center text-[13px] font-semibold text-slate-600 lg:flex">
-              {t("lineSubtotal")}
-            </p>
+            {hideQuantity ? null : (
+              <p className="hidden min-h-7 items-center text-[13px] font-semibold text-slate-600 lg:flex">
+                {t("lineSubtotal")}
+              </p>
+            )}
           </>
         ) : null}
         <div className="hidden min-h-7 lg:block" aria-hidden />
@@ -726,6 +749,21 @@ function OrderLineItem({
                 value={editDescription}
               />
             </>
+          ) : line.type === "OUTSIDE" ? (
+            <>
+              <NoteSuggestInput
+                id={`line-desc-${line.id}`}
+                name="description"
+                required
+                maxLength={500}
+                value={editDescription}
+                suggestionMode="outsideWork"
+                onValueChange={setEditDescription}
+                className={controlClass}
+                placeholder={t("outsideWorkDescriptionPlaceholder")}
+              />
+              <input type="hidden" name="partId" value="" />
+            </>
           ) : (
             <>
               <Input
@@ -733,7 +771,8 @@ function OrderLineItem({
                 name="description"
                 required
                 maxLength={500}
-                defaultValue={line.description}
+                value={editDescription}
+                onChange={(event) => setEditDescription(event.target.value)}
                 className={controlClass}
                 aria-label={t("lineDescription")}
               />
@@ -742,7 +781,7 @@ function OrderLineItem({
           )}
         </div>
 
-        {isPart ? (
+        {hasQuantity ? (
           <div className="min-w-0">
             <p className="mb-1.5 text-[13px] font-semibold text-slate-600 lg:hidden">
               {t("quantity")}
@@ -774,7 +813,7 @@ function OrderLineItem({
                 htmlFor={`line-price-${line.id}`}
                 className="mb-1.5 block text-[13px] font-semibold text-slate-600 lg:hidden"
               >
-                {t("unitPrice")}
+                {priceLabel}
               </label>
               <Input
                 key={`line-price-${line.id}-${editPartId}-${priceInputKey}`}
@@ -790,7 +829,7 @@ function OrderLineItem({
                   needsPricing &&
                     "border-amber-400 focus-visible:border-amber-500 focus-visible:ring-amber-500/25",
                 )}
-                aria-label={t("unitPrice")}
+                aria-label={priceLabel}
                 onFocus={(event) => {
                   if (isZeroRupeesInput(event.currentTarget.value)) {
                     event.currentTarget.select();
@@ -810,14 +849,16 @@ function OrderLineItem({
               />
             </div>
 
-            <div className="min-w-0">
-              <p className="mb-1.5 text-[13px] font-semibold text-slate-600 lg:hidden">
-                {t("lineSubtotal")}
-              </p>
-              <p className="flex h-11 min-h-11 items-center text-[15px] font-extrabold tabular-nums text-slate-950">
-                {formatRupees(liveTotal)}
-              </p>
-            </div>
+            {hideQuantity ? null : (
+              <div className="min-w-0">
+                <p className="mb-1.5 text-[13px] font-semibold text-slate-600 lg:hidden">
+                  {t("lineSubtotal")}
+                </p>
+                <p className="flex h-11 min-h-11 items-center text-[15px] font-extrabold tabular-nums text-slate-950">
+                  {formatRupees(liveTotal)}
+                </p>
+              </div>
+            )}
           </>
         )}
 
@@ -852,13 +893,16 @@ function OrderLineItem({
   if (layout === "table") {
     const inlineEditing = editing && canMutate;
     const cellPad = "align-middle py-2.5";
-    const hintColSpan = hidePrices
-      ? canMutate
-        ? 3
-        : 2
-      : canMutate
-        ? 6
-        : 5;
+    const showTypeCol = !hidePrices && !hideType;
+    const showQtyCol = !hideQuantity;
+    const showSubtotalCol = !hidePrices && !hideQuantity;
+    const hintColSpan =
+      1 +
+      (showTypeCol ? 1 : 0) +
+      (showQtyCol ? 1 : 0) +
+      (hidePrices ? 0 : 1) +
+      (showSubtotalCol ? 1 : 0) +
+      (canMutate ? 1 : 0);
     /** Only when a pricing hint or inventory prefill link is actually shown. */
     const showEditFooter =
       inlineEditing &&
@@ -880,7 +924,7 @@ function OrderLineItem({
             showEditFooter && "border-b-0",
           )}
         >
-          {!hidePrices ? (
+          {showTypeCol ? (
             <TableCell
               className={cn(typeColClass, cellPad, "whitespace-nowrap")}
             >
@@ -899,6 +943,17 @@ function OrderLineItem({
                   initialLabel={line.description}
                   disabled={creatingPart || savePending}
                   nameOnlyLabels={hidePrices}
+                />
+              ) : line.type === "OUTSIDE" ? (
+                <NoteSuggestInput
+                  id={`line-desc-${line.id}`}
+                  required
+                  maxLength={500}
+                  value={editDescription}
+                  suggestionMode="outsideWork"
+                  onValueChange={setEditDescription}
+                  className={controlClass}
+                  placeholder={t("outsideWorkDescriptionPlaceholder")}
                 />
               ) : (
                 <Input
@@ -922,31 +977,33 @@ function OrderLineItem({
               </div>
             )}
           </TableCell>
-          <TableCell
-            className={cn(
-              qtyColClass,
-              cellPad,
-              "text-center tabular-nums text-slate-800",
-            )}
-          >
-            {inlineEditing && isPart ? (
-              <div className="flex h-11 min-h-11 items-center justify-center">
-                <QuantityStepper
-                  id={`line-qty-${line.id}`}
-                  name={`qty-display-${line.id}`}
-                  label={t("quantity")}
-                  defaultValue={displayQuantity}
-                  min={1}
-                  hideLabel
-                  onValueChange={setDraftQty}
-                />
-              </div>
-            ) : (
-              <span className="inline-flex h-11 min-h-11 w-full items-center justify-center tabular-nums">
-                {isPart ? displayQuantity : "—"}
-              </span>
-            )}
-          </TableCell>
+          {showQtyCol ? (
+            <TableCell
+              className={cn(
+                qtyColClass,
+                cellPad,
+                "text-center tabular-nums text-slate-800",
+              )}
+            >
+              {inlineEditing && hasQuantity ? (
+                <div className="flex h-11 min-h-11 items-center justify-center">
+                  <QuantityStepper
+                    id={`line-qty-${line.id}`}
+                    name={`qty-display-${line.id}`}
+                    label={t("quantity")}
+                    defaultValue={displayQuantity}
+                    min={1}
+                    hideLabel
+                    onValueChange={setDraftQty}
+                  />
+                </div>
+              ) : (
+                <span className="inline-flex h-11 min-h-11 w-full items-center justify-center tabular-nums">
+                  {hasQuantity ? displayQuantity : "—"}
+                </span>
+              )}
+            </TableCell>
+          ) : null}
           {!hidePrices ? (
             <>
               <TableCell
@@ -970,7 +1027,7 @@ function OrderLineItem({
                       needsPricing &&
                         "border-amber-400 focus-visible:border-amber-500 focus-visible:ring-amber-500/25",
                     )}
-                    aria-label={t("unitPrice")}
+                    aria-label={priceLabel}
                     aria-describedby={
                       needsPricing ? `line-price-hint-${line.id}` : undefined
                     }
@@ -1004,19 +1061,21 @@ function OrderLineItem({
                   </span>
                 )}
               </TableCell>
-              <TableCell
-                className={cn(
-                  subtotalColClass,
-                  cellPad,
-                  "font-semibold tabular-nums text-slate-950",
-                )}
-              >
-                <span className="inline-flex h-11 min-h-11 items-center tabular-nums">
-                  {inlineEditing
-                    ? formatRupees(liveTotal)
-                    : formatRupees(savedTotal)}
-                </span>
-              </TableCell>
+              {showSubtotalCol ? (
+                <TableCell
+                  className={cn(
+                    subtotalColClass,
+                    cellPad,
+                    "font-semibold tabular-nums text-slate-950",
+                  )}
+                >
+                  <span className="inline-flex h-11 min-h-11 items-center tabular-nums">
+                    {inlineEditing
+                      ? formatRupees(liveTotal)
+                      : formatRupees(savedTotal)}
+                  </span>
+                </TableCell>
+              ) : null}
             </>
           ) : null}
           {canMutate ? (
@@ -1098,7 +1157,9 @@ function OrderLineItem({
               <p className="text-[13px] font-semibold text-slate-600">
                 {t("lineDescription")}
               </p>
-              {!hidePrices ? <TypeBadge type={line.type} /> : null}
+              {!hidePrices && !hideType ? (
+                <TypeBadge type={line.type} />
+              ) : null}
               {needsPricing ? (
                 <Badge variant="warning">{t("needsPricing")}</Badge>
               ) : null}
@@ -1108,22 +1169,24 @@ function OrderLineItem({
             </h4>
           </div>
 
-          {isPart ? (
+          {hasQuantity ? (
             <LineStat value={String(displayQuantity)} label={t("quantity")} />
-          ) : (
+          ) : hideQuantity ? null : (
             <div className="hidden sm:block" aria-hidden />
           )}
           {!hidePrices ? (
             <>
               <LineStat
                 value={formatRupees(displayUnitPricePaise)}
-                label={t("unitPrice")}
+                label={priceLabel}
               />
-              <LineStat
-                value={formatRupees(savedTotal)}
-                label={t("lineSubtotal")}
-                emphasize
-              />
+              {hideQuantity ? null : (
+                <LineStat
+                  value={formatRupees(savedTotal)}
+                  label={t("lineSubtotal")}
+                  emphasize
+                />
+              )}
             </>
           ) : null}
 
@@ -1148,6 +1211,9 @@ export function OrderLinesTable({
   canMutate,
   lines,
   hidePrices = false,
+  hideType = false,
+  hideQuantity = false,
+  amountLabel,
 }: Props) {
   const t = useTranslations("orders");
   const isMobile = useIsMdDown();
@@ -1155,6 +1221,7 @@ export function OrderLinesTable({
   const visibleLines = hidePrices
     ? lines.filter((line) => line.type === "PART")
     : lines;
+  const priceHeader = amountLabel ?? t("unitPrice");
 
   if (isMobile) {
     return (
@@ -1165,6 +1232,9 @@ export function OrderLinesTable({
             orderId={orderId}
             canMutate={canMutate}
             hidePrices={hidePrices}
+            hideType={hideType}
+            hideQuantity={hideQuantity}
+            amountLabel={amountLabel}
             line={line}
             layout="card"
           />
@@ -1178,7 +1248,7 @@ export function OrderLinesTable({
       <Table className="table-fixed">
         <TableHeader className="bg-slate-100 [&_tr]:border-border">
           <TableRow className="hover:bg-transparent">
-            {!hidePrices ? (
+            {!hidePrices && !hideType ? (
               <TableHead
                 className={cn(typeColClass, "text-slate-700")}
               >
@@ -1188,26 +1258,30 @@ export function OrderLinesTable({
             <TableHead className="min-w-0 text-slate-700">
               {t("lineDescription")}
             </TableHead>
-            <TableHead
-              className={cn(
-                qtyColClass,
-                "whitespace-nowrap text-center text-slate-700",
-              )}
-            >
-              {t("quantity")}
-            </TableHead>
+            {!hideQuantity ? (
+              <TableHead
+                className={cn(
+                  qtyColClass,
+                  "whitespace-nowrap text-center text-slate-700",
+                )}
+              >
+                {t("quantity")}
+              </TableHead>
+            ) : null}
             {!hidePrices ? (
               <>
                 <TableHead
                   className={cn(priceColClass, "text-slate-700")}
                 >
-                  {t("unitPrice")}
+                  {priceHeader}
                 </TableHead>
-                <TableHead
-                  className={cn(subtotalColClass, "text-slate-700")}
-                >
-                  {t("lineSubtotal")}
-                </TableHead>
+                {!hideQuantity ? (
+                  <TableHead
+                    className={cn(subtotalColClass, "text-slate-700")}
+                  >
+                    {t("lineSubtotal")}
+                  </TableHead>
+                ) : null}
               </>
             ) : null}
             {canMutate ? (
@@ -1226,6 +1300,9 @@ export function OrderLinesTable({
               orderId={orderId}
               canMutate={canMutate}
               hidePrices={hidePrices}
+              hideType={hideType}
+              hideQuantity={hideQuantity}
+              amountLabel={amountLabel}
               line={line}
               layout="table"
             />

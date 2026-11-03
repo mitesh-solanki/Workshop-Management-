@@ -28,6 +28,8 @@ export async function createCustomerAction(
       name: String(formData.get("name") ?? ""),
       phone: String(formData.get("phone") ?? ""),
       address: String(formData.get("address") ?? ""),
+      gstin: String(formData.get("gstin") ?? ""),
+      stateCode: String(formData.get("stateCode") ?? ""),
       notes: String(formData.get("notes") ?? ""),
     });
     customerId = customer.id;
@@ -52,6 +54,8 @@ export async function createCustomerModalAction(
       name: String(formData.get("name") ?? ""),
       phone: String(formData.get("phone") ?? ""),
       address: String(formData.get("address") ?? ""),
+      gstin: String(formData.get("gstin") ?? ""),
+      stateCode: String(formData.get("stateCode") ?? ""),
       notes: String(formData.get("notes") ?? ""),
     });
     revalidatePath("/customers");
@@ -78,6 +82,8 @@ export async function updateCustomerAction(
       name: String(formData.get("name") ?? ""),
       phone: String(formData.get("phone") ?? ""),
       address: String(formData.get("address") ?? ""),
+      gstin: String(formData.get("gstin") ?? ""),
+      stateCode: String(formData.get("stateCode") ?? ""),
       notes: String(formData.get("notes") ?? ""),
     });
     revalidatePath("/customers");

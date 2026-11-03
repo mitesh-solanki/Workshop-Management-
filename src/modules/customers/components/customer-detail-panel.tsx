@@ -6,6 +6,8 @@ import {
   Car,
   ClipboardList,
   FileText,
+  Hash,
+  Map,
   MapPin,
   MessageSquare,
   NotebookPen,
@@ -118,7 +120,7 @@ export function CustomerDetailPanel({
   const tv = useTranslations("vehicles");
   const tw = useTranslations("warranties");
   const ti = useTranslations("inspections");
-  const to = useTranslations("orders");
+  const tGst = useTranslations("gst");
   usePageDetailLabel(customer.name);
   const { activeSection, scrollToSection, setSectionRef } =
     useSectionScrollSpy({
@@ -270,6 +272,17 @@ export function CustomerDetailPanel({
                 }
               />
               <Fact
+                icon={Hash}
+                label={t("gstin")}
+                value={customer.gstin ?? t("notSet")}
+                muted={!customer.gstin}
+              />
+              <Fact
+                icon={Map}
+                label={t("state")}
+                value={tGst(`states.${customer.stateCode}`)}
+              />
+              <Fact
                 icon={MapPin}
                 label={t("address")}
                 value={customer.address ?? t("notSet")}
@@ -351,19 +364,18 @@ export function CustomerDetailPanel({
             sectionRef={setSectionRef("service")}
           >
             <ServiceHistoryList
-              orders={serviceHistory}
-              locale={locale}
+              slips={serviceHistory}
               customerId={customer.id}
               canWrite={canCreateOrder}
               canDelete={canDeleteOrder}
+              canUploadPaper={canDeleteOrder}
+              showRegistration
               emptyTitle={t("serviceHistoryEmpty")}
               emptyBody={
                 vehicles.length === 0
                   ? t("noVehiclesDescription")
                   : t("serviceHistoryPlaceholder")
               }
-              showRegistration
-              statusLabel={(status) => to(`statuses.${status}`)}
             />
           </SectionBlock>
 

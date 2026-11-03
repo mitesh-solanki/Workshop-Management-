@@ -63,7 +63,11 @@ type Props = {
 const boardSelectTriggerClass = "h-9 min-h-9 w-auto min-w-[11rem]";
 const boardFilterSelectClass = "w-auto shrink-0";
 
-function formatDue(value: Date | string | null, empty: string): string {
+function formatDue(
+  value: Date | string | null,
+  empty: string,
+  withTime = false,
+): string {
   if (!value) {
     return empty;
   }
@@ -74,8 +78,9 @@ function formatDue(value: Date | string | null, empty: string): string {
   return date.toLocaleString(undefined, {
     month: "short",
     day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
+    ...(withTime
+      ? { hour: "2-digit" as const, minute: "2-digit" as const }
+      : { year: "numeric" as const }),
   });
 }
 
@@ -558,7 +563,7 @@ function BoardCard({
         )}`}
       </p>
       <p className="mt-0.5 truncate text-caption text-slate-500">
-        {`${t("createdLabel")}: ${formatDue(order.createdAt, t("dueNone"))}`}
+        {`${t("createdLabel")}: ${formatDue(order.createdAt, t("dueNone"), true)}`}
       </p>
       <p
         className={cn(

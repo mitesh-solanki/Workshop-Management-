@@ -88,6 +88,8 @@ const sampleCustomer = {
   name: "Ravi Patel",
   phone: "9876543210",
   address: null,
+  gstin: null,
+  stateCode: "24",
   notes: null,
   createdAt: new Date(),
   updatedAt: new Date(),
@@ -371,6 +373,28 @@ describe("schema validation messages are i18n keys", () => {
       );
     }
   });
+
+  it("defaults customer state to Gujarat and accepts optional GSTIN", () => {
+    const parsed = createCustomerSchema.parse({
+      name: "Ravi",
+      phone: "9876543210",
+      address: null,
+      notes: null,
+    });
+    expect(parsed.stateCode).toBe("24");
+    expect(parsed.gstin).toBeNull();
+
+    const withGstin = createCustomerSchema.parse({
+      name: "Ravi",
+      phone: "9876543210",
+      gstin: "24aabcu9603r1zm",
+      stateCode: "27",
+      address: null,
+      notes: null,
+    });
+    expect(withGstin.gstin).toBe("24AABCU9603R1ZM");
+    expect(withGstin.stateCode).toBe("27");
+  });
 });
 
 describe("customers empty copy keys", () => {
@@ -441,6 +465,8 @@ describe("garageId filtering", () => {
       name: "Ravi Updated",
       phone: "9876543210",
       address: null,
+      gstin: null,
+      stateCode: "24",
       notes: null,
     });
 
@@ -448,6 +474,8 @@ describe("garageId filtering", () => {
       name: "Ravi Updated",
       phone: "9876543210",
       address: null,
+      gstin: null,
+      stateCode: "24",
       notes: null,
     });
     expect(updateCustomerById).not.toHaveBeenCalledWith(
@@ -517,7 +545,13 @@ describe("delete customer and vehicle", () => {
     fitnessExpiry: null,
     createdAt: new Date(),
     updatedAt: new Date(),
-    customer: { id: "cust-a", name: "Ravi Patel", phone: "9876543210" },
+    customer: {
+      id: "cust-a",
+      name: "Ravi Patel",
+      phone: "9876543210",
+      gstin: null,
+      stateCode: "24",
+    },
   };
 
   it("deletes a customer with no service orders and writes audit via repo", async () => {

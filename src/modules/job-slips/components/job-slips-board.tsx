@@ -22,6 +22,8 @@ import { formatTechniciansList } from "@/modules/service-orders/technicians";
 
 const PAGE_SIZE = 8;
 
+const SLIP_MASONRY_BREAKPOINTS = [{ minWidth: 900, columns: 2 }] as const;
+
 type SlipSort = "newest" | "oldest" | "reg_asc" | "reg_desc";
 type StatusFilter = "" | ServiceOrderStatus;
 
@@ -184,7 +186,10 @@ export function JobSlipsBoard({ slips }: Props) {
         />
       ) : (
         <>
-          <MasonryGrid>
+          <MasonryGrid
+            className="grid-cols-1 min-[900px]:grid-cols-2 lg:grid-cols-2 xl:grid-cols-2"
+            breakpoints={SLIP_MASONRY_BREAKPOINTS}
+          >
             {visible.map((slip) => (
               <JobSlipCard key={slip.id} slip={slip} />
             ))}

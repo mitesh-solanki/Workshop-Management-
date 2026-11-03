@@ -16,8 +16,10 @@ type Props = {
 const SECTION_NUMBERS: Record<JobCardSection, string> = {
   details: "01",
   lines: "02",
-  billing: "03",
-  timeline: "04",
+  outsideWork: "03",
+  billing: "04",
+  paper: "05",
+  timeline: "06",
 };
 
 export function JobCardSectionNav({
@@ -31,14 +33,18 @@ export function JobCardSectionNav({
   const labels: Record<JobCardSection, string> = {
     details: t("details"),
     lines: t("lines"),
+    outsideWork: t("outsideWork"),
     billing: tb("title"),
+    paper: t("paperTitle"),
     timeline: t("timeline"),
   };
 
   const subs: Record<JobCardSection, string> = {
     details: t("sectionNav.details"),
     lines: t("sectionNav.lines"),
+    outsideWork: t("sectionNav.outsideWork"),
     billing: t("sectionNav.billing"),
+    paper: t("sectionNav.paper"),
     timeline: t("sectionNav.timeline"),
   };
 

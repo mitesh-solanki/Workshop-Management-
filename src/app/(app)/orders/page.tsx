@@ -19,6 +19,8 @@ export default async function OrdersPage() {
     session.role === "TECHNICIAN";
   const canDelete =
     session.role === "OWNER" || session.role === "MANAGER";
+  const canUploadPaper =
+    session.role === "OWNER" || session.role === "MANAGER";
   const canCreate =
     session.role === "OWNER" || session.role === "MANAGER";
   const showNeedsPricing =
@@ -46,15 +48,19 @@ export default async function OrdersPage() {
       <OrdersTable
         canWrite={canWrite}
         canDelete={canDelete}
+        canUploadPaper={canUploadPaper}
         showNeedsPricing={showNeedsPricing}
+        showReport
         orders={orders.map((order) => ({
           id: order.id,
           customerId: order.customerId,
+          vehicleId: order.vehicleId,
           status: order.status,
           complaint: order.complaint,
           bay: order.bay,
           createdAt: order.createdAt,
           expectedCompletion: order.expectedCompletion,
+          paperCopyCount: order.paperCopies.length,
           needsPricing:
             showNeedsPricing &&
             order.status !== "COMPLETED" &&

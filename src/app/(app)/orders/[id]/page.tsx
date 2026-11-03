@@ -13,7 +13,7 @@ import {
   getInvoicesForOrder,
 } from "@/modules/billing/service";
 import {
-  getEstimateForOrder,
+  getInspectionEstimateForOrder,
   getLatestEstimateForCustomerVehicle,
 } from "@/modules/estimates/service";
 import { getInspectionForOrder } from "@/modules/inspections/service";
@@ -28,7 +28,9 @@ import {
   getOrder,
   getOrderTimeline,
   listAssignableTechnicians,
+  listPaperCopies,
 } from "@/modules/service-orders/service";
+import { canMutateAssignedJobCard } from "@/modules/service-orders/technicians";
 
 type Props = {
   params: Promise<{ id: string }>;
@@ -57,12 +59,11 @@ export default async function OrderEditPage({ params, searchParams }: Props) {
     throw error;
   }
 
-  const canMutate =
-    (session.role === "OWNER" ||
-      session.role === "MANAGER" ||
-      (session.role === "TECHNICIAN" &&
-        order.technicianId === session.userId)) &&
-    order.status !== "COMPLETED";
+  const canMutate = canMutateAssignedJobCard(
+    session.role,
+    order,
+    session.userId,
+  );
 
   const canBill =
     session.role === "OWNER" ||
@@ -72,7 +73,6 @@ export default async function OrderEditPage({ params, searchParams }: Props) {
   let timeline: Awaited<ReturnType<typeof getOrderTimeline>> = [];
   let linkedInspection: Awaited<ReturnType<typeof getInspectionForOrder>> =
     null;
-  let estimate: Awaited<ReturnType<typeof getEstimateForOrder>> | null = null;
   let latestCustomerVehicleEstimate: Awaited<
     ReturnType<typeof getLatestEstimateForCustomerVehicle>
   > = null;
@@ -83,33 +83,38 @@ export default async function OrderEditPage({ params, searchParams }: Props) {
   let liveLinkStatus: Awaited<ReturnType<typeof getLiveLinkStatusForOrder>> = {
     active: null,
   };
+  let paperCopies: Awaited<ReturnType<typeof listPaperCopies>> = [];
   let draftSyncError: string | null = null;
+  const canEditPaper =
+    session.role === "OWNER" || session.role === "MANAGER";
 
   try {
     if (surface.includeCommercialSections) {
       [
         timeline,
         linkedInspection,
-        estimate,
-        latestCustomerVehicleEstimate,
         technicians,
         bays,
         garage,
         liveLinkStatus,
+        paperCopies,
       ] = await Promise.all([
         getOrderTimeline(session, id),
         getInspectionForOrder(session, id),
-        getEstimateForOrder(session, id),
-        getLatestEstimateForCustomerVehicle(
-          session,
-          order.customerId,
-          order.vehicleId,
-        ),
         listAssignableTechnicians(session),
         listBaysForSelect(session).catch(() => []),
         getGarageBillingProfile(session),
         getLiveLinkStatusForOrder(session, id).catch(() => ({ active: null })),
+        listPaperCopies(session, id).catch(() => []),
       ]);
+
+      latestCustomerVehicleEstimate =
+        (await getInspectionEstimateForOrder(session, id).catch(() => null)) ??
+        (await getLatestEstimateForCustomerVehicle(
+          session,
+          order.customerId,
+          order.vehicleId,
+        ).catch(() => null));
 
       if (canBill) {
         try {
@@ -127,13 +132,15 @@ export default async function OrderEditPage({ params, searchParams }: Props) {
       }
       invoices = await getInvoicesForOrder(session, id);
     } else {
-      // Technicians do not use the inspections module — only the latest estimate card.
-      [latestCustomerVehicleEstimate, technicians, bays] = await Promise.all([
-        getLatestEstimateForCustomerVehicle(
+      // Technicians: inspection estimate only on the labour/parts card.
+      latestCustomerVehicleEstimate =
+        (await getInspectionEstimateForOrder(session, id).catch(() => null)) ??
+        (await getLatestEstimateForCustomerVehicle(
           session,
           order.customerId,
           order.vehicleId,
-        ),
+        ).catch(() => null));
+      [technicians, bays] = await Promise.all([
         session.role === "TECHNICIAN"
           ? Promise.resolve([
               {
@@ -154,38 +161,41 @@ export default async function OrderEditPage({ params, searchParams }: Props) {
     throw error;
   }
 
-  const billedEstimateLineIds = new Set<string>();
-  for (const invoice of invoices) {
-    for (const line of invoice.lines) {
-      if (line.estimateLineId) {
-        billedEstimateLineIds.add(line.estimateLineId);
-      }
-    }
-  }
-
-  const estimateLineByOrderLineId = new Map(
-    (estimate?.current?.lines ?? [])
-      .filter((line) => line.sourceOrderLineId)
-      .map((line) => [line.sourceOrderLineId as string, line]),
+  const billedOrderFingerprints = new Set(
+    invoices
+      .filter((invoice) => invoice.status === "FINALIZED")
+      .flatMap((invoice) =>
+        invoice.lines.map(
+          (line) =>
+            `${line.description}|${line.type}|${line.quantity}|${line.unitPricePaise}`,
+        ),
+      ),
   );
 
   const billableOrderLines = order.lines.filter(
     (line) =>
-      (line.type === "LABOUR" || line.type === "PART") &&
+      (line.type === "LABOUR" ||
+        line.type === "PART" ||
+        line.type === "OUTSIDE") &&
       line.unitPricePaise > 0 &&
       line.quantity > 0,
   );
 
-  const unbilledOrderLines = billableOrderLines.filter((line) => {
-    const linked = estimateLineByOrderLineId.get(line.id);
-    if (!linked) return true;
-    return !billedEstimateLineIds.has(linked.id);
-  });
+  const unbilledOrderLines = billableOrderLines.filter(
+    (line) =>
+      !billedOrderFingerprints.has(
+        `${line.description}|${line.type}|${line.quantity}|${line.unitPricePaise}`,
+      ),
+  );
   const hasUnbilledApprovedLines = unbilledOrderLines.length > 0;
 
   const approvedPreviewLines = unbilledOrderLines.map((line) => {
     const typeKey =
-      line.type === "PART" || line.type === "LABOUR" ? line.type : "LABOUR";
+      line.type === "PART" ||
+      line.type === "LABOUR" ||
+      line.type === "OUTSIDE"
+        ? line.type
+        : "LABOUR";
     const part =
       "part" in line && line.part
         ? line.part
@@ -203,7 +213,8 @@ export default async function OrderEditPage({ params, searchParams }: Props) {
       id: line.id,
       description: line.description,
       type: typeKey,
-      typeLabel: te(`lineTypes.${typeKey}`),
+      typeLabel:
+        typeKey === "OUTSIDE" ? "" : te(`lineTypes.${typeKey}`),
       quantity: line.quantity,
       unitPricePaise: line.unitPricePaise,
       taxablePaise: amounts.taxablePaise,
@@ -248,9 +259,19 @@ export default async function OrderEditPage({ params, searchParams }: Props) {
         quantity: line.quantity,
         unitPricePaise: surface.hidePrices ? 0 : line.unitPricePaise,
         approvalState: line.approvalState,
+        sourceOrderLineId: line.sourceOrderLineId ?? null,
       })),
     };
   })();
+
+  const estimateInspectionId =
+    latestCustomerVehicleEstimate?.inspection?.id ??
+    latestCustomerVehicleEstimate?.inspectionId ??
+    linkedInspection?.id ??
+    null;
+  const estimateHref = estimateInspectionId
+    ? `/inspections/${estimateInspectionId}?section=report`
+    : null;
 
   return (
     <main className="w-full max-w-none space-y-4">
@@ -274,6 +295,7 @@ export default async function OrderEditPage({ params, searchParams }: Props) {
           bay: order.bay,
           technicianId: order.technicianId,
           customerId: order.customerId,
+          vehicleId: order.vehicleId,
           customer: { name: order.customer.name },
           vehicle: {
             registrationNumber: order.vehicle.registrationNumber,
@@ -308,6 +330,7 @@ export default async function OrderEditPage({ params, searchParams }: Props) {
         locale={locale}
         initialSection={initialSection}
         latestEstimate={latestEstimatePanel}
+        estimateHref={estimateHref}
         liveLink={
           surface.includeCommercialSections
             ? {
@@ -317,6 +340,18 @@ export default async function OrderEditPage({ params, searchParams }: Props) {
               }
             : undefined
         }
+        paperCopies={
+          surface.includeCommercialSections
+            ? paperCopies.map((copy) => ({
+                id: copy.id,
+                url: copy.url,
+                contentType: copy.contentType,
+                fileName: copy.fileName,
+                byteSize: copy.byteSize,
+              }))
+            : []
+        }
+        canEditPaper={surface.includeCommercialSections && canEditPaper}
         billingContent={
           surface.includeCommercialSections ? (
             <JobCardBillingContent
@@ -325,7 +360,7 @@ export default async function OrderEditPage({ params, searchParams }: Props) {
               canEdit={canBill}
               invoices={invoices}
               hasUnbilledApprovedLines={hasUnbilledApprovedLines}
-              defaultPlaceOfSupplyStateCode={order.vehicle.stateCode}
+              defaultPlaceOfSupplyStateCode={order.customer.stateCode}
               draftSyncError={draftSyncError}
               preview={{
                 garageName: garage?.name ?? t("title"),
@@ -333,6 +368,7 @@ export default async function OrderEditPage({ params, searchParams }: Props) {
                 garageGstin: garage?.gstin ?? null,
                 customerName: order.customer.name,
                 customerPhone: order.customer.phone,
+                customerGstin: order.customer.gstin,
                 vehicleRegistration: order.vehicle.registrationNumber,
                 vehicleLabel:
                   `${order.vehicle.make} ${order.vehicle.model}`.trim(),

@@ -45,7 +45,11 @@ export type InvoicePdfInput = {
   invoiceNumber: string | null;
   issuedAt: Date;
   garage: { name: string; address: string | null; gstin: string | null };
-  customer: { name: string; phone: string; address: string | null };
+  customer: {
+    name: string;
+    phone: string;
+    gstin?: string | null;
+  };
   vehicle: { registrationNumber: string; make: string; model: string } | null;
   placeOfSupplyStateCode: string;
   sellerStateCode: string;
@@ -76,6 +80,8 @@ const COLORS = {
   muted: "#6c7a8b",
   metaLabel: "#7a8899",
   metaBody: "#67788c",
+  /** Darker than metaBody — Bill To GSTIN / contact under customer name. */
+  billToDetail: "#2a3a4f",
   line: "#e7ebf2",
   summaryRule: "#dfe7f4",
   headerBg: "#eff4ff",
@@ -445,17 +451,23 @@ export async function generateInvoicePdf(
     width: half,
   });
   billY = doc.y + 3;
-  setBodyFont(doc, fontPath, 9);
-  doc.fillColor(COLORS.metaBody).text(input.customer.phone, billX, billY, {
-    width: half,
-  });
-  billY = doc.y + 3;
-  if (input.customer.address) {
-    doc.fillColor(COLORS.metaBody).text(input.customer.address, billX, billY, {
-      width: half,
-    });
+  if (input.customer.gstin) {
+    setBoldFont(doc, fontPath, 9);
+    doc.fillColor(COLORS.billToDetail).text(
+      `${labels.gstin}: ${input.customer.gstin}`,
+      billX,
+      billY,
+      { width: half },
+    );
     billY = doc.y + 3;
   }
+  setBoldFont(doc, fontPath, 9);
+  doc
+    .fillColor(COLORS.billToDetail)
+    .text(`${labels.contact}: ${input.customer.phone}`, billX, billY, {
+      width: half,
+    });
+  billY = doc.y + 3;
 
   setBoldFont(doc, fontPath, 7.5);
   doc

@@ -147,6 +147,9 @@ const APP_ERROR_MESSAGE_KEYS: Record<string, readonly [string, string]> = {
     "purchases",
     "errors.billAttachmentTooLarge",
   ],
+  "orders.paper_copy_type": ["orders", "errors.paperCopyType"],
+  "orders.paper_copy_too_large": ["orders", "errors.paperCopyTooLarge"],
+  "orders.paper_copy_limit": ["orders", "errors.paperCopyLimit"],
   STORAGE_NOT_CONFIGURED: ["vendorBills", "errors.storageNotConfigured"],
   "warranties.battery_photo_required": [
     "warranties",

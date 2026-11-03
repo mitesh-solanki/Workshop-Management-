@@ -163,7 +163,7 @@ describe("job card module — full scenarios", () => {
     await prisma.$disconnect();
   });
 
-  it("creates a job card in WAITING with audit", async () => {
+  it("creates a job card in IN_PROGRESS with audit", async () => {
     if (!ready) return;
 
     const order = await createServiceOrder(garageId, {
@@ -176,10 +176,11 @@ describe("job card module — full scenarios", () => {
       technicianIds: [technicianId],
       bay: "Bay 1",
       priority: "HIGH",
+      status: "IN_PROGRESS",
       actorId: userId });
 
     orderId = order.id;
-    expect(order.status).toBe("WAITING");
+    expect(order.status).toBe("IN_PROGRESS");
     expect(order.priority).toBe("HIGH");
     expect(order.complaint).toBe("Engine oil leak");
     expect(order.bay).toBe("Bay 1");
@@ -230,10 +231,14 @@ describe("job card module — full scenarios", () => {
   it("walks allowed status transitions and rejects stale/illegal moves", async () => {
     if (!ready) return;
 
-    // Schema gate used by the service layer.
-    for (const [status, next] of Object.entries(STATUS_TRANSITIONS) as Array<
-      [ServiceOrderStatusValue, readonly ServiceOrderStatusValue[]]
-    >) {
+    for (const status of [
+      "WAITING",
+      "INSPECTION",
+      "IN_PROGRESS",
+      "WAITING_FOR_PARTS",
+      "READY",
+      "COMPLETED",
+    ] as const) {
       for (const candidate of [
         "WAITING",
         "INSPECTION",
@@ -242,13 +247,12 @@ describe("job card module — full scenarios", () => {
         "READY",
         "COMPLETED",
       ] as const) {
-        expect(canTransitionStatus(status, candidate)).toBe(
-          next.includes(candidate),
-        );
+        expect(canTransitionStatus(status, candidate)).toBe(status !== candidate);
       }
     }
-    expect(canTransitionStatus("READY", "WAITING")).toBe(false);
-    expect(canTransitionStatus("COMPLETED", "READY")).toBe(false);
+    expect(canTransitionStatus("READY", "WAITING")).toBe(true);
+    expect(canTransitionStatus("COMPLETED", "READY")).toBe(true);
+    expect(STATUS_TRANSITIONS.COMPLETED).toEqual([]);
 
     const path: ServiceOrderStatusValue[] = [
       "INSPECTION",
@@ -259,7 +263,7 @@ describe("job card module — full scenarios", () => {
       "IN_PROGRESS",
     ];
 
-    let from: ServiceOrderStatusValue = "WAITING";
+    let from: ServiceOrderStatusValue = "IN_PROGRESS";
     for (const to of path) {
       expect(canTransitionStatus(from, to)).toBe(true);
       const moved = await updateServiceOrderStatus(garageId, orderId, {
@@ -515,6 +519,7 @@ describe("job card module — full scenarios", () => {
       technicianIds: [],
       bay: null,
       priority: "NORMAL",
+      status: "IN_PROGRESS",
       actorId: userId });
     orderBId = orderB.id;
 

@@ -227,7 +227,7 @@ export async function findCurrentEstimateForInspection(
   });
 }
 
-/** Latest current estimate for this customer + vehicle (inspection or job card). */
+/** Latest inspection estimate for this customer + vehicle. */
 export async function findLatestCurrentEstimateForCustomerVehicle(
   garageId: string,
   customerId: string,
@@ -237,10 +237,8 @@ export async function findLatestCurrentEstimateForCustomerVehicle(
     where: {
       garageId,
       supersededAt: null,
-      OR: [
-        { inspection: { customerId, vehicleId } },
-        { serviceOrder: { customerId, vehicleId } },
-      ],
+      inspectionId: { not: null },
+      inspection: { customerId, vehicleId },
     },
     orderBy: { createdAt: "desc" },
     select: {

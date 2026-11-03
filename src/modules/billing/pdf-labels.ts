@@ -9,6 +9,7 @@ export type InvoicePdfLabels = {
   date: string;
   garage: string;
   gstin: string;
+  contact: string;
   billTo: string;
   vehicle: string;
   vehicleDetails: string;
@@ -54,6 +55,7 @@ const LABELS: Record<PdfLocale, Omit<InvoicePdfLabels, "locale">> = {
     date: "Date",
     garage: "Garage",
     gstin: "GSTIN",
+    contact: "Contact",
     billTo: "Bill to",
     vehicle: "Vehicle",
     vehicleDetails: "Vehicle",
@@ -97,6 +99,7 @@ const LABELS: Record<PdfLocale, Omit<InvoicePdfLabels, "locale">> = {
     date: "दिनांक",
     garage: "गैराज",
     gstin: "GSTIN",
+    contact: "संपर्क",
     billTo: "बिल प्राप्तकर्ता",
     vehicle: "वाहन",
     vehicleDetails: "वाहन",
@@ -140,6 +143,7 @@ const LABELS: Record<PdfLocale, Omit<InvoicePdfLabels, "locale">> = {
     date: "તારીખ",
     garage: "ગેરેજ",
     gstin: "GSTIN",
+    contact: "સંપર્ક",
     billTo: "બિલ મેળવનાર",
     vehicle: "વાહન",
     vehicleDetails: "વાહન",

@@ -7,9 +7,11 @@ export const GLOBAL_SEARCH_ENTITY_TYPES = [
   "customer",
   "vehicle",
   "order",
+  "inspection",
   "part",
   "vendor",
   "invoice",
+  "team",
 ] as const;
 
 export type GlobalSearchEntityType = (typeof GLOBAL_SEARCH_ENTITY_TYPES)[number];
@@ -26,6 +28,7 @@ export const GLOBAL_SEARCH_MATCH_FIELDS = [
   "gstin",
   "email",
   "invoiceNumber",
+  "role",
 ] as const;
 
 export type GlobalSearchMatchField = (typeof GLOBAL_SEARCH_MATCH_FIELDS)[number];

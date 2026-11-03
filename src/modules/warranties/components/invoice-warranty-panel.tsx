@@ -10,7 +10,7 @@ import { InvoiceLineWarrantyModal } from "@/modules/warranties/components/invoic
 export type InvoiceWarrantyLine = {
   id: string;
   description: string;
-  type: "LABOUR" | "PART";
+  type: "LABOUR" | "PART" | "OUTSIDE";
   quantity: number;
   unitPricePaise: number;
   totalPaise: number;

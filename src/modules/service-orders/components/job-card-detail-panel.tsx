@@ -15,7 +15,13 @@ import {
 } from "@/modules/service-orders/components/latest-estimate-lines-card";
 import { OrderLineForm } from "@/modules/service-orders/components/order-line-form";
 import { OrderLinesTable } from "@/modules/service-orders/components/order-lines-table";
+import { OutsideWorkForm } from "@/modules/service-orders/components/outside-work-form";
 import { JobCardTimeline } from "@/modules/service-orders/components/job-card-timeline";
+import {
+  PaperJobCardHeaderUpload,
+  PaperJobCardPanel,
+  type PaperCopyView,
+} from "@/modules/service-orders/components/paper-job-card-panel";
 import {
   datetimeLocalFromOrder,
   ServiceOrderForm,
@@ -72,6 +78,7 @@ type OrderData = {
   bay: string | null;
   technicianId: string | null;
   customerId: string;
+  vehicleId: string;
   customer: { name: string };
   vehicle: { registrationNumber: string; make: string; model: string };
   technician: { name: string | null; email: string } | null;
@@ -104,6 +111,8 @@ type Props = {
   latestEstimate?: {
     lines: LatestEstimateLine[];
   } | null;
+  /** Full estimate page (inspection report) for deeper edits. */
+  estimateHref?: string | null;
   billingContent: ReactNode;
   /** Owner/staff: live link controls in Customer bill header after estimate exists. */
   liveLink?: {
@@ -111,6 +120,8 @@ type Props = {
     canEdit: boolean;
     showInBillingHeader: boolean;
   };
+  paperCopies?: PaperCopyView[];
+  canEditPaper?: boolean;
 };
 
 const SECTION_BODY_CLASS = "space-y-5";
@@ -153,8 +164,11 @@ export function JobCardDetailPanel({
   locale: _locale,
   initialSection = "details",
   latestEstimate = null,
+  estimateHref = null,
   billingContent,
   liveLink,
+  paperCopies = [],
+  canEditPaper = false,
 }: Props) {
   const t = useTranslations("orders");
   const tb = useTranslations("billing");
@@ -183,11 +197,24 @@ export function JobCardDetailPanel({
     [scrollToSection],
   );
 
+  const labourPartLines = order.lines.filter(
+    (line) => line.type === "LABOUR" || line.type === "PART",
+  );
+  const outsideWorkLines = order.lines.filter(
+    (line) => line.type === "OUTSIDE",
+  );
+  /** Estimate is separate from job-card lines — split only by estimate type. */
+  const outsideEstimateLines =
+    latestEstimate?.lines.filter((line) => line.type === "OUTSIDE") ?? [];
+  const labourPartEstimateLines =
+    latestEstimate?.lines.filter((line) => line.type !== "OUTSIDE") ?? [];
   const visibleLines = hidePrices
-    ? order.lines.filter((line) => line.type === "PART")
-    : order.lines;
-  const labourCount = order.lines.filter((line) => line.type === "LABOUR").length;
-  const partCount = order.lines.filter((line) => line.type === "PART").length;
+    ? labourPartLines.filter((line) => line.type === "PART")
+    : labourPartLines;
+  const labourCount = labourPartLines.filter(
+    (line) => line.type === "LABOUR",
+  ).length;
+  const partCount = labourPartLines.filter((line) => line.type === "PART").length;
   const needsPricing =
     !hidePrices &&
     order.status !== "COMPLETED" &&
@@ -209,14 +236,18 @@ export function JobCardDetailPanel({
   const sectionTitles: Record<JobCardSection, string> = {
     details: t("details"),
     lines: t("lines"),
+    outsideWork: t("outsideWork"),
     billing: tb("title"),
+    paper: t("paperTitle"),
     timeline: t("timeline"),
   };
 
   const sectionSubtitles: Record<JobCardSection, string | undefined> = {
     details: t("detailsHint"),
     lines: t("linesDescription"),
+    outsideWork: t("outsideWorkHint"),
     billing: t("billingHint"),
+    paper: t("paperHint"),
     timeline: t("timelineHint"),
   };
 
@@ -306,6 +337,15 @@ export function JobCardDetailPanel({
                     variant="header"
                   />
                 ) : null}
+                {activeSection === "paper" ? (
+                  <PaperJobCardHeaderUpload
+                    serviceOrderId={order.id}
+                    customerId={order.customerId}
+                    vehicleId={order.vehicleId}
+                    canEdit={canEditPaper}
+                    copyCount={paperCopies.length}
+                  />
+                ) : null}
               </div>
 
               <div className="min-w-0 px-4 py-5 sm:px-5">
@@ -341,12 +381,13 @@ export function JobCardDetailPanel({
 
                 <SectionPanel id="lines" open={activeSection === "lines"}>
                   <div className={SECTION_BODY_CLASS}>
-                    {latestEstimate ? (
+                    {labourPartEstimateLines.length > 0 ? (
                       <LatestEstimateLinesCard
                         orderId={order.id}
-                        lines={latestEstimate.lines}
+                        lines={labourPartEstimateLines}
                         hidePrices={hidePrices}
-                        canEdit={canMutate && !hidePrices}
+                        canEdit={false}
+                        estimateHref={estimateHref}
                       />
                     ) : null}
 
@@ -404,7 +445,7 @@ export function JobCardDetailPanel({
                           orderId={order.id}
                           canMutate={canMutate}
                           hidePrices={hidePrices}
-                          lines={order.lines}
+                          lines={visibleLines}
                         />
                       )}
                     </div>
@@ -431,8 +472,87 @@ export function JobCardDetailPanel({
                 </SectionPanel>
 
                 {showCommercial ? (
+                  <SectionPanel
+                    id="outsideWork"
+                    open={activeSection === "outsideWork"}
+                  >
+                    <div className="w-full max-w-2xl space-y-5">
+                      {outsideEstimateLines.length > 0 ? (
+                        <LatestEstimateLinesCard
+                          orderId={order.id}
+                          lines={outsideEstimateLines}
+                          hidePrices={false}
+                          canEdit={false}
+                          hideQuantity
+                          amountLabel={t("outsideWorkAmount")}
+                          hint={t("latestEstimateOutsideHint")}
+                          estimateHref={estimateHref}
+                        />
+                      ) : null}
+
+                      <div className="space-y-3">
+                        <div className="flex flex-wrap items-baseline gap-2">
+                          <strong className="text-[14px] font-semibold text-slate-900">
+                            {t("outsideWorkList")}
+                          </strong>
+                          <small className="text-[13px] text-slate-500">
+                            {t("outsideWorkCount", {
+                              count: outsideWorkLines.length,
+                            })}
+                          </small>
+                        </div>
+                        {outsideWorkLines.length === 0 ? (
+                          <p className="rounded-[10px] border border-dashed border-slate-300 bg-slate-50/50 px-4 py-6 text-[14px] text-slate-600">
+                            {t("outsideWorkEmpty")}
+                          </p>
+                        ) : (
+                          <OrderLinesTable
+                            orderId={order.id}
+                            canMutate={canMutate}
+                            hidePrices={false}
+                            hideType
+                            hideQuantity
+                            amountLabel={t("outsideWorkAmount")}
+                            lines={outsideWorkLines}
+                          />
+                        )}
+                      </div>
+
+                      {canMutate ? (
+                        <div className="space-y-3 border-t border-slate-300 pt-5">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <strong className="text-[14px] font-semibold text-slate-900">
+                              {t("addOutsideWork")}
+                            </strong>
+                            <small className="text-[13px] text-slate-500">
+                              {t("outsideWorkHint")}
+                            </small>
+                          </div>
+                          <div className="rounded-[10px] border border-[#e8edf5] bg-[#fafcff] p-4 sm:p-5">
+                            <OutsideWorkForm orderId={order.id} />
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
+                  </SectionPanel>
+                ) : null}
+
+                {showCommercial ? (
                   <SectionPanel id="billing" open={activeSection === "billing"}>
                     {billingContent}
+                  </SectionPanel>
+                ) : null}
+
+                {showCommercial ? (
+                  <SectionPanel id="paper" open={activeSection === "paper"}>
+                    <PaperJobCardPanel
+                      embedded
+                      serviceOrderId={order.id}
+                      customerId={order.customerId}
+                      vehicleId={order.vehicleId}
+                      canEdit={canEditPaper}
+                      copies={paperCopies}
+                    />
                   </SectionPanel>
                 ) : null}
 

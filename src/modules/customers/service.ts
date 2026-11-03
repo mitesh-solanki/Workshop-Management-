@@ -59,6 +59,8 @@ export async function createCustomerRecord(
     name: input.name,
     phone: input.phone,
     address: input.address,
+    gstin: input.gstin,
+    stateCode: input.stateCode,
     notes: input.notes,
   });
 }
@@ -75,6 +77,8 @@ export async function updateCustomerRecord(
     name: input.name,
     phone: input.phone,
     address: input.address,
+    gstin: input.gstin,
+    stateCode: input.stateCode,
     notes: input.notes,
   });
 

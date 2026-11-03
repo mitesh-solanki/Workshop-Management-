@@ -9,6 +9,7 @@ const jobSlipSelect = {
   status: true,
   complaint: true,
   bay: true,
+  odometerIn: true,
   createdAt: true,
   expectedCompletion: true,
   technicianId: true,
@@ -23,6 +24,7 @@ const jobSlipSelect = {
     select: {
       name: true,
       phone: true,
+      address: true,
     },
   },
   technician: {
@@ -61,7 +63,6 @@ const jobSlipSelect = {
       sortOrder: true,
     },
     orderBy: [{ sortOrder: "asc" as const }, { createdAt: "asc" as const }],
-    take: 20,
   },
 } satisfies Prisma.ServiceOrderSelect;
 
@@ -79,5 +80,22 @@ export async function listJobSlipOrders(
     select: jobSlipSelect,
     orderBy: [{ createdAt: "desc" }],
     take: 200,
+  });
+}
+
+export async function findJobSlipOrder(
+  garageId: string,
+  orderId: string,
+  options: { technicianId?: string } = {},
+) {
+  return prisma.serviceOrder.findFirst({
+    where: {
+      id: orderId,
+      garageId,
+      ...(options.technicianId
+        ? { AND: [assignedTechnicianWhere(options.technicianId)] }
+        : {}),
+    },
+    select: jobSlipSelect,
   });
 }

@@ -8,9 +8,11 @@ import {
 } from "@/modules/global-search/schema";
 import {
   searchCustomersForGlobal,
+  searchInspectionsForGlobal,
   searchInvoicesForGlobal,
   searchOrdersForGlobal,
   searchPartsForGlobal,
+  searchTeamForGlobal,
   searchVehiclesForGlobal,
   searchVendorsForGlobal,
 } from "@/modules/global-search/repo";
@@ -59,15 +61,24 @@ export async function runGlobalSearch(
   if (q.length < GLOBAL_SEARCH_MIN_CHARS) return [];
 
   const isTechnician = session.role === "TECHNICIAN";
+  const canSearchTeam =
+    session.role === "OWNER" || session.role === "MANAGER";
+  const canSearchInspections =
+    session.role === "OWNER" ||
+    session.role === "MANAGER" ||
+    session.role === "ACCOUNTANT";
   const technicianScope = isTechnician
     ? { technicianId: session.userId }
     : {};
 
-  const [customers, vehicles, orders, parts, vendors, invoices] =
+  const [customers, vehicles, orders, inspections, parts, vendors, invoices, team] =
     await Promise.all([
       searchCustomersForGlobal(session.garageId, q),
       searchVehiclesForGlobal(session.garageId, q),
       searchOrdersForGlobal(session.garageId, q, technicianScope),
+      canSearchInspections
+        ? searchInspectionsForGlobal(session.garageId, q)
+        : Promise.resolve([]),
       isTechnician
         ? Promise.resolve([])
         : searchPartsForGlobal(session.garageId, q),
@@ -77,6 +88,9 @@ export async function runGlobalSearch(
       isTechnician
         ? Promise.resolve([])
         : searchInvoicesForGlobal(session.garageId, q),
+      canSearchTeam
+        ? searchTeamForGlobal(session.garageId, q)
+        : Promise.resolve([]),
     ]);
 
   const results: GlobalSearchResult[] = [];
@@ -139,6 +153,30 @@ export async function runGlobalSearch(
         "complaint",
       ),
       href: `/orders/${row.id}`,
+    });
+  }
+
+  for (const row of inspections) {
+    results.push({
+      id: row.id,
+      type: "inspection",
+      title: row.vehicle.registrationNumber,
+      subtitle: `${row.customer.name}${
+        row.complaint?.trim() ? ` · ${row.complaint.trim()}` : ""
+      }`,
+      matchIn: firstMatch(
+        [
+          { key: "registration", value: row.vehicle.registrationNumber },
+          { key: "name", value: row.customer.name },
+          { key: "phone", value: row.customer.phone },
+          { key: "complaint", value: row.complaint },
+          { key: "make", value: row.vehicle.make },
+          { key: "model", value: row.vehicle.model },
+        ],
+        q,
+        "registration",
+      ),
+      href: `/inspections/${row.id}`,
     });
   }
 
@@ -206,6 +244,28 @@ export async function runGlobalSearch(
         "invoiceNumber",
       ),
       href: `/orders/${row.serviceOrderId}?section=billing`,
+    });
+  }
+
+  for (const row of team) {
+    const displayName = row.name?.trim() || row.email;
+    results.push({
+      id: row.id,
+      type: "team",
+      title: displayName,
+      subtitle: `${row.role}${
+        row.name?.trim() ? ` · ${row.email}` : ""
+      }`,
+      matchIn: firstMatch(
+        [
+          { key: "name", value: row.name },
+          { key: "email", value: row.email },
+          { key: "role", value: row.role },
+        ],
+        q,
+        "name",
+      ),
+      href: "/team",
     });
   }
 

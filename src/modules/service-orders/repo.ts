@@ -104,6 +104,8 @@ const orderListSelect = {
       id: true,
       name: true,
       phone: true,
+      gstin: true,
+      stateCode: true,
     },
   },
   technician: {
@@ -123,6 +125,14 @@ const orderListSelect = {
       unitPricePaise: 0,
       OR: [{ partId: null }, { part: { sellingPricePaise: { lte: 0 } } }],
     },
+    select: { id: true },
+    take: 1,
+  },
+} satisfies Prisma.ServiceOrderSelect;
+
+const orderListWithPaperSelect = {
+  ...orderListSelect,
+  paperCopies: {
     select: { id: true },
     take: 1,
   },
@@ -161,7 +171,7 @@ export async function listServiceOrders(
       }),
       ...(options.bay ? { bay: options.bay } : {}),
     },
-    select: orderListSelect,
+    select: orderListWithPaperSelect,
     orderBy: [{ createdAt: "desc" }],
     take: 200,
   });
@@ -245,22 +255,88 @@ const historySelect = {
   id: true,
   status: true,
   complaint: true,
+  bay: true,
+  odometerIn: true,
   createdAt: true,
   expectedCompletion: true,
   vehicle: {
     select: {
       id: true,
       registrationNumber: true,
+      make: true,
+      model: true,
     },
   },
+  customer: {
+    select: {
+      name: true,
+      phone: true,
+      address: true,
+    },
+  },
+  technician: {
+    select: {
+      id: true,
+      name: true,
+      email: true,
+    },
+  },
+  technicianAssignments: {
+    select: technicianAssignmentSelect,
+    orderBy: { createdAt: "asc" as const },
+  },
+  lines: {
+    select: {
+      id: true,
+      type: true,
+      description: true,
+      quantity: true,
+      unitPricePaise: true,
+      partId: true,
+      part: {
+        select: {
+          sellingPricePaise: true,
+        },
+      },
+    },
+    orderBy: [{ sortOrder: "asc" as const }, { createdAt: "asc" as const }],
+  },
+  paperCopies: {
+    select: {
+      id: true,
+      storageKey: true,
+      contentType: true,
+      fileName: true,
+    },
+    orderBy: { createdAt: "asc" as const },
+  },
+} satisfies Prisma.ServiceOrderSelect;
+
+const paperCopySelect = {
+  id: true,
+  garageId: true,
+  serviceOrderId: true,
+  storageKey: true,
+  contentType: true,
+  fileName: true,
+  byteSize: true,
+  createdById: true,
+  createdAt: true,
 } as const;
 
 export async function listServiceOrdersByCustomer(
   garageId: string,
   customerId: string,
+  options: { technicianId?: string } = {},
 ) {
   return prisma.serviceOrder.findMany({
-    where: { garageId, customerId },
+    where: {
+      garageId,
+      customerId,
+      ...(options.technicianId
+        ? { AND: [assignedTechnicianWhere(options.technicianId)] }
+        : {}),
+    },
     select: historySelect,
     orderBy: { createdAt: "desc" },
     take: 50,
@@ -270,9 +346,16 @@ export async function listServiceOrdersByCustomer(
 export async function listServiceOrdersByVehicle(
   garageId: string,
   vehicleId: string,
+  options: { technicianId?: string } = {},
 ) {
   return prisma.serviceOrder.findMany({
-    where: { garageId, vehicleId },
+    where: {
+      garageId,
+      vehicleId,
+      ...(options.technicianId
+        ? { AND: [assignedTechnicianWhere(options.technicianId)] }
+        : {}),
+    },
     select: historySelect,
     orderBy: { createdAt: "desc" },
     take: 50,
@@ -368,11 +451,13 @@ export async function createServiceOrder(
     technicianIds: string[];
     bay: string | null;
     priority: ServiceOrderPriority;
+    status: ServiceOrderStatusValue;
     actorId: string;
   },
 ) {
   const technicianIds = [...new Set(data.technicianIds.filter(Boolean))];
   const primaryTechnicianId = technicianIds[0] ?? null;
+  const status = data.status === "WAITING" ? "IN_PROGRESS" : data.status;
 
   return prisma.$transaction(async (tx) => {
     const order = await tx.serviceOrder.create({
@@ -380,7 +465,7 @@ export async function createServiceOrder(
         garageId,
         vehicleId: data.vehicleId,
         customerId: data.customerId,
-        status: "WAITING",
+        status,
         priority: data.priority,
         complaint: data.complaint,
         requestedServices: data.requestedServices,
@@ -414,7 +499,7 @@ export async function createServiceOrder(
         entityId: order.id,
         meta: {
           from: null,
-          to: "WAITING",
+          to: status,
           created: true,
           technicianIds,
         } satisfies Prisma.InputJsonValue,
@@ -1010,3 +1095,186 @@ export async function deleteServiceOrderById(
     return existing;
   });
 }
+
+export async function listPaperCopiesForOrder(
+  garageId: string,
+  serviceOrderId: string,
+) {
+  return prisma.serviceOrderPaperCopy.findMany({
+    where: { garageId, serviceOrderId },
+    select: paperCopySelect,
+    orderBy: { createdAt: "asc" },
+  });
+}
+
+export async function countPaperCopiesForOrder(
+  garageId: string,
+  serviceOrderId: string,
+) {
+  return prisma.serviceOrderPaperCopy.count({
+    where: { garageId, serviceOrderId },
+  });
+}
+
+export async function createPaperCopy(
+  garageId: string,
+  data: {
+    serviceOrderId: string;
+    storageKey: string;
+    contentType: string;
+    fileName?: string;
+    byteSize: number;
+    actorId: string;
+  },
+) {
+  return prisma.$transaction(async (tx) => {
+    const order = await tx.serviceOrder.findFirst({
+      where: { id: data.serviceOrderId, garageId },
+      select: {
+        id: true,
+        customerId: true,
+        vehicleId: true,
+      },
+    });
+    if (!order) {
+      throw new Error("NOT_FOUND");
+    }
+
+    const row = await tx.serviceOrderPaperCopy.create({
+      data: {
+        garageId,
+        serviceOrderId: data.serviceOrderId,
+        storageKey: data.storageKey,
+        contentType: data.contentType,
+        fileName: data.fileName ?? null,
+        byteSize: data.byteSize,
+        createdById: data.actorId,
+      },
+      select: paperCopySelect,
+    });
+
+    await tx.auditLog.create({
+      data: {
+        garageId,
+        actorId: data.actorId,
+        action: "service_order.paper_copy_uploaded",
+        entity: "ServiceOrderPaperCopy",
+        entityId: row.id,
+        meta: {
+          serviceOrderId: data.serviceOrderId,
+          customerId: order.customerId,
+          vehicleId: order.vehicleId,
+          contentType: data.contentType,
+          fileName: data.fileName ?? null,
+          byteSize: data.byteSize,
+        } satisfies Prisma.InputJsonValue,
+      },
+    });
+
+    return row;
+  });
+}
+
+export async function deletePaperCopy(
+  garageId: string,
+  data: {
+    serviceOrderId: string;
+    paperCopyId: string;
+    actorId: string;
+  },
+) {
+  return prisma.$transaction(async (tx) => {
+    const existing = await tx.serviceOrderPaperCopy.findFirst({
+      where: {
+        id: data.paperCopyId,
+        garageId,
+        serviceOrderId: data.serviceOrderId,
+      },
+      select: paperCopySelect,
+    });
+    if (!existing) {
+      return null;
+    }
+
+    await tx.serviceOrderPaperCopy.delete({
+      where: { id: existing.id },
+    });
+
+    await tx.auditLog.create({
+      data: {
+        garageId,
+        actorId: data.actorId,
+        action: "service_order.paper_copy_removed",
+        entity: "ServiceOrderPaperCopy",
+        entityId: existing.id,
+        meta: {
+          serviceOrderId: data.serviceOrderId,
+          storageKey: existing.storageKey,
+          contentType: existing.contentType,
+          fileName: existing.fileName,
+        } satisfies Prisma.InputJsonValue,
+      },
+    });
+
+    return existing;
+  });
+}
+
+export async function replacePaperCopy(
+  garageId: string,
+  data: {
+    serviceOrderId: string;
+    paperCopyId: string;
+    storageKey: string;
+    contentType: string;
+    fileName?: string;
+    byteSize: number;
+    actorId: string;
+  },
+) {
+  return prisma.$transaction(async (tx) => {
+    const existing = await tx.serviceOrderPaperCopy.findFirst({
+      where: {
+        id: data.paperCopyId,
+        garageId,
+        serviceOrderId: data.serviceOrderId,
+      },
+      select: paperCopySelect,
+    });
+    if (!existing) {
+      return null;
+    }
+
+    const row = await tx.serviceOrderPaperCopy.update({
+      where: { id: existing.id },
+      data: {
+        storageKey: data.storageKey,
+        contentType: data.contentType,
+        fileName: data.fileName ?? null,
+        byteSize: data.byteSize,
+      },
+      select: paperCopySelect,
+    });
+
+    await tx.auditLog.create({
+      data: {
+        garageId,
+        actorId: data.actorId,
+        action: "service_order.paper_copy_replaced",
+        entity: "ServiceOrderPaperCopy",
+        entityId: row.id,
+        meta: {
+          serviceOrderId: data.serviceOrderId,
+          previousStorageKey: existing.storageKey,
+          storageKey: data.storageKey,
+          contentType: data.contentType,
+          fileName: data.fileName ?? null,
+          byteSize: data.byteSize,
+        } satisfies Prisma.InputJsonValue,
+      },
+    });
+
+    return { row, previousStorageKey: existing.storageKey };
+  });
+}
+

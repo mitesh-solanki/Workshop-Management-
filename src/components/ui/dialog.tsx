@@ -55,6 +55,17 @@ function isSearchableSelectLayer(target: EventTarget | null) {
   )
 }
 
+function isLiveMediaLightboxLayer(target: EventTarget | null) {
+  return (
+    target instanceof Element &&
+    Boolean(target.closest("[data-slot='live-media-lightbox']"))
+  )
+}
+
+function isLiveMediaLightboxOpen() {
+  return Boolean(document.querySelector("[data-slot='live-media-lightbox']"))
+}
+
 function focusSearchableSelectTarget(target: EventTarget | null) {
   if (!(target instanceof Element)) return
   const root = target.closest("[data-slot='searchable-select-dropdown']")
@@ -75,6 +86,7 @@ function DialogContent({
   onInteractOutside,
   onFocusOutside,
   onPointerDownOutside,
+  onEscapeKeyDown,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   showCloseButton?: boolean
@@ -93,23 +105,40 @@ function DialogContent({
         )}
         {...props}
         onInteractOutside={(event) => {
-          if (isSearchableSelectLayer(event.target)) {
+          if (
+            isLiveMediaLightboxOpen() ||
+            isSearchableSelectLayer(event.target) ||
+            isLiveMediaLightboxLayer(event.target)
+          ) {
             event.preventDefault()
           }
           onInteractOutside?.(event)
         }}
         onFocusOutside={(event) => {
-          if (isSearchableSelectLayer(event.target)) {
+          if (
+            isLiveMediaLightboxOpen() ||
+            isSearchableSelectLayer(event.target) ||
+            isLiveMediaLightboxLayer(event.target)
+          ) {
             event.preventDefault()
           }
           onFocusOutside?.(event)
         }}
         onPointerDownOutside={(event) => {
+          if (isLiveMediaLightboxOpen() || isLiveMediaLightboxLayer(event.target)) {
+            event.preventDefault()
+          }
           if (isSearchableSelectLayer(event.target)) {
             event.preventDefault()
             focusSearchableSelectTarget(event.target)
           }
           onPointerDownOutside?.(event)
+        }}
+        onEscapeKeyDown={(event) => {
+          if (isLiveMediaLightboxOpen()) {
+            event.preventDefault()
+          }
+          onEscapeKeyDown?.(event)
         }}
       >
         {children}

@@ -11,16 +11,20 @@ vi.mock("@/modules/global-search/repo", () => ({
   searchCustomersForGlobal: vi.fn(),
   searchVehiclesForGlobal: vi.fn(),
   searchOrdersForGlobal: vi.fn(),
+  searchInspectionsForGlobal: vi.fn(),
   searchPartsForGlobal: vi.fn(),
   searchVendorsForGlobal: vi.fn(),
   searchInvoicesForGlobal: vi.fn(),
+  searchTeamForGlobal: vi.fn(),
 }));
 
 import {
   searchCustomersForGlobal,
+  searchInspectionsForGlobal,
   searchInvoicesForGlobal,
   searchOrdersForGlobal,
   searchPartsForGlobal,
+  searchTeamForGlobal,
   searchVehiclesForGlobal,
   searchVendorsForGlobal,
 } from "@/modules/global-search/repo";
@@ -57,9 +61,11 @@ function emptyMocks() {
   vi.mocked(searchCustomersForGlobal).mockResolvedValue([]);
   vi.mocked(searchVehiclesForGlobal).mockResolvedValue([]);
   vi.mocked(searchOrdersForGlobal).mockResolvedValue([]);
+  vi.mocked(searchInspectionsForGlobal).mockResolvedValue([]);
   vi.mocked(searchPartsForGlobal).mockResolvedValue([]);
   vi.mocked(searchVendorsForGlobal).mockResolvedValue([]);
   vi.mocked(searchInvoicesForGlobal).mockResolvedValue([]);
+  vi.mocked(searchTeamForGlobal).mockResolvedValue([]);
 }
 
 describe("global search schema", () => {
@@ -73,9 +79,11 @@ describe("global search schema", () => {
       "customer",
       "vehicle",
       "order",
+      "inspection",
       "part",
       "vendor",
       "invoice",
+      "team",
     ]);
   });
 
@@ -92,6 +100,7 @@ describe("global search schema", () => {
       "gstin",
       "email",
       "invoiceNumber",
+      "role",
     ]);
   });
 });
@@ -130,9 +139,11 @@ describe("runGlobalSearch", () => {
     expect(searchCustomersForGlobal).toHaveBeenCalledWith(garageA, "Ravi");
     expect(searchVehiclesForGlobal).toHaveBeenCalledWith(garageA, "Ravi");
     expect(searchOrdersForGlobal).toHaveBeenCalledWith(garageA, "Ravi", {});
+    expect(searchInspectionsForGlobal).toHaveBeenCalledWith(garageA, "Ravi");
     expect(searchPartsForGlobal).toHaveBeenCalledWith(garageA, "Ravi");
     expect(searchVendorsForGlobal).toHaveBeenCalledWith(garageA, "Ravi");
     expect(searchInvoicesForGlobal).toHaveBeenCalledWith(garageA, "Ravi");
+    expect(searchTeamForGlobal).toHaveBeenCalledWith(garageA, "Ravi");
     expect(results).toEqual([
       expect.objectContaining({
         id: "cust-a",
@@ -156,6 +167,8 @@ describe("runGlobalSearch", () => {
     expect(searchPartsForGlobal).not.toHaveBeenCalled();
     expect(searchVendorsForGlobal).not.toHaveBeenCalled();
     expect(searchInvoicesForGlobal).not.toHaveBeenCalled();
+    expect(searchInspectionsForGlobal).not.toHaveBeenCalled();
+    expect(searchTeamForGlobal).not.toHaveBeenCalled();
   });
 
   it("does not scope job cards for manager or owner", async () => {
@@ -366,6 +379,18 @@ describe("runGlobalSearch", () => {
         },
       },
     ]);
+    vi.mocked(searchInspectionsForGlobal).mockResolvedValue([
+      {
+        id: "ins1",
+        complaint: "Noise",
+        customer: { name: "Ravi", phone: "111" },
+        vehicle: {
+          registrationNumber: "GJ01AA0001",
+          make: "Tata",
+          model: "Nexon",
+        },
+      },
+    ]);
     vi.mocked(searchPartsForGlobal).mockResolvedValue([
       { id: "p1", name: "Pad", sku: "PAD-1", hsn: "8708" },
     ]);
@@ -387,15 +412,96 @@ describe("runGlobalSearch", () => {
         serviceOrder: { vehicle: { registrationNumber: "GJ01AA0001" } },
       },
     ]);
+    vi.mocked(searchTeamForGlobal).mockResolvedValue([
+      {
+        id: "u1",
+        name: "Ravi Tech",
+        email: "ravi@garage.test",
+        role: "TECHNICIAN",
+      },
+    ]);
 
     const results = await runGlobalSearch(ownerA, "aa");
     expect(results.map((r) => r.type)).toEqual([
       "customer",
       "vehicle",
       "order",
+      "inspection",
       "part",
       "vendor",
       "invoice",
+      "team",
     ]);
+  });
+
+  it("maps team members to /team by name and email", async () => {
+    vi.mocked(searchTeamForGlobal).mockResolvedValue([
+      {
+        id: "u1",
+        name: "Ravi Tech",
+        email: "ravi@garage.test",
+        role: "TECHNICIAN",
+      },
+    ]);
+
+    const byName = await runGlobalSearch(ownerA, "Ravi");
+    expect(byName[0]).toMatchObject({
+      type: "team",
+      title: "Ravi Tech",
+      subtitle: "TECHNICIAN · ravi@garage.test",
+      href: "/team",
+      matchIn: "name",
+    });
+
+    emptyMocks();
+    vi.mocked(searchTeamForGlobal).mockResolvedValue([
+      {
+        id: "u1",
+        name: "Ravi Tech",
+        email: "ravi@garage.test",
+        role: "TECHNICIAN",
+      },
+    ]);
+    const byEmail = await runGlobalSearch(ownerA, "ravi@garage");
+    expect(byEmail[0]).toMatchObject({
+      type: "team",
+      matchIn: "email",
+      href: "/team",
+    });
+  });
+
+  it("maps inspections to /inspections/[id]", async () => {
+    vi.mocked(searchInspectionsForGlobal).mockResolvedValue([
+      {
+        id: "ins-1",
+        complaint: "AC not cooling",
+        customer: { name: "Ravi Patel", phone: "9876543210" },
+        vehicle: {
+          registrationNumber: "GJ01AB1234",
+          make: "Honda",
+          model: "City",
+        },
+      },
+    ]);
+
+    const results = await runGlobalSearch(ownerA, "AC not");
+    expect(results[0]).toMatchObject({
+      type: "inspection",
+      title: "GJ01AB1234",
+      subtitle: "Ravi Patel · AC not cooling",
+      href: "/inspections/ins-1",
+      matchIn: "complaint",
+    });
+  });
+
+  it("hides team search from accountants", async () => {
+    const accountantA: RoleSession = {
+      userId: "acc-a",
+      garageId: garageA,
+      role: "ACCOUNTANT",
+    };
+    await runGlobalSearch(accountantA, "Ravi");
+    expect(searchTeamForGlobal).not.toHaveBeenCalled();
+    expect(searchInspectionsForGlobal).toHaveBeenCalledWith(garageA, "Ravi");
   });
 });

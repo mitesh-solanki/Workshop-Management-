@@ -30,9 +30,19 @@ import {
 } from "@/components/ui/dialog";
 import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/toast";
 import { isValidPhone, sanitizePhoneTyping } from "@/lib/contact";
+import {
+  GST_STATE_CODES,
+  gstinStateCode,
+  isKnownGstStateCode,
+  isValidGstin,
+  sanitizeGstinTyping,
+} from "@/lib/gstin";
+import { cn } from "@/lib/utils";
+import { DEFAULT_CUSTOMER_STATE_CODE } from "@/modules/customers/schema";
 
 const initial: CustomerActionState = { ok: false };
 
@@ -41,6 +51,8 @@ export type EditCustomerValues = {
   name: string;
   phone: string;
   address: string | null;
+  gstin: string | null;
+  stateCode: string;
   notes: string | null;
 };
 
@@ -48,6 +60,8 @@ type FormValues = {
   name: string;
   phone: string;
   address: string;
+  gstin: string;
+  stateCode: string;
   notes: string;
 };
 
@@ -60,6 +74,7 @@ type Props = {
 export function EditCustomerModal({ customer, trigger }: Props) {
   const t = useTranslations("customers");
   const te = useTranslations("errors");
+  const tGst = useTranslations("gst");
   const router = useRouter();
   const formId = useId();
   const [open, setOpen] = useState(false);
@@ -67,6 +82,8 @@ export function EditCustomerModal({ customer, trigger }: Props) {
     name: customer.name,
     phone: customer.phone,
     address: customer.address ?? "",
+    gstin: customer.gstin ?? "",
+    stateCode: customer.stateCode || DEFAULT_CUSTOMER_STATE_CODE,
     notes: customer.notes ?? "",
   }));
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -76,6 +93,25 @@ export function EditCustomerModal({ customer, trigger }: Props) {
   );
   const [state, formAction, pending] = useActionState(boundUpdate, initial);
   const handled = useRef<string | null>(null);
+
+  const stateOptions = useMemo(
+    () =>
+      GST_STATE_CODES.map((code) => {
+        const label = tGst(`states.${code}`);
+        return {
+          value: code,
+          label,
+          keywords: `${code} ${label}`,
+        };
+      }),
+    [tGst],
+  );
+
+  const gstinNormalized = values.gstin.trim();
+  const gstinEmpty = gstinNormalized.length === 0;
+  const gstinValid = isValidGstin(gstinNormalized);
+  const gstinLiveError =
+    !gstinEmpty && !gstinValid ? t("gstinInvalidLive") : undefined;
 
   useEffect(() => {
     if (!state.message || state.message === handled.current) return;
@@ -101,6 +137,25 @@ export function EditCustomerModal({ customer, trigger }: Props) {
     });
   }
 
+  function setGstin(raw: string) {
+    const nextGstin = sanitizeGstinTyping(raw);
+    const code = gstinStateCode(nextGstin);
+    setValues((prev) => ({
+      ...prev,
+      gstin: nextGstin,
+      stateCode:
+        isValidGstin(nextGstin) && code && isKnownGstStateCode(code)
+          ? code
+          : prev.stateCode,
+    }));
+    setFieldErrors((prev) => {
+      if (!prev.gstin) return prev;
+      const next = { ...prev };
+      delete next.gstin;
+      return next;
+    });
+  }
+
   function validateClient(): boolean {
     const next: Record<string, string> = {};
     if (!values.name.trim()) {
@@ -110,6 +165,9 @@ export function EditCustomerModal({ customer, trigger }: Props) {
       next.phone = te("validation.required");
     } else if (!isValidPhone(values.phone)) {
       next.phone = te("validation.invalidPhone");
+    }
+    if (!gstinEmpty && !gstinValid) {
+      next.gstin = te("validation.invalidGstin");
     }
     setFieldErrors(next);
     if (Object.keys(next).length === 0) return true;
@@ -131,6 +189,8 @@ export function EditCustomerModal({ customer, trigger }: Props) {
             name: customer.name,
             phone: customer.phone,
             address: customer.address ?? "",
+            gstin: customer.gstin ?? "",
+            stateCode: customer.stateCode || DEFAULT_CUSTOMER_STATE_CODE,
             notes: customer.notes ?? "",
           });
           setFieldErrors({});
@@ -206,6 +266,43 @@ export function EditCustomerModal({ customer, trigger }: Props) {
                 />
               </FormField>
             </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <FormField
+                id={`edit-gstin-${customer.id}`}
+                label={t("gstin")}
+                error={gstinLiveError ?? fieldErrors.gstin}
+              >
+                <Input
+                  id={`edit-gstin-${customer.id}`}
+                  name="gstin"
+                  value={values.gstin}
+                  onChange={(e) => setGstin(e.target.value)}
+                  placeholder={t("gstinPlaceholder")}
+                  autoCapitalize="characters"
+                  spellCheck={false}
+                  maxLength={15}
+                  aria-invalid={Boolean(gstinLiveError ?? fieldErrors.gstin)}
+                  className={cn(
+                    "h-11 min-h-11 font-mono tracking-wide uppercase",
+                    gstinValid && !gstinEmpty && "border-success/40",
+                  )}
+                />
+              </FormField>
+              <FormField id={`edit-state-${customer.id}`} label={t("state")}>
+                <SearchableSelect
+                  id={`edit-state-${customer.id}`}
+                  name="stateCode"
+                  value={values.stateCode}
+                  onChange={(code) => setField("stateCode", code)}
+                  options={stateOptions}
+                  trigger="field"
+                  clearable={false}
+                  placeholder={t("statePlaceholder")}
+                  searchPlaceholder={t("stateSearchPlaceholder")}
+                  emptyLabel={t("stateEmpty")}
+                />
+              </FormField>
+            </div>
             <FormField id={`edit-address-${customer.id}`} label={t("address")}>
               <Textarea
                 id={`edit-address-${customer.id}`}
@@ -232,7 +329,13 @@ export function EditCustomerModal({ customer, trigger }: Props) {
               {t("cancel")}
             </Button>
           </DialogClose>
-          <Button type="submit" form={formId} size="md" loading={pending}>
+          <Button
+            type="submit"
+            form={formId}
+            size="md"
+            loading={pending}
+            disabled={Boolean(gstinLiveError)}
+          >
             {pending ? t("saving") : t("save")}
           </Button>
         </DialogFooter>

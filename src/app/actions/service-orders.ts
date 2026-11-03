@@ -7,9 +7,14 @@ import { getTranslations } from "next-intl/server";
 import {
   addOrderLine,
   changeOrderStatus,
+  confirmPaperCopyUpload,
   createOrder,
+  createPaperCopyUploadUrl,
   deleteOrder,
+  listPaperCopies,
   removeOrderLine,
+  removePaperCopyUpload,
+  replacePaperCopyUpload,
   updateOrder,
   updateOrderLine,
 } from "@/modules/service-orders/service";
@@ -45,6 +50,14 @@ function parseCreateOrderForm(formData: FormData) {
       | "NORMAL"
       | "HIGH"
       | "URGENT",
+    status: String(formData.get("status") ?? "") as
+      | ""
+      | "WAITING"
+      | "INSPECTION"
+      | "IN_PROGRESS"
+      | "WAITING_FOR_PARTS"
+      | "READY"
+      | "COMPLETED",
     inspectionId: String(formData.get("inspectionId") ?? ""),
   };
 }
@@ -106,10 +119,9 @@ export async function updateServiceOrderAction(
   try {
     const session = await requireSession();
     await updateOrder(session, orderId, parseUpdateOrderForm(formData));
-    // Do not revalidate `/orders/[id]` — that remounts the open job card and
-    // feels like a full page refresh. Lists still update.
     revalidatePath("/orders");
     revalidatePath("/workshop");
+    revalidatePath(`/orders/${orderId}`);
     return { ok: true, message: t("saved") };
   } catch (error) {
     return {
@@ -183,7 +195,7 @@ export async function addServiceOrderLineAction(
   try {
     const session = await requireSession();
     await addOrderLine(session, orderId, {
-      type: String(formData.get("type") ?? "") as "LABOUR" | "PART",
+      type: String(formData.get("type") ?? "") as "LABOUR" | "PART" | "OUTSIDE",
       description: String(formData.get("description") ?? ""),
       quantity: String(formData.get("quantity") ?? "1"),
       unitPricePaise: String(formData.get("unitPriceRupees") ?? "0"),
@@ -260,5 +272,115 @@ export async function deleteServiceOrderAction(
       ok: false,
       message: await translateError(error),
     };
+  }
+}
+
+function revalidatePaperCopyPaths(
+  orderId: string,
+  customerId?: string,
+  vehicleId?: string,
+) {
+  revalidatePath("/orders");
+  revalidatePath(`/orders/${orderId}`);
+  if (customerId) revalidatePath(`/customers/${customerId}`);
+  if (vehicleId) revalidatePath(`/vehicles/${vehicleId}`);
+}
+
+export async function listPaperCopiesAction(serviceOrderId: string) {
+  try {
+    const session = await requireSession();
+    const copies = await listPaperCopies(session, serviceOrderId);
+    return { ok: true as const, copies };
+  } catch (error) {
+    return {
+      ok: false as const,
+      message: await translateError(error),
+      copies: [] as Awaited<ReturnType<typeof listPaperCopies>>,
+    };
+  }
+}
+
+export async function requestPaperCopyUploadUrlAction(input: {
+  serviceOrderId: string;
+  contentType: string;
+  byteSize: number;
+  fileName?: string;
+  replacePaperCopyId?: string;
+}) {
+  try {
+    const session = await requireSession();
+    return await createPaperCopyUploadUrl(session, input);
+  } catch (error) {
+    throw new Error(await translateError(error));
+  }
+}
+
+export async function confirmPaperCopyAction(input: {
+  serviceOrderId: string;
+  storageKey: string;
+  contentType: string;
+  byteSize: number;
+  fileName?: string;
+  customerId?: string;
+  vehicleId?: string;
+}): Promise<ServiceOrderActionState> {
+  const t = await getTranslations("orders");
+  try {
+    const session = await requireSession();
+    await confirmPaperCopyUpload(session, input);
+    revalidatePaperCopyPaths(
+      input.serviceOrderId,
+      input.customerId,
+      input.vehicleId,
+    );
+    return { ok: true, message: t("paperUploaded") };
+  } catch (error) {
+    return { ok: false, message: await translateError(error) };
+  }
+}
+
+export async function replacePaperCopyAction(input: {
+  serviceOrderId: string;
+  paperCopyId: string;
+  storageKey: string;
+  contentType: string;
+  byteSize: number;
+  fileName?: string;
+  customerId?: string;
+  vehicleId?: string;
+}): Promise<ServiceOrderActionState> {
+  const t = await getTranslations("orders");
+  try {
+    const session = await requireSession();
+    await replacePaperCopyUpload(session, input);
+    revalidatePaperCopyPaths(
+      input.serviceOrderId,
+      input.customerId,
+      input.vehicleId,
+    );
+    return { ok: true, message: t("paperReplaced") };
+  } catch (error) {
+    return { ok: false, message: await translateError(error) };
+  }
+}
+
+export async function removePaperCopyAction(input: {
+  serviceOrderId: string;
+  paperCopyId: string;
+  customerId?: string;
+  vehicleId?: string;
+}): Promise<ServiceOrderActionState> {
+  const t = await getTranslations("orders");
+  try {
+    const session = await requireSession();
+    await removePaperCopyUpload(session, input);
+    revalidatePaperCopyPaths(
+      input.serviceOrderId,
+      input.customerId,
+      input.vehicleId,
+    );
+    return { ok: true, message: t("paperRemoved") };
+  } catch (error) {
+    return { ok: false, message: await translateError(error) };
   }
 }

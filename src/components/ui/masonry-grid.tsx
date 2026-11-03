@@ -36,6 +36,9 @@ function useMasonryColumnCount(
   breakpoints: readonly MasonryBreakpoint[],
 ) {
   const [columnCount, setColumnCount] = useState(1);
+  const breakpointsKey = breakpoints
+    .map((bp) => `${bp.minWidth}:${bp.columns}`)
+    .join("|");
 
   useEffect(() => {
     if (!enabled) return;
@@ -47,7 +50,8 @@ function useMasonryColumnCount(
 
     const update = () => {
       const match = sorted.find((_, index) => mqls[index]!.matches);
-      setColumnCount(match?.columns ?? 1);
+      const next = match?.columns ?? 1;
+      setColumnCount((prev) => (prev === next ? prev : next));
     };
 
     update();
@@ -55,7 +59,9 @@ function useMasonryColumnCount(
     return () => {
       mqls.forEach((mql) => mql.removeEventListener("change", update));
     };
-  }, [enabled, breakpoints]);
+    // breakpointsKey captures breakpoint values; avoid re-binding on new array refs.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional
+  }, [enabled, breakpointsKey]);
 
   return columnCount;
 }

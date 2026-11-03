@@ -6,7 +6,9 @@ import { NotFoundError } from "@/lib/errors";
 import { homePathForRole } from "@/lib/rbac";
 import { requireSession } from "@/lib/session";
 import { listVehicleInspections } from "@/modules/inspections/service";
+import { toJobSlipCardData } from "@/modules/job-slips/to-job-slip-card";
 import { listVehicleServiceHistory } from "@/modules/service-orders/service";
+import { getGarageSettings } from "@/modules/settings/service";
 import { VehicleDetailPanel } from "@/modules/vehicles/components/vehicle-detail-panel";
 import { getVehicle } from "@/modules/vehicles/service";
 import { listVehicleWarranties } from "@/modules/warranties/service";
@@ -36,11 +38,23 @@ export default async function VehicleDetailPage({ params }: Props) {
     throw error;
   }
 
-  const [serviceHistory, inspections, warrantyDocs] = await Promise.all([
-    listVehicleServiceHistory(session, vehicle.id),
-    listVehicleInspections(session, vehicle.id).catch(() => []),
-    listVehicleWarranties(session, vehicle.id).catch(() => []),
-  ]);
+  const [serviceHistoryRows, inspections, warrantyDocs, garage] =
+    await Promise.all([
+      listVehicleServiceHistory(session, vehicle.id),
+      listVehicleInspections(session, vehicle.id).catch(() => []),
+      listVehicleWarranties(session, vehicle.id).catch(() => []),
+      getGarageSettings(session),
+    ]);
+
+  const serviceHistory = serviceHistoryRows.map((order) => ({
+    ...toJobSlipCardData(order, {
+      name: garage.name,
+      address: garage.address,
+    }),
+    paperCopies: order.paperCopies,
+    paperCopyCount: order.paperCopyCount,
+    vehicleId: order.vehicle.id,
+  }));
 
   const canWrite =
     session.role === "OWNER" || session.role === "MANAGER";

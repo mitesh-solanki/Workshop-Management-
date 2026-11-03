@@ -20,9 +20,11 @@ import {
 } from "@/modules/billing/balance";
 import { getInvoicePdfLabels } from "@/modules/billing/pdf-labels";
 import {
+  isBillableOrderLineType,
   normalizePaymentBreakdown,
   recordPaymentSchema,
 } from "@/modules/billing/schema";
+import { defaultHsnOrSac } from "@/modules/estimates/schema";
 
 vi.mock("@/modules/billing/repo", () => ({
   findInvoiceById: vi.fn(),
@@ -475,5 +477,18 @@ describe("invoice number sequence under concurrent finalization", () => {
     expect(results.sort((a, b) => a - b)).toEqual([1, 2, 3, 4, 5]);
     expect(lastNumber).toBe(5);
     expect(new Set(results).size).toBe(5);
+  });
+});
+
+describe("outside work billing types", () => {
+  it("treats OUTSIDE as a billable order line type", () => {
+    expect(isBillableOrderLineType("OUTSIDE")).toBe(true);
+    expect(isBillableOrderLineType("LABOUR")).toBe(true);
+    expect(isBillableOrderLineType("PART")).toBe(true);
+    expect(isBillableOrderLineType("OTHER")).toBe(false);
+  });
+
+  it("uses labour SAC for outside work HSN/SAC default", () => {
+    expect(defaultHsnOrSac("OUTSIDE")).toBe(defaultHsnOrSac("LABOUR"));
   });
 });

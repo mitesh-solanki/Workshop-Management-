@@ -9,6 +9,8 @@ const customerSelect = {
   name: true,
   phone: true,
   address: true,
+  gstin: true,
+  stateCode: true,
   notes: true,
   createdAt: true,
   updatedAt: true,
@@ -30,6 +32,8 @@ export async function createCustomer(
     name: string;
     phone: string;
     address: string | null;
+    gstin: string | null;
+    stateCode: string;
     notes: string | null;
   },
 ) {
@@ -39,6 +43,8 @@ export async function createCustomer(
       name: data.name,
       phone: data.phone,
       address: data.address,
+      gstin: data.gstin,
+      stateCode: data.stateCode,
       notes: data.notes,
     },
     select: customerSelect,
@@ -52,6 +58,8 @@ export async function updateCustomerById(
     name: string;
     phone: string;
     address: string | null;
+    gstin: string | null;
+    stateCode: string;
     notes: string | null;
   },
 ) {
@@ -61,6 +69,8 @@ export async function updateCustomerById(
       name: data.name,
       phone: data.phone,
       address: data.address,
+      gstin: data.gstin,
+      stateCode: data.stateCode,
       notes: data.notes,
     },
   });

@@ -5,6 +5,7 @@ import {
   useActionState,
   useEffect,
   useId,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -28,10 +29,20 @@ import {
 } from "@/components/ui/dialog";
 import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/toast";
 import { useCreateModalNavigation } from "@/hooks/use-create-modal-navigation";
 import { isValidPhone, sanitizePhoneTyping } from "@/lib/contact";
+import {
+  GST_STATE_CODES,
+  gstinStateCode,
+  isKnownGstStateCode,
+  isValidGstin,
+  sanitizeGstinTyping,
+} from "@/lib/gstin";
+import { cn } from "@/lib/utils";
+import { DEFAULT_CUSTOMER_STATE_CODE } from "@/modules/customers/schema";
 
 const initial: CustomerActionState = { ok: false };
 
@@ -39,6 +50,8 @@ type FormValues = {
   name: string;
   phone: string;
   address: string;
+  gstin: string;
+  stateCode: string;
   notes: string;
 };
 
@@ -46,6 +59,8 @@ const EMPTY: FormValues = {
   name: "",
   phone: "",
   address: "",
+  gstin: "",
+  stateCode: DEFAULT_CUSTOMER_STATE_CODE,
   notes: "",
 };
 
@@ -58,6 +73,7 @@ type Props = {
 export function CreateCustomerModal({ trigger, size = "md" }: Props) {
   const t = useTranslations("customers");
   const te = useTranslations("errors");
+  const tGst = useTranslations("gst");
   const formId = useId();
   const [values, setValues] = useState<FormValues>(EMPTY);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -66,6 +82,25 @@ export function CreateCustomerModal({ trigger, size = "md" }: Props) {
     initial,
   );
   const errorHandled = useRef<string | null>(null);
+
+  const stateOptions = useMemo(
+    () =>
+      GST_STATE_CODES.map((code) => {
+        const label = tGst(`states.${code}`);
+        return {
+          value: code,
+          label,
+          keywords: `${code} ${label}`,
+        };
+      }),
+    [tGst],
+  );
+
+  const gstinNormalized = values.gstin.trim();
+  const gstinEmpty = gstinNormalized.length === 0;
+  const gstinValid = isValidGstin(gstinNormalized);
+  const gstinLiveError =
+    !gstinEmpty && !gstinValid ? t("gstinInvalidLive") : undefined;
 
   const { open, onOpenChange } = useCreateModalNavigation({
     kind: "customer",
@@ -97,6 +132,25 @@ export function CreateCustomerModal({ trigger, size = "md" }: Props) {
     });
   }
 
+  function setGstin(raw: string) {
+    const nextGstin = sanitizeGstinTyping(raw);
+    const code = gstinStateCode(nextGstin);
+    setValues((prev) => ({
+      ...prev,
+      gstin: nextGstin,
+      stateCode:
+        isValidGstin(nextGstin) && code && isKnownGstStateCode(code)
+          ? code
+          : prev.stateCode,
+    }));
+    setFieldErrors((prev) => {
+      if (!prev.gstin) return prev;
+      const next = { ...prev };
+      delete next.gstin;
+      return next;
+    });
+  }
+
   function validateClient(): boolean {
     const next: Record<string, string> = {};
     if (!values.name.trim()) {
@@ -106,6 +160,9 @@ export function CreateCustomerModal({ trigger, size = "md" }: Props) {
       next.phone = te("validation.required");
     } else if (!isValidPhone(values.phone)) {
       next.phone = te("validation.invalidPhone");
+    }
+    if (!gstinEmpty && !gstinValid) {
+      next.gstin = te("validation.invalidGstin");
     }
     setFieldErrors(next);
     if (Object.keys(next).length === 0) return true;
@@ -191,6 +248,43 @@ export function CreateCustomerModal({ trigger, size = "md" }: Props) {
                 />
               </FormField>
             </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <FormField
+                id="modal-gstin"
+                label={t("gstin")}
+                error={gstinLiveError ?? fieldErrors.gstin}
+              >
+                <Input
+                  id="modal-gstin"
+                  name="gstin"
+                  value={values.gstin}
+                  onChange={(e) => setGstin(e.target.value)}
+                  placeholder={t("gstinPlaceholder")}
+                  autoCapitalize="characters"
+                  spellCheck={false}
+                  maxLength={15}
+                  aria-invalid={Boolean(gstinLiveError ?? fieldErrors.gstin)}
+                  className={cn(
+                    "h-11 min-h-11 font-mono tracking-wide uppercase",
+                    gstinValid && !gstinEmpty && "border-success/40",
+                  )}
+                />
+              </FormField>
+              <FormField id="modal-state" label={t("state")}>
+                <SearchableSelect
+                  id="modal-state"
+                  name="stateCode"
+                  value={values.stateCode}
+                  onChange={(code) => setField("stateCode", code)}
+                  options={stateOptions}
+                  trigger="field"
+                  clearable={false}
+                  placeholder={t("statePlaceholder")}
+                  searchPlaceholder={t("stateSearchPlaceholder")}
+                  emptyLabel={t("stateEmpty")}
+                />
+              </FormField>
+            </div>
             <FormField id="modal-address" label={t("address")}>
               <Textarea
                 id="modal-address"
@@ -217,7 +311,13 @@ export function CreateCustomerModal({ trigger, size = "md" }: Props) {
               {t("cancel")}
             </Button>
           </DialogClose>
-          <Button type="submit" form={formId} size="md" loading={pending}>
+          <Button
+            type="submit"
+            form={formId}
+            size="md"
+            loading={pending}
+            disabled={Boolean(gstinLiveError)}
+          >
             {pending ? t("saving") : t("create")}
           </Button>
         </DialogFooter>

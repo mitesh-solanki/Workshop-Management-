@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { rupeesToPaiseSchema } from "@/lib/money";
 
-export const ESTIMATE_LINE_TYPES = ["LABOUR", "PART"] as const;
+export const ESTIMATE_LINE_TYPES = ["LABOUR", "PART", "OUTSIDE"] as const;
 export type EstimateLineTypeValue = (typeof ESTIMATE_LINE_TYPES)[number];
 
 export const ESTIMATE_APPROVAL_STATES = [
@@ -158,5 +158,6 @@ export type UpdateJobCardEstimateLineInput = z.input<
 >;
 
 export function defaultHsnOrSac(type: EstimateLineTypeValue): string {
-  return type === "LABOUR" ? DEFAULT_LABOUR_SAC : DEFAULT_PART_HSN;
+  // Outside work uses the labour SAC (service), same as labour lines.
+  return type === "PART" ? DEFAULT_PART_HSN : DEFAULT_LABOUR_SAC;
 }

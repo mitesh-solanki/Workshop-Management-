@@ -29,6 +29,7 @@ import {
   type DeleteDraftInvoiceInput,
   type FinalizeInvoiceInput,
   type InvoiceLineTypeValue,
+  isBillableOrderLineType,
   type RecordPaymentInput,
   type RecordRefundInput,
 } from "@/modules/billing/schema";
@@ -45,8 +46,6 @@ import {
   recordRefundRow,
   type InvoiceLineCreateRow,
 } from "@/modules/billing/repo";
-import { findCurrentEstimate } from "@/modules/estimates/repo";
-import { ensureEstimateReadyForBilling } from "@/modules/estimates/service";
 import { findServiceOrderById } from "@/modules/service-orders/repo";
 import { partRequiresWarrantyCard } from "@/modules/warranties/part-requires-warranty";
 import {
@@ -104,21 +103,19 @@ function resolveSellerStateCode(gstin: string | null | undefined): string {
   return code;
 }
 
-function buildLinesFromApproved(
+function buildLinesFromOrderSnapshots(
   lines: Array<{
-    id: string;
+    estimateLineId: string | null;
     type: InvoiceLineTypeValue;
     description: string;
     quantity: number;
     unitPricePaise: number;
     gstRatePercent: number;
     hsnOrSac: string;
-    approvalState: string;
   }>,
   sameState: boolean,
 ): InvoiceLineCreateRow[] {
-  const approved = lines.filter((line) => line.approvalState === "APPROVED");
-  return approved.map((line, index) => {
+  return lines.map((line, index) => {
     const split = computeLineGstSplit(
       {
         quantity: line.quantity,
@@ -128,7 +125,7 @@ function buildLinesFromApproved(
       sameState,
     );
     return {
-      estimateLineId: line.id,
+      estimateLineId: line.estimateLineId,
       type: line.type,
       description: line.description,
       quantity: line.quantity,
@@ -183,7 +180,7 @@ function pricedOrderLineIdSet(
     lines
       .filter(
         (line) =>
-          (line.type === "LABOUR" || line.type === "PART") &&
+          isBillableOrderLineType(line.type) &&
           line.unitPricePaise > 0 &&
           line.quantity > 0,
       )
@@ -191,11 +188,9 @@ function pricedOrderLineIdSet(
   );
 }
 
-function draftMatchesExpectedLines(
+function draftMatchesExpectedOrderLines(
   draft: {
-    estimateId: string;
     lines: Array<{
-      estimateLineId: string | null;
       description: string;
       type: string;
       quantity: number;
@@ -204,9 +199,7 @@ function draftMatchesExpectedLines(
       hsnOrSac: string;
     }>;
   },
-  estimateId: string,
   expected: Array<{
-    id: string;
     description: string;
     type: string;
     quantity: number;
@@ -215,28 +208,68 @@ function draftMatchesExpectedLines(
     hsnOrSac: string;
   }>,
 ) {
-  return (
-    estimateId === draft.estimateId &&
-    draft.lines.length === expected.length &&
-    expected.every((line) => {
-      const snapshot = draft.lines.find(
-        (item) => item.estimateLineId === line.id,
-      );
-      return (
-        snapshot != null &&
-        snapshot.description === line.description &&
-        snapshot.type === line.type &&
-        snapshot.quantity === line.quantity &&
-        snapshot.unitPricePaise === line.unitPricePaise &&
-        snapshot.gstRatePercent === line.gstRatePercent &&
-        snapshot.hsnOrSac === line.hsnOrSac
-      );
-    })
-  );
+  if (draft.lines.length !== expected.length) {
+    return false;
+  }
+  return expected.every((line) => {
+    const snapshot = draft.lines.find(
+      (item) =>
+        item.description === line.description &&
+        item.type === line.type &&
+        item.quantity === line.quantity &&
+        item.unitPricePaise === line.unitPricePaise &&
+        item.gstRatePercent === line.gstRatePercent &&
+        item.hsnOrSac === line.hsnOrSac,
+    );
+    return snapshot != null;
+  });
+}
+
+function defaultHsnOrSacForType(type: string) {
+  if (type === "PART") return "8708";
+  if (type === "OUTSIDE") return "9987";
+  return "9987";
+}
+
+function billableOrderLineSnapshots(order: {
+  lines: Array<{
+    id: string;
+    type: string;
+    description: string;
+    quantity: number;
+    unitPricePaise: number;
+    part?: { gstRatePercent?: number | null; hsn?: string | null } | null;
+  }>;
+}) {
+  return order.lines
+    .filter(
+      (line) =>
+        isBillableOrderLineType(line.type) &&
+        line.unitPricePaise > 0 &&
+        line.quantity > 0,
+    )
+    .map((line) => {
+      const part = line.part ?? null;
+      return {
+        estimateLineId: null as string | null,
+        type: line.type as InvoiceLineTypeValue,
+        description: line.description,
+        quantity: line.quantity,
+        unitPricePaise: line.unitPricePaise,
+        gstRatePercent:
+          part && typeof part.gstRatePercent === "number"
+            ? part.gstRatePercent
+            : 18,
+        hsnOrSac:
+          part && typeof part.hsn === "string" && part.hsn.trim()
+            ? part.hsn.trim()
+            : defaultHsnOrSacForType(line.type),
+      };
+    });
 }
 
 /**
- * Keep one DRAFT invoice in sync with priced job-card labour/parts.
+ * Keep one DRAFT invoice in sync with priced job-card labour / parts / outside work.
  * Creates it when missing; remakes it when lines changed. No-op when empty.
  */
 export async function ensureDraftInvoiceInSync(
@@ -259,21 +292,24 @@ export async function ensureDraftInvoiceInSync(
     });
   }
 
-  const estimate = await ensureEstimateReadyForBilling(session, order.id);
-  const alreadyIssued = new Set(
+  const billedFingerprints = new Set(
     invoices
       .filter((invoice) => invoice.status === "FINALIZED")
-      .flatMap((invoice) => invoice.lines.map((line) => line.estimateLineId))
-      .filter((id): id is string => id !== null),
+      .flatMap((invoice) =>
+        invoice.lines.map(
+          (line) =>
+            `${line.description}|${line.type}|${line.quantity}|${line.unitPricePaise}`,
+        ),
+      ),
   );
-  const expected = estimate.lines.filter(
+  const expected = billableOrderLineSnapshots(order).filter(
     (line) =>
-      line.sourceOrderLineId != null &&
-      pricedIds.has(line.sourceOrderLineId) &&
-      !alreadyIssued.has(line.id),
+      !billedFingerprints.has(
+        `${line.description}|${line.type}|${line.quantity}|${line.unitPricePaise}`,
+      ),
   );
 
-  if (draftMatchesExpectedLines(draft, estimate.id, expected)) {
+  if (draftMatchesExpectedOrderLines(draft, expected)) {
     return withBalance(draft);
   }
 
@@ -285,7 +321,7 @@ export async function ensureDraftInvoiceInSync(
 }
 
 /**
- * Build an invoice from priced labour/parts on the job card.
+ * Build an invoice from priced labour / parts / outside work on the job card.
  * Optional finalize allocates the sequential FY number under a counter lock.
  */
 export async function createInvoiceFromApprovedEstimate(
@@ -297,23 +333,17 @@ export async function createInvoiceFromApprovedEstimate(
   const input = createInvoiceFromEstimateSchema.parse(raw);
   const order = await loadOrder(session, serviceOrderId);
 
-  // Job card is the source of truth. Estimate rows are kept in sync only so
-  // invoice FKs and remake/finalize still work — no customer approval step.
-  const estimate = await ensureEstimateReadyForBilling(session, order.id);
-  if (estimate.supersededAt != null) {
-    throw new AppError("billing.estimate_superseded");
-  }
-
+  // Bill only from priced job-card lines. Estimate is separate (inspection).
   const garage = await findGarageBillingProfile(session.garageId);
   if (!garage) {
     throw new NotFoundError();
   }
   const sellerStateCode = resolveSellerStateCode(garage.gstin);
-  const vehicleStateCode = order.vehicle.stateCode;
+  const customerStateCode = order.customer.stateCode;
   const placeOfSupplyStateCode =
     input.placeOfSupplyStateCode ??
-    (isKnownGstStateCode(vehicleStateCode)
-      ? vehicleStateCode
+    (isKnownGstStateCode(customerStateCode)
+      ? customerStateCode
       : sellerStateCode);
   const sameState = isSameStateSupply(
     sellerStateCode,
@@ -324,50 +354,29 @@ export async function createInvoiceFromApprovedEstimate(
     session.garageId,
     order.id,
   );
-  const billedEstimateLineIds = new Set<string>();
-  for (const invoice of existingInvoices) {
-    for (const line of invoice.lines) {
-      if (line.estimateLineId) {
-        billedEstimateLineIds.add(line.estimateLineId);
-      }
-    }
-  }
-
-  const pricedOrderLineIds = new Set(
-    order.lines
-      .filter(
-        (line) =>
-          (line.type === "LABOUR" || line.type === "PART") &&
-          line.unitPricePaise > 0 &&
-          line.quantity > 0,
-      )
-      .map((line) => line.id),
+  const billedOrderFingerprints = new Set(
+    existingInvoices
+      .filter((invoice) => invoice.status === "FINALIZED")
+      .flatMap((invoice) =>
+        invoice.lines.map(
+          (line) =>
+            `${line.description}|${line.type}|${line.quantity}|${line.unitPricePaise}`,
+        ),
+      ),
   );
 
-  const lineRows = buildLinesFromApproved(
-    estimate.lines
-      .filter(
-        (line) =>
-          line.sourceOrderLineId != null &&
-          pricedOrderLineIds.has(line.sourceOrderLineId) &&
-          !billedEstimateLineIds.has(line.id),
-      )
-      .map((line) => ({
-        id: line.id,
-        type: line.type,
-        description: line.description,
-        quantity: line.quantity,
-        unitPricePaise: line.unitPricePaise,
-        gstRatePercent: line.gstRatePercent,
-        hsnOrSac: line.hsnOrSac,
-        approvalState: "APPROVED",
-      })),
-    sameState,
+  const snapshots = billableOrderLineSnapshots(order).filter(
+    (line) =>
+      !billedOrderFingerprints.has(
+        `${line.description}|${line.type}|${line.quantity}|${line.unitPricePaise}`,
+      ),
   );
+
+  const lineRows = buildLinesFromOrderSnapshots(snapshots, sameState);
 
   if (lineRows.length === 0) {
     throw new AppError(
-      billedEstimateLineIds.size > 0
+      existingInvoices.some((invoice) => invoice.status === "FINALIZED")
         ? "billing.no_unbilled_approved_lines"
         : "billing.no_priced_lines",
     );
@@ -382,7 +391,7 @@ export async function createInvoiceFromApprovedEstimate(
 
   const payload = {
     serviceOrderId: order.id,
-    estimateId: estimate.id,
+    estimateId: null,
     customerId: order.customerId,
     sellerStateCode,
     placeOfSupplyStateCode,
@@ -434,34 +443,33 @@ export async function finalizeInvoice(
     throw error;
   }
 
-  // Draft must match current job-card labour/parts. Remake if lines changed.
+  // Draft must match current job-card labour / parts / outside work.
   const draft = await findInvoiceById(session.garageId, input.invoiceId);
   if (!draft) {
     throw new NotFoundError();
   }
-  const estimate = await ensureEstimateReadyForBilling(
-    session,
-    draft.serviceOrderId,
-  );
   const order = await loadOrder(session, draft.serviceOrderId);
-  const pricedOrderLineIds = pricedOrderLineIdSet(order.lines);
   const issuedInvoices = await listInvoicesForOrder(
     session.garageId,
     draft.serviceOrderId,
   );
-  const alreadyIssued = new Set(
+  const billedFingerprints = new Set(
     issuedInvoices
       .filter((invoice) => invoice.status === "FINALIZED")
-      .flatMap((invoice) => invoice.lines.map((line) => line.estimateLineId))
-      .filter((id): id is string => id !== null),
+      .flatMap((invoice) =>
+        invoice.lines.map(
+          (line) =>
+            `${line.description}|${line.type}|${line.quantity}|${line.unitPricePaise}`,
+        ),
+      ),
   );
-  const expected = estimate.lines.filter(
+  const expected = billableOrderLineSnapshots(order).filter(
     (line) =>
-      line.sourceOrderLineId != null &&
-      pricedOrderLineIds.has(line.sourceOrderLineId) &&
-      !alreadyIssued.has(line.id),
+      !billedFingerprints.has(
+        `${line.description}|${line.type}|${line.quantity}|${line.unitPricePaise}`,
+      ),
   );
-  if (!draftMatchesExpectedLines(draft, estimate.id, expected)) {
+  if (!draftMatchesExpectedOrderLines(draft, expected)) {
     throw new AppError("billing.invoice_draft_outdated");
   }
 
@@ -517,7 +525,7 @@ export async function deleteDraftInvoice(
 }
 
 /**
- * Rebuild the draft from current job-card labour/parts, keeping warranty cards
+ * Rebuild the draft from current job-card labour / parts / outside work, keeping warranty cards
  * that still match a part on the new draft (by estimate line, then part name).
  */
 export async function remakeDraftInvoice(
@@ -822,7 +830,7 @@ export async function getInvoicePdfBuffer(
     customer: {
       name: invoice.customer.name,
       phone: invoice.customer.phone,
-      address: invoice.customer.address,
+      gstin: invoice.customer.gstin,
     },
     vehicle: invoice.serviceOrder.vehicle,
     placeOfSupplyStateCode: invoice.placeOfSupplyStateCode,

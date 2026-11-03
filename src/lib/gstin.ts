@@ -55,6 +55,14 @@ export function normalizeGstin(value: string): string {
   return value.trim().toUpperCase().replace(/\s+/g, "");
 }
 
+/** Uppercase alphanumeric only, max 15 — for controlled GSTIN inputs while typing. */
+export function sanitizeGstinTyping(value: string): string {
+  return value
+    .toUpperCase()
+    .replace(/[^0-9A-Z]/g, "")
+    .slice(0, 15);
+}
+
 export function isValidGstin(value: string): boolean {
   if (!value) return true;
   return GSTIN_REGEX.test(normalizeGstin(value));

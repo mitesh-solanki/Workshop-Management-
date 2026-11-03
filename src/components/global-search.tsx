@@ -14,12 +14,14 @@ import { useTranslations } from "next-intl";
 import {
   ArrowRight,
   Car,
+  ClipboardCheck,
   ClipboardList,
   Loader2,
   Package,
   Receipt,
   Search,
   Store,
+  UserRound,
   Users,
   type LucideIcon,
 } from "lucide-react";
@@ -39,9 +41,11 @@ const TYPE_ICONS: Record<GlobalSearchEntityType, LucideIcon> = {
   customer: Users,
   vehicle: Car,
   order: ClipboardList,
+  inspection: ClipboardCheck,
   part: Package,
   vendor: Store,
   invoice: Receipt,
+  team: UserRound,
 };
 
 export function GlobalSearch() {
@@ -51,6 +55,8 @@ export function GlobalSearch() {
   const rootRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const requestIdRef = useRef(0);
+  const searchErrorMessage = t("searchError");
 
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
@@ -94,6 +100,7 @@ export function GlobalSearch() {
     abortRef.current?.abort();
 
     if (debouncedQuery.length < GLOBAL_SEARCH_MIN_CHARS) {
+      requestIdRef.current += 1;
       setResults([]);
       setLoading(false);
       setError(null);
@@ -101,8 +108,12 @@ export function GlobalSearch() {
       return;
     }
 
+    const requestId = requestIdRef.current + 1;
+    requestIdRef.current = requestId;
     const controller = new AbortController();
     abortRef.current = controller;
+    setResults([]);
+    setActiveIndex(-1);
     setLoading(true);
     setError(null);
 
@@ -117,22 +128,26 @@ export function GlobalSearch() {
           results?: GlobalSearchResult[];
           error?: string;
         };
+        if (requestIdRef.current !== requestId) return;
         if (!res.ok || !json.success) {
           throw new Error(json.error || "search_failed");
         }
         setResults(Array.isArray(json.results) ? json.results : []);
         setActiveIndex(-1);
+        setLoading(false);
       } catch (err) {
         if ((err as Error).name === "AbortError") return;
+        if (requestIdRef.current !== requestId) return;
         setResults([]);
-        setError(t("searchError"));
-      } finally {
-        if (!controller.signal.aborted) setLoading(false);
+        setError(searchErrorMessage);
+        setLoading(false);
       }
     })();
 
-    return () => controller.abort();
-  }, [debouncedQuery, t]);
+    return () => {
+      controller.abort();
+    };
+  }, [debouncedQuery, searchErrorMessage]);
 
   const flatResults = results;
   const grouped = useMemo(() => {
@@ -190,13 +205,15 @@ export function GlobalSearch() {
   const waitingForDebounce =
     query.trim() !== debouncedQuery &&
     query.trim().length >= GLOBAL_SEARCH_MIN_CHARS;
+  const isBusy = loading || waitingForDebounce;
+  /** Full-panel loading only before the first result set — never over existing hits. */
+  const showInitialLoading = isBusy && results.length === 0 && !error;
 
-  const statusLabel =
-    loading || waitingForDebounce
+  const statusLabel = error
+    ? t("searchError")
+    : showInitialLoading
       ? t("searching")
-      : error
-        ? t("searchError")
-        : t("searchResultCount", { count: results.length });
+      : t("searchResultCount", { count: results.length });
 
   return (
     <div ref={rootRef} className="relative w-full min-w-0">
@@ -232,13 +249,14 @@ export function GlobalSearch() {
         <div
           id={listboxId}
           role="listbox"
+          aria-busy={isBusy}
           className="absolute inset-x-0 top-[calc(100%+0.5rem)] z-50 overflow-hidden rounded-xl border border-slate-200 bg-card shadow-lg"
         >
           <div className="flex items-center justify-between border-b border-slate-100 px-4 py-2.5">
             <p className="text-[11px] font-semibold tracking-wider text-slate-500 uppercase">
               {statusLabel}
             </p>
-            {loading || waitingForDebounce ? (
+            {showInitialLoading ? (
               <Loader2
                 className="size-3.5 animate-spin text-slate-500"
                 aria-hidden
@@ -251,13 +269,13 @@ export function GlobalSearch() {
               <p className="px-4 py-6 text-center text-sm text-red-600">
                 {error}
               </p>
-            ) : !loading && !waitingForDebounce && results.length === 0 ? (
-              <p className="px-4 py-6 text-center text-sm text-slate-500">
-                {t("searchNoResults", { query: debouncedQuery || query.trim() })}
-              </p>
-            ) : loading || waitingForDebounce ? (
+            ) : showInitialLoading ? (
               <p className="px-4 py-6 text-center text-sm text-slate-500">
                 {t("searching")}
+              </p>
+            ) : results.length === 0 ? (
+              <p className="px-4 py-6 text-center text-sm text-slate-500">
+                {t("searchNoResults", { query: debouncedQuery || query.trim() })}
               </p>
             ) : (
               grouped.map((group) => {

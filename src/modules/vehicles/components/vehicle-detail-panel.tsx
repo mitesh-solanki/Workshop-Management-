@@ -408,15 +408,14 @@ export function VehicleDetailPanel({
             action={createJobCard}
           >
             <ServiceHistoryList
-              orders={serviceHistory}
-              locale={locale}
+              slips={serviceHistory}
               customerId={customerId}
               canWrite={canCreateOrder}
               canDelete={canDeleteOrder}
+              canUploadPaper={canDeleteOrder}
+              showRegistration={false}
               emptyTitle={tv("serviceHistoryEmpty")}
               emptyBody={tv("serviceHistoryPlaceholder")}
-              showRegistration={false}
-              statusLabel={(status) => to(`statuses.${status}`)}
             />
           </SectionBlock>
         </div>

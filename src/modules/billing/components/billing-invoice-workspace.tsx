@@ -23,7 +23,7 @@ import { partRequiresWarrantyCard } from "@/modules/warranties/part-requires-war
 type UnbilledLine = {
   id: string;
   description: string;
-  type?: "LABOUR" | "PART";
+  type?: "LABOUR" | "PART" | "OUTSIDE";
   typeLabel?: string;
   quantity: number;
   unitPricePaise: number;
@@ -48,7 +48,7 @@ export type BillingInvoiceCardModel = {
   lines: Array<{
     id: string;
     description: string;
-    type: "LABOUR" | "PART";
+    type: "LABOUR" | "PART" | "OUTSIDE";
     quantity: number;
     unitPricePaise: number;
     totalPaise: number;

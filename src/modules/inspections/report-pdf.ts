@@ -32,7 +32,7 @@ export type InspectionReportPdfInput = {
   generatedAt: Date;
 };
 
-/** Readable date/time for the PDF header (ASCII-safe). */
+/** Readable date for the PDF header (ASCII-safe, no time). */
 export function formatInspectionPdfExpectedCompletion(
   value: Date | string | null | undefined,
 ): string | null {
@@ -56,12 +56,7 @@ export function formatInspectionPdfExpectedCompletion(
   ];
   const month = months[date.getMonth()] ?? "";
   const year = date.getFullYear();
-  let hours = date.getHours();
-  const minutes = String(date.getMinutes()).padStart(2, "0");
-  const ampm = hours >= 12 ? "pm" : "am";
-  hours = hours % 12;
-  if (hours === 0) hours = 12;
-  return `${day} ${month} ${year}, ${hours}:${minutes} ${ampm}`;
+  return `${day} ${month} ${year}`;
 }
 
 const PAGE = { margin: 48, width: 595.28, height: 841.89 } as const;
@@ -328,7 +323,7 @@ export async function generateInspectionReportPdf(
       .fillColor(COLORS.text)
       .font("Helvetica-Bold")
       .fontSize(12)
-      .text("Needs External Check", PAGE.margin, y);
+      .text("Needs Outside Work", PAGE.margin, y);
     y = doc.y + 8;
     doc.fillColor(COLORS.text).font("Helvetica").fontSize(10);
     doc.text(external.join("  ·  "), PAGE.margin, y, { width: contentWidth });

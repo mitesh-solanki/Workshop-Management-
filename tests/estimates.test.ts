@@ -104,7 +104,13 @@ function sampleOrder(
       model: "Swift",
       stateCode: "24",
     },
-    customer: { id: "cust-1", name: "Ravi", phone: "9876543210" },
+    customer: {
+      id: "cust-1",
+      name: "Ravi",
+      phone: "9876543210",
+      gstin: null,
+      stateCode: "24",
+    },
     technician: null,
     technicianAssignments: [],
     lines: [
@@ -679,6 +685,40 @@ describe("estimates service", () => {
       description: "Oil filter",
       quantity: 1,
       unitPricePaise: 20_000,
+    });
+
+    expect(result).toBeNull();
+    expect(addEstimateLine).not.toHaveBeenCalled();
+    expect(updateEstimateLineDetails).not.toHaveBeenCalled();
+  });
+
+  it("does not change the estimate when job-card outside work is added", async () => {
+    const order = sampleOrder({ status: "IN_PROGRESS" });
+    vi.mocked(findServiceOrderById).mockResolvedValue(order);
+    vi.mocked(findCurrentEstimate).mockResolvedValue({
+      id: "est-1",
+      garageId: garageA,
+      serviceOrderId: order.id,
+      inspectionId: null,
+      revisionNumber: 1,
+      notes: null,
+      askPermission: false,
+      permissionVia: null,
+      supersededAt: null,
+      createdById: ownerA.userId,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      createdBy: { id: ownerA.userId, name: "Owner", email: "o@a.test" },
+      lines: [],
+      approvals: [],
+    });
+
+    const result = await mirrorOrderLineOntoCurrentEstimate(ownerA, order.id, {
+      id: "sol-outside",
+      type: "OUTSIDE",
+      description: "Wheel alignment",
+      quantity: 1,
+      unitPricePaise: 15_000,
     });
 
     expect(result).toBeNull();

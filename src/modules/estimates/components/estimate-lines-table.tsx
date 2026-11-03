@@ -59,6 +59,9 @@ type Props = {
 
 function TypeBadge({ type }: { type: string }) {
   const t = useTranslations("estimates");
+  if (type === "OUTSIDE") {
+    return <span className="text-slate-400">—</span>;
+  }
   const typeKey = type === "PART" || type === "LABOUR" ? type : "LABOUR";
   return (
     <span

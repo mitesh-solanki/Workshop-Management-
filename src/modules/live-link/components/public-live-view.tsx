@@ -124,13 +124,14 @@ export async function PublicLiveViewPanel({
           {view.expectedCompletion ? (
             <p className="text-caption text-slate-500">
               {t("expectedCompletion", {
-                when: new Date(view.expectedCompletion).toLocaleString(locale, {
-                  day: "numeric",
-                  month: "short",
-                  year: "numeric",
-                  hour: "numeric",
-                  minute: "2-digit",
-                }),
+                when: new Date(view.expectedCompletion).toLocaleDateString(
+                  locale,
+                  {
+                    day: "numeric",
+                    month: "short",
+                    year: "numeric",
+                  },
+                ),
               })}
             </p>
           ) : null}

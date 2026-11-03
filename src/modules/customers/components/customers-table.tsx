@@ -14,6 +14,8 @@ export type CustomerTableRow = {
   name: string;
   phone: string;
   address: string | null;
+  gstin: string | null;
+  stateCode: string;
   notes: string | null;
   vehicles: { registrationNumber: string }[];
 };
@@ -103,6 +105,8 @@ export function CustomersTable({
               name: row.original.name,
               phone: row.original.phone,
               address: row.original.address,
+              gstin: row.original.gstin,
+              stateCode: row.original.stateCode,
               notes: row.original.notes,
             }}
             canWrite={canWrite}
@@ -161,6 +165,8 @@ export function CustomersTable({
                   name: customer.name,
                   phone: customer.phone,
                   address: customer.address,
+                  gstin: customer.gstin,
+                  stateCode: customer.stateCode,
                   notes: customer.notes,
                 }}
                 canWrite={canWrite}

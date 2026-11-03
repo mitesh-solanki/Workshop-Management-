@@ -169,6 +169,17 @@ export function buildVehicleWarrantyKey(input: {
   return `garages/${input.garageId}/vehicles/${input.vehicleId}/warranty/${id}.${ext}`;
 }
 
+/** Build a garage-scoped object key for a paper job card scan. */
+export function buildServiceOrderPaperCopyKey(input: {
+  garageId: string;
+  serviceOrderId: string;
+  contentType: string;
+}) {
+  const ext = extensionForContentType(input.contentType);
+  const id = randomBytes(12).toString("hex");
+  return `garages/${input.garageId}/service-orders/${input.serviceOrderId}/paper/${id}.${ext}`;
+}
+
 /**
  * Presigned PUT (S3) or app POST target (Cloudinary) for browser upload.
  * Cloudinary path posts the file to `/api/storage/upload` (server uploads).

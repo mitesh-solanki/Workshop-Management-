@@ -1,5 +1,19 @@
 import { z } from "zod";
 import { isValidPhone } from "@/lib/contact";
+import {
+  GST_STATE_CODES,
+  GSTIN_REGEX,
+  normalizeGstin,
+} from "@/lib/gstin";
+
+/** Gujarat GST state code — default for new and existing customers. */
+export const DEFAULT_CUSTOMER_STATE_CODE = "24" as const;
+
+function blankToNull(value: unknown): string | null {
+  if (value == null) return null;
+  const trimmed = String(value).trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
 
 const optionalText = (max: number) =>
   z
@@ -15,6 +29,34 @@ const optionalText = (max: number) =>
       error: "validation.tooLong",
     });
 
+const optionalGstin = z.preprocess(
+  (value) => {
+    const raw = blankToNull(value);
+    return raw == null ? null : normalizeGstin(raw);
+  },
+  z
+    .string()
+    .refine((value) => GSTIN_REGEX.test(value), {
+      error: "validation.invalidGstin",
+    })
+    .nullable(),
+);
+
+const stateCodeField = z
+  .union([z.string(), z.null(), z.undefined()])
+  .optional()
+  .transform((value, ctx) => {
+    const raw =
+      value == null || String(value).trim() === ""
+        ? DEFAULT_CUSTOMER_STATE_CODE
+        : String(value).trim();
+    if (!(GST_STATE_CODES as readonly string[]).includes(raw)) {
+      ctx.addIssue({ code: "custom", message: "validation.invalidInput" });
+      return z.NEVER;
+    }
+    return raw;
+  });
+
 export const createCustomerSchema = z.object({
   name: z
     .string()
@@ -29,6 +71,8 @@ export const createCustomerSchema = z.object({
       error: "validation.invalidPhone",
     }),
   address: optionalText(500),
+  gstin: optionalGstin.optional().default(null),
+  stateCode: stateCodeField,
   notes: optionalText(2000),
 });
 

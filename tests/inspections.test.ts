@@ -132,7 +132,13 @@ const sampleOrder = {
     model: "Swift",
     stateCode: "24",
   },
-  customer: { id: "cust-1", name: "Ravi", phone: "9876543210" },
+  customer: {
+    id: "cust-1",
+    name: "Ravi",
+    phone: "9876543210",
+    gstin: null,
+    stateCode: "24",
+  },
   technician: { id: "tech-a", name: "Tech", email: "t@example.com" },
   lines: [],
 };

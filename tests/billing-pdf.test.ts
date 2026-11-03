@@ -14,7 +14,11 @@ describe("invoice PDF generation", () => {
         address: "Ahmedabad",
         gstin: "24AABCU9603R1ZM",
       },
-      customer: { name: "Ravi", phone: "9876543210", address: null },
+      customer: {
+        name: "Ravi",
+        phone: "9876543210",
+        gstin: "27AABCU9603R1ZM",
+      },
       vehicle: {
         registrationNumber: "GJ01AB1234",
         make: "Maruti",
@@ -60,6 +64,7 @@ describe("invoice PDF generation", () => {
     expect(
       asLatin1.includes("INV-2025-26-0001") || asLatin1.includes("0001"),
     ).toBe(true);
+    expect(labels.gstin).toBe("GSTIN");
     expect(labels).toEqual(getInvoicePdfLabels("en"));
     expect(labels.warranties).toBe("Warranty");
     expect(labels.warrantyExpires).toBe("Expires");
@@ -74,7 +79,7 @@ describe("invoice PDF generation", () => {
       invoiceNumber: "INV-2025-26-0002",
       issuedAt: new Date("2025-06-15T10:00:00Z"),
       garage: { name: "G", address: null, gstin: null },
-      customer: { name: "C", phone: "9", address: null },
+      customer: { name: "C", phone: "9" },
       vehicle: null,
       placeOfSupplyStateCode: "24",
       sellerStateCode: "24",
@@ -103,7 +108,7 @@ describe("invoice PDF generation", () => {
         invoiceNumber: null,
         issuedAt: new Date(),
         garage: { name: "G", address: null, gstin: null },
-        customer: { name: "C", phone: "9", address: null },
+        customer: { name: "C", phone: "9" },
         vehicle: null,
         placeOfSupplyStateCode: "24",
         sellerStateCode: "24",

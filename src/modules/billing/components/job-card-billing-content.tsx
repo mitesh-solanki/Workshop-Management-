@@ -19,13 +19,14 @@ export type BillingPreviewContext = {
   garageGstin: string | null;
   customerName: string;
   customerPhone: string;
+  customerGstin: string | null;
   vehicleRegistration: string;
   vehicleLabel: string;
   jobLabel: string;
   approvedLines: Array<{
     id: string;
     description: string;
-    type: "LABOUR" | "PART";
+    type: "LABOUR" | "PART" | "OUTSIDE";
     typeLabel: string;
     quantity: number;
     unitPricePaise: number;
@@ -94,7 +95,7 @@ export async function JobCardBillingContent({
           garageGstin: preview.garageGstin,
           customerName: preview.customerName,
           customerPhone: preview.customerPhone,
-          customerGstin: null,
+          customerGstin: preview.customerGstin,
           vehicleLabel: preview.vehicleRegistration,
           jobLabel: `${preview.vehicleLabel} · ${preview.jobLabel}`,
           notes: null,
@@ -194,7 +195,7 @@ export async function JobCardBillingContent({
         garageGstin: preview.garageGstin,
         customerName: invoice.customer.name,
         customerPhone: invoice.customer.phone,
-        customerGstin: null,
+        customerGstin: invoice.customer.gstin,
         vehicleLabel:
           invoice.serviceOrder.vehicle?.registrationNumber ??
           preview.vehicleRegistration,

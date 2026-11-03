@@ -204,7 +204,8 @@ export function PricingLinesTable({
           const typeText =
             typeKey != null
               ? te(`lineTypes.${typeKey}`)
-              : (line.typeLabel ?? null);
+              : null;
+          const showsQuantity = line.type === "PART";
           const info =
             typeKey === "PART" && warranty
               ? warranty.byLineId[line.id]
@@ -246,9 +247,9 @@ export function PricingLinesTable({
               </div>
               <div className="shrink-0 text-right">
                 <p className="text-[12px] tabular-nums text-slate-500">
-                  {typeKey === "LABOUR"
-                    ? formatRupees(line.unitPricePaise)
-                    : `${line.quantity} × ${formatRupees(line.unitPricePaise)}`}
+                  {showsQuantity
+                    ? `${line.quantity} × ${formatRupees(line.unitPricePaise)}`
+                    : formatRupees(line.unitPricePaise)}
                 </p>
                 <p className="text-[14px] font-semibold tabular-nums text-slate-900">
                   {formatRupees(line.totalPaise)}
@@ -307,9 +308,8 @@ export function PricingLinesTable({
                 ? line.type
                 : null;
             const typeText =
-              typeKey != null
-                ? te(`lineTypes.${typeKey}`)
-                : (line.typeLabel ?? null);
+              typeKey != null ? te(`lineTypes.${typeKey}`) : null;
+            const showsQuantity = line.type === "PART";
             const info =
               typeKey === "PART" && warranty
                 ? warranty.byLineId[line.id]
@@ -359,7 +359,7 @@ export function PricingLinesTable({
                   )}
                 >
                   <span className="inline-flex h-11 min-h-11 w-full items-center justify-center">
-                    {typeKey === "LABOUR" ? "—" : line.quantity}
+                    {showsQuantity ? line.quantity : "—"}
                   </span>
                 </TableCell>
                 <TableCell

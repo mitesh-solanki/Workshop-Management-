@@ -26,7 +26,7 @@ import { cn } from "@/lib/utils";
 import { BaySearchSelect } from "@/modules/bays/components/bay-search-select";
 import {
   SERVICE_ORDER_PRIORITIES,
-  STATUS_TRANSITIONS,
+  SERVICE_ORDER_STATUSES,
   type ServiceOrderStatusValue,
 } from "@/modules/service-orders/schema";
 import { technicianDisplayName } from "@/modules/service-orders/technicians";
@@ -94,18 +94,19 @@ type EditProps = {
 
 type Props = CreateProps | EditProps;
 
-function toDatetimeLocalValue(value: Date | string | null): string {
+function toDateInputValue(value: Date | string | null): string {
   if (!value) return "";
   const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) return "";
   const pad = (n: number) => String(n).padStart(2, "0");
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
 
+/** Expected completion as `YYYY-MM-DD` for `<input type="date">`. */
 export function datetimeLocalFromOrder(
   value: Date | string | null,
 ): string {
-  return toDatetimeLocalValue(value);
+  return toDateInputValue(value);
 }
 
 function TechnicianReadField({
@@ -166,7 +167,7 @@ export function ServiceOrderForm(props: Props) {
           technicianIds: lockTechnicianId ? [lockTechnicianId] : [],
           bay: "",
           priority: "NORMAL",
-          status: "WAITING" as const,
+          status: "IN_PROGRESS" as const,
         };
 
   const [bay, setBay] = useState(defaults.bay);
@@ -174,6 +175,27 @@ export function ServiceOrderForm(props: Props) {
     defaults.technicianIds,
   );
   const [technicianQuery, setTechnicianQuery] = useState("");
+  const [status, setStatus] = useState<ServiceOrderStatusValue>(
+    defaults.status,
+  );
+  const [priority, setPriority] = useState(
+    defaults.priority || "NORMAL",
+  );
+
+  const technicianIdsKey = defaults.technicianIds.join(",");
+
+  useEffect(() => {
+    setStatus(defaults.status);
+    setPriority(defaults.priority || "NORMAL");
+    setBay(defaults.bay);
+    setTechnicianIds(technicianIdsKey ? technicianIdsKey.split(",") : []);
+  }, [
+    orderId,
+    defaults.status,
+    defaults.priority,
+    defaults.bay,
+    technicianIdsKey,
+  ]);
 
   const allTechnicianOptions = useMemo(
     () =>
@@ -205,13 +227,7 @@ export function ServiceOrderForm(props: Props) {
     );
   }, [allTechnicianOptions, technicianQuery]);
 
-  const currentStatus =
-    props.mode === "edit" ? props.defaults.status : ("WAITING" as const);
-  const nextStatuses = STATUS_TRANSITIONS[currentStatus];
-  const statusOptions =
-    props.mode === "edit"
-      ? ([currentStatus, ...nextStatuses] as ServiceOrderStatusValue[])
-      : [];
+  const statusOptions = SERVICE_ORDER_STATUSES;
 
   const technicianFieldsOnly =
     props.mode === "edit" && Boolean(props.technicianFieldsOnly);
@@ -230,7 +246,7 @@ export function ServiceOrderForm(props: Props) {
         />
         <TechnicianReadField
           label={t("statusField")}
-          value={t(`statuses.${currentStatus}`)}
+          value={t(`statuses.${status}`)}
         />
         <TechnicianReadField label={t("bay")} value={bayLabel} />
         <TechnicianReadField label={t("odometerIn")} value={odometer} />
@@ -281,25 +297,12 @@ export function ServiceOrderForm(props: Props) {
       </FormField>
     ) : null;
 
-  const createStatusField =
-    props.mode === "create" ? (
-      <FormField id="create-status" label={t("statusField")}>
-        <Input
-          id="create-status"
-          value={t("statuses.WAITING")}
-          disabled
-          readOnly
-          className="h-11 min-h-11"
-        />
-      </FormField>
-    ) : null;
-
   const expectedCompletionField = (
     <FormField id="expectedCompletion" label={t("expectedCompletion")}>
       <Input
         id="expectedCompletion"
         name="expectedCompletion"
-        type="datetime-local"
+        type="date"
         defaultValue={defaults.expectedCompletion}
         disabled={readOnly}
         className="h-11 min-h-11"
@@ -375,11 +378,12 @@ export function ServiceOrderForm(props: Props) {
       <FormSelect
         id="priority"
         name="priority"
-        defaultValue={defaults.priority || "NORMAL"}
+        value={priority}
+        onValueChange={setPriority}
         disabled={readOnly}
-        options={SERVICE_ORDER_PRIORITIES.map((priority) => ({
-          value: priority,
-          label: t(`priorities.${priority}`),
+        options={SERVICE_ORDER_PRIORITIES.map((item) => ({
+          value: item,
+          label: t(`priorities.${item}`),
         }))}
       />
     </FormField>
@@ -416,24 +420,23 @@ export function ServiceOrderForm(props: Props) {
     </div>
   );
 
-  const statusField =
-    props.mode === "edit" ? (
-      <FormField id="status" label={t("statusField")}>
-        <FormSelect
-          id="status"
-          name="status"
-          defaultValue={currentStatus}
-          disabled={readOnly || nextStatuses.length === 0}
-          options={statusOptions.map((status) => ({
-            value: status,
-            label:
-              status === currentStatus
-                ? t(`statuses.${status}`)
-                : `${t(`statuses.${currentStatus}`)} → ${t(`statuses.${status}`)}`,
-          }))}
-        />
-      </FormField>
-    ) : null;
+  const statusField = (
+    <FormField id="status" label={t("statusField")}>
+      <FormSelect
+        id="status"
+        name="status"
+        value={status}
+        onValueChange={(next) =>
+          setStatus(next as ServiceOrderStatusValue)
+        }
+        disabled={readOnly}
+        options={statusOptions.map((option) => ({
+          value: option,
+          label: t(`statuses.${option}`),
+        }))}
+      />
+    </FormField>
+  );
 
   return (
     <form
@@ -501,7 +504,7 @@ export function ServiceOrderForm(props: Props) {
 
             <div className="grid gap-4 sm:grid-cols-2">
               {expectedCompletionField}
-              {props.mode === "edit" ? statusField : createStatusField}
+              {statusField}
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2">

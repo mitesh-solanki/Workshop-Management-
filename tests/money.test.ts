@@ -4,6 +4,7 @@ import {
   formatRupees,
   isZeroRupeesInput,
   multiplyByQuantity,
+  normalizeRupeesInput,
   paiseToRupeesInput,
   parseRupeesToPaise,
   percentage,
@@ -122,6 +123,20 @@ describe("money", () => {
       expect(sanitizeRupeesTyping("250.556fcdf")).toBe("250.55");
       expect(sanitizeRupeesTyping("12.3.4")).toBe("12.34");
       expect(sanitizeRupeesTyping("abc")).toBe("");
+    });
+
+    it("strips leading zeros on the rupee part", () => {
+      expect(sanitizeRupeesTyping("0122")).toBe("122");
+      expect(sanitizeRupeesTyping("0")).toBe("0");
+      expect(sanitizeRupeesTyping("0.50")).toBe("0.50");
+    });
+  });
+
+  describe("normalizeRupeesInput", () => {
+    it("stores a clean amount for re-edit", () => {
+      expect(normalizeRupeesInput("0122")).toBe("122");
+      expect(normalizeRupeesInput("122.50")).toBe("122.50");
+      expect(normalizeRupeesInput("0")).toBe("");
     });
   });
 });

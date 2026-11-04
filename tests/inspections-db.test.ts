@@ -146,6 +146,7 @@ describe("standalone inspections against Postgres", () => {
         garageId,
         vehicleId,
         customerId,
+        jobCardNumber: 1,
         complaint: "From inspection",
         status: "WAITING",
       },
@@ -181,6 +182,7 @@ describe("standalone inspections against Postgres", () => {
 
     const order = await createOrder(session, {
       vehicleId,
+      jobCardNumber: 2,
       complaint: "From inspection due",
       requestedServices: "",
       odometerIn: null,

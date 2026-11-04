@@ -79,6 +79,12 @@ export function JobCardTimeline({ events }: Props) {
             billFinalizedNoAmount: (invoiceNumber) =>
               t("timelineBillFinalizedNoAmount", { invoiceNumber }),
             billDraftDeleted: t("timelineBillDraftDeleted"),
+            billDeleted: (invoiceNumber) =>
+              t("timelineBillDeleted", { invoiceNumber }),
+            billDeletedNoNumber: t("timelineBillDeletedNoNumber"),
+            billLinesUpdated: (amount) =>
+              t("timelineBillLinesUpdated", { amount }),
+            billLinesUpdatedNoAmount: t("timelineBillLinesUpdatedNoAmount"),
             paymentReceived: (method, amount) =>
               t("timelinePaymentReceived", { method, amount }),
             refundGiven: (method, amount) =>

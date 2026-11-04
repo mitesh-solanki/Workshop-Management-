@@ -259,3 +259,28 @@ body {
     bottom: 5.25rem !important;
   }
 }
+
+/* Soft rounded border pulse for next-step action buttons */
+@keyframes next-step-border {
+  0%,
+  100% {
+    outline-color: rgb(37 99 235 / 0.2);
+  }
+  50% {
+    outline-color: rgb(37 99 235);
+  }
+}
+
+.next-step-border {
+  outline: 2px solid rgb(37 99 235 / 0.2);
+  outline-offset: 2px;
+  border-radius: 0.5rem;
+  animation: next-step-border 1.2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .next-step-border {
+    animation: none;
+    outline-color: rgb(37 99 235);
+  }
+}

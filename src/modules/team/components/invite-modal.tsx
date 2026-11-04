@@ -22,6 +22,7 @@ import {
 import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/toast";
+import { useStripCreateQuery } from "@/hooks/use-open-create-query";
 import { isValidEmail, sanitizeEmailTyping } from "@/lib/contact";
 import { cn } from "@/lib/utils";
 
@@ -31,11 +32,17 @@ const INVITE_ROLES = ["MANAGER", "TECHNICIAN", "ACCOUNTANT"] as const;
 
 type InviteRole = (typeof INVITE_ROLES)[number];
 
-export function InviteModal() {
+type Props = {
+  /** Open from sidebar Add (`?create=1`). */
+  defaultOpen?: boolean;
+};
+
+export function InviteModal({ defaultOpen = false }: Props) {
   const t = useTranslations("team");
   const te = useTranslations("errors");
   const formId = useId();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultOpen);
+  useStripCreateQuery(defaultOpen);
   const [role, setRole] = useState<InviteRole>("MANAGER");
   const [email, setEmail] = useState("");
   const [emailError, setEmailError] = useState<string | undefined>();

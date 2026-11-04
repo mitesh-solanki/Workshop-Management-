@@ -15,6 +15,13 @@ vi.mock("@/modules/settings/repo", () => ({
   findGarageById: vi.fn(),
   updateGarageById: vi.fn() }));
 
+vi.mock("@/modules/service-orders/repo", () => ({
+  getNextJobCardNumber: vi.fn().mockResolvedValue(1),
+  setNextJobCardNumberSeed: vi.fn().mockImplementation(
+    async (_garageId: string, next: number) => next,
+  ),
+}));
+
 vi.mock("@/modules/team/repo", () => ({
   findUserInGarage: vi.fn(),
   listUsersByGarage: vi.fn(),
@@ -95,7 +102,9 @@ describe("garage isolation", () => {
       updateGarageSettingsForGarageId(ownerA, garageB, {
         name: "Hacked Name",
         address: "Elsewhere",
-        gstin: "24AAAAA0000A1Z5" }),
+        gstin: "24AAAAA0000A1Z5",
+        nextJobCardNumber: 1,
+      }),
     ).rejects.toBeInstanceOf(ForbiddenError);
 
     expect(updateGarageById).not.toHaveBeenCalled();
@@ -113,7 +122,9 @@ describe("garage isolation", () => {
     const updated = await updateGarageSettings(ownerA, {
       name: "Alpha Updated",
       address: "Ring Road",
-      gstin: "24AAAAA0000A1Z5" });
+      gstin: "24AAAAA0000A1Z5",
+      nextJobCardNumber: 12,
+    });
 
     expect(updateGarageById).toHaveBeenCalledWith(garageA, {
       name: "Alpha Updated",
@@ -124,6 +135,7 @@ describe("garage isolation", () => {
       expect.anything(),
     );
     expect(updated.id).toBe(garageA);
+    expect(updated.nextJobCardNumber).toBe(12);
     expect(writeAuditLog).toHaveBeenCalledWith(
       expect.objectContaining({ garageId: garageA, actorId: ownerA.userId }),
     );

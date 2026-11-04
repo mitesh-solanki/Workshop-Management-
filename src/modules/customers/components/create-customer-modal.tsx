@@ -33,6 +33,7 @@ import { SearchableSelect } from "@/components/ui/searchable-select";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/toast";
 import { useCreateModalNavigation } from "@/hooks/use-create-modal-navigation";
+import { useStripCreateQuery } from "@/hooks/use-open-create-query";
 import { isValidPhone, sanitizePhoneTyping } from "@/lib/contact";
 import {
   GST_STATE_CODES,
@@ -68,9 +69,15 @@ type Props = {
   /** Optional trigger; defaults to primary “Add customer” button. */
   trigger?: React.ReactNode;
   size?: "sm" | "md";
+  /** Open from sidebar Add (`?create=1`). */
+  defaultOpen?: boolean;
 };
 
-export function CreateCustomerModal({ trigger, size = "md" }: Props) {
+export function CreateCustomerModal({
+  trigger,
+  size = "md",
+  defaultOpen = false,
+}: Props) {
   const t = useTranslations("customers");
   const te = useTranslations("errors");
   const tGst = useTranslations("gst");
@@ -108,12 +115,14 @@ export function CreateCustomerModal({ trigger, size = "md" }: Props) {
       state.ok && state.customerId
         ? { id: state.customerId, message: state.message }
         : null,
-    hrefForId: (id) => `/customers/${id}`,
+    hrefForId: (id) => `/customers/${id}?next=vehicles`,
+    defaultOpen,
     onReset: () => {
       setValues(EMPTY);
       setFieldErrors({});
     },
   });
+  useStripCreateQuery(defaultOpen);
 
   useEffect(() => {
     if (state.ok || !state.message) return;

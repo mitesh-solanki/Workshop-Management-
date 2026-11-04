@@ -54,6 +54,7 @@ export async function listInvoices(
         invoiceNumber: invoice.invoiceNumber,
         totalPaise: invoice.totalPaise,
         amountPaidPaise: invoice.amountPaidPaise,
+        creditNotesTotalPaise,
         pendingBalancePaise: pending,
         finalizedAt: invoice.finalizedAt,
         createdAt: invoice.createdAt,

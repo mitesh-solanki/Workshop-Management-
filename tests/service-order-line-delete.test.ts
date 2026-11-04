@@ -1,9 +1,9 @@
 /**
  * Postgres proofs for every delete path around a job card:
- * - delete labour / part on job card (free, pending, approved, rejected)
- * - approved-on-current-estimate block; superseded estimate does not block
- * - delete estimate line (pending / approved → stock back / billed)
- * - approved qty change adjusts stock
+ * - delete labour / part on job card (stock OUT on add, IN on remove)
+ * - estimate approval / qty no longer moves stock
+ * - superseded estimate does not block
+ * - draft invoice allows estimate delete; finalized blocks
  * - delete whole job card restores held stock
  * - NOT_FOUND / wrong garage
  */
@@ -119,6 +119,7 @@ describe("job card delete matrix", () => {
         garageId,
         customerId,
         vehicleId,
+        jobCardNumber: 1,
         status: "IN_PROGRESS",
         complaint: "Brakes" },
       select: { id: true } });
@@ -278,13 +279,14 @@ describe("job card delete matrix", () => {
         sourceOrderLineId: disposable.line.id,
         sortOrder: 2 } });
 
+    // partLine + disposable each held 1; deleting disposable restores one.
     expect(
       await deleteServiceOrderLine(garageId, {
         lineId: disposable.line.id,
         serviceOrderId: orderId,
         actorId: userId }),
     ).toEqual({ ok: true });
-    expect(await getPartStock(garageId, partId)).toBe(5);
+    expect(await getPartStock(garageId, partId)).toBe(4);
     expect(
       await prisma.estimateLine.count({
         where: { garageId, sourceOrderLineId: disposable.line.id } }),
@@ -300,6 +302,7 @@ describe("job card delete matrix", () => {
       note: null,
       recordedById: userId });
     expect(agreed.ok).toBe(true);
+    // Estimate approval does not move stock (already OUT on job-card add).
     expect(await getPartStock(garageId, partId)).toBe(4);
 
     // Labour job-card delete cascades its estimate line (no stock effect).
@@ -313,7 +316,7 @@ describe("job card delete matrix", () => {
       await prisma.estimateLine.count({ where: { id: estLabourId, garageId } }),
     ).toBe(0);
 
-    // Qty increase on approved estimate issues more stock.
+    // Qty change on approved estimate does not move stock.
     const qtyUp = await updateEstimateLineDetails(garageId, {
       lineId: estPartId,
       estimateId: estimate.id,
@@ -323,9 +326,8 @@ describe("job card delete matrix", () => {
       unitPricePaise: 32_000,
       actorId: userId });
     expect(qtyUp).not.toBeNull();
-    expect(await getPartStock(garageId, partId)).toBe(3);
+    expect(await getPartStock(garageId, partId)).toBe(4);
 
-    // Qty decrease returns stock.
     const qtyDown = await updateEstimateLineDetails(garageId, {
       lineId: estPartId,
       estimateId: estimate.id,
@@ -337,7 +339,7 @@ describe("job card delete matrix", () => {
     expect(qtyDown).not.toBeNull();
     expect(await getPartStock(garageId, partId)).toBe(4);
 
-    // Approved part: job-card delete returns stock and removes estimate line.
+    // Job-card delete returns stock and removes estimate line.
     expect(
       await deleteServiceOrderLine(garageId, {
         lineId: partLine.line.id,
@@ -350,7 +352,7 @@ describe("job card delete matrix", () => {
     ).toBe(0);
   });
 
-  it("Disagree restores stock; superseded approved estimate does not block", async () => {
+  it("Disagree does not move stock; job-card delete restores; superseded does not block", async () => {
     if (!ready) return;
 
     const partLine = await createServiceOrderLine(garageId, {
@@ -363,6 +365,7 @@ describe("job card delete matrix", () => {
       actorId: userId });
     expect(partLine.ok).toBe(true);
     if (!partLine.ok) return;
+    expect(await getPartStock(garageId, partId)).toBe(4);
 
     const estimate = await prisma.estimate.create({
       data: {
@@ -405,7 +408,7 @@ describe("job card delete matrix", () => {
       method: "MANUAL",
       note: "Disagree",
       recordedById: userId });
-    expect(await getPartStock(garageId, partId)).toBe(5);
+    expect(await getPartStock(garageId, partId)).toBe(4);
 
     expect(
       await deleteServiceOrderLine(garageId, {
@@ -413,6 +416,7 @@ describe("job card delete matrix", () => {
         serviceOrderId: orderId,
         actorId: userId }),
     ).toEqual({ ok: true });
+    expect(await getPartStock(garageId, partId)).toBe(5);
 
     // Superseded approved estimate must not block delete on a new job-card part.
     const part2 = await createServiceOrderLine(garageId, {
@@ -499,7 +503,8 @@ describe("job card delete matrix", () => {
         description: "Brake Pad",
         actorId: userId }),
     ).toBe("ok");
-    expect(await getPartStock(garageId, partId)).toBe(5);
+    // Job-card part still holds stock until the order line is removed.
+    expect(await getPartStock(garageId, partId)).toBe(4);
 
     const est2 = await prisma.estimate.create({
       data: {
@@ -575,7 +580,7 @@ describe("job card delete matrix", () => {
         description: "Brake Pad",
         actorId: userId }),
     ).toBe("ok");
-    expect(await getPartStock(garageId, partId)).toBe(5);
+    expect(await getPartStock(garageId, partId)).toBe(4);
     expect(
       await prisma.invoiceLine.count({
         where: { garageId, invoiceId: draftInvoice.id } }),
@@ -685,14 +690,15 @@ describe("job card delete matrix", () => {
       method: "MANUAL",
       note: "cleanup",
       recordedById: userId });
-    expect(await getPartStock(garageId, partId)).toBe(5);
+    expect(await getPartStock(garageId, partId)).toBe(4);
     await deleteServiceOrderLine(garageId, {
       lineId: partLine.line.id,
       serviceOrderId: orderId,
       actorId: userId });
+    expect(await getPartStock(garageId, partId)).toBe(5);
   });
 
-  it("deleting the whole job card restores stock still held by Agree", async () => {
+  it("deleting the whole job card restores stock still held on the job card", async () => {
     if (!ready) return;
 
     const order = await prisma.serviceOrder.create({
@@ -700,6 +706,7 @@ describe("job card delete matrix", () => {
         garageId,
         customerId,
         vehicleId,
+        jobCardNumber: 2,
         status: "IN_PROGRESS",
         complaint: "Delete me" },
       select: { id: true } });
@@ -735,6 +742,8 @@ describe("job card delete matrix", () => {
             sortOrder: 0 } } },
       select: { id: true, lines: { select: { id: true } } } });
 
+    expect(await getPartStock(garageId, partId)).toBe(3);
+
     const agreed = await recordLineApproval(garageId, {
       estimateId: estimate.id,
       estimateLineId: estimate.lines[0]!.id,
@@ -747,7 +756,7 @@ describe("job card delete matrix", () => {
     expect(agreed.ok).toBe(true);
     expect(await getPartStock(garageId, partId)).toBe(3);
 
-    // Draft / approved estimate: job-card delete cascades and returns stock.
+    // Job-card delete cascades estimate line and returns stock.
     expect(
       await deleteServiceOrderLine(garageId, {
         lineId: partLine.line.id,

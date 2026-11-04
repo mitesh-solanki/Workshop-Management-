@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import {
@@ -77,12 +78,14 @@ type StatCardProps = {
   emphasize?: boolean;
   /** Optional trailing chip (e.g. Badge). */
   badge?: ReactNode;
+  /** When set, the whole card is a link (dashboard drill-through). */
+  href?: string;
   className?: string;
 };
 
 /**
  * Usage:
- * <StatCard title="Waiting" value={12} icon={Clock} tone="waiting" />
+ * <StatCard title="Waiting" value={12} icon={Clock} tone="waiting" href="/workshop" />
  */
 function StatCard({
   title,
@@ -92,50 +95,59 @@ function StatCard({
   tone = "neutral",
   emphasize = false,
   badge,
+  href,
   className,
 }: StatCardProps) {
   const colors = toneClasses[tone];
 
-  return (
-    <Card
-      className={cn(
-        "gap-0 overflow-hidden border-t-2 py-0",
-        colors.border,
-        emphasize && colors.emphasize,
-        className,
-      )}
-    >
-      <CardBody className="flex flex-col gap-3 px-4 py-4">
-        <div className="flex items-start justify-between gap-2">
-          {Icon ? (
-            <span
-              className={cn(
-                "flex size-10 shrink-0 items-center justify-center rounded-lg",
-                colors.icon,
-              )}
-              aria-hidden
-            >
-              <Icon className="size-5" />
-            </span>
-          ) : (
-            <span className="size-10" aria-hidden />
-          )}
-          {badge}
-        </div>
-        <div className="min-w-0 space-y-0.5">
-          <p className="text-page-title tabular-nums text-slate-900">{value}</p>
-          <CardTitle className="text-body font-medium text-slate-600">
-            {title}
-          </CardTitle>
-          {description ? (
-            <CardDescription className="text-caption">
-              {description}
-            </CardDescription>
-          ) : null}
-        </div>
-      </CardBody>
-    </Card>
+  const body = (
+    <CardBody className="flex flex-col gap-3 px-4 py-4">
+      <div className="flex items-start justify-between gap-2">
+        {Icon ? (
+          <span
+            className={cn(
+              "flex size-10 shrink-0 items-center justify-center rounded-lg",
+              colors.icon,
+            )}
+            aria-hidden
+          >
+            <Icon className="size-5" />
+          </span>
+        ) : (
+          <span className="size-10" aria-hidden />
+        )}
+        {badge}
+      </div>
+      <div className="min-w-0 space-y-0.5">
+        <p className="text-page-title tabular-nums text-slate-900">{value}</p>
+        <CardTitle className="text-body font-medium text-slate-600">
+          {title}
+        </CardTitle>
+        {description ? (
+          <CardDescription className="text-caption">{description}</CardDescription>
+        ) : null}
+      </div>
+    </CardBody>
   );
+
+  const cardClass = cn(
+    "gap-0 overflow-hidden border-t-2 py-0",
+    colors.border,
+    emphasize && colors.emphasize,
+    href &&
+      "transition-shadow hover:shadow-md focus-within:ring-2 focus-within:ring-blue-600/30",
+    className,
+  );
+
+  if (href) {
+    return (
+      <Link href={href} className="block rounded-[14px] outline-none">
+        <Card className={cardClass}>{body}</Card>
+      </Link>
+    );
+  }
+
+  return <Card className={cardClass}>{body}</Card>;
 }
 
 export { StatCard, type StatCardTone };

@@ -8,6 +8,7 @@ import { requireSession } from "@/lib/session";
 import {
   createCustomerRecord,
   deleteCustomerRecord,
+  listCustomers,
   updateCustomerRecord,
 } from "@/modules/customers/service";
 
@@ -16,6 +17,37 @@ export type CustomerActionState = {
   message?: string;
   customerId?: string;
 };
+
+export type CustomerPickerItem = {
+  id: string;
+  name: string;
+  phone: string;
+};
+
+/** Debounced SearchableSelect picker — matches name or phone. */
+export async function searchCustomersPickerAction(
+  q: string,
+): Promise<{ items: CustomerPickerItem[] }> {
+  const session = await requireSession();
+  const trimmed = q.trim();
+  if (trimmed.length < 2) {
+    return { items: [] };
+  }
+
+  const { items } = await listCustomers(session, {
+    q: trimmed,
+    pageSize: 20,
+    sort: "name_asc",
+  });
+
+  return {
+    items: items.map((customer) => ({
+      id: customer.id,
+      name: customer.name,
+      phone: customer.phone,
+    })),
+  };
+}
 
 export async function createCustomerAction(
   _prev: CustomerActionState,

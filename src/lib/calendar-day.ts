@@ -32,6 +32,52 @@ export function calendarDayBoundsUtc(
   return { start, end };
 }
 
+/**
+ * From start of today through end of the day `extraDays` ahead (inclusive).
+ * `extraDays: 1` → today and tomorrow (exclusive end = start of day after tomorrow).
+ */
+export function calendarDaysAheadBoundsUtc(
+  extraDays: number,
+  now: Date = new Date(),
+  timeZone: string = WORKSHOP_TIME_ZONE,
+): { start: Date; end: Date } {
+  const today = calendarDayBoundsUtc(now, timeZone);
+  const midTomorrow = new Date(today.start.getTime() + (extraDays + 0.5) * 86_400_000);
+  const lastDay = calendarDayBoundsUtc(midTomorrow, timeZone);
+  return { start: today.start, end: lastDay.end };
+}
+
+/** Single workshop calendar day at `dayOffset` from today (0 = today, 1 = tomorrow). */
+export function calendarDayOffsetBoundsUtc(
+  dayOffset: number,
+  now: Date = new Date(),
+  timeZone: string = WORKSHOP_TIME_ZONE,
+): { start: Date; end: Date } {
+  const today = calendarDayBoundsUtc(now, timeZone);
+  const mid = new Date(today.start.getTime() + (dayOffset + 0.5) * 86_400_000);
+  return calendarDayBoundsUtc(mid, timeZone);
+}
+
+/** Parse `YYYY-MM-DD` as a workshop calendar day → UTC [start, end). */
+export function calendarDateKeyBoundsUtc(
+  dateKey: string,
+  timeZone: string = WORKSHOP_TIME_ZONE,
+): { start: Date; end: Date } | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateKey.trim());
+  if (!match) {
+    return null;
+  }
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  if (!year || !month || !day) {
+    return null;
+  }
+  const start = zonedCivilTimeToUtc(year, month, day, 0, 0, 0, timeZone);
+  const end = zonedCivilTimeToUtc(year, month, day + 1, 0, 0, 0, timeZone);
+  return { start, end };
+}
+
 /** Convert a civil date/time in `timeZone` to a UTC Date (handles day overflow). */
 function zonedCivilTimeToUtc(
   year: number,

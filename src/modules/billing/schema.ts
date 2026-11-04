@@ -15,6 +15,47 @@ export function isBillableOrderLineType(
   return (INVOICE_LINE_TYPES as readonly string[]).includes(type);
 }
 
+/** Fallback HSN/SAC only when the line has no part and no existing bill code. */
+export function defaultInvoiceHsnOrSac(type: string): string {
+  if (type === "PART") return "8708";
+  return "9987";
+}
+
+/**
+ * Patch tax codes for Edit Invoice: form override, else the selected/catalogue
+ * part, else the existing bill line — defaults only when none of those exist.
+ */
+export function resolveInvoiceEditLineTax(input: {
+  type: string;
+  gstRatePercent?: number;
+  hsnOrSac?: string;
+  existing?: { gstRatePercent: number; hsnOrSac: string } | null;
+  part?: { gstRatePercent?: number | null; hsn?: string | null } | null;
+}): { gstRatePercent: number; hsnOrSac: string } {
+  const fromPartGst =
+    input.part && typeof input.part.gstRatePercent === "number"
+      ? input.part.gstRatePercent
+      : null;
+  const fromPartHsn =
+    input.part && typeof input.part.hsn === "string" && input.part.hsn.trim()
+      ? input.part.hsn.trim()
+      : null;
+  const explicitHsn = input.hsnOrSac?.trim();
+
+  return {
+    gstRatePercent:
+      input.gstRatePercent ??
+      fromPartGst ??
+      input.existing?.gstRatePercent ??
+      18,
+    hsnOrSac:
+      explicitHsn ||
+      fromPartHsn ||
+      input.existing?.hsnOrSac ||
+      defaultInvoiceHsnOrSac(input.type),
+  };
+}
+
 export const GST_SPLIT_KINDS = ["CGST_SGST", "IGST"] as const;
 export type GstSplitKindSchemaValue = (typeof GST_SPLIT_KINDS)[number];
 
@@ -106,6 +147,49 @@ export const deleteDraftInvoiceSchema = z.object({
 
 export type DeleteDraftInvoiceInput = z.input<typeof deleteDraftInvoiceSchema>;
 
+/** Delete draft or finalized invoice (same shape). */
+export const deleteInvoiceSchema = deleteDraftInvoiceSchema;
+export type DeleteInvoiceInput = DeleteDraftInvoiceInput;
+
+const invoiceEditLineSchema = z.object({
+  id: z
+    .string()
+    .trim()
+    .optional()
+    .transform((value) => (value && value.length > 0 ? value : undefined)),
+  type: z.enum(INVOICE_LINE_TYPES),
+  description: z
+    .string()
+    .trim()
+    .min(1, { error: "validation.required" })
+    .max(500, { error: "validation.tooLong" }),
+  quantity: quantityField,
+  unitPricePaise: rupeesToPaiseSchema,
+  partId: z
+    .string()
+    .trim()
+    .optional()
+    .transform((value) => (value && value.length > 0 ? value : undefined)),
+  gstRatePercent: gstRateField.optional(),
+  hsnOrSac: hsnOrSacField.optional(),
+});
+
+export const updateInvoiceLinesSchema = z.object({
+  invoiceId: z.string().trim().min(1),
+  lines: z.array(invoiceEditLineSchema).min(1).max(200),
+  notes: optionalNotes.optional(),
+});
+
+export type UpdateInvoiceLinesInput = z.input<typeof updateInvoiceLinesSchema>;
+
+export const syncInvoiceFromJobCardSchema = z.object({
+  serviceOrderId: z.string().trim().min(1),
+});
+
+export type SyncInvoiceFromJobCardInput = z.input<
+  typeof syncInvoiceFromJobCardSchema
+>;
+
 const paymentBreakdownSchema = z
   .object({
     method: z.enum(PAYMENT_METHODS),
@@ -119,7 +203,7 @@ const paymentBreakdownSchema = z
     if (data.amountPaise <= 0) {
       ctx.addIssue({
         code: "custom",
-        message: "validation.invalidInput",
+        message: "validation.amountMustBePositive",
         path: ["amountPaise"],
       });
       return;
@@ -165,6 +249,20 @@ export const recordPaymentSchema = paymentBreakdownSchema.extend({
 });
 
 export type RecordPaymentInput = z.input<typeof recordPaymentSchema>;
+
+export const updatePaymentSchema = paymentBreakdownSchema.extend({
+  invoiceId: z.string().trim().min(1),
+  paymentId: z.string().trim().min(1),
+});
+
+export type UpdatePaymentInput = z.input<typeof updatePaymentSchema>;
+
+export const deletePaymentSchema = z.object({
+  invoiceId: z.string().trim().min(1),
+  paymentId: z.string().trim().min(1),
+});
+
+export type DeletePaymentInput = z.input<typeof deletePaymentSchema>;
 
 /** Money returned to the customer after overpayment (credit note / overpay). */
 export const recordRefundSchema = recordPaymentSchema;

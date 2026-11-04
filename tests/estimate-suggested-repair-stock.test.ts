@@ -1,5 +1,6 @@
 /**
- * Postgres proofs: suggested-repair part stock on estimate approval.
+ * Postgres proofs: suggested-repair part resolve + estimate approval
+ * no longer moves stock (job-card add does).
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { PrismaClient } from "@prisma/client";
@@ -80,6 +81,7 @@ describe("estimate stock from suggested repairs", () => {
         garageId,
         customerId,
         vehicleId,
+        jobCardNumber: 1,
         status: "INSPECTION",
         complaint: "Test" },
       select: { id: true } });
@@ -177,7 +179,7 @@ describe("estimate stock from suggested repairs", () => {
     });
   });
 
-  it("issues stock OUT when approving suggested-repair part line", async () => {
+  it("does not move stock when approving suggested-repair part line", async () => {
     if (!ready) {
       return;
     }
@@ -200,17 +202,17 @@ describe("estimate stock from suggested repairs", () => {
     const after = await prisma.stockMovement.aggregate({
       where: { garageId, partId },
       _sum: { quantityChange: true } });
-    expect(after._sum.quantityChange).toBe(3);
+    expect(after._sum.quantityChange).toBe(5);
   });
 
-  it("returns stock IN when rejecting an approved suggested-repair part line", async () => {
+  it("does not move stock when rejecting an approved suggested-repair part line", async () => {
     if (!ready) {
       return;
     }
     const before = await prisma.stockMovement.aggregate({
       where: { garageId, partId },
       _sum: { quantityChange: true } });
-    expect(before._sum.quantityChange).toBe(3);
+    expect(before._sum.quantityChange).toBe(5);
 
     const result = await recordLineApproval(garageId, {
       estimateId,

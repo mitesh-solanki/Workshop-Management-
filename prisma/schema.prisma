@@ -181,6 +181,7 @@ model Garage {
   vehicleWarrantyDocuments VehicleWarrantyDocument[]
   serviceOrderTechnicianAssignments ServiceOrderTechnicianAssignment[]
   serviceOrderPaperCopies ServiceOrderPaperCopy[]
+  jobCardNumberCounters JobCardNumberCounter[]
 }
 
 /// Physical service bay in the workshop (master list for job cards).
@@ -293,6 +294,8 @@ model ServiceOrder {
   vehicle            Vehicle            @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
   customerId         String
   customer           Customer           @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  /// Human Job Card number (per garage). Used on reports and invoice PDF filenames.
+  jobCardNumber      Int
   status             ServiceOrderStatus   @default(WAITING)
   priority           ServiceOrderPriority @default(NORMAL)
   complaint          String
@@ -315,11 +318,20 @@ model ServiceOrder {
   partsRequests  PartsRequest[]
   paperCopies    ServiceOrderPaperCopy[]
 
+  @@unique([garageId, jobCardNumber])
   @@index([garageId])
   @@index([garageId, status])
   @@index([garageId, technicianId])
   @@index([vehicleId])
   @@index([customerId])
+}
+
+/// Per-garage high-water mark for Job Card numbers. Next suggestion = lastNumber + 1.
+model JobCardNumberCounter {
+  id         String @id @default(cuid())
+  garageId   String @unique
+  garage     Garage @relation(fields: [garageId], references: [id], onDelete: Cascade)
+  lastNumber Int    @default(0)
 }
 
 /// Photo or PDF of the signed physical job card, archived on the digital Job Card.

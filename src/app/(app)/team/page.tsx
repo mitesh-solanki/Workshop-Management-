@@ -8,11 +8,16 @@ import { InviteModal } from "@/modules/team/components/invite-modal";
 import { TeamPagePanel } from "@/modules/team/components/team-page-panel";
 import { listTeam } from "@/modules/team/service";
 
+type Props = {
+  searchParams: Promise<{ create?: string }>;
+};
+
 /** Auth session uses request-time crypto — do not prerender this route. */
 export const instant = false;
 
-export default async function TeamPage() {
+export default async function TeamPage({ searchParams }: Props) {
   const session = await requireSession();
+  const params = await searchParams;
   const locale = await getLocale();
   const t = await getTranslations("team");
 
@@ -49,7 +54,11 @@ export default async function TeamPage() {
       <PageHeader
         title={t("title")}
         description={t("subtitle")}
-        actions={canInvite && !error ? <InviteModal /> : undefined}
+        actions={
+          canInvite && !error ? (
+            <InviteModal defaultOpen={params.create === "1"} />
+          ) : undefined
+        }
       />
 
       {error ? (

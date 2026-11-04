@@ -1,6 +1,7 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import {
   Car,
@@ -20,10 +21,17 @@ import {
 import { usePageDetailLabel } from "@/components/page-chrome";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription } from "@/components/ui/card";
+import { toast } from "@/components/ui/toast";
 import {
   SectionDesktopNav,
   SectionMobileNavBar,
 } from "@/components/shared/section-side-nav";
+import {
+  HIGHLIGHT_VEHICLE_ACTIONS_KEY,
+  NEXT_STEP_DURATION_MS,
+  NEXT_STEP_HIGHLIGHT_CLASS,
+  useNextStepHighlight,
+} from "@/hooks/use-next-step-highlight";
 import {
   sectionDomId,
   useSectionScrollSpy,
@@ -68,6 +76,8 @@ type Props = {
   canCreateInspection: boolean;
   canDeleteOrder?: boolean;
   locale: string;
+  /** After create customer — scroll + highlight Vehicles. */
+  nextStep?: "vehicles" | null;
 };
 
 function SectionBlock({
@@ -76,6 +86,7 @@ function SectionBlock({
   subtitle,
   action,
   sectionRef,
+  highlighted = false,
   children,
 }: {
   id: string;
@@ -83,13 +94,17 @@ function SectionBlock({
   subtitle?: string;
   action?: ReactNode;
   sectionRef: (node: HTMLElement | null) => void;
+  highlighted?: boolean;
   children: ReactNode;
 }) {
   return (
     <Card
       id={id}
       ref={sectionRef}
-      className="min-w-0 scroll-mt-4 gap-0 overflow-visible py-0"
+      className={cn(
+        "min-w-0 scroll-mt-4 gap-0 overflow-visible py-0",
+        highlighted && NEXT_STEP_HIGHLIGHT_CLASS,
+      )}
     >
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-4 sm:px-6">
         <div className="min-w-0 space-y-0.5">
@@ -115,19 +130,67 @@ export function CustomerDetailPanel({
   canCreateInspection,
   canDeleteOrder = false,
   locale,
+  nextStep = null,
 }: Props) {
   const t = useTranslations("customers");
   const tv = useTranslations("vehicles");
   const tw = useTranslations("warranties");
   const ti = useTranslations("inspections");
   const tGst = useTranslations("gst");
+  const router = useRouter();
+  const pathname = usePathname();
+  const guidedNextRef = useRef(false);
+  const [vehiclesPulse, setVehiclesPulse] = useState(
+    () => (nextStep === "vehicles" ? 1 : 0),
+  );
+  const [highlightVehicleId, setHighlightVehicleId] = useState<string | null>(
+    null,
+  );
+  const highlightVehicles = useNextStepHighlight(
+    vehiclesPulse > 0 ? vehiclesPulse : null,
+  );
+  const highlightActionsReady =
+    highlightVehicleId != null &&
+    vehicles.some((vehicle) => vehicle.id === highlightVehicleId);
+  const highlightVehicleActions = useNextStepHighlight(
+    highlightActionsReady ? highlightVehicleId : null,
+  );
   usePageDetailLabel(customer.name);
   const { activeSection, scrollToSection, setSectionRef } =
     useSectionScrollSpy({
       sections: CUSTOMER_SECTIONS,
       idPrefix: CUSTOMER_SECTION_ID_PREFIX,
-      initialSection: "details",
+      initialSection: nextStep === "vehicles" ? "vehicles" : "details",
     });
+
+  useEffect(() => {
+    if (nextStep !== "vehicles" || guidedNextRef.current) return;
+    guidedNextRef.current = true;
+    scrollToSection("vehicles");
+    toast.message(t("nextStepAddVehicle"), { duration: NEXT_STEP_DURATION_MS });
+    router.replace(pathname, { scroll: false });
+  }, [nextStep, pathname, router, scrollToSection, t]);
+
+  // Start button highlight only after the new vehicle row is on screen.
+  useEffect(() => {
+    let stored: string | null = null;
+    try {
+      stored = sessionStorage.getItem(HIGHLIGHT_VEHICLE_ACTIONS_KEY);
+    } catch {
+      stored = null;
+    }
+    const targetId = highlightVehicleId ?? stored;
+    if (!targetId) return;
+    if (!vehicles.some((vehicle) => vehicle.id === targetId)) return;
+    if (highlightVehicleId !== targetId) {
+      setHighlightVehicleId(targetId);
+    }
+    try {
+      sessionStorage.removeItem(HIGHLIGHT_VEHICLE_ACTIONS_KEY);
+    } catch {
+      // ignore
+    }
+  }, [vehicles, highlightVehicleId]);
 
   const navItems = [
     { id: "details" as const, label: t("details"), icon: NotebookPen },
@@ -150,11 +213,27 @@ export function CustomerDetailPanel({
     },
   ];
 
+  function onVehicleCreated(vehicleId?: string) {
+    scrollToSection("vehicles");
+    setVehiclesPulse((n) => n + 1);
+    if (vehicleId) {
+      try {
+        sessionStorage.setItem(HIGHLIGHT_VEHICLE_ACTIONS_KEY, vehicleId);
+      } catch {
+        // ignore
+      }
+      setHighlightVehicleId(vehicleId);
+    }
+    toast.message(tv("nextStepAfterCreate"), {
+      duration: NEXT_STEP_DURATION_MS,
+    });
+  }
+
   const mobileCtas = canWrite ? (
     <CreateVehicleModal
       customerId={customer.id}
       customerName={customer.name}
-      onCreated={() => scrollToSection("vehicles")}
+      onCreated={onVehicleCreated}
       trigger={
         <Button
           type="button"
@@ -304,12 +383,13 @@ export function CustomerDetailPanel({
             title={t("vehicles")}
             subtitle={t("vehiclesDescription")}
             sectionRef={setSectionRef("vehicles")}
+            highlighted={highlightVehicles}
             action={
               canWrite ? (
                 <CreateVehicleModal
                   customerId={customer.id}
                   customerName={customer.name}
-                  onCreated={() => scrollToSection("vehicles")}
+                  onCreated={onVehicleCreated}
                   trigger={
                     <Button type="button" size="md" className="text-white">
                       <Plus className="size-4 text-white" aria-hidden />
@@ -328,6 +408,11 @@ export function CustomerDetailPanel({
               canWrite={canWrite}
               canCreateOrder={canCreateOrder}
               canCreateInspection={canCreateInspection}
+              highlightNextActionsForId={
+                highlightVehicleActions && highlightActionsReady
+                  ? highlightVehicleId
+                  : null
+              }
               empty={
                 <EmptyState
                   icon={Car}

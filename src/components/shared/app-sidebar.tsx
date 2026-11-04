@@ -2,15 +2,23 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
+import { createPortal } from "react-dom";
 import { useTranslations } from "next-intl";
-import { ChevronDown, X } from "lucide-react";
+import { ChevronDown, List, Plus, X } from "lucide-react";
 import { AppLogoMark } from "@/components/brand/app-logo";
 import {
   isCounterSalesPath,
   isInventoryPartsPath,
   navGroupsForRole,
   type AppRole,
+  type NavFlyoutItem,
   type NavItem,
 } from "@/components/shared/nav-items";
 import { SidebarUserCard } from "@/components/shared/sidebar-user-card";
@@ -43,6 +51,8 @@ type AppSidebarProps = {
   roleLabel: string;
 };
 
+type FlyoutPos = { top: number; left: number };
+
 function childIsActive(pathname: string, href: string, key: string): boolean {
   if (key === "counterSales") return isCounterSalesPath(pathname);
   return pathname === href || pathname.startsWith(`${href}/`);
@@ -67,6 +77,183 @@ function parentLinkIsActive(pathname: string, item: NavItem): boolean {
   return parentIsActive(pathname, item);
 }
 
+function isFlyoutActive(pathname: string, href: string): boolean {
+  if (href.includes("?")) return false;
+  if (href.endsWith("/new")) return pathname === href;
+  return pathname === href || pathname.startsWith(`${href}/`);
+}
+
+function SidebarNavFlyoutHost({
+  item,
+  pathname,
+  flyoutsEnabled,
+  onNavigate,
+  children,
+}: {
+  item: NavItem;
+  pathname: string;
+  flyoutsEnabled: boolean;
+  onNavigate: () => void;
+  children: ReactNode;
+}) {
+  const t = useTranslations("nav");
+  const flyoutItems = item.flyout ?? [];
+  const hasFlyout = flyoutItems.length > 0 && flyoutsEnabled;
+  const itemRef = useRef<HTMLDivElement>(null);
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [flyoutOpen, setFlyoutOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  const [pos, setPos] = useState<FlyoutPos>({ top: 0, left: 0 });
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const clearCloseTimer = useCallback(() => {
+    if (closeTimer.current) {
+      clearTimeout(closeTimer.current);
+      closeTimer.current = null;
+    }
+  }, []);
+
+  const closeFlyout = useCallback(() => {
+    clearCloseTimer();
+    setFlyoutOpen(false);
+  }, [clearCloseTimer]);
+
+  const openFlyout = useCallback(() => {
+    if (!hasFlyout || !itemRef.current) return;
+    clearCloseTimer();
+    const rect = itemRef.current.getBoundingClientRect();
+    const gap = 8;
+    const menuWidth = 216;
+    const maxLeft = window.innerWidth - menuWidth - gap;
+    setPos({
+      top: Math.max(gap, Math.min(rect.top, window.innerHeight - gap - 48)),
+      left: Math.min(rect.right + gap, maxLeft),
+    });
+    setFlyoutOpen(true);
+  }, [clearCloseTimer, hasFlyout]);
+
+  const scheduleClose = useCallback(() => {
+    clearCloseTimer();
+    closeTimer.current = setTimeout(() => setFlyoutOpen(false), 120);
+  }, [clearCloseTimer]);
+
+  useEffect(() => () => clearCloseTimer(), [clearCloseTimer]);
+
+  useEffect(() => {
+    if (!flyoutsEnabled) closeFlyout();
+  }, [flyoutsEnabled, closeFlyout]);
+
+  useEffect(() => {
+    function onHide() {
+      closeFlyout();
+    }
+    function onVisibilityChange() {
+      if (document.visibilityState === "hidden") closeFlyout();
+    }
+    window.addEventListener("blur", onHide);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      window.removeEventListener("blur", onHide);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, [closeFlyout]);
+
+  useEffect(() => {
+    closeFlyout();
+  }, [pathname, closeFlyout]);
+
+  useEffect(() => {
+    if (!flyoutOpen) return;
+
+    function updatePos() {
+      if (!itemRef.current) return;
+      const rect = itemRef.current.getBoundingClientRect();
+      const gap = 8;
+      const menuWidth = 216;
+      const maxLeft = window.innerWidth - menuWidth - gap;
+      setPos({
+        top: Math.max(gap, Math.min(rect.top, window.innerHeight - gap - 48)),
+        left: Math.min(rect.right + gap, maxLeft),
+      });
+    }
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") closeFlyout();
+    }
+
+    window.addEventListener("scroll", updatePos, true);
+    window.addEventListener("resize", updatePos);
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("scroll", updatePos, true);
+      window.removeEventListener("resize", updatePos);
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [flyoutOpen, closeFlyout]);
+
+  const flyoutMenu =
+    hasFlyout && flyoutOpen && mounted
+      ? createPortal(
+          <div
+            className="pointer-events-auto fixed z-100 min-w-54 overflow-hidden rounded-lg border border-slate-200 bg-white py-2 shadow-lg shadow-slate-900/15"
+            style={{ top: pos.top, left: pos.left }}
+            onMouseEnter={openFlyout}
+            onMouseLeave={scheduleClose}
+          >
+            <p className="px-3 pb-1.5 pt-0.5 text-[10px] font-bold uppercase tracking-widest text-blue-700/80">
+              {t(item.key)}
+            </p>
+            <div className="space-y-0.5 px-1.5">
+              {flyoutItems.map((action: NavFlyoutItem) => {
+                const actionActive = isFlyoutActive(pathname, action.href);
+                const ActionIcon = action.kind === "add" ? Plus : List;
+                return (
+                  <Link
+                    key={`${action.labelKey}-${action.href}`}
+                    href={action.href}
+                    onClick={onNavigate}
+                    className={cn(
+                      "flex min-h-10 items-center gap-2.5 rounded-md px-3 py-2 text-sm transition-colors",
+                      actionActive
+                        ? "bg-blue-50 font-semibold text-blue-800"
+                        : "text-slate-700 hover:bg-slate-50 hover:text-slate-900",
+                    )}
+                  >
+                    <ActionIcon
+                      className={cn(
+                        "size-3.5 shrink-0",
+                        action.kind === "add"
+                          ? "text-blue-600"
+                          : "text-slate-400",
+                      )}
+                      aria-hidden
+                    />
+                    <span>{t(`flyout.${action.labelKey}`)}</span>
+                  </Link>
+                );
+              })}
+            </div>
+          </div>,
+          document.body,
+        )
+      : null;
+
+  return (
+    <div
+      ref={itemRef}
+      className="relative"
+      onMouseEnter={hasFlyout ? openFlyout : undefined}
+      onMouseLeave={hasFlyout ? scheduleClose : undefined}
+    >
+      {children}
+      {flyoutMenu}
+    </div>
+  );
+}
+
 export function AppSidebar({
   role,
   appName,
@@ -80,6 +267,7 @@ export function AppSidebar({
   const groups = navGroupsForRole(role);
   const { state, isMobile, setOpenMobile } = useSidebar();
   const collapsed = state === "collapsed" && !isMobile;
+  const flyoutsEnabled = !isMobile;
   const [openMenus, setOpenMenus] = useState<Record<string, boolean>>({});
   const [menusPath, setMenusPath] = useState(pathname);
   if (menusPath !== pathname) {
@@ -93,6 +281,10 @@ export function AppSidebar({
 
   function toggleMenu(key: string) {
     setOpenMenus((prev) => ({ ...prev, [key]: !prev[key] }));
+  }
+
+  function closeMobile() {
+    if (isMobile) setOpenMobile(false);
   }
 
   return (
@@ -154,29 +346,38 @@ export function AppSidebar({
                     if (!hasChildren) {
                       return (
                         <SidebarMenuItem key={href}>
-                          <SidebarMenuButton
-                            asChild
-                            isActive={active}
-                            size="lg"
-                            className={cn(
-                              "min-h-11 rounded-lg group-data-[collapsible=icon]:min-h-10 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:rounded-lg",
-                              active &&
-                                "data-[active=true]:bg-blue-600 data-[active=true]:text-white data-[active=true]:hover:bg-blue-700 data-[active=true]:hover:text-white",
-                            )}
+                          <SidebarNavFlyoutHost
+                            item={item}
+                            pathname={pathname}
+                            flyoutsEnabled={flyoutsEnabled}
+                            onNavigate={closeMobile}
                           >
-                            <Link
-                              href={href}
-                              title={t(key)}
-                              onClick={() => {
-                                if (isMobile) setOpenMobile(false);
-                              }}
+                            <SidebarMenuButton
+                              asChild
+                              isActive={active}
+                              size="lg"
+                              className={cn(
+                                "min-h-11 rounded-lg group-data-[collapsible=icon]:min-h-10 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:rounded-lg",
+                                active &&
+                                  "data-[active=true]:bg-blue-600 data-[active=true]:text-white data-[active=true]:hover:bg-blue-700 data-[active=true]:hover:text-white",
+                              )}
                             >
-                              <Icon aria-hidden />
-                              <span className="group-data-[collapsible=icon]:hidden">
-                                {t(key)}
-                              </span>
-                            </Link>
-                          </SidebarMenuButton>
+                              <Link
+                                href={href}
+                                title={
+                                  collapsed && !item.flyout?.length
+                                    ? t(key)
+                                    : undefined
+                                }
+                                onClick={closeMobile}
+                              >
+                                <Icon aria-hidden />
+                                <span className="group-data-[collapsible=icon]:hidden">
+                                  {t(key)}
+                                </span>
+                              </Link>
+                            </SidebarMenuButton>
+                          </SidebarNavFlyoutHost>
                         </SidebarMenuItem>
                       );
                     }
@@ -184,27 +385,32 @@ export function AppSidebar({
                     if (collapsed) {
                       return (
                         <SidebarMenuItem key={href}>
-                          <SidebarMenuButton
-                            asChild
-                            isActive={active}
-                            size="lg"
-                            className={cn(
-                              "min-h-11 rounded-lg group-data-[collapsible=icon]:min-h-10 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:rounded-lg",
-                              active &&
-                                "data-[active=true]:bg-blue-600 data-[active=true]:text-white data-[active=true]:hover:bg-blue-700 data-[active=true]:hover:text-white",
-                            )}
+                          <SidebarNavFlyoutHost
+                            item={item}
+                            pathname={pathname}
+                            flyoutsEnabled={flyoutsEnabled}
+                            onNavigate={closeMobile}
                           >
-                            <Link
-                              href={href}
-                              title={t(key)}
-                              onClick={() => {
-                                if (isMobile) setOpenMobile(false);
-                              }}
+                            <SidebarMenuButton
+                              asChild
+                              isActive={active}
+                              size="lg"
+                              className={cn(
+                                "min-h-11 rounded-lg group-data-[collapsible=icon]:min-h-10 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:rounded-lg",
+                                active &&
+                                  "data-[active=true]:bg-blue-600 data-[active=true]:text-white data-[active=true]:hover:bg-blue-700 data-[active=true]:hover:text-white",
+                              )}
                             >
-                              <Icon aria-hidden />
-                              <span className="sr-only">{t(key)}</span>
-                            </Link>
-                          </SidebarMenuButton>
+                              <Link
+                                href={href}
+                                title={item.flyout?.length ? undefined : t(key)}
+                                onClick={closeMobile}
+                              >
+                                <Icon aria-hidden />
+                                <span className="sr-only">{t(key)}</span>
+                              </Link>
+                            </SidebarMenuButton>
+                          </SidebarNavFlyoutHost>
                         </SidebarMenuItem>
                       );
                     }
@@ -213,55 +419,61 @@ export function AppSidebar({
 
                     return (
                       <SidebarMenuItem key={href}>
-                        <div
-                          className={cn(
-                            "flex min-h-11 items-stretch overflow-hidden rounded-lg",
-                            parentActive
-                              ? "bg-blue-600 text-white hover:bg-blue-700"
-                              : "hover:bg-sidebar-accent",
-                          )}
+                        <SidebarNavFlyoutHost
+                          item={item}
+                          pathname={pathname}
+                          flyoutsEnabled={flyoutsEnabled}
+                          onNavigate={closeMobile}
                         >
-                          <Link
-                            href={href}
-                            title={t(key)}
+                          <div
                             className={cn(
-                              "flex min-h-11 min-w-0 flex-1 items-center gap-2 px-2 text-sm font-medium outline-none",
+                              "flex min-h-11 items-stretch overflow-hidden rounded-lg",
                               parentActive
-                                ? "text-white"
-                                : "text-sidebar-foreground",
+                                ? "bg-blue-600 text-white hover:bg-blue-700"
+                                : "hover:bg-sidebar-accent",
                             )}
-                            onClick={() => {
-                              setOpenMenus((prev) => ({
-                                ...prev,
-                                [key]: true,
-                              }));
-                              if (isMobile) setOpenMobile(false);
-                            }}
                           >
-                            <Icon className="size-4 shrink-0" aria-hidden />
-                            <span className="truncate">{t(key)}</span>
-                          </Link>
-                          <button
-                            type="button"
-                            className={cn(
-                              "inline-flex size-11 shrink-0 items-center justify-center outline-none",
-                              parentActive
-                                ? "text-white hover:bg-blue-800/40"
-                                : "text-sidebar-foreground hover:bg-sidebar-accent",
-                            )}
-                            aria-label={t("toggleSubmenu", { label: t(key) })}
-                            aria-expanded={menuOpen}
-                            onClick={() => toggleMenu(key)}
-                          >
-                            <ChevronDown
+                            <Link
+                              href={href}
                               className={cn(
-                                "size-4 transition-transform",
-                                menuOpen && "rotate-180",
+                                "flex min-h-11 min-w-0 flex-1 items-center gap-2 px-2 text-sm font-medium outline-none",
+                                parentActive
+                                  ? "text-white"
+                                  : "text-sidebar-foreground",
                               )}
-                              aria-hidden
-                            />
-                          </button>
-                        </div>
+                              onClick={() => {
+                                setOpenMenus((prev) => ({
+                                  ...prev,
+                                  [key]: true,
+                                }));
+                                closeMobile();
+                              }}
+                            >
+                              <Icon className="size-4 shrink-0" aria-hidden />
+                              <span className="truncate">{t(key)}</span>
+                            </Link>
+                            <button
+                              type="button"
+                              className={cn(
+                                "inline-flex size-11 shrink-0 items-center justify-center outline-none",
+                                parentActive
+                                  ? "text-white hover:bg-blue-800/40"
+                                  : "text-sidebar-foreground hover:bg-sidebar-accent",
+                              )}
+                              aria-label={t("toggleSubmenu", { label: t(key) })}
+                              aria-expanded={menuOpen}
+                              onClick={() => toggleMenu(key)}
+                            >
+                              <ChevronDown
+                                className={cn(
+                                  "size-4 transition-transform",
+                                  menuOpen && "rotate-180",
+                                )}
+                                aria-hidden
+                              />
+                            </button>
+                          </div>
+                        </SidebarNavFlyoutHost>
 
                         {menuOpen ? (
                           <SidebarMenuSub>
@@ -287,9 +499,7 @@ export function AppSidebar({
                                   >
                                     <Link
                                       href={child.href}
-                                      onClick={() => {
-                                        if (isMobile) setOpenMobile(false);
-                                      }}
+                                      onClick={closeMobile}
                                     >
                                       <span>{t(child.key)}</span>
                                     </Link>

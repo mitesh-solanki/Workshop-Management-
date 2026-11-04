@@ -20,6 +20,7 @@ import {
 import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { toast } from "@/components/ui/toast";
 import {
   gstinStateCode,
   isKnownGstStateCode,
@@ -35,6 +36,7 @@ type Props = {
     name: string;
     address: string | null;
     gstin: string | null;
+    nextJobCardNumber: number;
   };
   canEdit: boolean;
 };
@@ -88,8 +90,18 @@ export function GarageSettingsForm({ garage, canEdit }: Props) {
   const [name, setName] = useState(garage.name);
   const [address, setAddress] = useState(garage.address ?? "");
   const [gstin, setGstin] = useState(garage.gstin ?? "");
+  const [nextJobCardNumber, setNextJobCardNumber] = useState(
+    String(garage.nextJobCardNumber),
+  );
   const [state, formAction, pending] = useActionState(
-    updateGarageSettingsAction,
+    async (prev: SettingsActionState, formData: FormData) => {
+      const next = await updateGarageSettingsAction(prev, formData);
+      if (next.message) {
+        if (next.ok) toast.success(next.message);
+        else toast.error(next.message);
+      }
+      return next;
+    },
     initial,
   );
 
@@ -97,7 +109,8 @@ export function GarageSettingsForm({ garage, canEdit }: Props) {
     canEdit &&
     (name.trim() !== garage.name ||
       address.trim() !== (garage.address ?? "") ||
-      normalizeGstin(gstin) !== normalizeGstin(garage.gstin ?? ""));
+      normalizeGstin(gstin) !== normalizeGstin(garage.gstin ?? "") ||
+      nextJobCardNumber.trim() !== String(garage.nextJobCardNumber));
 
   const gstinNormalized = normalizeGstin(gstin);
   const gstinEmpty = gstinNormalized.length === 0;
@@ -114,6 +127,7 @@ export function GarageSettingsForm({ garage, canEdit }: Props) {
     setName(garage.name);
     setAddress(garage.address ?? "");
     setGstin(garage.gstin ?? "");
+    setNextJobCardNumber(String(garage.nextJobCardNumber));
   }
 
   const saveDisabled = !dirty || Boolean(gstinLiveError) || !canEdit;
@@ -178,10 +192,10 @@ export function GarageSettingsForm({ garage, canEdit }: Props) {
               />
             </FormField>
             <div className="sm:col-span-2 border-t border-slate-100 pt-3">
-              <p className="text-xs font-semibold text-slate-800">
+              <p className="text-base font-semibold leading-tight text-slate-900">
                 {t("sections.invoiceTitle")}
               </p>
-              <p className="text-xs text-slate-600">
+              <p className="mt-0.5 text-xs text-slate-600">
                 {t("sections.invoiceDescription")}
               </p>
             </div>
@@ -237,14 +251,36 @@ export function GarageSettingsForm({ garage, canEdit }: Props) {
                 })}
               </p>
             ) : null}
+            <div className="sm:col-span-2 border-t border-slate-100 pt-3">
+              <p className="text-base font-semibold leading-tight text-slate-900">
+                {t("sections.jobCardNumberTitle")}
+              </p>
+              <p className="mt-0.5 text-xs text-slate-600">
+                {t("sections.jobCardNumberDescription")}
+              </p>
+            </div>
+            <FormField
+              id="nextJobCardNumber"
+              label={t("nextJobCardNumber")}
+              hint={t("nextJobCardNumberHint")}
+              className="sm:col-span-2"
+            >
+              <Input
+                id="nextJobCardNumber"
+                name="nextJobCardNumber"
+                type="number"
+                inputMode="numeric"
+                min={1}
+                step={1}
+                value={nextJobCardNumber}
+                onChange={(e) => setNextJobCardNumber(e.target.value)}
+                required
+                disabled={!canEdit}
+                className="h-10 font-mono sm:max-w-xs"
+              />
+            </FormField>
           </div>
         </SettingsSection>
-
-        {state.ok && state.message ? (
-          <p className="mt-3 text-body text-success" role="status">
-            {state.message}
-          </p>
-        ) : null}
       </form>
     </div>
   );

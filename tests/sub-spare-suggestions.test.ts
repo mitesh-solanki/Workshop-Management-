@@ -31,6 +31,13 @@ describe("getSubSpareSuggestions", () => {
     expect(suggestions).toContain("Brake Disc");
   });
 
+  it("returns wheel-related suggestions for Wheel", () => {
+    const suggestions = getSubSpareSuggestions("Wheel");
+    expect(suggestions).toContain("Wheel Alignment");
+    expect(suggestions).toContain("Wheel Balancing");
+    expect(suggestions).toContain("Wheel Rim");
+  });
+
   it("matches partial main labels like brake pad category via brake", () => {
     const suggestions = getSubSpareSuggestions("Front Brake");
     expect(suggestions.some((name) => name.toLowerCase().includes("brake"))).toBe(
@@ -40,5 +47,11 @@ describe("getSubSpareSuggestions", () => {
 
   it("returns empty for unknown labels", () => {
     expect(getSubSpareSuggestions("Unknown Widget XYZ")).toEqual([]);
+  });
+});
+
+describe("Wheel main spare", () => {
+  it("suggests Wheel when typing whe", () => {
+    expect(filterInspectionMainPartNames("whe")).toContain("Wheel");
   });
 });

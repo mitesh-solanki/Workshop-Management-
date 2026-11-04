@@ -32,6 +32,8 @@ type FormSelectProps = {
   /** Show an X to clear back to empty when a non-empty value is selected. */
   clearable?: boolean;
   clearLabel?: string;
+  /** Prefix shown only on the closed trigger, e.g. "Status" → "Status: All". */
+  selectedPrefix?: string;
   className?: string;
   triggerClassName?: string;
   options: readonly FormSelectOption[];
@@ -61,6 +63,7 @@ export function FormSelect({
   required,
   clearable = false,
   clearLabel = "Clear",
+  selectedPrefix,
   className,
   triggerClassName,
   options,
@@ -136,7 +139,16 @@ export function FormSelect({
             </SelectValue>
           ) : (
             <SelectValue placeholder={placeholder}>
-              {selectedLabel}
+              {selectedPrefix ? (
+                <span className="truncate">
+                  <span className="font-semibold text-slate-500">
+                    {selectedPrefix}:{" "}
+                  </span>
+                  <span>{selectedLabel}</span>
+                </span>
+              ) : (
+                selectedLabel
+              )}
             </SelectValue>
           )}
         </SelectTrigger>

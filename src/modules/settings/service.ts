@@ -1,7 +1,7 @@
 import "server-only";
 
 import { writeAuditLog } from "@/lib/audit";
-import { ForbiddenError, NotFoundError } from "@/lib/errors";
+import { AppError, ForbiddenError, NotFoundError } from "@/lib/errors";
 import { requireRole, type RoleSession } from "@/lib/rbac";
 import {
   findGarageById,
@@ -11,6 +11,10 @@ import {
   updateGarageSettingsSchema,
   type UpdateGarageSettingsInput,
 } from "@/modules/settings/schema";
+import {
+  getNextJobCardNumber,
+  setNextJobCardNumberSeed,
+} from "@/modules/service-orders/repo";
 
 const SETTINGS_ROLES = ["OWNER", "MANAGER"] as const;
 
@@ -20,7 +24,8 @@ export async function getGarageSettings(session: RoleSession) {
   if (!garage) {
     throw new NotFoundError();
   }
-  return garage;
+  const nextJobCardNumber = await getNextJobCardNumber(session.garageId);
+  return { ...garage, nextJobCardNumber };
 }
 
 export async function updateGarageSettings(
@@ -41,6 +46,22 @@ export async function updateGarageSettings(
     throw new NotFoundError();
   }
 
+  let nextJobCardNumber: number;
+  try {
+    nextJobCardNumber = await setNextJobCardNumberSeed(
+      session.garageId,
+      input.nextJobCardNumber,
+    );
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      error.message === "JOB_CARD_NUMBER_SEED_TOO_LOW"
+    ) {
+      throw new AppError("orders.job_card_number_seed_too_low", 400);
+    }
+    throw error;
+  }
+
   await writeAuditLog({
     garageId: session.garageId,
     actorId: session.userId,
@@ -51,10 +72,11 @@ export async function updateGarageSettings(
       name: garage.name,
       address: garage.address,
       gstin: garage.gstin,
+      nextJobCardNumber,
     },
   });
 
-  return garage;
+  return { ...garage, nextJobCardNumber };
 }
 
 /** Test helper: attempt to read another garage while scoped to the session. */

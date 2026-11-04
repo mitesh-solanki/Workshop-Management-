@@ -42,6 +42,10 @@ export type FormatOrderTimelineLabels = {
   billFinalized: (invoiceNumber: string, amount: string) => string;
   billFinalizedNoAmount: (invoiceNumber: string) => string;
   billDraftDeleted: string;
+  billDeleted: (invoiceNumber: string) => string;
+  billDeletedNoNumber: string;
+  billLinesUpdated: (amount: string) => string;
+  billLinesUpdatedNoAmount: string;
   paymentReceived: (method: string, amount: string) => string;
   refundGiven: (method: string, amount: string) => string;
   creditNote: (
@@ -157,6 +161,20 @@ export function formatOrderTimelineEvent(
 
   if (action === "billing.invoice_draft_deleted") {
     return labels.billDraftDeleted;
+  }
+
+  if (action === "billing.invoice_deleted") {
+    const invoiceNumber = asString(meta.invoiceNumber);
+    return invoiceNumber
+      ? labels.billDeleted(invoiceNumber)
+      : labels.billDeletedNoNumber;
+  }
+
+  if (action === "billing.invoice_lines_updated") {
+    const amount = money(asNumber(meta.totalPaise), locale);
+    return amount
+      ? labels.billLinesUpdated(amount)
+      : labels.billLinesUpdatedNoAmount;
   }
 
   if (action === "billing.payment_recorded") {

@@ -23,6 +23,8 @@ import {
   isBillableOrderLineType,
   normalizePaymentBreakdown,
   recordPaymentSchema,
+  resolveInvoiceEditLineTax,
+  updateInvoiceLinesSchema,
 } from "@/modules/billing/schema";
 import { defaultHsnOrSac } from "@/modules/estimates/schema";
 
@@ -36,6 +38,9 @@ vi.mock("@/modules/billing/repo", () => ({
   recordPaymentRow: vi.fn(),
   recordRefundRow: vi.fn(),
   createCreditNoteRow: vi.fn(),
+  replaceInvoiceLinesRow: vi.fn(),
+  deleteInvoiceRow: vi.fn(),
+  deleteDraftInvoiceRow: vi.fn(),
 }));
 
 vi.mock("@/modules/estimates/repo", () => ({
@@ -275,6 +280,73 @@ describe("payment breakdown", () => {
         cardPaise: 0,
       }).success,
     ).toBe(true);
+  });
+});
+
+describe("updateInvoiceLinesSchema", () => {
+  it("accepts labour and part lines with rupee prices", () => {
+    const parsed = updateInvoiceLinesSchema.parse({
+      invoiceId: "inv-1",
+      lines: [
+        {
+          type: "LABOUR",
+          description: "Oil change",
+          quantity: "1",
+          unitPricePaise: "500",
+        },
+        {
+          type: "PART",
+          description: "Oil filter",
+          quantity: "2",
+          unitPricePaise: "150.50",
+        },
+      ],
+    });
+    expect(parsed.lines).toHaveLength(2);
+    expect(parsed.lines[0]?.unitPricePaise).toBe(50_000);
+    expect(parsed.lines[1]?.unitPricePaise).toBe(15_050);
+    expect(parsed.lines[1]?.quantity).toBe(2);
+  });
+
+  it("rejects an empty line list", () => {
+    expect(
+      updateInvoiceLinesSchema.safeParse({
+        invoiceId: "inv-1",
+        lines: [],
+      }).success,
+    ).toBe(false);
+  });
+});
+
+describe("resolveInvoiceEditLineTax", () => {
+  it("keeps catalogue HSN when the form only patches price", () => {
+    expect(
+      resolveInvoiceEditLineTax({
+        type: "PART",
+        existing: { gstRatePercent: 18, hsnOrSac: "8708" },
+        part: { gstRatePercent: 18, hsn: "87089900" },
+      }),
+    ).toEqual({ gstRatePercent: 18, hsnOrSac: "87089900" });
+  });
+
+  it("uses the newly selected part GST and HSN over the old line", () => {
+    expect(
+      resolveInvoiceEditLineTax({
+        type: "PART",
+        existing: { gstRatePercent: 18, hsnOrSac: "87089900" },
+        part: { gstRatePercent: 28, hsn: "4011" },
+      }),
+    ).toEqual({ gstRatePercent: 28, hsnOrSac: "4011" });
+  });
+
+  it("keeps the existing bill codes when there is no linked part", () => {
+    expect(
+      resolveInvoiceEditLineTax({
+        type: "LABOUR",
+        existing: { gstRatePercent: 18, hsnOrSac: "998714" },
+        part: null,
+      }),
+    ).toEqual({ gstRatePercent: 18, hsnOrSac: "998714" });
   });
 });
 

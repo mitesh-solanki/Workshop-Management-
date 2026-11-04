@@ -9,9 +9,11 @@ import {
   createAndFinalizeInvoice,
   createCreditNoteRow,
   createDraftInvoice,
+  deleteInvoiceRow,
   finalizeInvoiceInTransaction,
   recordPaymentRow,
-  recordRefundRow } from "@/modules/billing/repo";
+  recordRefundRow,
+  updatePaymentRow } from "@/modules/billing/repo";
 import {
   pendingBalancePaise,
   refundDuePaise } from "@/modules/billing/balance";
@@ -89,6 +91,7 @@ describe("billing against Postgres", () => {
         garageId,
         customerId,
         vehicleId,
+        jobCardNumber: 1,
         complaint: "Billing test",
         status: "READY" },
       select: { id: true } });
@@ -390,6 +393,49 @@ describe("billing against Postgres", () => {
       where: { id: invoice!.id, garageId },
       select: { amountPaidPaise: true } });
     expect(still?.amountPaidPaise).toBe(90_000);
+
+    const partialId =
+      partial && "payment" in partial ? partial.payment!.id : "";
+    expect(partialId).toBeTruthy();
+
+    const edited = await updatePaymentRow(garageId, {
+      invoiceId: invoice!.id,
+      paymentId: partialId,
+      method: "CASH",
+      amountPaise: 20_000,
+      cashPaise: 20_000,
+      upiPaise: 0,
+      cardPaise: 0,
+      note: "fixed amount",
+      actorId: userId });
+    expect(edited && "invoice" in edited && edited.invoice?.amountPaidPaise).toBe(
+      70_000,
+    );
+
+    const cascadeDelete = await deleteInvoiceRow(
+      garageId,
+      invoice!.id,
+      userId,
+    );
+    expect(cascadeDelete && "id" in cascadeDelete && cascadeDelete.id).toBe(
+      invoice!.id,
+    );
+    expect(
+      cascadeDelete &&
+        "paymentsCollectedPaise" in cascadeDelete &&
+        cascadeDelete.paymentsCollectedPaise,
+    ).toBe(70_000);
+
+    const gone = await prisma.invoice.findFirst({
+      where: { id: invoice!.id, garageId },
+      select: { id: true },
+    });
+    expect(gone).toBeNull();
+
+    const paymentsLeft = await prisma.payment.count({
+      where: { invoiceId: invoice!.id, garageId },
+    });
+    expect(paymentsLeft).toBe(0);
   });
 
   it("shows refund due after credit note on a fully paid invoice and records cash returned", async () => {

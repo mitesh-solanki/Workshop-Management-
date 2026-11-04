@@ -21,6 +21,11 @@ import {
   updateServiceOrderLineAction,
   type ServiceOrderActionState,
 } from "@/app/actions/service-orders";
+import {
+  SyncInvoicePrompt,
+  useInvoiceSyncPrompt,
+  type BillSyncMode,
+} from "@/modules/billing/components/sync-invoice-prompt";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -42,7 +47,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { toast } from "@/components/ui/toast";
-import { NoteSuggestInput } from "@/modules/inspections/components/note-suggest-input";
 import {
   formatRupees,
   isZeroRupeesInput,
@@ -89,6 +93,8 @@ type Props = {
   hideQuantity?: boolean;
   /** Optional label for the unit-price column (e.g. Amount). */
   amountLabel?: string;
+  /** Draft syncs quietly; finalized asks Yes/No. */
+  billSyncMode?: BillSyncMode;
 };
 
 const initial: ServiceOrderActionState = { ok: false };
@@ -183,6 +189,7 @@ function OrderLineItem({
   hideType = false,
   hideQuantity = false,
   amountLabel,
+  billSyncMode = "none",
   line,
   layout,
 }: {
@@ -192,6 +199,7 @@ function OrderLineItem({
   hideType?: boolean;
   hideQuantity?: boolean;
   amountLabel?: string;
+  billSyncMode?: BillSyncMode;
   line: Line;
   layout: "card" | "table";
 }) {
@@ -202,6 +210,10 @@ function OrderLineItem({
   const [editing, setEditing] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [removing, startRemove] = useTransition();
+  const { syncOpen, setSyncOpen, offerSync } = useInvoiceSyncPrompt(
+    orderId,
+    billSyncMode,
+  );
   const bound = useMemo(
     () => updateServiceOrderLineAction.bind(null, orderId, line.id),
     [orderId, line.id],
@@ -407,6 +419,7 @@ function OrderLineItem({
     );
     if (result.ok) {
       toast.success(result.message ?? t("inventoryPriceApplied"));
+      offerSync();
       router.refresh();
       return;
     }
@@ -496,6 +509,7 @@ function OrderLineItem({
         partId: isPart ? editPartId || null : null,
       });
       setEditing(false);
+      offerSync();
       router.refresh();
       return;
     }
@@ -512,6 +526,7 @@ function OrderLineItem({
     isPart,
     line.description,
     line.unitPricePaise,
+    offerSync,
     router,
   ]);
 
@@ -543,6 +558,7 @@ function OrderLineItem({
           partId: isPart ? editPartId || null : null,
         });
         setEditing(false);
+        offerSync();
         router.refresh();
         return;
       }
@@ -560,6 +576,7 @@ function OrderLineItem({
       if (result.ok) {
         setDeleteOpen(false);
         toast.success(result.message ?? t("lineRemoved"));
+        offerSync();
         return;
       }
       toast.error(result.message ?? t("errors.deleteFailed"));
@@ -751,14 +768,13 @@ function OrderLineItem({
             </>
           ) : line.type === "OUTSIDE" ? (
             <>
-              <NoteSuggestInput
+              <Input
                 id={`line-desc-${line.id}`}
                 name="description"
                 required
                 maxLength={500}
                 value={editDescription}
-                suggestionMode="outsideWork"
-                onValueChange={setEditDescription}
+                onChange={(event) => setEditDescription(event.target.value)}
                 className={controlClass}
                 placeholder={t("outsideWorkDescriptionPlaceholder")}
               />
@@ -945,13 +961,12 @@ function OrderLineItem({
                   nameOnlyLabels={hidePrices}
                 />
               ) : line.type === "OUTSIDE" ? (
-                <NoteSuggestInput
+                <Input
                   id={`line-desc-${line.id}`}
                   required
                   maxLength={500}
                   value={editDescription}
-                  suggestionMode="outsideWork"
-                  onValueChange={setEditDescription}
+                  onChange={(event) => setEditDescription(event.target.value)}
                   className={controlClass}
                   placeholder={t("outsideWorkDescriptionPlaceholder")}
                 />
@@ -1202,6 +1217,11 @@ function OrderLineItem({
           </div>
         ) : null}
       </div>
+      <SyncInvoicePrompt
+        orderId={orderId}
+        open={syncOpen}
+        onOpenChange={setSyncOpen}
+      />
     </>
   );
 }
@@ -1214,6 +1234,7 @@ export function OrderLinesTable({
   hideType = false,
   hideQuantity = false,
   amountLabel,
+  billSyncMode = "none",
 }: Props) {
   const t = useTranslations("orders");
   const isMobile = useIsMdDown();
@@ -1235,6 +1256,7 @@ export function OrderLinesTable({
             hideType={hideType}
             hideQuantity={hideQuantity}
             amountLabel={amountLabel}
+            billSyncMode={billSyncMode}
             line={line}
             layout="card"
           />
@@ -1303,6 +1325,7 @@ export function OrderLinesTable({
               hideType={hideType}
               hideQuantity={hideQuantity}
               amountLabel={amountLabel}
+              billSyncMode={billSyncMode}
               line={line}
               layout="table"
             />

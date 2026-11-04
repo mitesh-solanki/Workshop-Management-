@@ -26,6 +26,24 @@ const SUB_SPARES: Record<string, readonly string[]> = {
   ],
   tyres: ["Tyre", "Tube", "Flap", "Wheel Rim", "Wheel Nut", "Wheel Bearing"],
   tyre: ["Tyre", "Tube", "Flap", "Wheel Rim", "Wheel Nut"],
+  wheel: [
+    "Wheel Alignment",
+    "Wheel Balancing",
+    "Wheel Rim",
+    "Wheel Nut",
+    "Wheel Bearing",
+    "Alloy Wheel",
+    "Wheel Cap",
+  ],
+  wheels: [
+    "Wheel Alignment",
+    "Wheel Balancing",
+    "Wheel Rim",
+    "Wheel Nut",
+    "Wheel Bearing",
+    "Alloy Wheel",
+    "Wheel Cap",
+  ],
   battery: ["Battery", "Battery Terminal", "Self Starter Relay", "Alternator"],
   lights: [
     "Headlight Bulb",
@@ -112,6 +130,7 @@ export const INSPECTION_MAIN_PART_NAMES = [
   "Steering",
   "Suspension",
   "Tyres",
+  "Wheel",
   "Wiper",
 ] as const;
 

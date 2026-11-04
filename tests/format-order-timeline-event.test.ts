@@ -27,6 +27,10 @@ const labels: FormatOrderTimelineLabels = {
   billFinalizedNoAmount: (invoiceNumber) =>
     `Bill finalized as ${invoiceNumber}`,
   billDraftDeleted: "Draft bill removed",
+  billDeleted: (invoiceNumber) => `Bill ${invoiceNumber} removed`,
+  billDeletedNoNumber: "Bill removed",
+  billLinesUpdated: (amount) => `Bill lines updated — total ${amount}`,
+  billLinesUpdatedNoAmount: "Bill lines updated",
   paymentReceived: (method, amount) =>
     `Payment received — ${method}, ${amount}`,
   refundGiven: (method, amount) =>
@@ -91,5 +95,24 @@ describe("formatOrderTimelineEvent", () => {
         },
       ),
     ).toBe("Status changed from Waiting to In progress");
+  });
+
+  it("explains bill delete and line updates in plain language", () => {
+    expect(
+      formatOrderTimelineEvent(
+        "billing.invoice_deleted",
+        { invoiceNumber: "INV-2026-27-0010" },
+        labels,
+      ),
+    ).toBe("Bill INV-2026-27-0010 removed");
+
+    expect(
+      formatOrderTimelineEvent(
+        "billing.invoice_lines_updated",
+        { totalPaise: 195_054 },
+        labels,
+        "en-IN",
+      ),
+    ).toContain("Bill lines updated — total");
   });
 });

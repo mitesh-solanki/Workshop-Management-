@@ -5,15 +5,12 @@ import { createPortal } from "react-dom";
 import { useTranslations } from "next-intl";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import { filterOutsideWorkSuggestions } from "@/modules/inspections/outside-work-suggestions";
 import { filterSubSpareSuggestions } from "@/modules/inspections/sub-spare-suggestions";
 
 type Props = {
   id: string;
   value: string;
   mainSpareLabel?: string;
-  /** Sub-spare suggestions for a main part, or outside-work service suggestions. */
-  suggestionMode?: "subSpare" | "outsideWork";
   onValueChange: (value: string) => void;
   placeholder?: string;
   disabled?: boolean;
@@ -23,12 +20,11 @@ type Props = {
   maxLength?: number;
 };
 
-/** Notes field with autocomplete (portaled so accordion/table never clips it). */
+/** Notes field with sub-spare autocomplete (portaled so accordion/table never clips it). */
 export function NoteSuggestInput({
   id,
   value,
   mainSpareLabel = "",
-  suggestionMode = "subSpare",
   onValueChange,
   placeholder,
   disabled,
@@ -51,15 +47,8 @@ export function NoteSuggestInput({
     maxHeight: 240,
   });
 
-  const suggestions =
-    suggestionMode === "outsideWork"
-      ? filterOutsideWorkSuggestions(value)
-      : filterSubSpareSuggestions(mainSpareLabel, value);
+  const suggestions = filterSubSpareSuggestions(mainSpareLabel, value);
   const showList = open && !disabled && suggestions.length > 0;
-  const listAriaLabel =
-    suggestionMode === "outsideWork"
-      ? t("outsideWorkSuggestions")
-      : t("subSpareSuggestions");
 
   useEffect(() => {
     setMounted(true);
@@ -133,7 +122,7 @@ export function NoteSuggestInput({
             ref={listRef}
             id={listboxId}
             role="listbox"
-            aria-label={listAriaLabel}
+            aria-label={t("subSpareSuggestions")}
             style={{
               position: "fixed",
               top: menuPos.top,

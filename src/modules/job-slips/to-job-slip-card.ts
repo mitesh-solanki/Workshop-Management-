@@ -3,6 +3,7 @@ import type { ServiceOrderStatusValue } from "@/modules/service-orders/schema";
 
 export type JobSlipOrderSource = {
   id: string;
+  jobCardNumber: number;
   status: string;
   complaint: string;
   bay: string | null;
@@ -58,6 +59,7 @@ export function toJobSlipCardData(
 ): JobSlipCardData {
   return {
     id: order.id,
+    jobCardNumber: order.jobCardNumber,
     status: order.status as ServiceOrderStatusValue,
     needsPricing: orderNeedsPricing(order),
     complaint: order.complaint,

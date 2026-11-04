@@ -53,7 +53,7 @@ export async function listVehiclesByCustomerId(
   return prisma.vehicle.findMany({
     where: { garageId, customerId },
     select: vehicleSelect,
-    orderBy: { registrationNumber: "asc" },
+    orderBy: { createdAt: "desc" },
     take: 500,
   });
 }

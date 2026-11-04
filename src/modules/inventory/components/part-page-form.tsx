@@ -257,16 +257,21 @@ export function PartPageForm(props: Props) {
         ) : stockFromVendors ? (
           <>
             <input type="hidden" name="openingStock" value="0" />
-            <QuantityStepper
-              key={`auto-stock-${vendorStockQty}`}
+            <FormField
               id={`${idPrefix}-openingStock`}
-              name="openingStockDisplay"
               label={t("openingStock")}
-              defaultValue={vendorStockQty}
-              min={0}
-              disabled
-              hint={t("openingStockFromVendorsHint")}
-            />
+              hint={t("stockAfterReceive", {
+                count: afterSaveStock,
+                unit: displayUnit,
+              })}
+            >
+              <Input
+                id={`${idPrefix}-openingStock`}
+                value={t("stockCount", { count: 0, unit: displayUnit })}
+                disabled
+                className="h-11 min-h-11"
+              />
+            </FormField>
           </>
         ) : (
           <QuantityStepper

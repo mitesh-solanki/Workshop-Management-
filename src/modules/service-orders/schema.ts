@@ -228,8 +228,15 @@ const optionalComplaint = z
     return value.trim().slice(0, 4000);
   });
 
+const jobCardNumberField = z.coerce
+  .number({ error: "validation.required" })
+  .int({ error: "validation.invalidJobCardNumber" })
+  .min(1, { error: "validation.invalidJobCardNumber" })
+  .max(2_147_483_647, { error: "validation.invalidJobCardNumber" });
+
 export const createServiceOrderSchema = z.object({
   vehicleId: z.string().trim().min(1),
+  jobCardNumber: jobCardNumberField,
   complaint: optionalComplaint,
   requestedServices: optionalRequestedServices,
   odometerIn: optionalOdometer,
@@ -279,6 +286,7 @@ export const updateServiceOrderStatusSchema = z.object({
 /** Editable job-card fields (customer/vehicle stay fixed after create). */
 export const updateServiceOrderSchema = z
   .object({
+    jobCardNumber: jobCardNumberField,
     complaint: optionalComplaint,
     requestedServices: optionalRequestedServices,
     odometerIn: optionalOdometer,

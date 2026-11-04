@@ -8,66 +8,65 @@ import {
   useRef,
   useState,
 } from "react";
-import { ChevronDown, Plus, Trash2 } from "lucide-react";
+import { Check, Pencil, Plus, Trash2, X } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { FormSelect } from "@/components/ui/form-select";
-import { SmoothAccordion } from "@/components/ui/smooth-accordion";
 import { toast } from "@/components/ui/toast";
-import { formatRupees, parseRupeesToPaise } from "@/lib/money";
+import { sumLineGstSplit } from "@/lib/gst";
+import {
+  formatRupees,
+  normalizeRupeesInput,
+  parseRupeesToPaise,
+  sanitizeRupeesTyping,
+} from "@/lib/money";
 import { cn } from "@/lib/utils";
 import {
   createCreditNoteAction,
   type BillingActionState,
 } from "@/app/actions/billing";
 import { CREDIT_NOTE_REASONS } from "@/modules/billing/schema";
-import { GST_RATE_OPTIONS } from "@/modules/estimates/schema";
-import { QuantityStepper } from "@/modules/inventory/components/quantity-stepper";
 
 const initial: BillingActionState = { ok: false };
 
 const controlClass =
   "h-11 min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-[14px] shadow-xs outline-none focus-visible:border-blue-600 focus-visible:ring-2 focus-visible:ring-blue-600/25";
 
+const amountControlClass =
+  "h-12 min-h-12 w-full rounded-lg border border-slate-300 bg-white px-3 text-[16px] font-semibold shadow-xs outline-none focus-visible:border-blue-600 focus-visible:ring-2 focus-visible:ring-blue-600/25";
+
 const labelClass = "mb-1.5 block text-[13px] font-bold text-slate-700";
+
+const actionBtnClass =
+  "inline-flex size-11 min-h-11 min-w-11 items-center justify-center rounded-lg border border-slate-300 bg-white p-0 leading-none shadow-xs [&_svg]:size-5 [&_svg]:shrink-0";
+
+const DEFAULT_GST = "18";
+const DEFAULT_HSN = "998714";
+
+const lineGridClass =
+  "grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_10rem_minmax(6.5rem,auto)] sm:items-center sm:gap-3";
 
 type LineDraft = {
   key: string;
   description: string;
-  quantity: string;
-  unitPriceRupees: string;
-  gstRatePercent: string;
-  hsnOrSac: string;
+  amountRupees: string;
 };
 
 function emptyLine(key: string): LineDraft {
   return {
     key,
     description: "",
-    quantity: "1",
-    unitPriceRupees: "",
-    gstRatePercent: "18",
-    hsnOrSac: "998714",
+    amountRupees: "",
   };
-}
-
-function lineTotalPaise(line: LineDraft): number {
-  const qty = Number.parseInt(line.quantity, 10);
-  const unit = parseRupeesToPaise(line.unitPriceRupees);
-  const gst = Number.parseFloat(line.gstRatePercent);
-  if (!Number.isFinite(qty) || qty < 1 || unit == null) return 0;
-  if (!Number.isFinite(gst) || gst < 0) return 0;
-  const taxable = unit * qty;
-  const tax = Math.round((taxable * gst) / 100);
-  return taxable + tax;
 }
 
 type Props = {
   invoiceId: string;
   orderId: string;
+  gstSplit: "CGST_SGST" | "IGST";
 };
 
-export function CreditNoteForm({ invoiceId, orderId }: Props) {
+export function CreditNoteForm({ invoiceId, orderId, gstSplit }: Props) {
   const t = useTranslations("billing");
   const idPrefix = useId();
   const firstKey = `${idPrefix}-0`;
@@ -81,7 +80,9 @@ export function CreditNoteForm({ invoiceId, orderId }: Props) {
   const [lines, setLines] = useState<LineDraft[]>(() => [
     emptyLine(firstKey),
   ]);
-  const [openKey, setOpenKey] = useState<string | null>(null);
+  const [editingKey, setEditingKey] = useState<string | null>(firstKey);
+  const [draftDescription, setDraftDescription] = useState("");
+  const [draftAmount, setDraftAmount] = useState("");
   linesRef.current = lines;
 
   const wrapped = useMemo(() => {
@@ -89,9 +90,18 @@ export function CreditNoteForm({ invoiceId, orderId }: Props) {
       prev: BillingActionState,
       formData: FormData,
     ): Promise<BillingActionState> => {
-      const filled = linesRef.current.filter((line) => {
+      const currentLines = linesRef.current;
+      const hasZeroAmount = currentLines.some((line) => {
         if (line.description.trim().length === 0) return false;
-        const unit = parseRupeesToPaise(line.unitPriceRupees);
+        const unit = parseRupeesToPaise(line.amountRupees);
+        return unit == null || unit <= 0;
+      });
+      if (hasZeroAmount) {
+        return { ok: false, message: t("errors.creditNoteAmountRequired") };
+      }
+      const filled = currentLines.filter((line) => {
+        if (line.description.trim().length === 0) return false;
+        const unit = parseRupeesToPaise(line.amountRupees);
         return unit != null && unit > 0;
       });
       if (filled.length === 0) {
@@ -99,22 +109,42 @@ export function CreditNoteForm({ invoiceId, orderId }: Props) {
       }
       const clean = new FormData();
       clean.set("reason", String(formData.get("reason") ?? "CORRECTION"));
-      clean.set("notes", String(formData.get("notes") ?? ""));
       for (const line of filled) {
         clean.append("description", line.description.trim());
-        clean.append("quantity", line.quantity || "1");
-        clean.append("unitPriceRupees", line.unitPriceRupees);
-        clean.append("gstRatePercent", line.gstRatePercent || "18");
-        clean.append("hsnOrSac", line.hsnOrSac.trim() || "998714");
+        clean.append("quantity", "1");
+        clean.append("unitPriceRupees", line.amountRupees);
+        clean.append("gstRatePercent", DEFAULT_GST);
+        clean.append("hsnOrSac", DEFAULT_HSN);
       }
       return bound(prev, clean);
     };
   }, [bound, t]);
   const [state, formAction, pending] = useActionState(wrapped, initial);
 
-  const creditTotalPaise = lines.reduce(
-    (sum, line) => sum + lineTotalPaise(line),
-    0,
+  const sameState = gstSplit === "CGST_SGST";
+  const creditTotals = useMemo(
+    () =>
+      sumLineGstSplit(
+        lines
+          .map((line) => {
+            const unitPricePaise = parseRupeesToPaise(line.amountRupees);
+            if (unitPricePaise == null || unitPricePaise <= 0) return null;
+            return {
+              quantity: 1,
+              unitPricePaise,
+              gstRatePercent: Number(DEFAULT_GST),
+            };
+          })
+          .filter(
+            (line): line is {
+              quantity: number;
+              unitPricePaise: number;
+              gstRatePercent: number;
+            } => line != null,
+          ),
+        sameState,
+      ),
+    [lines, sameState],
   );
 
   useEffect(() => {
@@ -129,237 +159,289 @@ export function CreditNoteForm({ invoiceId, orderId }: Props) {
       const resetKey = `${idPrefix}-0`;
       setLineSeq(1);
       setLines([emptyLine(resetKey)]);
-      setOpenKey(null);
+      setEditingKey(resetKey);
+      setDraftDescription("");
+      setDraftAmount("");
     } else {
       toast.error(state.message);
     }
   }, [state, t, idPrefix]);
 
-  function updateLine(key: string, patch: Partial<LineDraft>) {
+  function beginEdit(line: LineDraft) {
+    setEditingKey(line.key);
+    setDraftDescription(line.description);
+    setDraftAmount(line.amountRupees);
+  }
+
+  function cancelEdit() {
+    const current = lines.find((line) => line.key === editingKey);
+    if (
+      current &&
+      !current.description.trim() &&
+      !current.amountRupees.trim() &&
+      lines.length > 1
+    ) {
+      removeLine(current.key);
+      return;
+    }
+    setEditingKey(null);
+    setDraftDescription("");
+    setDraftAmount("");
+  }
+
+  function saveEdit(key: string) {
+    const description = draftDescription.trim();
+    const amount = normalizeRupeesInput(draftAmount);
+    const amountPaise = parseRupeesToPaise(amount);
+    if (!description) {
+      toast.error(t("errors.creditNoteNeedItem"));
+      return;
+    }
+    if (amountPaise == null || amountPaise <= 0) {
+      toast.error(t("errors.creditNoteAmountRequired"));
+      return;
+    }
     setLines((prev) =>
-      prev.map((line) => (line.key === key ? { ...line, ...patch } : line)),
+      prev.map((line) =>
+        line.key === key
+          ? { ...line, description, amountRupees: amount }
+          : line,
+      ),
     );
+    setEditingKey(null);
+    setDraftDescription("");
+    setDraftAmount("");
   }
 
   function removeLine(key: string) {
     setLines((prev) => {
       const next = prev.filter((row) => row.key !== key);
-      if (openKey === key) {
-        setOpenKey(next[next.length - 1]?.key ?? null);
+      if (next.length === 0) {
+        const resetKey = `${idPrefix}-${lineSeq}`;
+        setLineSeq((n) => n + 1);
+        setEditingKey(resetKey);
+        setDraftDescription("");
+        setDraftAmount("");
+        return [emptyLine(resetKey)];
+      }
+      if (editingKey === key) {
+        setEditingKey(null);
+        setDraftDescription("");
+        setDraftAmount("");
       }
       return next;
     });
   }
 
   function addLine() {
-    const unfinished = lines.find((line) => line.description.trim().length === 0);
-    if (unfinished) {
-      setOpenKey(unfinished.key);
+    if (editingKey) {
+      toast.error(t("creditNoteFinishEditFirst"));
       return;
     }
     const nextKey = `${idPrefix}-${lineSeq}`;
     setLineSeq((n) => n + 1);
     setLines((prev) => [...prev, emptyLine(nextKey)]);
-    setOpenKey(nextKey);
+    setEditingKey(nextKey);
+    setDraftDescription("");
+    setDraftAmount("");
   }
 
   return (
-    <form action={formAction} className="space-y-4">
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-12">
-        <div className="min-w-0 sm:col-span-4">
-          <label htmlFor={`${idPrefix}-reason`} className={labelClass}>
-            {t("creditNoteReason")}
-          </label>
-          <FormSelect
-            id={`${idPrefix}-reason`}
-            name="reason"
-            defaultValue="CORRECTION"
-            options={CREDIT_NOTE_REASONS.map((reason) => ({
-              value: reason,
-              label: t(`reasons.${reason}`),
-            }))}
-          />
-        </div>
-        <div className="min-w-0 sm:col-span-8">
-          <label htmlFor={`${idPrefix}-notes`} className={labelClass}>
-            {t("notes")}
-          </label>
-          <input
-            id={`${idPrefix}-notes`}
-            name="notes"
-            className={controlClass}
-            placeholder={t("notesPlaceholder")}
-          />
-        </div>
+    <form action={formAction} className="max-w-2xl space-y-4">
+      <p className="text-[13px] text-slate-500">{t("creditNoteSimpleHint")}</p>
+
+      <div className="max-w-sm">
+        <label htmlFor={`${idPrefix}-reason`} className={labelClass}>
+          {t("creditNoteReason")}
+        </label>
+        <FormSelect
+          id={`${idPrefix}-reason`}
+          name="reason"
+          defaultValue="CORRECTION"
+          options={CREDIT_NOTE_REASONS.map((reason) => ({
+            value: reason,
+            label: t(`reasons.${reason}`),
+          }))}
+        />
       </div>
 
-      <div className="space-y-3">
-        {lines.map((line, index) => {
-          const total = lineTotalPaise(line);
-          const open = openKey === line.key;
-          const summary =
-            line.description.trim() ||
-            formatRupees(total);
+      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+        <div
+          className={cn(
+            lineGridClass,
+            "hidden border-b border-slate-200 bg-slate-50 px-3 py-2.5 text-[12px] font-bold tracking-wide text-slate-500 uppercase sm:grid",
+          )}
+        >
+          <span>{t("lineDescription")}</span>
+          <span className="text-center">{t("amount")}</span>
+          <span className="text-right">{t("actions")}</span>
+        </div>
 
-          return (
-            <div
-              key={line.key}
-              className="overflow-hidden rounded-[13px] border border-[#cfdcf1] bg-white shadow-[0_3px_17px_rgba(36,58,99,0.04)]"
-            >
-              <div className="flex items-center gap-2 border-b border-[#d8e4f5] bg-[#f4f8ff] px-2 py-1.5 sm:px-3">
-                <button
-                  type="button"
-                  className="flex min-h-11 min-w-0 flex-1 items-center justify-between gap-2 px-2 py-1.5 text-left"
-                  aria-expanded={open}
-                  onClick={() =>
-                    setOpenKey((current) =>
-                      current === line.key ? null : line.key,
-                    )
-                  }
-                >
-                  <span className="min-w-0">
-                    <strong className="block text-[13px] font-semibold text-slate-900">
-                      {t("creditNoteLine", { n: index + 1 })}
-                    </strong>
-                    {!open ? (
-                      <span className="mt-0.5 block truncate text-[12px] text-slate-500">
-                        {summary}
-                      </span>
-                    ) : null}
-                  </span>
-                  <ChevronDown
-                    className={cn(
-                      "size-4 shrink-0 text-slate-600 transition-transform duration-300",
-                      open && "rotate-180",
-                    )}
-                    aria-hidden
-                  />
-                </button>
-                {lines.length > 1 ? (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="min-h-11 shrink-0 gap-1.5 text-red-600 hover:bg-red-50 hover:text-red-700"
-                    onClick={() => removeLine(line.key)}
-                  >
-                    <Trash2 className="size-4" aria-hidden />
-                    {t("removeLine")}
-                  </Button>
-                ) : null}
-              </div>
-
-              <SmoothAccordion open={open}>
-                <div className="space-y-3 bg-[#fafcff] px-4 py-4">
-                  <div>
-                    <label
-                      htmlFor={`description-${line.key}`}
-                      className={labelClass}
-                    >
-                      {t("lineDescription")}
-                    </label>
-                    <input
-                      id={`description-${line.key}`}
-                      name="description"
-                      required={open}
-                      value={line.description}
-                      onChange={(e) =>
-                        updateLine(line.key, { description: e.target.value })
-                      }
-                      className={controlClass}
-                      placeholder={t("lineDescriptionPlaceholder")}
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-12">
-                    <div className="min-w-0 sm:col-span-2">
-                      <QuantityStepper
-                        id={`quantity-${line.key}`}
-                        name="quantity"
-                        label={t("quantity")}
-                        min={1}
-                        defaultValue={Number.parseInt(line.quantity, 10) || 1}
-                        onValueChange={(value) =>
-                          updateLine(line.key, { quantity: String(value) })
-                        }
-                        className="gap-1.5 [&_label]:mb-1.5 [&_label]:text-[13px] [&_label]:font-bold [&_label]:text-slate-700"
-                      />
-                    </div>
-                    <div className="min-w-0 sm:col-span-3">
-                      <label
-                        htmlFor={`unitPriceRupees-${line.key}`}
-                        className={labelClass}
-                      >
-                        {t("unitPrice")}
+        <ul className="divide-y divide-slate-100">
+          {lines.map((line) => {
+            const editing = editingKey === line.key;
+            const amountPaise = parseRupeesToPaise(line.amountRupees) ?? 0;
+            return (
+              <li key={line.key} className="px-3 py-3">
+                {editing ? (
+                  <div className={cn(lineGridClass, "sm:items-end")}>
+                    <div className="min-w-0">
+                      <label className="mb-1.5 block text-[13px] font-bold text-slate-700 sm:sr-only">
+                        {t("lineDescription")}
                       </label>
                       <input
-                        id={`unitPriceRupees-${line.key}`}
-                        name="unitPriceRupees"
-                        required={open}
-                        value={line.unitPriceRupees}
-                        onChange={(e) =>
-                          updateLine(line.key, {
-                            unitPriceRupees: e.target.value,
-                          })
+                        className={controlClass}
+                        value={draftDescription}
+                        onChange={(event) =>
+                          setDraftDescription(event.target.value)
                         }
-                        className={cn(controlClass, "tabular-nums")}
+                        placeholder={t("lineDescriptionPlaceholder")}
+                      />
+                    </div>
+                    <div className="min-w-0">
+                      <label className="mb-1.5 block text-[13px] font-bold text-slate-700 sm:sr-only">
+                        {t("amount")}
+                      </label>
+                      <input
+                        className={cn(
+                          amountControlClass,
+                          "tabular-nums sm:text-center",
+                        )}
+                        value={draftAmount}
+                        onChange={(event) =>
+                          setDraftAmount(
+                            sanitizeRupeesTyping(event.target.value),
+                          )
+                        }
                         inputMode="decimal"
                         placeholder="0"
                       />
                     </div>
-                    <div className="min-w-0 sm:col-span-2">
-                      <label
-                        htmlFor={`gstRatePercent-${line.key}`}
-                        className={labelClass}
+                    <div className="flex items-center justify-end gap-3">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        className={cn(
+                          actionBtnClass,
+                          "text-emerald-700 hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-800",
+                        )}
+                        aria-label={t("saveCreditNoteLine")}
+                        title={t("saveCreditNoteLine")}
+                        onClick={() => saveEdit(line.key)}
                       >
-                        {t("gstRate")}
-                      </label>
-                      <FormSelect
-                        id={`gstRatePercent-${line.key}`}
-                        name="gstRatePercent"
-                        required
-                        value={line.gstRatePercent}
-                        onValueChange={(value) =>
-                          updateLine(line.key, {
-                            gstRatePercent: value,
-                          })
-                        }
-                        options={GST_RATE_OPTIONS.map((rate) => ({
-                          value: String(rate),
-                          label: `${rate}%`,
-                        }))}
-                      />
-                    </div>
-                    <div className="min-w-0 col-span-2 sm:col-span-3">
-                      <label
-                        htmlFor={`hsnOrSac-${line.key}`}
-                        className={labelClass}
+                        <Check className="size-5" aria-hidden />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        className={cn(
+                          actionBtnClass,
+                          "text-slate-700 hover:bg-slate-50",
+                        )}
+                        aria-label={t("cancelEditPayment")}
+                        title={t("cancelEditPayment")}
+                        onClick={cancelEdit}
                       >
-                        {t("hsnOrSac")}
-                      </label>
-                      <input
-                        id={`hsnOrSac-${line.key}`}
-                        name="hsnOrSac"
-                        required={open}
-                        value={line.hsnOrSac}
-                        onChange={(e) =>
-                          updateLine(line.key, { hsnOrSac: e.target.value })
-                        }
-                        className={cn(controlClass, "tabular-nums")}
-                      />
-                    </div>
-                    <div className="col-span-2 flex min-w-0 flex-col justify-end sm:col-span-2">
-                      <span className={labelClass}>{t("lineTotal")}</span>
-                      <p className="flex h-11 items-center text-[15px] font-bold tabular-nums text-slate-900">
-                        {formatRupees(total)}
-                      </p>
+                        <X className="size-5" aria-hidden />
+                      </Button>
                     </div>
                   </div>
-                </div>
-              </SmoothAccordion>
+                ) : (
+                  <div className={lineGridClass}>
+                    <div className="min-w-0">
+                      <p className="text-[12px] font-bold text-slate-500 sm:hidden">
+                        {t("lineDescription")}
+                      </p>
+                      <p className="text-[14px] font-semibold text-slate-900">
+                        {line.description || t("creditNoteEmptyLine")}
+                      </p>
+                    </div>
+                    <div className="sm:text-center">
+                      <p className="text-[12px] font-bold text-slate-500 sm:hidden">
+                        {t("amount")}
+                      </p>
+                      <p className="text-[16px] font-bold tabular-nums text-slate-900">
+                        {formatRupees(amountPaise)}
+                      </p>
+                    </div>
+                    <div className="flex items-center justify-end gap-3">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        className={cn(
+                          actionBtnClass,
+                          "text-blue-700 hover:border-blue-300 hover:bg-blue-50",
+                        )}
+                        aria-label={t("editCreditNoteLine")}
+                        title={t("editCreditNoteLine")}
+                        disabled={editingKey != null}
+                        onClick={() => beginEdit(line)}
+                      >
+                        <Pencil className="size-5" aria-hidden />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        className={cn(
+                          actionBtnClass,
+                          "text-red-600 hover:border-red-300 hover:bg-red-50 hover:text-red-700",
+                        )}
+                        aria-label={t("removeLine")}
+                        title={t("removeLine")}
+                        disabled={editingKey != null}
+                        onClick={() => removeLine(line.key)}
+                      >
+                        <Trash2 className="size-5" aria-hidden />
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+
+        <dl className="flex flex-wrap items-start gap-x-6 gap-y-3 border-t border-slate-200 bg-slate-50 px-3 py-3.5 sm:flex-nowrap sm:justify-between">
+          <div>
+            <dt className="text-[13px] text-slate-500">{t("taxable")}</dt>
+            <dd className="mt-0.5 text-[14px] font-semibold tabular-nums text-slate-900">
+              {formatRupees(creditTotals.taxablePaise)}
+            </dd>
+          </div>
+          {gstSplit === "CGST_SGST" ? (
+            <>
+              <div>
+                <dt className="text-[13px] text-slate-500">{t("cgst")}</dt>
+                <dd className="mt-0.5 text-[14px] font-semibold tabular-nums text-slate-900">
+                  {formatRupees(creditTotals.cgstPaise)}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-[13px] text-slate-500">{t("sgst")}</dt>
+                <dd className="mt-0.5 text-[14px] font-semibold tabular-nums text-slate-900">
+                  {formatRupees(creditTotals.sgstPaise)}
+                </dd>
+              </div>
+            </>
+          ) : (
+            <div>
+              <dt className="text-[13px] text-slate-500">{t("igst")}</dt>
+              <dd className="mt-0.5 text-[14px] font-semibold tabular-nums text-slate-900">
+                {formatRupees(creditTotals.igstPaise)}
+              </dd>
             </div>
-          );
-        })}
+          )}
+          <div className="sm:ml-auto sm:text-right">
+            <dt className="text-[13px] text-slate-500">{t("paperTotal")}</dt>
+            <dd className="mt-0.5 text-[18px] font-bold tabular-nums text-blue-700">
+              {formatRupees(creditTotals.totalPaise)}
+            </dd>
+          </div>
+        </dl>
       </div>
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -372,25 +454,15 @@ export function CreditNoteForm({ invoiceId, orderId }: Props) {
           <Plus className="size-4" strokeWidth={2.5} aria-hidden />
           {t("addCreditNoteLine")}
         </Button>
-
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
-          <div className="text-right">
-            <p className="text-[13px] font-bold text-slate-500">
-              {t("creditNoteTotal")}
-            </p>
-            <p className="text-[18px] font-bold tabular-nums text-slate-900">
-              {formatRupees(creditTotalPaise)}
-            </p>
-          </div>
-          <Button
-            type="submit"
-            size="md"
-            loading={pending}
-            className="min-h-11 shrink-0 bg-blue-600 px-4 text-[14px] font-bold text-white hover:bg-blue-700"
-          >
-            {pending ? t("saving") : t("saveCreditNote")}
-          </Button>
-        </div>
+        <Button
+          type="submit"
+          size="md"
+          loading={pending}
+          disabled={editingKey != null}
+          className="min-h-11 shrink-0 bg-blue-600 px-4 text-[14px] font-bold text-white hover:bg-blue-700"
+        >
+          {pending ? t("saving") : t("saveCreditNote")}
+        </Button>
       </div>
 
       {state.message && !state.ok ? (

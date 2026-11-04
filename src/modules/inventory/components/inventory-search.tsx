@@ -39,9 +39,11 @@ export function InventorySearch({ className }: Props) {
   const urlQuery = searchParams.get("q") ?? "";
   const urlSortRaw = searchParams.get("sort") ?? "newest";
   const urlSort: PartSort = isPartSort(urlSortRaw) ? urlSortRaw : "newest";
+  const lowStockOnly = searchParams.get("stock") === "low";
   const [value, setValue] = useState(urlQuery);
   const [syncedUrlQuery, setSyncedUrlQuery] = useState(urlQuery);
-  const filtersActive = Boolean(urlQuery.trim()) || urlSort !== "newest";
+  const filtersActive =
+    Boolean(urlQuery.trim()) || urlSort !== "newest" || lowStockOnly;
 
   if (urlQuery !== syncedUrlQuery) {
     setSyncedUrlQuery(urlQuery);
@@ -57,10 +59,20 @@ export function InventorySearch({ className }: Props) {
     [t],
   );
 
-  function replaceParams(next: { q?: string; sort?: PartSort }) {
+  function replaceParams(next: {
+    q?: string;
+    sort?: PartSort;
+    stock?: "low" | "";
+  }) {
     const params = new URLSearchParams(searchParams.toString());
     const q = next.q !== undefined ? next.q.trim() : urlQuery.trim();
     const sort = next.sort ?? urlSort;
+    const stock =
+      next.stock !== undefined
+        ? next.stock
+        : lowStockOnly
+          ? "low"
+          : "";
 
     if (q) {
       params.set("q", q);
@@ -72,6 +84,12 @@ export function InventorySearch({ className }: Props) {
       params.delete("sort");
     } else {
       params.set("sort", sort);
+    }
+
+    if (stock === "low") {
+      params.set("stock", "low");
+    } else {
+      params.delete("stock");
     }
 
     const query = params.toString();
@@ -110,7 +128,22 @@ export function InventorySearch({ className }: Props) {
           aria-busy={pending || undefined}
         />
       </div>
-      <div className="flex shrink-0 items-center gap-2 self-end sm:self-auto">
+      <div className="flex shrink-0 flex-wrap items-center gap-2 self-end sm:self-auto">
+        <button
+          type="button"
+          disabled={pending}
+          onClick={() =>
+            replaceParams({ stock: lowStockOnly ? "" : "low" })
+          }
+          className={cn(
+            "inline-flex h-11 min-h-11 items-center rounded-lg border px-3 text-[13px] font-semibold transition",
+            lowStockOnly
+              ? "border-blue-600 bg-blue-50 text-blue-800"
+              : "border-slate-200 bg-white text-slate-700 hover:border-slate-300",
+          )}
+        >
+          {t("filterLowStock")}
+        </button>
         <ListSortMenu
           value={urlSort}
           options={sortOptions}

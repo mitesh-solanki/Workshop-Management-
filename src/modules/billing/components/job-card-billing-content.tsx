@@ -4,6 +4,7 @@ import {
   BillingInvoiceWorkspace,
   type BillingInvoiceCardModel,
 } from "@/modules/billing/components/billing-invoice-workspace";
+import { CreateInvoiceForm } from "@/modules/billing/components/create-invoice-form";
 import { InvoicePreviewButton } from "@/modules/billing/components/invoice-preview-button";
 import type { InvoicePreviewData } from "@/modules/billing/components/invoice-preview-dialog";
 import { PricingLinesTable } from "@/modules/billing/components/pricing-lines-table";
@@ -43,9 +44,9 @@ export type BillingPreviewContext = {
 type Props = {
   orderId: string;
   vehicleId: string;
+  jobCardNumber: number;
   canEdit: boolean;
   invoices: InvoiceList;
-  hasUnbilledApprovedLines: boolean;
   defaultPlaceOfSupplyStateCode: string;
   draftSyncError?: string | null;
   preview: BillingPreviewContext;
@@ -62,9 +63,9 @@ function formatIssuedAt(date: Date, locale: string) {
 export async function JobCardBillingContent({
   orderId,
   vehicleId,
+  jobCardNumber,
   canEdit,
   invoices,
-  hasUnbilledApprovedLines,
   defaultPlaceOfSupplyStateCode,
   draftSyncError = null,
   preview,
@@ -148,6 +149,7 @@ export async function JobCardBillingContent({
         type: line.type,
         quantity: line.quantity,
         unitPricePaise: line.unitPricePaise,
+        gstRatePercent: line.gstRatePercent,
         totalPaise: line.totalPaise,
       })),
       payments: invoice.payments.map((payment) => ({
@@ -155,6 +157,11 @@ export async function JobCardBillingContent({
         method: payment.method,
         amountPaise: payment.amountPaise,
         isRefund: payment.isRefund,
+        cashPaise: payment.cashPaise,
+        upiPaise: payment.upiPaise,
+        cardPaise: payment.cardPaise,
+        provider: payment.provider,
+        status: payment.status,
       })),
       creditNotes: invoice.creditNotes.map((note) => ({
         id: note.id,
@@ -310,6 +317,19 @@ export async function JobCardBillingContent({
                   {draftSyncError}
                 </p>
               ) : null}
+              {canEdit ? (
+                <div className="space-y-3 border-t border-slate-200 px-4 py-4">
+                  <CreateInvoiceForm
+                    orderId={orderId}
+                    defaultPlaceOfSupplyStateCode={
+                      defaultPlaceOfSupplyStateCode
+                    }
+                  />
+                  <p className="text-[13px] text-slate-500">
+                    {t("createDraftHint")}
+                  </p>
+                </div>
+              ) : null}
             </div>
           ) : (
             <p className="text-sm text-slate-600">
@@ -321,12 +341,10 @@ export async function JobCardBillingContent({
         <BillingInvoiceWorkspace
           orderId={orderId}
           vehicleId={vehicleId}
+          jobCardNumber={jobCardNumber}
           canEdit={canEdit}
           pdfLocale={pdfLocale}
           invoices={invoiceCards}
-          unbilledLines={preview.approvedLines}
-          hasUnbilledApprovedLines={hasUnbilledApprovedLines}
-          defaultPlaceOfSupplyStateCode={defaultPlaceOfSupplyStateCode}
         />
       )}
     </div>

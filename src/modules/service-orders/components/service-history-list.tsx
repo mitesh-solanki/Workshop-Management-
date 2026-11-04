@@ -309,6 +309,9 @@ export function ServiceHistoryList({
                       {formatDate(slip.createdAt, locale)}
                     </p>
                   )}
+                  <p className="font-mono text-caption font-semibold text-foreground">
+                    {tj("jobCardNumber", { number: slip.jobCardNumber })}
+                  </p>
                   <p className="text-caption text-muted-foreground">
                     {showRegistration
                       ? `${formatDate(slip.createdAt, locale)} · ${tj("fields.deliveryDate")}: ${formatDate(slip.expectedCompletion, locale)}`
@@ -339,6 +342,7 @@ export function ServiceHistoryList({
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead>{t("columns.jobCardNumber")}</TableHead>
               <TableHead>{t("columns.issueDate")}</TableHead>
               {showRegistration ? (
                 <TableHead>{tj("fields.registration")}</TableHead>
@@ -356,6 +360,9 @@ export function ServiceHistoryList({
               const tech = formatTechniciansList(slip, "").trim();
               return (
                 <TableRow key={slip.id}>
+                  <TableCell className="font-mono text-sm font-semibold">
+                    {slip.jobCardNumber}
+                  </TableCell>
                   <TableCell className="whitespace-nowrap text-sm">
                     {formatDate(slip.createdAt, locale)}
                   </TableCell>

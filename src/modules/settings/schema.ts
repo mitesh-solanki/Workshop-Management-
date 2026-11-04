@@ -22,6 +22,11 @@ export const updateGarageSettingsSchema = z.object({
     .refine((value) => value == null || GSTIN_REGEX.test(value), {
       error: "validation.invalidGstin",
     }),
+  nextJobCardNumber: z.coerce
+    .number({ error: "validation.required" })
+    .int({ error: "validation.invalidJobCardNumber" })
+    .min(1, { error: "validation.invalidJobCardNumber" })
+    .max(2_147_483_647, { error: "validation.invalidJobCardNumber" }),
 });
 
-export type UpdateGarageSettingsInput = z.infer<typeof updateGarageSettingsSchema>;
+export type UpdateGarageSettingsInput = z.input<typeof updateGarageSettingsSchema>;

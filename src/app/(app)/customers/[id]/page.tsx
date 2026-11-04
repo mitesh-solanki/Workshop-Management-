@@ -15,16 +15,22 @@ import { listCustomerWarranties } from "@/modules/warranties/service";
 
 type Props = {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ next?: string }>;
 };
 
 export const instant = false;
 
-export default async function CustomerDetailPage({ params }: Props) {
+export default async function CustomerDetailPage({
+  params,
+  searchParams,
+}: Props) {
   const session = await requireSession();
   if (session.role === "TECHNICIAN") {
     redirect(homePathForRole(session.role));
   }
   const { id } = await params;
+  const { next: nextRaw } = await searchParams;
+  const nextStep = nextRaw === "vehicles" ? ("vehicles" as const) : null;
   const locale = await getLocale();
   const t = await getTranslations("customers");
 
@@ -119,6 +125,7 @@ export default async function CustomerDetailPage({ params }: Props) {
         canCreateInspection={canCreateInspection}
         canDeleteOrder={canDeleteOrder}
         locale={locale}
+        nextStep={nextStep}
       />
     </main>
   );

@@ -97,6 +97,7 @@ function CreatePartFormFields({
   const t = useTranslations("inventory");
   const [vendorErrorKeys, setVendorErrorKeys] = useState<string[]>([]);
   const [manualStock, setManualStock] = useState(0);
+  const [unit, setUnit] = useState("pcs");
   const vendorStockQty = shopLines
     .filter((line) => line.vendorId.trim())
     .reduce((sum, line) => sum + Math.max(0, line.quantity), 0);
@@ -137,9 +138,10 @@ function CreatePartFormFields({
               name="unit"
               required
               defaultValue="pcs"
-              options={PART_UNIT_OPTIONS.map((unit) => ({
-                value: unit,
-                label: t(`units.${unit}`),
+              onValueChange={setUnit}
+              options={PART_UNIT_OPTIONS.map((option) => ({
+                value: option,
+                label: t(`units.${option}`),
               }))}
             />
           </FormField>
@@ -158,9 +160,10 @@ function CreatePartFormFields({
                   name="unit"
                   required
                   defaultValue="pcs"
-                  options={PART_UNIT_OPTIONS.map((unit) => ({
-                    value: unit,
-                    label: t(`units.${unit}`),
+                  onValueChange={setUnit}
+                  options={PART_UNIT_OPTIONS.map((option) => ({
+                    value: option,
+                    label: t(`units.${option}`),
                   }))}
                 />
               </FormField>
@@ -212,16 +215,21 @@ function CreatePartFormFields({
               stockFromVendors ? (
                 <>
                   <input type="hidden" name="openingStock" value="0" />
-                  <QuantityStepper
-                    key={`auto-stock-${vendorStockQty}`}
+                  <FormField
                     id={`${idPrefix}-openingStock`}
-                    name="openingStockDisplay"
                     label={t("openingStock")}
-                    defaultValue={vendorStockQty}
-                    min={0}
-                    disabled
-                    hint={t("openingStockFromVendorsHint")}
-                  />
+                    hint={t("stockAfterReceive", {
+                      count: vendorStockQty,
+                      unit,
+                    })}
+                  >
+                    <Input
+                      id={`${idPrefix}-openingStock`}
+                      value={t("stockCount", { count: 0, unit })}
+                      disabled
+                      className="h-11 min-h-11"
+                    />
+                  </FormField>
                 </>
               ) : (
                 <QuantityStepper

@@ -14,6 +14,15 @@ import { withSelectedPartFirst } from "@/modules/inventory/components/parts-sele
 export type PartPickerItem = PartsPickerPageResult["items"][number];
 
 const PAGE_SIZE = 25;
+const LABEL_ONLY_PREFIX = "__label__:";
+
+function labelOnlyValue(label: string) {
+  return `${LABEL_ONLY_PREFIX}${label.trim()}`;
+}
+
+function isLabelOnlyValue(value: string) {
+  return value.startsWith(LABEL_ONLY_PREFIX);
+}
 
 type Props = {
   id?: string;
@@ -58,11 +67,15 @@ export function PartPickerSelect({
   const [nextOffset, setNextOffset] = useState(0);
   const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(false);
+  const trimmedInitial = initialLabel?.trim() ?? "";
+  const selectValue =
+    value || (trimmedInitial ? labelOnlyValue(trimmedInitial) : "");
+
   const [selected, setSelected] = useState<PartPickerItem | null>(() =>
-    value && initialLabel
+    selectValue && trimmedInitial
       ? {
-          id: value,
-          name: initialLabel,
+          id: selectValue,
+          name: trimmedInitial,
           sku: "",
           unit: "pcs",
           sellingPricePaise: 0,
@@ -114,6 +127,18 @@ export function PartPickerSelect({
 
   useEffect(() => {
     if (!value) {
+      if (trimmedInitial) {
+        const id = labelOnlyValue(trimmedInitial);
+        setSelected({
+          id,
+          name: trimmedInitial,
+          sku: "",
+          unit: "pcs",
+          sellingPricePaise: 0,
+          quantityOnHand: 0,
+        });
+        return;
+      }
       setSelected(null);
       return;
     }
@@ -125,6 +150,17 @@ export function PartPickerSelect({
     if (selected?.id === value) {
       return;
     }
+    if (isLabelOnlyValue(value)) {
+      setSelected({
+        id: value,
+        name: value.slice(LABEL_ONLY_PREFIX.length),
+        sku: "",
+        unit: "pcs",
+        sellingPricePaise: 0,
+        quantityOnHand: 0,
+      });
+      return;
+    }
     let cancelled = false;
     void getPartPickerItemAction(value).then((part) => {
       if (cancelled || !part) return;
@@ -133,21 +169,22 @@ export function PartPickerSelect({
     return () => {
       cancelled = true;
     };
-  }, [value, items, selected?.id]);
+  }, [value, trimmedInitial, items, selected?.id]);
 
   const options = useMemo(() => {
     return withSelectedPartFirst(items, selected).map((part) => ({
       value: part.id,
-      label: nameOnlyLabels
-        ? part.name
-        : part.sku
-          ? ti("partOptionLabel", {
-              name: part.name,
-              sku: part.sku,
-              count: part.quantityOnHand,
-              unit: part.unit,
-            })
-          : part.name,
+      label:
+        isLabelOnlyValue(part.id) || nameOnlyLabels
+          ? part.name
+          : part.sku
+            ? ti("partOptionLabel", {
+                name: part.name,
+                sku: part.sku,
+                count: part.quantityOnHand,
+                unit: part.unit,
+              })
+            : part.name,
       keywords: `${part.name} ${part.sku}`,
     }));
   }, [items, selected, ti, nameOnlyLabels]);
@@ -204,6 +241,10 @@ export function PartPickerSelect({
       onChange("", null);
       return;
     }
+    // Description-only rows (e.g. invoice lines without partId) — keep as-is.
+    if (isLabelOnlyValue(nextId)) {
+      return;
+    }
     const part =
       items.find((item) => item.id === nextId) ??
       (selected?.id === nextId ? selected : null);
@@ -218,7 +259,7 @@ export function PartPickerSelect({
       id={id}
       name={name}
       form={form}
-      value={value}
+      value={selectValue}
       onChange={handleChange}
       options={options}
       filter="remote"

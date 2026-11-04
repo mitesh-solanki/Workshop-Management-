@@ -6,7 +6,7 @@ type FormFieldProps = {
   id: string;
   label: string;
   /** Hint shown under the control when there is no error. */
-  hint?: string;
+  hint?: React.ReactNode;
   error?: string;
   className?: string;
   children: React.ReactNode;

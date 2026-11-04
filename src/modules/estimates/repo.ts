@@ -8,7 +8,6 @@ import type {
   Prisma,
 } from "@prisma/client";
 import { prisma } from "@/lib/db";
-import { applyStockMovement } from "@/modules/inventory/repo";
 
 class EstimateStockTxError extends Error {
   readonly reason: "INSUFFICIENT_STOCK" | "PART_NOT_FOUND";
@@ -74,10 +73,14 @@ export async function findLinkedPartLine(
   return null;
 }
 
+/**
+ * Estimate / live-link approval no longer moves stock. Parts leave inventory
+ * when they are added on the job card (see createServiceOrderLine).
+ */
 export async function applyApprovedPartStock(
-  tx: Prisma.TransactionClient,
-  garageId: string,
-  data: {
+  _tx: Prisma.TransactionClient,
+  _garageId: string,
+  _data: {
     partId: string;
     serviceOrderId: string;
     serviceOrderLineId: string | null;
@@ -87,43 +90,7 @@ export async function applyApprovedPartStock(
     note: string;
   },
 ) {
-  if (data.quantity <= 0) {
-    return;
-  }
-
-  // serviceOrderLineId is unique on StockMovement — only attach it on the
-  // first OUT for that job-card line. Later returns / re-issues stay unlinked.
-  let serviceOrderLineId: string | null = null;
-  if (data.type === "OUT" && data.serviceOrderLineId) {
-    const linked = await tx.stockMovement.findFirst({
-      where: { garageId, serviceOrderLineId: data.serviceOrderLineId },
-      select: { id: true },
-    });
-    if (!linked) {
-      serviceOrderLineId = data.serviceOrderLineId;
-    }
-  }
-
-  const stock = await applyStockMovement(
-    garageId,
-    {
-      partId: data.partId,
-      type: data.type,
-      quantity: data.quantity,
-      note: data.note,
-      actorId: data.actorId,
-      serviceOrderId: data.serviceOrderId,
-      serviceOrderLineId,
-    },
-    tx,
-  );
-  if (!stock.ok) {
-    throw new EstimateStockTxError(
-      stock.reason,
-      stock.reason === "INSUFFICIENT_STOCK" ? stock.partName : undefined,
-      stock.reason === "INSUFFICIENT_STOCK" ? stock.partId : undefined,
-    );
-  }
+  return;
 }
 
 const approvalSelect = {

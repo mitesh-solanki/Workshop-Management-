@@ -161,17 +161,6 @@ export default async function OrderEditPage({ params, searchParams }: Props) {
     throw error;
   }
 
-  const billedOrderFingerprints = new Set(
-    invoices
-      .filter((invoice) => invoice.status === "FINALIZED")
-      .flatMap((invoice) =>
-        invoice.lines.map(
-          (line) =>
-            `${line.description}|${line.type}|${line.quantity}|${line.unitPricePaise}`,
-        ),
-      ),
-  );
-
   const billableOrderLines = order.lines.filter(
     (line) =>
       (line.type === "LABOUR" ||
@@ -181,15 +170,7 @@ export default async function OrderEditPage({ params, searchParams }: Props) {
       line.quantity > 0,
   );
 
-  const unbilledOrderLines = billableOrderLines.filter(
-    (line) =>
-      !billedOrderFingerprints.has(
-        `${line.description}|${line.type}|${line.quantity}|${line.unitPricePaise}`,
-      ),
-  );
-  const hasUnbilledApprovedLines = unbilledOrderLines.length > 0;
-
-  const approvedPreviewLines = unbilledOrderLines.map((line) => {
+  const approvedPreviewLines = billableOrderLines.map((line) => {
     const typeKey =
       line.type === "PART" ||
       line.type === "LABOUR" ||
@@ -284,8 +265,16 @@ export default async function OrderEditPage({ params, searchParams }: Props) {
       </Link>
 
       <JobCardDetailPanel
+        billSyncMode={
+          invoices.some((invoice) => invoice.status === "FINALIZED")
+            ? "finalized"
+            : invoices.some((invoice) => invoice.status === "DRAFT")
+              ? "draft"
+              : "none"
+        }
         order={{
           id: order.id,
+          jobCardNumber: order.jobCardNumber,
           status: order.status,
           priority: order.priority,
           complaint: order.complaint,
@@ -357,9 +346,9 @@ export default async function OrderEditPage({ params, searchParams }: Props) {
             <JobCardBillingContent
               orderId={order.id}
               vehicleId={order.vehicleId}
+              jobCardNumber={order.jobCardNumber}
               canEdit={canBill}
               invoices={invoices}
-              hasUnbilledApprovedLines={hasUnbilledApprovedLines}
               defaultPlaceOfSupplyStateCode={order.customer.stateCode}
               draftSyncError={draftSyncError}
               preview={{

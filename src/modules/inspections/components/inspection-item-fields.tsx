@@ -76,6 +76,7 @@ const RESULTS = [
 const ITEM_ICONS: Record<string, LucideIcon> = {
   brakes: Disc3,
   tyres: CircleDot,
+  wheel: CircleDot,
   battery: Battery,
   lights: Lightbulb,
   fluids: Droplets,
@@ -95,6 +96,7 @@ function iconKeyForLabel(label: string): string | null {
   const lower = label.trim().toLowerCase();
   if (lower.includes("brake")) return "brakes";
   if (lower.includes("tyre") || lower.includes("tire")) return "tyres";
+  if (lower.includes("wheel")) return "wheel";
   if (lower.includes("battery")) return "battery";
   if (lower.includes("light")) return "lights";
   if (lower.includes("wiper")) return "wiper";
@@ -119,11 +121,17 @@ function iconKeyForLabel(label: string): string | null {
   return null;
 }
 
+function newNoteKey() {
+  return `note_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
+}
+
 function newNoteLine(
-  defaults?: Partial<Pick<InspectionNoteLine, "text" | "quantity" | "unitPriceRupees">>,
+  defaults?: Partial<
+    Pick<InspectionNoteLine, "key" | "text" | "quantity" | "unitPriceRupees">
+  >,
 ): InspectionNoteLine {
   return {
-    key: `note_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`,
+    key: defaults?.key ?? newNoteKey(),
     text: defaults?.text ?? "",
     quantity: defaults?.quantity ?? 1,
     unitPriceRupees: defaults?.unitPriceRupees ?? "",
@@ -131,14 +139,16 @@ function newNoteLine(
 }
 
 function parseStoredLines(
+  itemId: string,
   notes: string | null,
   quantity: number,
   unitPricePaise: number,
 ): InspectionNoteLine[] {
   const parsed = parseInspectionSubSpares(notes, quantity, unitPricePaise);
   if (parsed.length > 0) {
-    return parsed.map((line) =>
+    return parsed.map((line, index) =>
       newNoteLine({
+        key: `${itemId}:note:${index}`,
         text: line.description,
         quantity: line.quantity,
         unitPriceRupees: paiseToRupeesInput(line.unitPricePaise),
@@ -146,7 +156,13 @@ function parseStoredLines(
     );
   }
 
-  return [newNoteLine({ quantity, unitPriceRupees: paiseToRupeesInput(unitPricePaise) })];
+  return [
+    newNoteLine({
+      key: `${itemId}:note:0`,
+      quantity,
+      unitPriceRupees: paiseToRupeesInput(unitPricePaise),
+    }),
+  ];
 }
 
 export function draftItemFromServer(item: {
@@ -166,7 +182,12 @@ export function draftItemFromServer(item: {
     key: item.key,
     label: item.label,
     result: item.result,
-    noteLines: parseStoredLines(item.notes, item.quantity, item.unitPricePaise),
+    noteLines: parseStoredLines(
+      item.id,
+      item.notes,
+      item.quantity,
+      item.unitPricePaise,
+    ),
     externalCheck: item.externalCheck,
     media: item.media,
   };
@@ -475,22 +496,30 @@ export function InspectionItemFields({
                         {t("notes")}
                       </p>
                       <div className="flex items-center gap-1">
-                        <NoteSuggestInput
-                          id={`note-${item.clientId}-${line.key}`}
-                          value={line.text}
-                          mainSpareLabel={item.label}
-                          suggestionMode={
-                            item.externalCheck ? "outsideWork" : "subSpare"
-                          }
-                          onValueChange={(text) =>
-                            updateLine(line.key, { text })
-                          }
-                          placeholder={
-                            item.externalCheck
-                              ? t("outsideWorkNotesPlaceholder")
-                              : t("notesPlaceholder")
-                          }
-                        />
+                        {item.externalCheck ? (
+                          <Input
+                            id={`note-${item.clientId}-${line.key}`}
+                            value={line.text}
+                            onChange={(event) =>
+                              updateLine(line.key, {
+                                text: event.target.value,
+                              })
+                            }
+                            placeholder={t("outsideWorkNotesPlaceholder")}
+                            maxLength={500}
+                            className="h-11 min-h-11"
+                          />
+                        ) : (
+                          <NoteSuggestInput
+                            id={`note-${item.clientId}-${line.key}`}
+                            value={line.text}
+                            mainSpareLabel={item.label}
+                            onValueChange={(text) =>
+                              updateLine(line.key, { text })
+                            }
+                            placeholder={t("notesPlaceholder")}
+                          />
+                        )}
                         <button
                           type="button"
                           className="inline-flex size-7 shrink-0 items-center justify-center text-red-600 hover:text-red-700"
@@ -562,22 +591,30 @@ export function InspectionItemFields({
                       className="border-b border-border last:border-0"
                     >
                       <td className="px-2 py-1.5 align-middle">
-                        <NoteSuggestInput
-                          id={`note-${item.clientId}-${line.key}`}
-                          value={line.text}
-                          mainSpareLabel={item.label}
-                          suggestionMode={
-                            item.externalCheck ? "outsideWork" : "subSpare"
-                          }
-                          onValueChange={(text) =>
-                            updateLine(line.key, { text })
-                          }
-                          placeholder={
-                            item.externalCheck
-                              ? t("outsideWorkNotesPlaceholder")
-                              : t("notesPlaceholder")
-                          }
-                        />
+                        {item.externalCheck ? (
+                          <Input
+                            id={`note-${item.clientId}-${line.key}`}
+                            value={line.text}
+                            onChange={(event) =>
+                              updateLine(line.key, {
+                                text: event.target.value,
+                              })
+                            }
+                            placeholder={t("outsideWorkNotesPlaceholder")}
+                            maxLength={500}
+                            className="h-11 min-h-11"
+                          />
+                        ) : (
+                          <NoteSuggestInput
+                            id={`note-${item.clientId}-${line.key}`}
+                            value={line.text}
+                            mainSpareLabel={item.label}
+                            onValueChange={(text) =>
+                              updateLine(line.key, { text })
+                            }
+                            placeholder={t("notesPlaceholder")}
+                          />
+                        )}
                       </td>
                       <td className="px-1.5 py-1.5 align-middle">
                         <QuantityStepper

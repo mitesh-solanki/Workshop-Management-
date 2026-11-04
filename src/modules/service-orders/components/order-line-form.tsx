@@ -12,6 +12,11 @@ import {
   getPartEditValuesAction,
   getPartPickerItemAction,
 } from "@/app/actions/inventory";
+import {
+  SyncInvoicePrompt,
+  useInvoiceSyncPrompt,
+  type BillSyncMode,
+} from "@/modules/billing/components/sync-invoice-prompt";
 import { RupeePriceInput } from "@/components/rupee-price-input";
 import { Button } from "@/components/ui/button";
 import { FormField } from "@/components/ui/form-field";
@@ -41,9 +46,14 @@ type Props = {
   orderId: string;
   /** Technician: no price field; server stores 0 until owner sets it. */
   hidePrices?: boolean;
+  billSyncMode?: BillSyncMode;
 };
 
-export function OrderLineForm({ orderId, hidePrices = false }: Props) {
+export function OrderLineForm({
+  orderId,
+  hidePrices = false,
+  billSyncMode = "none",
+}: Props) {
   const t = useTranslations("orders");
   const ti = useTranslations("inventory");
   const tc = useTranslations("common");
@@ -63,6 +73,10 @@ export function OrderLineForm({ orderId, hidePrices = false }: Props) {
   const [createInitialName, setCreateInitialName] = useState("");
   const [creatingPart, setCreatingPart] = useState(false);
   const [formKey, setFormKey] = useState(0);
+  const { syncOpen, setSyncOpen, offerSync } = useInvoiceSyncPrompt(
+    orderId,
+    billSyncMode,
+  );
 
   useEffect(() => {
     const finished = wasPending.current && !pending;
@@ -76,10 +90,13 @@ export function OrderLineForm({ orderId, hidePrices = false }: Props) {
       setEditOpen(false);
       setEditPart(null);
       setFormKey((key) => key + 1);
+      if (!hidePrices) {
+        offerSync();
+      }
       return;
     }
     toast.error(state.message);
-  }, [pending, state, t]);
+  }, [pending, state, t, hidePrices, offerSync]);
 
   async function refreshSelectedPart(id: string) {
     const full = await getPartPickerItemAction(id);
@@ -190,6 +207,7 @@ export function OrderLineForm({ orderId, hidePrices = false }: Props) {
   }
 
   return (
+    <>
     <form action={formAction} className="space-y-2">
       {partsOnly ? <input type="hidden" name="type" value="PART" /> : null}
       <div
@@ -330,5 +348,11 @@ export function OrderLineForm({ orderId, hidePrices = false }: Props) {
         />
       ) : null}
     </form>
+    <SyncInvoicePrompt
+      orderId={orderId}
+      open={syncOpen}
+      onOpenChange={setSyncOpen}
+    />
+    </>
   );
 }

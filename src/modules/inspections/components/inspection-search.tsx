@@ -166,9 +166,10 @@ export function InspectionSearch({ className, actions }: Props) {
             value={urlStatus}
             onValueChange={(status) => replaceParams({ status })}
             options={statusOptions}
+            selectedPrefix={t("filterSelectedPrefix")}
             disabled={pending}
-            className="w-auto min-w-42"
-            triggerClassName="h-11 min-h-11 w-auto min-w-42 rounded-lg border-slate-200 bg-white px-3 text-[13px] font-semibold shadow-xs"
+            className="w-auto min-w-48"
+            triggerClassName="h-11 min-h-11 w-auto min-w-48 rounded-lg border-slate-200 bg-white px-3 text-[13px] font-semibold shadow-xs"
           />
         </div>
         <ListSortMenu

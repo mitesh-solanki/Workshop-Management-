@@ -1,8 +1,9 @@
 "use client";
 
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
-import { EmptyState } from "@/components/ui/empty-state";
+import { getSuggestedExpectedCompletionAction } from "@/app/actions/service-orders";
+import { searchVehiclesPickerAction } from "@/app/actions/vehicles";
 import { FormField } from "@/components/ui/form-field";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { JobCardSectionNav } from "@/modules/service-orders/components/job-card-section-nav";
@@ -12,10 +13,6 @@ import {
   type JobCardSection,
   type JobCardSurface,
 } from "@/modules/service-orders/job-card-sections";
-import {
-  jobCardSectionDomId,
-  useJobCardSections,
-} from "@/modules/service-orders/use-job-card-sections";
 
 export type VehicleOption = {
   id: string;
@@ -41,6 +38,7 @@ type Props = {
   vehicles: VehicleOption[];
   technicians: TechnicianOption[];
   bays: BayOption[];
+  suggestedJobCardNumber: number;
   initialVehicleId?: string;
   /** When set (technician create), assignment is locked to this user. */
   lockTechnicianId?: string;
@@ -50,229 +48,246 @@ type Props = {
   defaultExpectedCompletion?: string;
   /** Defaults to full Owner/Manager surface — pass technician surface separately. */
   surface?: JobCardSurface;
+  /**
+   * When true, vehicle list is complete for this customer — local filter only.
+   * When false, search the garage by registration or customer name (debounced).
+   */
+  localVehicleList?: boolean;
 };
 
-function SectionBlock({
-  id,
-  title,
-  subtitle,
-  sectionRef,
-  sectionNumber,
-  children,
-}: {
-  id: JobCardSection;
-  title: string;
-  subtitle?: string;
-  sectionRef: (node: HTMLElement | null) => void;
-  sectionNumber: string;
-  children: ReactNode;
-}) {
-  return (
-    <section
-      id={jobCardSectionDomId(id)}
-      ref={sectionRef}
-      className="min-w-0 scroll-mt-24 overflow-hidden rounded-[14px] border border-[#d7deea] bg-white shadow-[0_3px_17px_rgba(36,58,99,0.06)] lg:scroll-mt-6"
-    >
-      <div className="flex items-start gap-3 border-b border-[#d7deea] bg-[#f8fafc] px-4 py-4 sm:px-5">
-        <span className="grid size-9 shrink-0 place-items-center rounded-[10px] bg-[#e8efff] text-[13px] font-black text-[#1f5eff]">
-          {sectionNumber}
-        </span>
-        <div className="min-w-0 flex-1 pt-0.5">
-          <h2 className="text-[17px] font-semibold tracking-tight text-[#152238]">
-            {title}
-          </h2>
-          {subtitle ? (
-            <p className="mt-1 text-[12px] text-[#5c6b7e]">{subtitle}</p>
-          ) : null}
-        </div>
-      </div>
-      {children}
-    </section>
-  );
-}
-
-function LockedBody({ onGoDetails }: { onGoDetails: () => void }) {
-  const t = useTranslations("orders");
-  return (
-    <div className="px-5 py-5 sm:px-6">
-      <EmptyState
-        compact
-        title={t("createSectionsLockedTitle")}
-        description={t("createSectionsLockedBody")}
-        action={
-          <button
-            type="button"
-            onClick={onGoDetails}
-            className="text-sm font-medium text-teal-700 underline-offset-4 hover:underline"
-          >
-            {t("createSectionsLockedAction")}
-          </button>
-        }
-      />
-    </div>
-  );
+function toSelectOptions(vehicles: VehicleOption[]) {
+  return vehicles.map((vehicle) => ({
+    value: vehicle.id,
+    label: `${vehicle.registrationNumber} · ${vehicle.customerName}`.trim(),
+    keywords: `${vehicle.registrationNumber} ${vehicle.customerName} ${vehicle.make} ${vehicle.model}`,
+  }));
 }
 
 export function NewJobCardForm({
-  vehicles,
+  vehicles: initialVehicles,
   technicians,
   bays,
+  suggestedJobCardNumber,
   initialVehicleId = "",
   lockTechnicianId,
   inspectionId,
-  defaultExpectedCompletion,
+  defaultExpectedCompletion = "",
   surface = FULL_JOB_CARD_SURFACE,
+  localVehicleList = false,
 }: Props) {
   const t = useTranslations("orders");
-  const tb = useTranslations("billing");
+  /** Keep the number shown at open — do not follow counter after save soft-refresh. */
+  const [lockedJobCardNumber] = useState(suggestedJobCardNumber);
   const [vehicleId, setVehicleId] = useState(initialVehicleId);
-  const [vehicleQuery, setVehicleQuery] = useState("");
+  const [remoteVehicles, setRemoteVehicles] = useState<VehicleOption[] | null>(
+    null,
+  );
+  const vehicles = remoteVehicles ?? initialVehicles;
+  const [vehicleSearching, setVehicleSearching] = useState(false);
+  const searchTimer = useRef<number | null>(null);
+  const [expectedCompletion, setExpectedCompletion] = useState(
+    defaultExpectedCompletion,
+  );
+  const [expectedCompletionSource, setExpectedCompletionSource] = useState<
+    "inspection" | "estimate" | "linked-inspection" | null
+  >(defaultExpectedCompletion ? "linked-inspection" : null);
+
   const sections = surface.sections;
-  const showCommercial = surface.includeCommercialSections;
-  const { activeSection, scrollToSection, setSectionRef } = useJobCardSections({
-    sections,
-  });
-  const sectionNumbers = Object.fromEntries(
-    sections.map((id, index) => [
-      id,
-      String(index + 1).padStart(2, "0"),
-    ]),
-  ) as Record<JobCardSection, string>;
+  const lockedSections = sections.filter(
+    (id): id is JobCardSection => id !== "details",
+  );
 
   const selected = useMemo(
     () => vehicles.find((item) => item.id === vehicleId) ?? null,
     [vehicles, vehicleId],
   );
 
-  const vehicleOptions = useMemo(() => {
-    const options = vehicles.map((vehicle) => ({
-      value: vehicle.id,
-      label: `${vehicle.registrationNumber} · ${vehicle.make} ${vehicle.model}`.trim(),
-      keywords: `${vehicle.registrationNumber} ${vehicle.customerName} ${vehicle.make} ${vehicle.model}`,
-    }));
-    const ordered = (() => {
-      if (!vehicleId) return options;
-      const current = options.find((option) => option.value === vehicleId);
-      if (!current) return options;
-      return [current, ...options.filter((option) => option.value !== vehicleId)];
-    })();
-    const q = vehicleQuery.trim().toLowerCase();
-    if (!q) return ordered;
-    return ordered.filter(
-      (opt) =>
-        opt.label.toLowerCase().includes(q) ||
-        opt.value.toLowerCase().includes(q) ||
-        Boolean(opt.keywords?.toLowerCase().includes(q)),
-    );
-  }, [vehicles, vehicleId, vehicleQuery]);
+  useEffect(() => {
+    return () => {
+      if (searchTimer.current != null) {
+        window.clearTimeout(searchTimer.current);
+      }
+    };
+  }, []);
 
-  function goToDetails() {
-    scrollToSection("details");
+  useEffect(() => {
+    if (!vehicleId) {
+      if (!inspectionId) {
+        window.setTimeout(() => {
+          setExpectedCompletion("");
+          setExpectedCompletionSource(null);
+        }, 0);
+      }
+      return;
+    }
+
+    // Linked inspection from URL wins until vehicle changes away.
+    if (inspectionId && defaultExpectedCompletion && vehicleId === initialVehicleId) {
+      window.setTimeout(() => {
+        setExpectedCompletion(defaultExpectedCompletion);
+        setExpectedCompletionSource("linked-inspection");
+      }, 0);
+      return;
+    }
+
+    let cancelled = false;
+    void (async () => {
+      const result = await getSuggestedExpectedCompletionAction(vehicleId);
+      if (cancelled) return;
+      if (result.ok && result.suggestion) {
+        setExpectedCompletion(result.suggestion.date);
+        setExpectedCompletionSource(result.suggestion.source);
+      } else {
+        setExpectedCompletion("");
+        setExpectedCompletionSource(null);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    vehicleId,
+    inspectionId,
+    defaultExpectedCompletion,
+    initialVehicleId,
+  ]);
+
+  const expectedCompletionHint =
+    expectedCompletionSource === "inspection" ||
+    expectedCompletionSource === "linked-inspection"
+      ? t("expectedCompletionFromInspection")
+      : expectedCompletionSource === "estimate"
+        ? t("expectedCompletionFromEstimate")
+        : undefined;
+
+  const vehicleOptions = useMemo(() => {
+    const options = toSelectOptions(vehicles);
+    if (!vehicleId) return options;
+    const current = options.find((option) => option.value === vehicleId);
+    if (!current) return options;
+    return [current, ...options.filter((option) => option.value !== vehicleId)];
+  }, [vehicles, vehicleId]);
+
+  function onVehicleQueryChange(query: string) {
+    if (localVehicleList) {
+      const q = query.trim().toLowerCase();
+      if (!q) {
+        setRemoteVehicles(null);
+        return;
+      }
+      setRemoteVehicles(
+        initialVehicles.filter((vehicle) => {
+          const haystack =
+            `${vehicle.registrationNumber} ${vehicle.customerName} ${vehicle.make} ${vehicle.model}`.toLowerCase();
+          return haystack.includes(q);
+        }),
+      );
+      return;
+    }
+
+    if (searchTimer.current != null) {
+      window.clearTimeout(searchTimer.current);
+    }
+    const trimmed = query.trim();
+    if (trimmed.length < 2) {
+      setRemoteVehicles(null);
+      setVehicleSearching(false);
+      return;
+    }
+    setVehicleSearching(true);
+    searchTimer.current = window.setTimeout(() => {
+      void searchVehiclesPickerAction(trimmed)
+        .then((result) => {
+          const next = result.items.map((vehicle) => ({
+            id: vehicle.id,
+            registrationNumber: vehicle.registrationNumber,
+            make: vehicle.make,
+            model: vehicle.model,
+            odometer: vehicle.odometer,
+            customerName: vehicle.customerName,
+          }));
+          if (vehicleId) {
+            const selectedRow =
+              next.find((item) => item.id === vehicleId) ??
+              initialVehicles.find((item) => item.id === vehicleId) ??
+              vehicles.find((item) => item.id === vehicleId);
+            if (selectedRow && !next.some((item) => item.id === selectedRow.id)) {
+              setRemoteVehicles([selectedRow, ...next]);
+              return;
+            }
+          }
+          setRemoteVehicles(next);
+        })
+        .finally(() => setVehicleSearching(false));
+    }, 300);
   }
 
   return (
     <div className="flex w-full flex-col gap-4 lg:flex-row lg:items-start">
       <aside className="sticky top-0 z-20 w-full shrink-0 bg-background pb-1 lg:top-4 lg:w-[220px] lg:bg-transparent lg:pb-0 xl:w-[240px]">
         <JobCardSectionNav
-          section={activeSection}
-          onSectionChange={scrollToSection}
+          section="details"
+          onSectionChange={() => undefined}
           sections={sections}
+          lockedSections={lockedSections}
         />
       </aside>
 
-      <div className="flex min-w-0 flex-1 flex-col gap-4">
-        <SectionBlock
-          id="details"
-          title={t("details")}
-          subtitle={t("detailsHint")}
-          sectionRef={setSectionRef("details")}
-          sectionNumber={sectionNumbers.details}
-        >
-          <div className="space-y-6 px-5 py-5 sm:px-6">
-            <ServiceOrderForm
-              key={selected?.id ?? "new-job-card"}
-              mode="create"
-              vehicleId={selected?.id ?? ""}
-              customerName={selected?.customerName ?? ""}
-              defaultOdometer={selected?.odometer ?? null}
-              defaultExpectedCompletion={defaultExpectedCompletion}
-              technicians={technicians}
-              bays={bays}
-              lockTechnicianId={lockTechnicianId}
-              inspectionId={inspectionId}
-              vehiclePicker={
-                <FormField
-                  id="vehicleId-picker"
-                  label={t("selectVehicle")}
-                  hint={t("selectVehicleHint")}
-                >
-                  <SearchableSelect
-                    id="vehicleId-picker"
-                    value={vehicleId}
-                    onChange={setVehicleId}
-                    options={vehicleOptions}
-                    filter="remote"
-                    minQueryLength={0}
-                    onQueryChange={setVehicleQuery}
-                    onOpenChange={(open) => {
-                      if (!open) setVehicleQuery("");
-                    }}
-                    clearable={false}
-                    placeholder={t("selectVehiclePlaceholder")}
-                    searchPlaceholder={t("selectVehicleSearchPlaceholder")}
-                    emptyLabel={t("selectVehicleEmpty")}
-                  />
-                </FormField>
-              }
-            />
+      <div className="min-w-0 flex-1 overflow-hidden rounded-[14px] border border-[#d7deea] bg-white shadow-[0_3px_17px_rgba(36,58,99,0.06)]">
+        <div className="flex items-start gap-3 border-b border-[#d7deea] bg-[#f8fafc] px-4 py-4 sm:px-5">
+          <span className="grid size-9 shrink-0 place-items-center rounded-[10px] bg-[#e8efff] text-[13px] font-black text-[#1f5eff]">
+            01
+          </span>
+          <div className="min-w-0 flex-1 pt-0.5">
+            <h2 className="text-[17px] font-semibold tracking-tight text-[#152238]">
+              {t("details")}
+            </h2>
+            <p className="mt-1 text-[12px] text-[#5c6b7e]">{t("detailsHint")}</p>
           </div>
-        </SectionBlock>
-
-        <SectionBlock
-          id="lines"
-          title={t("lines")}
-          subtitle={t("linesDescription")}
-          sectionRef={setSectionRef("lines")}
-          sectionNumber={sectionNumbers.lines}
-        >
-          <LockedBody onGoDetails={goToDetails} />
-        </SectionBlock>
-
-        {showCommercial ? (
-          <SectionBlock
-            id="billing"
-            title={tb("title")}
-            subtitle={t("billingHint")}
-            sectionRef={setSectionRef("billing")}
-            sectionNumber={sectionNumbers.billing}
-          >
-            <LockedBody onGoDetails={goToDetails} />
-          </SectionBlock>
-        ) : null}
-
-        {showCommercial ? (
-          <SectionBlock
-            id="paper"
-            title={t("paperTitle")}
-            subtitle={t("paperHint")}
-            sectionRef={setSectionRef("paper")}
-            sectionNumber={sectionNumbers.paper}
-          >
-            <LockedBody onGoDetails={goToDetails} />
-          </SectionBlock>
-        ) : null}
-
-        {showCommercial ? (
-          <SectionBlock
-            id="timeline"
-            title={t("timeline")}
-            subtitle={t("timelineHint")}
-            sectionRef={setSectionRef("timeline")}
-            sectionNumber={sectionNumbers.timeline}
-          >
-            <LockedBody onGoDetails={goToDetails} />
-          </SectionBlock>
-        ) : null}
+        </div>
+        <div className="space-y-6 px-5 py-5 sm:px-6">
+          <ServiceOrderForm
+            key={`${selected?.id ?? "new-job-card"}-${expectedCompletion}-${expectedCompletionSource ?? "none"}`}
+            mode="create"
+            vehicleId={selected?.id ?? ""}
+            defaultOdometer={selected?.odometer ?? null}
+            defaultExpectedCompletion={expectedCompletion}
+            expectedCompletionHint={expectedCompletionHint}
+            suggestedJobCardNumber={lockedJobCardNumber}
+            technicians={technicians}
+            bays={bays}
+            lockTechnicianId={lockTechnicianId}
+            inspectionId={inspectionId}
+            vehiclePicker={
+              <FormField
+                id="vehicleId-picker"
+                label={t("selectVehicle")}
+                hint={t("selectVehicleHint")}
+              >
+                <SearchableSelect
+                  id="vehicleId-picker"
+                  value={vehicleId}
+                  onChange={setVehicleId}
+                  options={vehicleOptions}
+                  filter={localVehicleList ? "local" : "remote"}
+                  minQueryLength={localVehicleList ? 0 : 2}
+                  requireSearch={!localVehicleList && initialVehicles.length === 0}
+                  onQueryChange={onVehicleQueryChange}
+                  onOpenChange={(open) => {
+                    if (!open) setRemoteVehicles(null);
+                  }}
+                  loading={vehicleSearching}
+                  clearable={false}
+                  placeholder={t("selectVehiclePlaceholder")}
+                  searchPlaceholder={t("selectVehicleSearchPlaceholder")}
+                  emptyLabel={t("selectVehicleEmpty")}
+                  loadingLabel={t("searchingVehicles")}
+                />
+              </FormField>
+            }
+          />
+        </div>
       </div>
     </div>
   );

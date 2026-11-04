@@ -38,6 +38,9 @@ const invoiceListSelect = {
   creditNotes: {
     select: { totalPaise: true },
   },
+  _count: {
+    select: { payments: true, creditNotes: true },
+  },
 } as const;
 
 export type InvoiceListRow = Prisma.InvoiceGetPayload<{

@@ -12,7 +12,7 @@ import { getLiveLinkStatusForInspection } from "@/modules/live-link/service";
 
 type Props = {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ section?: string }>;
+  searchParams: Promise<{ section?: string; started?: string }>;
 };
 
 export const instant = false;
@@ -26,7 +26,7 @@ export default async function InspectionDetailPage({
     redirect(homePathForRole(session.role));
   }
   const { id } = await params;
-  const { section } = await searchParams;
+  const { section, started } = await searchParams;
   const t = await getTranslations("inspections");
 
   let inspection: Awaited<ReturnType<typeof getInspection>>;
@@ -72,6 +72,7 @@ export default async function InspectionDetailPage({
         mode="edit"
         canEdit={canEdit}
         initialSection={section}
+        justStarted={started === "1"}
         inspection={{
           id: inspection.id,
           complaint: inspection.complaint,

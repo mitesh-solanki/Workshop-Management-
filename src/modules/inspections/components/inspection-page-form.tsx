@@ -27,6 +27,11 @@ import { Input } from "@/components/ui/input";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/toast";
+import {
+  NEXT_STEP_DURATION_MS,
+  NEXT_STEP_HIGHLIGHT_CLASS,
+  useNextStepHighlight,
+} from "@/hooks/use-next-step-highlight";
 import { parseRupeesToPaise } from "@/lib/money";
 import { cn } from "@/lib/utils";
 import { PartNameSuggestInput } from "@/modules/inventory/components/part-name-suggest-input";
@@ -85,6 +90,8 @@ type EditProps = {
   mode: "edit";
   canEdit: boolean;
   initialSection?: string | null;
+  /** Soft cue after first checklist item created the inspection shell. */
+  justStarted?: boolean;
   inspection: {
     id: string;
     complaint: string | null;
@@ -226,6 +233,11 @@ export function InspectionPageForm(props: Props) {
   const [fieldErrors, setFieldErrors] = useState<InspectionSaveFieldErrors>(
     {},
   );
+  const justStarted =
+    !isCreate && props.mode === "edit" ? Boolean(props.justStarted) : false;
+  const [guideAddItem] = useState(justStarted);
+  const highlightAddItem = useNextStepHighlight(guideAddItem);
+  const startedCueRef = useRef(false);
 
   const allVehicleOptions = useMemo(
     () =>
@@ -323,6 +335,18 @@ export function InspectionPageForm(props: Props) {
     });
   }
 
+  useEffect(() => {
+    if (!justStarted || startedCueRef.current) return;
+    startedCueRef.current = true;
+    toast.message(t("inspectionStartedKeepGoing"), {
+      duration: NEXT_STEP_DURATION_MS,
+    });
+    router.replace(pathname, { scroll: false });
+    window.requestAnimationFrame(() => {
+      document.getElementById("inspection-add-spare")?.focus();
+    });
+  }, [justStarted, pathname, router, t]);
+
   // Browser back-forward cache can restore a filled create form. Clear it.
   useEffect(() => {
     if (!isCreate || pathname !== "/inspections/new") return;
@@ -406,7 +430,7 @@ export function InspectionPageForm(props: Props) {
       // replaceState desyncs the App Router, so opening New Inspection again
       // reused this form and looked like the last draft came back.
       if (justStarted) {
-        router.replace(`/inspections/${id}`);
+        router.replace(`/inspections/${id}?started=1`);
         return;
       }
 
@@ -646,6 +670,14 @@ export function InspectionPageForm(props: Props) {
                   <p className="mt-1 text-sm text-slate-500">
                     {t("reportSaveFirstBody")}
                   </p>
+                  <Button
+                    type="button"
+                    size="md"
+                    className="mt-4 text-white"
+                    onClick={() => onSectionChange("info")}
+                  >
+                    {t("reportGoToInfo")}
+                  </Button>
                 </div>
               ) : null}
 
@@ -835,7 +867,12 @@ export function InspectionPageForm(props: Props) {
                         className="gap-1.5 [&_[data-slot=label]]:sr-only"
                         error={fieldErrors.items}
                       >
-                        <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center">
+                        <div
+                          className={cn(
+                            "flex min-w-0 flex-col gap-2 rounded-lg sm:flex-row sm:items-center",
+                            highlightAddItem && NEXT_STEP_HIGHLIGHT_CLASS,
+                          )}
+                        >
                           <div className="min-w-0 flex-1">
                             <PartNameSuggestInput
                               id="inspection-add-spare"

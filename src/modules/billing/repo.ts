@@ -339,34 +339,161 @@ export async function deleteDraftInvoiceRow(
   invoiceId: string,
   actorId: string,
 ) {
+  return deleteInvoiceRow(garageId, invoiceId, actorId, { draftOnly: true });
+}
+
+/** Delete a draft or finalized invoice, including payments and credit notes. */
+export async function deleteInvoiceRow(
+  garageId: string,
+  invoiceId: string,
+  actorId: string,
+  options: { draftOnly?: boolean } = {},
+) {
   return prisma.$transaction(async (tx) => {
     const existing = await tx.invoice.findFirst({
-      where: { id: invoiceId, garageId, status: "DRAFT" },
-      select: { id: true, serviceOrderId: true, totalPaise: true },
+      where: {
+        id: invoiceId,
+        garageId,
+        ...(options.draftOnly ? { status: "DRAFT" as const } : {}),
+      },
+      select: {
+        id: true,
+        serviceOrderId: true,
+        totalPaise: true,
+        amountPaidPaise: true,
+        status: true,
+        invoiceNumber: true,
+        payments: {
+          select: { amountPaise: true, isRefund: true },
+        },
+        creditNotes: {
+          select: { totalPaise: true },
+        },
+      },
     });
     if (!existing) {
       return null;
     }
 
-    await tx.invoice.deleteMany({
-      where: { id: invoiceId, garageId, status: "DRAFT" },
-    });
+    const paymentsCollectedPaise = existing.payments
+      .filter((payment) => !payment.isRefund)
+      .reduce((sum, payment) => sum + payment.amountPaise, 0);
+    const creditNotesTotalPaise = existing.creditNotes.reduce(
+      (sum, note) => sum + note.totalPaise,
+      0,
+    );
+
+    await tx.payment.deleteMany({ where: { invoiceId, garageId } });
+    await tx.creditNote.deleteMany({ where: { invoiceId, garageId } });
+    await tx.invoice.deleteMany({ where: { id: invoiceId, garageId } });
 
     await tx.auditLog.create({
       data: {
         garageId,
         actorId,
-        action: "billing.invoice_draft_deleted",
+        action:
+          existing.status === "DRAFT"
+            ? "billing.invoice_draft_deleted"
+            : "billing.invoice_deleted",
         entity: "Invoice",
         entityId: invoiceId,
         meta: {
           serviceOrderId: existing.serviceOrderId,
           totalPaise: existing.totalPaise,
+          amountPaidPaise: existing.amountPaidPaise,
+          paymentsCollectedPaise,
+          creditNotesTotalPaise,
+          status: existing.status,
+          invoiceNumber: existing.invoiceNumber,
         },
       },
     });
 
-    return existing;
+    return {
+      ...existing,
+      paymentsCollectedPaise,
+      creditNotesTotalPaise,
+    };
+  });
+}
+
+/** Replace all lines on an invoice (draft or finalized) and update GST totals. */
+export async function replaceInvoiceLinesRow(
+  garageId: string,
+  data: {
+    invoiceId: string;
+    actorId: string;
+    taxablePaise: number;
+    cgstPaise: number;
+    sgstPaise: number;
+    igstPaise: number;
+    totalPaise: number;
+    gstSplit: GstSplitKindValue;
+    notes?: string | null;
+    lines: InvoiceLineCreateRow[];
+  },
+) {
+  return prisma.$transaction(async (tx) => {
+    const existing = await tx.invoice.findFirst({
+      where: { id: data.invoiceId, garageId },
+      select: { id: true, serviceOrderId: true, status: true },
+    });
+    if (!existing) {
+      return null;
+    }
+
+    await tx.invoiceLine.deleteMany({
+      where: { garageId, invoiceId: data.invoiceId },
+    });
+
+    await tx.invoice.update({
+      where: { id: data.invoiceId },
+      data: {
+        taxablePaise: data.taxablePaise,
+        cgstPaise: data.cgstPaise,
+        sgstPaise: data.sgstPaise,
+        igstPaise: data.igstPaise,
+        totalPaise: data.totalPaise,
+        gstSplit: data.gstSplit,
+        ...(data.notes !== undefined ? { notes: data.notes } : {}),
+        lines: {
+          create: data.lines.map((line) => ({
+            garageId,
+            estimateLineId: line.estimateLineId,
+            type: line.type,
+            description: line.description,
+            quantity: line.quantity,
+            unitPricePaise: line.unitPricePaise,
+            gstRatePercent: line.gstRatePercent,
+            hsnOrSac: line.hsnOrSac,
+            taxablePaise: line.taxablePaise,
+            cgstPaise: line.cgstPaise,
+            sgstPaise: line.sgstPaise,
+            igstPaise: line.igstPaise,
+            totalPaise: line.totalPaise,
+            sortOrder: line.sortOrder,
+          })),
+        },
+      },
+    });
+
+    await tx.auditLog.create({
+      data: {
+        garageId,
+        actorId: data.actorId,
+        action: "billing.invoice_lines_updated",
+        entity: "Invoice",
+        entityId: data.invoiceId,
+        meta: {
+          serviceOrderId: existing.serviceOrderId,
+          status: existing.status,
+          totalPaise: data.totalPaise,
+          lineCount: data.lines.length,
+        },
+      },
+    });
+
+    return findInvoiceById(garageId, data.invoiceId, tx);
   });
 }
 
@@ -639,6 +766,209 @@ export async function recordRefundRow(
   });
 }
 
+export async function updatePaymentRow(
+  garageId: string,
+  data: {
+    invoiceId: string;
+    paymentId: string;
+    method: PaymentMethodValue;
+    amountPaise: number;
+    cashPaise: number;
+    upiPaise: number;
+    cardPaise: number;
+    note: string | null;
+    actorId: string;
+  },
+) {
+  return prisma.$transaction(async (tx) => {
+    const payment = await tx.payment.findFirst({
+      where: {
+        id: data.paymentId,
+        garageId,
+        invoiceId: data.invoiceId,
+      },
+      select: {
+        id: true,
+        amountPaise: true,
+        isRefund: true,
+        provider: true,
+        status: true,
+      },
+    });
+    if (!payment) {
+      return null;
+    }
+    if (payment.provider !== "NONE" || payment.status !== "PAID") {
+      return { error: "online_locked" as const };
+    }
+    if (payment.isRefund) {
+      return { error: "refund_locked" as const };
+    }
+
+    const invoice = await tx.invoice.findFirst({
+      where: { id: data.invoiceId, garageId },
+      select: {
+        id: true,
+        status: true,
+        serviceOrderId: true,
+        totalPaise: true,
+        amountPaidPaise: true,
+        creditNotes: { select: { totalPaise: true } },
+      },
+    });
+    if (!invoice) {
+      return null;
+    }
+    if (invoice.status !== "FINALIZED") {
+      return { error: "not_finalized" as const };
+    }
+
+    const creditTotal = invoice.creditNotes.reduce(
+      (sum, note) => sum + note.totalPaise,
+      0,
+    );
+    const pendingWithoutThis =
+      invoice.totalPaise -
+      creditTotal -
+      invoice.amountPaidPaise +
+      payment.amountPaise;
+    if (data.amountPaise > pendingWithoutThis) {
+      return { error: "overpay" as const, pending: pendingWithoutThis };
+    }
+
+    const nextPaid =
+      invoice.amountPaidPaise - payment.amountPaise + data.amountPaise;
+
+    await tx.payment.update({
+      where: { id: payment.id },
+      data: {
+        method: data.method,
+        amountPaise: data.amountPaise,
+        cashPaise: data.cashPaise,
+        upiPaise: data.upiPaise,
+        cardPaise: data.cardPaise,
+        note: data.note,
+      },
+    });
+
+    const paid = await tx.invoice.updateMany({
+      where: { id: data.invoiceId, garageId },
+      data: { amountPaidPaise: nextPaid },
+    });
+    if (paid.count === 0) {
+      return null;
+    }
+
+    await tx.auditLog.create({
+      data: {
+        garageId,
+        actorId: data.actorId,
+        action: "billing.payment_updated",
+        entity: "Payment",
+        entityId: payment.id,
+        meta: {
+          invoiceId: data.invoiceId,
+          serviceOrderId: invoice.serviceOrderId,
+          method: data.method,
+          previousAmountPaise: payment.amountPaise,
+          amountPaise: data.amountPaise,
+        },
+      },
+    });
+
+    const updated = await findInvoiceById(garageId, data.invoiceId, tx);
+    return { paymentId: payment.id, invoice: updated };
+  });
+}
+
+export async function deletePaymentRow(
+  garageId: string,
+  data: {
+    invoiceId: string;
+    paymentId: string;
+    actorId: string;
+  },
+) {
+  return prisma.$transaction(async (tx) => {
+    const payment = await tx.payment.findFirst({
+      where: {
+        id: data.paymentId,
+        garageId,
+        invoiceId: data.invoiceId,
+      },
+      select: {
+        id: true,
+        amountPaise: true,
+        isRefund: true,
+        method: true,
+        provider: true,
+        status: true,
+      },
+    });
+    if (!payment) {
+      return null;
+    }
+    if (payment.provider !== "NONE" || payment.status !== "PAID") {
+      return { error: "online_locked" as const };
+    }
+
+    const invoice = await tx.invoice.findFirst({
+      where: { id: data.invoiceId, garageId },
+      select: {
+        id: true,
+        status: true,
+        serviceOrderId: true,
+        amountPaidPaise: true,
+      },
+    });
+    if (!invoice) {
+      return null;
+    }
+    if (invoice.status !== "FINALIZED") {
+      return { error: "not_finalized" as const };
+    }
+
+    const nextPaid = payment.isRefund
+      ? invoice.amountPaidPaise + payment.amountPaise
+      : invoice.amountPaidPaise - payment.amountPaise;
+    if (nextPaid < 0) {
+      return { error: "failed" as const };
+    }
+
+    await tx.payment.delete({ where: { id: payment.id } });
+
+    const paid = await tx.invoice.updateMany({
+      where: { id: data.invoiceId, garageId },
+      data: { amountPaidPaise: nextPaid },
+    });
+    if (paid.count === 0) {
+      return null;
+    }
+
+    await tx.auditLog.create({
+      data: {
+        garageId,
+        actorId: data.actorId,
+        action: payment.isRefund
+          ? "billing.refund_deleted"
+          : "billing.payment_deleted",
+        entity: "Payment",
+        entityId: payment.id,
+        meta: {
+          invoiceId: data.invoiceId,
+          serviceOrderId: invoice.serviceOrderId,
+          method: payment.method,
+          amountPaise: payment.amountPaise,
+          isRefund: payment.isRefund,
+        },
+      },
+    });
+
+    const updated = await findInvoiceById(garageId, data.invoiceId, tx);
+    return { paymentId: payment.id, invoice: updated };
+  });
+}
+
 export type CreditNoteLineCreateRow = {
   description: string;
   quantity: number;
@@ -755,4 +1085,30 @@ export async function createCreditNoteRow(
     const updatedInvoice = await findInvoiceById(garageId, data.invoiceId, tx);
     return { creditNote: note, invoice: updatedInvoice };
   });
+}
+
+/** Net customer payments received in a calendar window (PAID in − PAID refunds out). */
+export async function sumPaymentsReceivedInWindow(
+  garageId: string,
+  window: { start: Date; end: Date },
+): Promise<number> {
+  const groups = await prisma.payment.groupBy({
+    by: ["isRefund"],
+    where: {
+      garageId,
+      status: "PAID",
+      receivedAt: {
+        gte: window.start,
+        lt: window.end,
+      },
+    },
+    _sum: { amountPaise: true },
+  });
+
+  let net = 0;
+  for (const row of groups) {
+    const amount = row._sum.amountPaise ?? 0;
+    net += row.isRefund ? -amount : amount;
+  }
+  return net;
 }

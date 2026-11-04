@@ -7,6 +7,9 @@ import { Button } from "@/components/ui/button";
 type Props = {
   orderId: string;
   invoiceId: string;
+  /** Job Card number used as the download file name. */
+  jobCardNumber: number | null;
+  /** Fallback when job card number is missing (legacy). */
   invoiceNumber: string | null;
   locale: string;
 };
@@ -14,6 +17,7 @@ type Props = {
 export function DownloadInvoicePdfButton({
   orderId,
   invoiceId,
+  jobCardNumber,
   invoiceNumber,
   locale,
 }: Props) {
@@ -36,7 +40,11 @@ export function DownloadInvoicePdfButton({
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
       anchor.href = url;
-      anchor.download = `${invoiceNumber ?? invoiceId}.pdf`;
+      const fileBase =
+        jobCardNumber != null
+          ? String(jobCardNumber)
+          : (invoiceNumber ?? invoiceId);
+      anchor.download = `${fileBase}.pdf`;
       document.body.appendChild(anchor);
       anchor.click();
       anchor.remove();

@@ -39,7 +39,6 @@ import {
   type Paise,
 } from "@/lib/money";
 import { cn } from "@/lib/utils";
-import { NoteSuggestInput } from "@/modules/inspections/components/note-suggest-input";
 import { QuantityStepper } from "@/modules/inventory/components/quantity-stepper";
 
 export type LatestEstimateLine = {
@@ -246,30 +245,22 @@ export function LatestEstimateLinesCard({
                       className={cn("min-w-0 max-w-0 whitespace-normal", cellPad)}
                     >
                       {editing ? (
-                        hideQuantity ? (
-                          <NoteSuggestInput
-                            id={`estimate-desc-${line.id}`}
-                            required
-                            maxLength={500}
-                            value={draftDescription}
-                            suggestionMode="outsideWork"
-                            onValueChange={setDraftDescription}
-                            className={controlClass}
-                            placeholder={t("outsideWorkDescriptionPlaceholder")}
-                          />
-                        ) : (
-                          <Input
-                            id={`estimate-desc-${line.id}`}
-                            required
-                            maxLength={500}
-                            value={draftDescription}
-                            onChange={(event) =>
-                              setDraftDescription(event.target.value)
-                            }
-                            className={controlClass}
-                            aria-label={t("lineDescription")}
-                          />
-                        )
+                        <Input
+                          id={`estimate-desc-${line.id}`}
+                          required
+                          maxLength={500}
+                          value={draftDescription}
+                          onChange={(event) =>
+                            setDraftDescription(event.target.value)
+                          }
+                          className={controlClass}
+                          placeholder={
+                            hideQuantity
+                              ? t("outsideWorkDescriptionPlaceholder")
+                              : undefined
+                          }
+                          aria-label={t("lineDescription")}
+                        />
                       ) : (
                         <span className="truncate text-[14px] font-medium text-slate-900">
                           {line.description}

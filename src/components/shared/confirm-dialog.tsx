@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactElement } from "react";
+import type { ReactElement, ReactNode } from "react";
 import { XIcon } from "lucide-react";
 import { useTranslations } from "next-intl";
 import {
@@ -19,7 +19,7 @@ type ConfirmDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   title: string;
-  description: string;
+  description: ReactNode;
   /** Confirm button label. Defaults to common.confirm. */
   confirmLabel?: string;
   /** Cancel button label. Defaults to common.cancel. */

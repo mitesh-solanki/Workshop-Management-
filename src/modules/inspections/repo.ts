@@ -348,6 +348,25 @@ export async function findInspectionById(garageId: string, inspectionId: string)
   });
 }
 
+/** Most recent inspection for a vehicle that has an expected completion date. */
+export async function findLatestVehicleInspectionDue(
+  garageId: string,
+  vehicleId: string,
+) {
+  return prisma.inspection.findFirst({
+    where: {
+      garageId,
+      vehicleId,
+      expectedCompletion: { not: null },
+    },
+    orderBy: { createdAt: "desc" },
+    select: {
+      id: true,
+      expectedCompletion: true,
+    },
+  });
+}
+
 /** Deletes an inspection (linked or not). Job card stays; only the inspection row is removed. */
 export async function deleteInspectionById(
   garageId: string,

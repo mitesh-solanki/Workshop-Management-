@@ -3,6 +3,7 @@ import "server-only";
 import { getTranslations } from "next-intl/server";
 import { ZodError, type ZodIssue } from "zod";
 import { AppError, type ErrorParams } from "@/lib/errors";
+import { formatRupees } from "@/lib/money";
 
 /**
  * Maps AppError.code → [namespace, messageKey] for next-intl.
@@ -41,6 +42,11 @@ const APP_ERROR_MESSAGE_KEYS: Record<string, readonly [string, string]> = {
   INVALID_TECHNICIAN: ["orders", "errors.invalidTechnician"],
   ORDER_COMPLETED: ["orders", "errors.orderCompleted"],
   STATUS_CONFLICT: ["orders", "errors.statusConflict"],
+  "orders.job_card_number_exists": ["orders", "errors.jobCardNumberExists"],
+  "orders.job_card_number_seed_too_low": [
+    "orders",
+    "errors.jobCardNumberSeedTooLow",
+  ],
   "orders.line_approved_on_estimate": [
     "orders",
     "errors.lineOnFinalizedInvoice",
@@ -87,9 +93,14 @@ const APP_ERROR_MESSAGE_KEYS: Record<string, readonly [string, string]> = {
   "billing.invoice_finalize_failed": ["billing", "errors.invoiceFinalizeFailed"],
   "billing.invoice_immutable": ["billing", "errors.invoiceImmutable"],
   "billing.invoice_draft_outdated": ["billing", "errors.invoiceDraftOutdated"],
+  "billing.invoice_already_exists": ["billing", "errors.invoiceAlreadyExists"],
+  "billing.no_invoice": ["billing", "errors.noInvoice"],
   "billing.payment_requires_finalized": ["billing", "errors.paymentRequiresFinalized"],
   "billing.payment_exceeds_balance": ["billing", "errors.paymentExceedsBalance"],
   "billing.payment_failed": ["billing", "errors.paymentFailed"],
+  "billing.payment_online_locked": ["billing", "errors.paymentOnlineLocked"],
+  "billing.payment_refund_locked": ["billing", "errors.paymentRefundLocked"],
+  "billing.invoice_has_money_rows": ["billing", "errors.invoiceHasMoneyRows"],
   "billing.refund_exceeds_due": ["billing", "errors.refundExceedsDue"],
   "billing.refund_failed": ["billing", "errors.refundFailed"],
   "billing.credit_note_requires_finalized": [
@@ -239,6 +250,26 @@ export async function translateError(error: unknown): Promise<string> {
         return inventory("errors.insufficientStock", { partName });
       }
       return inventory("errors.insufficientStockGeneric");
+    }
+    if (error.code === "billing.payment_exceeds_balance") {
+      const billing = await getTranslations("billing");
+      const pendingPaise = Number(error.params?.pending ?? 0);
+      if (Number.isFinite(pendingPaise) && pendingPaise >= 0) {
+        return billing("errors.paymentExceedsBalance", {
+          pending: formatRupees(pendingPaise),
+        });
+      }
+      return billing("errors.paymentExceedsBalanceGeneric");
+    }
+    if (error.code === "billing.refund_exceeds_due") {
+      const billing = await getTranslations("billing");
+      const refundDuePaise = Number(error.params?.refundDue ?? 0);
+      if (Number.isFinite(refundDuePaise) && refundDuePaise >= 0) {
+        return billing("errors.refundExceedsDue", {
+          refundDue: formatRupees(refundDuePaise),
+        });
+      }
+      return billing("errors.refundFailed");
     }
     const translated = await translateAppErrorCode(error.code, error.params);
     return translated ?? common("error");

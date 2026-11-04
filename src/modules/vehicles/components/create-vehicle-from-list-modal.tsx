@@ -8,9 +8,11 @@ import {
   useRef,
   useState,
 } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Plus } from "lucide-react";
+import { searchCustomersPickerAction } from "@/app/actions/customers";
 import {
   createVehicleModalAction,
   type VehicleActionState,
@@ -28,7 +30,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { FormField } from "@/components/ui/form-field";
-import { FormSelect } from "@/components/ui/form-select";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { toast } from "@/components/ui/toast";
 import {
   firstVehicleFieldErrorId,
@@ -36,6 +38,7 @@ import {
   VehicleFields,
   type VehicleFormFieldErrors,
 } from "@/modules/vehicles/components/vehicle-fields";
+import { useStripCreateQuery } from "@/hooks/use-open-create-query";
 import {
   getVehicleYearMax,
   VEHICLE_ODOMETER_MAX,
@@ -54,28 +57,64 @@ type Props = {
   customers: CustomerOption[];
   trigger?: React.ReactNode;
   size?: "sm" | "md";
+  /** Open from sidebar Add (`?create=1`). */
+  defaultOpen?: boolean;
 };
 
 export function CreateVehicleFromListModal({
   customers,
   trigger,
   size = "md",
+  defaultOpen = false,
 }: Props) {
   const t = useTranslations("vehicles");
   const tc = useTranslations("customers");
   const te = useTranslations("errors");
   const router = useRouter();
   const formId = useId();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultOpen);
+  useStripCreateQuery(defaultOpen);
   const [formKey, setFormKey] = useState(0);
-  const [customerId, setCustomerId] = useState(customers[0]?.id ?? "");
+  const [customerId, setCustomerId] = useState("");
+  const [searchResults, setSearchResults] = useState<CustomerOption[] | null>(
+    null,
+  );
+  const [customerSearching, setCustomerSearching] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<VehicleFormFieldErrors>({});
   const [state, formAction, pending] = useActionState(
     createVehicleModalAction,
     initial,
   );
   const handled = useRef<string | null>(null);
+  const customerSearchTimer = useRef<number | null>(null);
   const idPrefix = "list-create-vehicle";
+
+  const selectedCustomer =
+    customers.find((item) => item.id === customerId) ??
+    searchResults?.find((item) => item.id === customerId) ??
+    null;
+  const customerOptions = (() => {
+    const base = searchResults ?? customers;
+    if (!selectedCustomer) return base;
+    if (base.some((item) => item.id === selectedCustomer.id)) return base;
+    return [selectedCustomer, ...base];
+  })();
+
+  function resetFormState() {
+    setCustomerId("");
+    setSearchResults(null);
+    setCustomerSearching(false);
+    setFieldErrors({});
+    setFormKey((k) => k + 1);
+  }
+
+  useEffect(() => {
+    return () => {
+      if (customerSearchTimer.current != null) {
+        window.clearTimeout(customerSearchTimer.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (state.ok) {
@@ -83,10 +122,13 @@ export function CreateVehicleFromListModal({
       if (!state.message || successKey === handled.current) return;
       handled.current = successKey;
       toast.success(state.message);
-      setFieldErrors({});
-      setFormKey((k) => k + 1);
+      resetFormState();
       setOpen(false);
-      router.refresh();
+      if (state.vehicleId) {
+        router.replace(`/vehicles/${state.vehicleId}?next=inspections`);
+      } else {
+        router.refresh();
+      }
       return;
     }
 
@@ -112,29 +154,49 @@ export function CreateVehicleFromListModal({
 
   const noCustomers = customers.length === 0;
 
+  function onCustomerQueryChange(query: string) {
+    if (customerSearchTimer.current != null) {
+      window.clearTimeout(customerSearchTimer.current);
+    }
+    const trimmed = query.trim();
+    if (trimmed.length < 2) {
+      setSearchResults(null);
+      setCustomerSearching(false);
+      return;
+    }
+    setCustomerSearching(true);
+    customerSearchTimer.current = window.setTimeout(() => {
+      void searchCustomersPickerAction(trimmed)
+        .then((result) => {
+          let next = result.items;
+          if (customerId && !next.some((item) => item.id === customerId)) {
+            const kept = customers.find((item) => item.id === customerId);
+            if (kept) next = [kept, ...next];
+          }
+          setSearchResults(next);
+        })
+        .finally(() => setCustomerSearching(false));
+    }, 300);
+  }
+
   return (
     <Dialog
       open={open}
       onOpenChange={(next) => {
-        setOpen(next);
         if (next) {
           handled.current = null;
-          setCustomerId(customers[0]?.id ?? "");
-          setFieldErrors({});
-          setFormKey((k) => k + 1);
+          resetFormState();
+          setOpen(true);
           return;
         }
-        setFieldErrors({});
+        // Clear before close animation so Cancel does not flash the last selection.
+        resetFormState();
+        setOpen(false);
       }}
     >
       <DialogTrigger asChild>
         {trigger ?? (
-          <Button
-            type="button"
-            size={size}
-            className="text-white"
-            disabled={noCustomers}
-          >
+          <Button type="button" size={size} className="text-white">
             <Plus className="size-4 text-white" aria-hidden />
             {t("add")}
           </Button>
@@ -157,6 +219,9 @@ export function CreateVehicleFromListModal({
                   {tc("cancel")}
                 </Button>
               </DialogClose>
+              <Button asChild size="md" className="text-white">
+                <Link href="/customers?create=1">{t("addCustomerFirst")}</Link>
+              </Button>
             </DialogFooter>
           </>
         ) : (
@@ -179,11 +244,19 @@ export function CreateVehicleFromListModal({
                       max: VEHICLE_ODOMETER_MAX.toLocaleString("en-IN"),
                     }),
                   });
+                  if (!customerId) {
+                    next.customerId = te("validation.required");
+                  }
                   if (Object.keys(next).length > 0) {
                     setFieldErrors(next);
                     const focusId = firstVehicleFieldErrorId(idPrefix, next);
                     window.setTimeout(() => {
                       if (focusId) document.getElementById(focusId)?.focus();
+                      else if (!customerId) {
+                        document
+                          .getElementById("list-create-vehicle-customer")
+                          ?.focus();
+                      }
                     }, 50);
                     return;
                   }
@@ -197,17 +270,37 @@ export function CreateVehicleFromListModal({
                 <FormField
                   id="list-create-vehicle-customer"
                   label={t("customer")}
+                  error={fieldErrors.customerId}
                 >
-                  <FormSelect
+                  <SearchableSelect
+                    key={`customer-${formKey}`}
                     id="list-create-vehicle-customer"
                     name="customerId"
                     value={customerId}
-                    onValueChange={setCustomerId}
-                    required
-                    options={customers.map((customer) => ({
+                    onChange={(value) => {
+                      setCustomerId(value);
+                      if (fieldErrors.customerId) {
+                        setFieldErrors((prev) => {
+                          const next = { ...prev };
+                          delete next.customerId;
+                          return next;
+                        });
+                      }
+                    }}
+                    options={customerOptions.map((customer) => ({
                       value: customer.id,
                       label: `${customer.name} · ${customer.phone}`,
+                      keywords: `${customer.name} ${customer.phone}`,
                     }))}
+                    filter="remote"
+                    minQueryLength={2}
+                    onQueryChange={onCustomerQueryChange}
+                    loading={customerSearching}
+                    clearable={false}
+                    placeholder={t("selectCustomerPlaceholder")}
+                    searchPlaceholder={t("selectCustomerSearchPlaceholder")}
+                    emptyLabel={t("selectCustomerEmpty")}
+                    loadingLabel={tc("searching")}
                   />
                 </FormField>
                 <VehicleFields

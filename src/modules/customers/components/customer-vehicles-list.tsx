@@ -13,6 +13,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  NEXT_STEP_ACTION_BORDER_CLASS,
+  useSequentialNextStepIndex,
+} from "@/hooks/use-next-step-highlight";
+import { cn } from "@/lib/utils";
 import type { EditVehicleValues } from "@/modules/vehicles/components/edit-vehicle-modal";
 import { VehicleRowActions } from "@/modules/vehicles/components/vehicle-row-actions";
 
@@ -36,6 +41,8 @@ type Props = {
   canWrite: boolean;
   canCreateOrder?: boolean;
   canCreateInspection?: boolean;
+  /** After create — flash Add Inspection / Job Card on this row. */
+  highlightNextActionsForId?: string | null;
   empty: ReactNode;
 };
 
@@ -62,6 +69,91 @@ function toEditValues(
   };
 }
 
+function VehicleNextActions({
+  customerId,
+  vehicleId,
+  canCreateInspection,
+  canCreateOrder,
+  canWrite,
+  editValues,
+  highlight,
+  compact,
+}: {
+  customerId: string;
+  vehicleId: string;
+  canCreateInspection: boolean;
+  canCreateOrder: boolean;
+  canWrite: boolean;
+  editValues: EditVehicleValues;
+  highlight: boolean;
+  compact?: boolean;
+}) {
+  const to = useTranslations("orders");
+  const ti = useTranslations("inspections");
+  const actionCount =
+    Number(canCreateInspection) + Number(canCreateOrder);
+  const activeIndex = useSequentialNextStepIndex(highlight, actionCount);
+  let nextSlot = 0;
+  const inspectionSlot = canCreateInspection ? nextSlot++ : -1;
+  const jobCardSlot = canCreateOrder ? nextSlot++ : -1;
+
+  return (
+    <div
+      className={cn(
+        "flex flex-row flex-nowrap items-center justify-end gap-1.5",
+        compact && "mt-3 flex-wrap border-t border-border pt-3",
+      )}
+    >
+      {canCreateInspection ? (
+        <Button
+          asChild
+          variant="outline"
+          size="sm"
+          className={cn(
+            "shrink-0",
+            compact && "min-h-10",
+            highlight &&
+              activeIndex === inspectionSlot &&
+              NEXT_STEP_ACTION_BORDER_CLASS,
+          )}
+        >
+          <Link
+            href={`/inspections/new?customerId=${customerId}&vehicleId=${vehicleId}`}
+          >
+            <Plus className="size-3.5" aria-hidden />
+            {ti("addInspection")}
+          </Link>
+        </Button>
+      ) : null}
+      {canCreateOrder ? (
+        <Button
+          asChild
+          size="sm"
+          className={cn(
+            "shrink-0 text-white",
+            compact && "min-h-10",
+            highlight &&
+              activeIndex === jobCardSlot &&
+              NEXT_STEP_ACTION_BORDER_CLASS,
+          )}
+        >
+          <Link
+            href={`/orders/new?customerId=${customerId}&vehicleId=${vehicleId}`}
+          >
+            <Plus className="size-3.5 text-white" aria-hidden />
+            {to("jobCard")}
+          </Link>
+        </Button>
+      ) : null}
+      <VehicleRowActions
+        vehicle={editValues}
+        canWrite={canWrite}
+        showView={false}
+      />
+    </div>
+  );
+}
+
 export function CustomerVehiclesList({
   vehicles,
   customerId,
@@ -69,11 +161,10 @@ export function CustomerVehiclesList({
   canWrite,
   canCreateOrder = false,
   canCreateInspection = false,
+  highlightNextActionsForId = null,
   empty,
 }: Props) {
   const t = useTranslations("vehicles");
-  const to = useTranslations("orders");
-  const ti = useTranslations("inspections");
 
   if (vehicles.length === 0) {
     return empty;
@@ -108,33 +199,16 @@ export function CustomerVehiclesList({
                   </span>
                 </span>
               </Link>
-              <div className="mt-3 flex flex-wrap items-center justify-end gap-2 border-t border-border pt-3">
-                {canCreateInspection ? (
-                  <Button asChild variant="outline" size="sm" className="min-h-10">
-                    <Link
-                      href={`/inspections/new?customerId=${customerId}&vehicleId=${vehicle.id}`}
-                    >
-                      <Plus className="size-3.5" aria-hidden />
-                      {ti("addInspection")}
-                    </Link>
-                  </Button>
-                ) : null}
-                {canCreateOrder ? (
-                  <Button asChild size="sm" className="min-h-10 text-white">
-                    <Link
-                      href={`/orders/new?customerId=${customerId}&vehicleId=${vehicle.id}`}
-                    >
-                      <Plus className="size-3.5 text-white" aria-hidden />
-                      {to("jobCard")}
-                    </Link>
-                  </Button>
-                ) : null}
-                <VehicleRowActions
-                  vehicle={editValues}
-                  canWrite={canWrite}
-                  showView={false}
-                />
-              </div>
+              <VehicleNextActions
+                customerId={customerId}
+                vehicleId={vehicle.id}
+                canCreateInspection={canCreateInspection}
+                canCreateOrder={canCreateOrder}
+                canWrite={canWrite}
+                editValues={editValues}
+                highlight={highlightNextActionsForId === vehicle.id}
+                compact
+              />
             </li>
           );
         })}
@@ -150,7 +224,7 @@ export function CustomerVehiclesList({
               <TableHead className="text-slate-700">
                 {t("columns.makeModel")}
               </TableHead>
-              <TableHead className="w-[1%] text-right text-slate-700">
+              <TableHead className="w-[1%] whitespace-nowrap text-right text-slate-700">
                 <span className="sr-only">{t("actions")}</span>
               </TableHead>
             </TableRow>
@@ -177,37 +251,16 @@ export function CustomerVehiclesList({
                       </span>
                     ) : null}
                   </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex items-center justify-end gap-1.5">
-                      {canCreateInspection ? (
-                        <Button asChild variant="outline" size="sm">
-                          <Link
-                            href={`/inspections/new?customerId=${customerId}&vehicleId=${vehicle.id}`}
-                          >
-                            <Plus className="size-3.5" aria-hidden />
-                            {ti("addInspection")}
-                          </Link>
-                        </Button>
-                      ) : null}
-                      {canCreateOrder ? (
-                        <Button asChild size="sm" className="text-white">
-                          <Link
-                            href={`/orders/new?customerId=${customerId}&vehicleId=${vehicle.id}`}
-                          >
-                            <Plus
-                              className="size-3.5 text-white"
-                              aria-hidden
-                            />
-                            {to("jobCard")}
-                          </Link>
-                        </Button>
-                      ) : null}
-                      <VehicleRowActions
-                        vehicle={editValues}
-                        canWrite={canWrite}
-                        showView={false}
-                      />
-                    </div>
+                  <TableCell className="whitespace-nowrap text-right">
+                    <VehicleNextActions
+                      customerId={customerId}
+                      vehicleId={vehicle.id}
+                      canCreateInspection={canCreateInspection}
+                      canCreateOrder={canCreateOrder}
+                      canWrite={canWrite}
+                      editValues={editValues}
+                      highlight={highlightNextActionsForId === vehicle.id}
+                    />
                   </TableCell>
                 </TableRow>
               );

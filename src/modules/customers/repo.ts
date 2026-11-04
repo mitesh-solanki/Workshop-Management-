@@ -94,7 +94,7 @@ export async function findCustomerById(garageId: string, customerId: string) {
           pucExpiry: true,
           fitnessExpiry: true,
         },
-        orderBy: { registrationNumber: "asc" },
+        orderBy: { createdAt: "desc" },
       },
     },
   });

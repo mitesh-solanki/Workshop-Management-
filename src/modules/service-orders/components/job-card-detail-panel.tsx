@@ -80,6 +80,7 @@ type OrderData = {
   customerId: string;
   vehicleId: string;
   customer: { name: string };
+  jobCardNumber: number;
   vehicle: { registrationNumber: string; make: string; model: string };
   technician: { name: string | null; email: string } | null;
   technicianAssignments?: Array<{
@@ -122,6 +123,8 @@ type Props = {
   };
   paperCopies?: PaperCopyView[];
   canEditPaper?: boolean;
+  /** none = no bill; draft = quiet sync; finalized = Yes/No confirm. */
+  billSyncMode?: "none" | "draft" | "finalized";
 };
 
 const SECTION_BODY_CLASS = "space-y-5";
@@ -169,6 +172,7 @@ export function JobCardDetailPanel({
   liveLink,
   paperCopies = [],
   canEditPaper = false,
+  billSyncMode = "none",
 }: Props) {
   const t = useTranslations("orders");
   const tb = useTranslations("billing");
@@ -260,6 +264,10 @@ export function JobCardDetailPanel({
               {order.vehicle.registrationNumber}
             </h1>
             <p className="mt-1 truncate text-[14px] text-[#5c6b7e]">
+              <span className="font-mono font-semibold text-[#152238]">
+                {t("jobCardNumberShort", { number: order.jobCardNumber })}
+              </span>
+              <span className="text-slate-300"> · </span>
               {hidePrices ? (
                 metaParts.map((part, index) => (
                   <span key={String(part)}>
@@ -364,6 +372,7 @@ export function JobCardDetailPanel({
                         vehicleLabel,
                       }}
                       defaults={{
+                        jobCardNumber: order.jobCardNumber,
                         complaint: order.complaint,
                         requestedServices: order.requestedServices ?? "",
                         odometerIn: order.odometerIn,
@@ -386,7 +395,7 @@ export function JobCardDetailPanel({
                         orderId={order.id}
                         lines={labourPartEstimateLines}
                         hidePrices={hidePrices}
-                        canEdit={false}
+                        canEdit={canMutate && !hidePrices}
                         estimateHref={estimateHref}
                       />
                     ) : null}
@@ -405,6 +414,7 @@ export function JobCardDetailPanel({
                           <OrderLineForm
                             orderId={order.id}
                             hidePrices={hidePrices}
+                            billSyncMode={billSyncMode}
                           />
                         </div>
                       </div>
@@ -445,6 +455,7 @@ export function JobCardDetailPanel({
                           orderId={order.id}
                           canMutate={canMutate}
                           hidePrices={hidePrices}
+                          billSyncMode={billSyncMode}
                           lines={visibleLines}
                         />
                       )}
@@ -464,6 +475,7 @@ export function JobCardDetailPanel({
                           <OrderLineForm
                             orderId={order.id}
                             hidePrices={hidePrices}
+                            billSyncMode={billSyncMode}
                           />
                         </div>
                       </div>
@@ -482,7 +494,7 @@ export function JobCardDetailPanel({
                           orderId={order.id}
                           lines={outsideEstimateLines}
                           hidePrices={false}
-                          canEdit={false}
+                          canEdit={canMutate}
                           hideQuantity
                           amountLabel={t("outsideWorkAmount")}
                           hint={t("latestEstimateOutsideHint")}
@@ -513,6 +525,7 @@ export function JobCardDetailPanel({
                             hideType
                             hideQuantity
                             amountLabel={t("outsideWorkAmount")}
+                            billSyncMode={billSyncMode}
                             lines={outsideWorkLines}
                           />
                         )}
@@ -529,7 +542,10 @@ export function JobCardDetailPanel({
                             </small>
                           </div>
                           <div className="rounded-[10px] border border-[#e8edf5] bg-[#fafcff] p-4 sm:p-5">
-                            <OutsideWorkForm orderId={order.id} />
+                            <OutsideWorkForm
+                              orderId={order.id}
+                              billSyncMode={billSyncMode}
+                            />
                           </div>
                         </div>
                       ) : null}

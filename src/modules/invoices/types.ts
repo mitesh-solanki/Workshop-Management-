@@ -8,6 +8,7 @@ export type InvoiceListItem = {
   invoiceNumber: string | null;
   totalPaise: number;
   amountPaidPaise: number;
+  creditNotesTotalPaise: number;
   pendingBalancePaise: number;
   finalizedAt: Date | null;
   createdAt: Date;

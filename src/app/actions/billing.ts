@@ -8,14 +8,18 @@ import { translateError } from "@/lib/translate-error";
 import {
   createCreditNote,
   createInvoiceFromApprovedEstimate,
-  deleteDraftInvoice,
+  deleteInvoice,
+  deleteInvoicePayment,
   finalizeInvoice,
   recordInvoicePayment,
   recordInvoiceRefund,
-  remakeDraftInvoice,
+  syncInvoiceFromJobCard,
+  updateInvoiceLines,
+  updateInvoicePayment,
 } from "@/modules/billing/service";
 import type {
   CreditNoteReasonValue,
+  InvoiceLineTypeValue,
   PaymentMethodValue,
 } from "@/modules/billing/schema";
 
@@ -24,6 +28,14 @@ export type BillingActionState = {
   message?: string;
   /** Stable AppError.code when the action failed (for client scroll/highlight). */
   code?: string;
+  /** Invoice lines after a successful edit (ids for warranty attach). */
+  savedLines?: Array<{
+    id: string;
+    type: string;
+    description: string;
+    quantity: number;
+    unitPricePaise: number;
+  }>;
 };
 
 function revalidateBilling(orderId: string) {
@@ -84,11 +96,21 @@ export async function deleteDraftInvoiceAction(
   _prev: BillingActionState,
   _formData: FormData,
 ): Promise<BillingActionState> {
+  return deleteInvoiceAction(orderId, invoiceId, _prev, _formData);
+}
+
+export async function deleteInvoiceAction(
+  orderId: string,
+  invoiceId: string,
+  _prev: BillingActionState,
+  _formData: FormData,
+): Promise<BillingActionState> {
   try {
     const session = await requireSession();
-    await deleteDraftInvoice(session, { invoiceId });
+    await deleteInvoice(session, { invoiceId });
     revalidateBilling(orderId);
-    return { ok: true, message: "draftDeleted" };
+    revalidatePath("/invoices");
+    return { ok: true, message: "invoiceDeleted" };
   } catch (error) {
     return {
       ok: false,
@@ -97,7 +119,7 @@ export async function deleteDraftInvoiceAction(
   }
 }
 
-export async function remakeDraftInvoiceAction(
+export async function updateInvoiceLinesAction(
   orderId: string,
   invoiceId: string,
   _prev: BillingActionState,
@@ -105,17 +127,61 @@ export async function remakeDraftInvoiceAction(
 ): Promise<BillingActionState> {
   try {
     const session = await requireSession();
-    const placeRaw = String(formData.get("placeOfSupplyStateCode") ?? "").trim();
-    const notes = String(formData.get("notes") ?? "");
-    await remakeDraftInvoice(session, orderId, invoiceId, {
-      ...(placeRaw.length === 2
-        ? { placeOfSupplyStateCode: placeRaw }
-        : {}),
-      notes,
-      finalize: false,
+    const types = formData.getAll("type").map(String);
+    const descriptions = formData.getAll("description").map(String);
+    const quantities = formData.getAll("quantity").map(String);
+    const unitPrices = formData.getAll("unitPriceRupees").map(String);
+    const ids = formData.getAll("lineId").map(String);
+    const partIds = formData.getAll("partId").map(String);
+    const lines = descriptions
+      .map((description, index) => ({
+        id: ids[index] ?? "",
+        type: (types[index] ?? "LABOUR") as InvoiceLineTypeValue,
+        description,
+        quantity: quantities[index] ?? "1",
+        unitPricePaise: unitPrices[index] ?? "0",
+        partId: partIds[index] ?? "",
+      }))
+      .filter((line) => line.description.trim().length > 0);
+    if (lines.length === 0) {
+      const t = await getTranslations("billing");
+      return { ok: false, message: t("errors.editNeedItem") };
+    }
+    const updated = await updateInvoiceLines(session, {
+      invoiceId,
+      notes: String(formData.get("notes") ?? ""),
+      lines,
     });
     revalidateBilling(orderId);
-    return { ok: true, message: "draftRemade" };
+    revalidatePath("/invoices");
+    return {
+      ok: true,
+      message: "invoiceUpdated",
+      savedLines: updated.lines.map((line) => ({
+        id: line.id,
+        type: line.type,
+        description: line.description,
+        quantity: line.quantity,
+        unitPricePaise: line.unitPricePaise,
+      })),
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      message: await translateError(error),
+    };
+  }
+}
+
+export async function syncInvoiceFromJobCardAction(
+  orderId: string,
+): Promise<BillingActionState> {
+  try {
+    const session = await requireSession();
+    await syncInvoiceFromJobCard(session, { serviceOrderId: orderId });
+    revalidateBilling(orderId);
+    revalidatePath("/invoices");
+    return { ok: true, message: "invoiceSynced" };
   } catch (error) {
     return {
       ok: false,
@@ -202,6 +268,49 @@ export async function recordPaymentAction(
   }
 }
 
+export async function updatePaymentAction(
+  orderId: string,
+  invoiceId: string,
+  paymentId: string,
+  _prev: BillingActionState,
+  formData: FormData,
+): Promise<BillingActionState> {
+  try {
+    const session = await requireSession();
+    const breakdown = paymentBreakdownFromForm(formData);
+    await updateInvoicePayment(session, {
+      invoiceId,
+      paymentId,
+      ...breakdown,
+    });
+    revalidateBilling(orderId);
+    return { ok: true, message: "paymentUpdated" };
+  } catch (error) {
+    return {
+      ok: false,
+      message: await translateError(error),
+    };
+  }
+}
+
+export async function deletePaymentAction(
+  orderId: string,
+  invoiceId: string,
+  paymentId: string,
+): Promise<BillingActionState> {
+  try {
+    const session = await requireSession();
+    await deleteInvoicePayment(session, { invoiceId, paymentId });
+    revalidateBilling(orderId);
+    return { ok: true, message: "paymentDeleted" };
+  } catch (error) {
+    return {
+      ok: false,
+      message: await translateError(error),
+    };
+  }
+}
+
 export async function createCreditNoteAction(
   orderId: string,
   invoiceId: string,
@@ -231,7 +340,7 @@ export async function createCreditNoteAction(
     await createCreditNote(session, {
       invoiceId,
       reason: String(formData.get("reason") ?? "CORRECTION") as CreditNoteReasonValue,
-      notes: String(formData.get("notes") ?? ""),
+      notes: null,
       lines,
     });
     revalidateBilling(orderId);

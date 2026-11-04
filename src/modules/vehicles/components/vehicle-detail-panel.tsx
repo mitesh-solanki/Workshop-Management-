@@ -1,7 +1,8 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Car, ClipboardList, FileText, Pencil, Plus, Wrench } from "lucide-react";
 import { usePageDetailLabel } from "@/components/page-chrome";
@@ -14,14 +15,21 @@ import {
   DescriptionList,
   DescriptionTerm,
 } from "@/components/ui/description-list";
+import { toast } from "@/components/ui/toast";
 import {
   SectionDesktopNav,
   SectionMobileNavBar,
 } from "@/components/shared/section-side-nav";
 import {
+  NEXT_STEP_DURATION_MS,
+  NEXT_STEP_HIGHLIGHT_CLASS,
+  useNextStepHighlight,
+} from "@/hooks/use-next-step-highlight";
+import {
   sectionDomId,
   useSectionScrollSpy,
 } from "@/hooks/use-section-scroll-spy";
+import { cn } from "@/lib/utils";
 import { getDateStatus, type DateStatus } from "@/lib/date-status";
 import { InspectionsList } from "@/modules/inspections/components/inspections-list";
 import type { InspectionTableRow } from "@/modules/inspections/components/inspections-table";
@@ -67,6 +75,8 @@ type Props = {
   canCreateInspection: boolean;
   canDeleteOrder?: boolean;
   locale: string;
+  /** After create vehicle — scroll + highlight Inspections. */
+  nextStep?: "inspections" | null;
 };
 
 function asDate(value: Date | string | null): Date | null {
@@ -105,6 +115,7 @@ function SectionBlock({
   subtitle,
   action,
   sectionRef,
+  highlighted = false,
   children,
 }: {
   id: string;
@@ -112,13 +123,17 @@ function SectionBlock({
   subtitle?: string;
   action?: ReactNode;
   sectionRef: (node: HTMLElement | null) => void;
+  highlighted?: boolean;
   children: ReactNode;
 }) {
   return (
     <Card
       id={id}
       ref={sectionRef}
-      className="min-w-0 scroll-mt-4 gap-0 overflow-visible py-0"
+      className={cn(
+        "min-w-0 scroll-mt-4 gap-0 overflow-visible py-0",
+        highlighted && NEXT_STEP_HIGHLIGHT_CLASS,
+      )}
     >
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-4 sm:px-6">
         <div className="min-w-0 space-y-0.5">
@@ -145,19 +160,35 @@ export function VehicleDetailPanel({
   canCreateInspection,
   canDeleteOrder = false,
   locale,
+  nextStep = null,
 }: Props) {
   const tv = useTranslations("vehicles");
   const tw = useTranslations("warranties");
   const ti = useTranslations("inspections");
   const to = useTranslations("orders");
   const tGst = useTranslations("gst");
+  const router = useRouter();
+  const pathname = usePathname();
+  const guidedNextRef = useRef(false);
+  const [guideInspections] = useState(() => nextStep === "inspections");
+  const highlightInspections = useNextStepHighlight(guideInspections);
   usePageDetailLabel(vehicle.registrationNumber);
   const { activeSection, scrollToSection, setSectionRef } =
     useSectionScrollSpy({
       sections: VEHICLE_SECTIONS,
       idPrefix: VEHICLE_SECTION_ID_PREFIX,
-      initialSection: "overview",
+      initialSection: nextStep === "inspections" ? "inspections" : "overview",
     });
+
+  useEffect(() => {
+    if (nextStep !== "inspections" || guidedNextRef.current) return;
+    guidedNextRef.current = true;
+    scrollToSection("inspections");
+    toast.message(tv("nextStepAfterCreate"), {
+      duration: NEXT_STEP_DURATION_MS,
+    });
+    router.replace(pathname, { scroll: false });
+  }, [nextStep, pathname, router, scrollToSection, tv]);
 
   const expiryRows = [
     {
@@ -357,6 +388,7 @@ export function VehicleDetailPanel({
             title={ti("vehicleSectionTitle")}
             subtitle={ti("vehicleSectionDescription")}
             sectionRef={setSectionRef("inspections")}
+            highlighted={highlightInspections}
             action={
               canCreateInspection ? (
                 <Button asChild size="md" className="text-white">

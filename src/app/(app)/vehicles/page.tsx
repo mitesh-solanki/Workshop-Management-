@@ -21,6 +21,7 @@ type Props = {
     sort?: string;
     page?: string;
     pageSize?: string;
+    create?: string;
   }>;
 };
 
@@ -61,7 +62,10 @@ export default async function VehiclesPage({ searchParams }: Props) {
           <>
             {canImport ? <ImportModal entity="vehicles" /> : null}
             {canWrite ? (
-              <CreateVehicleFromListModal customers={customerOptions} />
+              <CreateVehicleFromListModal
+                customers={customerOptions}
+                defaultOpen={params.create === "1"}
+              />
             ) : null}
           </>
         }

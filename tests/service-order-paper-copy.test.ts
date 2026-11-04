@@ -90,6 +90,7 @@ const sampleOrder = {
   garageId: garageA,
   vehicleId: "vehicle-1",
   customerId: "customer-1",
+  jobCardNumber: 1,
   status: "COMPLETED" as const,
   priority: "NORMAL" as const,
   complaint: "Brake noise",

@@ -27,6 +27,7 @@ const TITLE_BY_PREFIX: { prefix: string; key: NavKey }[] = [
   { prefix: "/vendor-bills", key: "vendorBills" },
   { prefix: "/purchase-returns", key: "purchaseReturns" },
   { prefix: "/invoices", key: "invoices" },
+  { prefix: "/reports", key: "reports" },
   { prefix: "/orders", key: "orders" },
   { prefix: "/inspections", key: "inspections" },
   { prefix: "/workshop", key: "workshop" },

@@ -7,12 +7,7 @@ import type {
   ServiceOrderStatus,
 } from "@prisma/client";
 import { prisma } from "@/lib/db";
-import {
-  applyApprovedPartStock,
-  EstimateStockTxError,
-  findLinkedPartLine,
-  removeDraftInvoiceLinesForEstimateLine,
-} from "@/modules/estimates/repo";
+import { removeDraftInvoiceLinesForEstimateLine } from "@/modules/estimates/repo";
 import { applyStockMovement } from "@/modules/inventory/repo";
 import {
   SERVICE_ORDER_STATUSES,
@@ -75,11 +70,19 @@ const lineSelect = {
   updatedAt: true,
 } as const;
 
+/** PART lines still at ₹0 with no catalogue selling price (mechanic-added / buy-to-price). */
+const unpricedPartLineWhere = {
+  type: "PART" as const,
+  unitPricePaise: 0,
+  OR: [{ partId: null }, { part: { sellingPricePaise: { lte: 0 } } }],
+} satisfies Prisma.ServiceOrderLineWhereInput;
+
 const orderListSelect = {
   id: true,
   garageId: true,
   vehicleId: true,
   customerId: true,
+  jobCardNumber: true,
   status: true,
   priority: true,
   complaint: true,
@@ -120,11 +123,7 @@ const orderListSelect = {
     orderBy: { createdAt: "asc" as const },
   },
   lines: {
-    where: {
-      type: "PART" as const,
-      unitPricePaise: 0,
-      OR: [{ partId: null }, { part: { sellingPricePaise: { lte: 0 } } }],
-    },
+    where: unpricedPartLineWhere,
     select: { id: true },
     take: 1,
   },
@@ -251,8 +250,73 @@ export async function listServiceOrdersForToday(
   });
 }
 
+/** Open jobs with expected completion inside a calendar window (e.g. today–tomorrow). */
+export async function listServiceOrdersDueInWindow(
+  garageId: string,
+  window: { start: Date; end: Date },
+  options: { technicianId?: string } = {},
+) {
+  return prisma.serviceOrder.findMany({
+    where: {
+      ...serviceOrderScopeWhere(garageId, options),
+      status: { not: "COMPLETED" },
+      expectedCompletion: {
+        gte: window.start,
+        lt: window.end,
+      },
+    },
+    select: orderListSelect,
+    orderBy: [
+      { expectedCompletion: "asc" },
+      { createdAt: "desc" },
+    ],
+    take: 25,
+  });
+}
+
+/** Open jobs for a single status (home queues / filtered lists). */
+export async function listServiceOrdersByStatus(
+  garageId: string,
+  status: ServiceOrderStatusValue,
+  options: { technicianId?: string } = {},
+) {
+  return prisma.serviceOrder.findMany({
+    where: {
+      ...serviceOrderScopeWhere(garageId, options),
+      status,
+    },
+    select: orderListSelect,
+    orderBy: [
+      { expectedCompletion: "asc" },
+      { createdAt: "desc" },
+    ],
+    take: 25,
+  });
+}
+
+/** Open jobs with at least one unpriced PART line (mechanic added, no catalogue price). */
+export async function listServiceOrdersNeedingPricing(
+  garageId: string,
+  options: { technicianId?: string } = {},
+) {
+  return prisma.serviceOrder.findMany({
+    where: {
+      ...serviceOrderScopeWhere(garageId, options),
+      status: { not: "COMPLETED" },
+      lines: { some: unpricedPartLineWhere },
+    },
+    select: orderListSelect,
+    orderBy: [
+      { expectedCompletion: "asc" },
+      { createdAt: "desc" },
+    ],
+    take: 25,
+  });
+}
+
 const historySelect = {
   id: true,
+  jobCardNumber: true,
   status: true,
   complaint: true,
   bay: true,
@@ -439,11 +503,107 @@ export async function applyCataloguePricesToUnpricedPartLines(
   return toUpdate.length;
 }
 
+export class JobCardNumberConflictError extends Error {
+  constructor() {
+    super("JOB_CARD_NUMBER_EXISTS");
+    this.name = "JobCardNumberConflictError";
+  }
+}
+
+export async function getNextJobCardNumber(garageId: string): Promise<number> {
+  const counter = await prisma.jobCardNumberCounter.findUnique({
+    where: { garageId },
+    select: { lastNumber: true },
+  });
+  return (counter?.lastNumber ?? 0) + 1;
+}
+
+export async function getMaxJobCardNumber(garageId: string): Promise<number> {
+  const result = await prisma.serviceOrder.aggregate({
+    where: { garageId },
+    _max: { jobCardNumber: true },
+  });
+  return result._max.jobCardNumber ?? 0;
+}
+
+/**
+ * Settings seed: Next Job Card Number = N means suggestion becomes N
+ * (stores lastNumber = N - 1). Must be greater than max existing.
+ */
+export async function setNextJobCardNumberSeed(
+  garageId: string,
+  nextNumber: number,
+): Promise<number> {
+  const maxUsed = await getMaxJobCardNumber(garageId);
+  if (nextNumber <= maxUsed) {
+    throw new Error("JOB_CARD_NUMBER_SEED_TOO_LOW");
+  }
+
+  await prisma.jobCardNumberCounter.upsert({
+    where: { garageId },
+    create: {
+      id: `jcn_${garageId}`,
+      garageId,
+      lastNumber: nextNumber - 1,
+    },
+    update: { lastNumber: nextNumber - 1 },
+  });
+
+  return nextNumber;
+}
+
+async function claimJobCardNumber(
+  tx: Prisma.TransactionClient,
+  garageId: string,
+  chosen: number,
+  excludeOrderId?: string,
+): Promise<void> {
+  await tx.$executeRaw`
+    INSERT INTO "JobCardNumberCounter" ("id", "garageId", "lastNumber")
+    VALUES (${`jcn_${garageId}`}, ${garageId}, 0)
+    ON CONFLICT ("garageId") DO NOTHING
+  `;
+
+  const locked = await tx.$queryRaw<
+    Array<{ id: string; lastNumber: number }>
+  >`
+    SELECT id, "lastNumber" FROM "JobCardNumberCounter"
+    WHERE "garageId" = ${garageId}
+    FOR UPDATE
+  `;
+
+  const row = locked[0];
+  if (!row) {
+    throw new Error("JobCardNumberCounter lock failed");
+  }
+
+  const duplicate = await tx.serviceOrder.findFirst({
+    where: {
+      garageId,
+      jobCardNumber: chosen,
+      ...(excludeOrderId ? { NOT: { id: excludeOrderId } } : {}),
+    },
+    select: { id: true },
+  });
+  if (duplicate) {
+    throw new JobCardNumberConflictError();
+  }
+
+  const nextLast = Math.max(row.lastNumber, chosen);
+  if (nextLast !== row.lastNumber) {
+    await tx.jobCardNumberCounter.update({
+      where: { id: row.id },
+      data: { lastNumber: nextLast },
+    });
+  }
+}
+
 export async function createServiceOrder(
   garageId: string,
   data: {
     vehicleId: string;
     customerId: string;
+    jobCardNumber: number;
     complaint: string;
     requestedServices: string | null;
     odometerIn: number | null;
@@ -460,11 +620,14 @@ export async function createServiceOrder(
   const status = data.status === "WAITING" ? "IN_PROGRESS" : data.status;
 
   return prisma.$transaction(async (tx) => {
+    await claimJobCardNumber(tx, garageId, data.jobCardNumber);
+
     const order = await tx.serviceOrder.create({
       data: {
         garageId,
         vehicleId: data.vehicleId,
         customerId: data.customerId,
+        jobCardNumber: data.jobCardNumber,
         status,
         priority: data.priority,
         complaint: data.complaint,
@@ -502,6 +665,7 @@ export async function createServiceOrder(
           to: status,
           created: true,
           technicianIds,
+          jobCardNumber: data.jobCardNumber,
         } satisfies Prisma.InputJsonValue,
       },
     });
@@ -514,6 +678,7 @@ export async function updateServiceOrderDetails(
   garageId: string,
   orderId: string,
   data: {
+    jobCardNumber: number;
     complaint: string;
     requestedServices: string | null;
     odometerIn: number | null;
@@ -531,10 +696,14 @@ export async function updateServiceOrderDetails(
   return prisma.$transaction(async (tx) => {
     const existing = await tx.serviceOrder.findFirst({
       where: { id: orderId, garageId },
-      select: { id: true },
+      select: { id: true, jobCardNumber: true },
     });
     if (!existing) {
       return null;
+    }
+
+    if (existing.jobCardNumber !== data.jobCardNumber) {
+      await claimJobCardNumber(tx, garageId, data.jobCardNumber, orderId);
     }
 
     await tx.serviceOrderTechnicianAssignment.deleteMany({
@@ -554,6 +723,7 @@ export async function updateServiceOrderDetails(
     const order = await tx.serviceOrder.update({
       where: { id: orderId },
       data: {
+        jobCardNumber: data.jobCardNumber,
         complaint: data.complaint,
         requestedServices: data.requestedServices,
         odometerIn: data.odometerIn,
@@ -584,6 +754,7 @@ export async function updateServiceOrderDetails(
           priority: data.priority,
           bay: data.bay,
           technicianIds,
+          jobCardNumber: data.jobCardNumber,
         } satisfies Prisma.InputJsonValue,
       },
     });
@@ -631,26 +802,30 @@ export async function updateServiceOrderStatus(
 
 export type CreateServiceOrderLineResult =
   | {
-      ok: true;
-      line: {
-        id: string;
-        garageId: string;
-        serviceOrderId: string;
-        type: ServiceOrderLineType;
-        description: string;
-        quantity: number;
-        unitPricePaise: number;
-        partId: string | null;
-        sortOrder: number;
-        createdAt: Date;
-        updatedAt: Date;
-      };
-    }
-  | { ok: false; reason: "PART_NOT_FOUND" };
+    ok: true;
+    line: {
+      id: string;
+      garageId: string;
+      serviceOrderId: string;
+      type: ServiceOrderLineType;
+      description: string;
+      quantity: number;
+      unitPricePaise: number;
+      partId: string | null;
+      sortOrder: number;
+      createdAt: Date;
+      updatedAt: Date;
+    };
+  }
+  | {
+    ok: false;
+    reason: "PART_NOT_FOUND" | "INSUFFICIENT_STOCK";
+    partName?: string;
+  };
 
 /**
- * Adds a labour/part line. Stock is not reduced here — parts leave inventory
- * only when the matching estimate line is approved.
+ * Adds a labour/part line. PART lines with a catalogue part deduct stock now
+ * (workshop uses the part when it is added on the job card).
  */
 export async function createServiceOrderLine(
   garageId: string,
@@ -696,6 +871,22 @@ export async function createServiceOrderLine(
         select: lineSelect,
       });
 
+      if (
+        data.type === "PART" &&
+        data.partId &&
+        data.quantity > 0
+      ) {
+        await issueJobCardPartStock(tx, garageId, {
+          partId: data.partId,
+          serviceOrderId: data.serviceOrderId,
+          serviceOrderLineId: created.id,
+          quantity: data.quantity,
+          type: "OUT",
+          actorId: data.actorId,
+          note: `Job card part added ${data.serviceOrderId}`,
+        });
+      }
+
       await tx.auditLog.create({
         data: {
           garageId,
@@ -720,6 +911,13 @@ export async function createServiceOrderLine(
     return { ok: true, line };
   } catch (error) {
     if (error instanceof StockLineTxError) {
+      if (error.reason === "INSUFFICIENT_STOCK") {
+        return {
+          ok: false,
+          reason: "INSUFFICIENT_STOCK",
+          partName: error.partName,
+        };
+      }
       return { ok: false, reason: "PART_NOT_FOUND" };
     }
     throw error;
@@ -742,7 +940,11 @@ type ServiceOrderLineRow = {
 
 export type UpdateServiceOrderLineResult =
   | { ok: true; line: ServiceOrderLineRow }
-  | { ok: false; reason: "NOT_FOUND" };
+  | {
+    ok: false;
+    reason: "NOT_FOUND" | "INSUFFICIENT_STOCK";
+    partName?: string;
+  };
 
 export async function updateServiceOrderLine(
   garageId: string,
@@ -783,6 +985,18 @@ export async function updateServiceOrderLine(
         if (!part) {
           throw new StockLineTxError("PART_NOT_FOUND");
         }
+      }
+
+      if (existing.type === "PART") {
+        await adjustJobCardPartStock(tx, garageId, {
+          serviceOrderId: data.serviceOrderId,
+          serviceOrderLineId: existing.id,
+          previousPartId: existing.partId,
+          previousQuantity: existing.quantity,
+          nextPartId,
+          nextQuantity: data.quantity,
+          actorId: data.actorId,
+        });
       }
 
       const updated = await tx.serviceOrderLine.update({
@@ -826,8 +1040,12 @@ export async function updateServiceOrderLine(
     return { ok: true, line };
   } catch (error) {
     if (error instanceof StockLineTxError) {
-      if (error.reason === "PART_NOT_FOUND") {
-        return { ok: false, reason: "NOT_FOUND" };
+      if (error.reason === "INSUFFICIENT_STOCK") {
+        return {
+          ok: false,
+          reason: "INSUFFICIENT_STOCK",
+          partName: error.partName,
+        };
       }
       return { ok: false, reason: "NOT_FOUND" };
     }
@@ -875,12 +1093,7 @@ export async function deleteServiceOrderLine(
         select: {
           id: true,
           estimateId: true,
-          type: true,
           description: true,
-          quantity: true,
-          approvalState: true,
-          sourceOrderLineId: true,
-          sourceSuggestedRepairId: true,
         },
       });
 
@@ -894,21 +1107,6 @@ export async function deleteServiceOrderLine(
         });
         if (billed > 0) {
           throw new StockLineTxError("BILLED_ON_FINALIZED_INVOICE");
-        }
-
-        if (estLine.approvalState === "APPROVED") {
-          const linked = await findLinkedPartLine(tx, garageId, estLine);
-          if (linked) {
-            await applyApprovedPartStock(tx, garageId, {
-              partId: linked.partId,
-              serviceOrderId: data.serviceOrderId,
-              serviceOrderLineId: linked.serviceOrderLineId,
-              quantity: estLine.quantity,
-              type: "IN",
-              actorId: data.actorId,
-              note: `Job-card line removed ${data.serviceOrderId} (estimate line ${estLine.id})`,
-            });
-          }
         }
 
         await removeDraftInvoiceLinesForEstimateLine(tx, garageId, estLine.id);
@@ -929,6 +1127,78 @@ export async function deleteServiceOrderLine(
               cascadedFromOrderLineId: existing.id,
             } satisfies Prisma.InputJsonValue,
           },
+        });
+      }
+
+      // One-bill drafts: drop matching paper lines when the job-card line goes.
+      const matchingDraftLines = await tx.invoiceLine.findMany({
+        where: {
+          garageId,
+          description: existing.description,
+          type: existing.type as "LABOUR" | "PART" | "OUTSIDE",
+          quantity: existing.quantity,
+          unitPricePaise: existing.unitPricePaise,
+          invoice: {
+            garageId,
+            serviceOrderId: data.serviceOrderId,
+            status: "DRAFT",
+          },
+        },
+        select: { id: true, invoiceId: true },
+      });
+      if (matchingDraftLines.length > 0) {
+        const invoiceIds = [
+          ...new Set(matchingDraftLines.map((line) => line.invoiceId)),
+        ];
+        await tx.invoiceLine.deleteMany({
+          where: {
+            garageId,
+            id: { in: matchingDraftLines.map((line) => line.id) },
+          },
+        });
+        for (const invoiceId of invoiceIds) {
+          const remaining = await tx.invoiceLine.findMany({
+            where: { invoiceId, garageId },
+            select: {
+              taxablePaise: true,
+              cgstPaise: true,
+              sgstPaise: true,
+              igstPaise: true,
+              totalPaise: true,
+            },
+          });
+          await tx.invoice.update({
+            where: { id: invoiceId },
+            data: {
+              taxablePaise: remaining.reduce(
+                (sum, line) => sum + line.taxablePaise,
+                0,
+              ),
+              cgstPaise: remaining.reduce((sum, line) => sum + line.cgstPaise, 0),
+              sgstPaise: remaining.reduce((sum, line) => sum + line.sgstPaise, 0),
+              igstPaise: remaining.reduce((sum, line) => sum + line.igstPaise, 0),
+              totalPaise: remaining.reduce(
+                (sum, line) => sum + line.totalPaise,
+                0,
+              ),
+            },
+          });
+        }
+      }
+
+      if (
+        existing.type === "PART" &&
+        existing.partId &&
+        existing.quantity > 0
+      ) {
+        await issueJobCardPartStock(tx, garageId, {
+          partId: existing.partId,
+          serviceOrderId: data.serviceOrderId,
+          serviceOrderLineId: existing.id,
+          quantity: existing.quantity,
+          type: "IN",
+          actorId: data.actorId,
+          note: `Job card part removed ${data.serviceOrderId}`,
         });
       }
 
@@ -961,22 +1231,148 @@ export async function deleteServiceOrderLine(
       }
       return { ok: false, reason: "NOT_FOUND" };
     }
-    if (error instanceof EstimateStockTxError) {
-      return { ok: false, reason: "NOT_FOUND" };
-    }
     throw error;
   }
 }
 
 class StockLineTxError extends Error {
-  readonly reason: "NOT_FOUND" | "PART_NOT_FOUND" | "BILLED_ON_FINALIZED_INVOICE";
+  readonly reason:
+    | "NOT_FOUND"
+    | "PART_NOT_FOUND"
+    | "BILLED_ON_FINALIZED_INVOICE"
+    | "INSUFFICIENT_STOCK";
+  readonly partName?: string;
 
   constructor(
-    reason: "NOT_FOUND" | "PART_NOT_FOUND" | "BILLED_ON_FINALIZED_INVOICE",
+    reason:
+      | "NOT_FOUND"
+      | "PART_NOT_FOUND"
+      | "BILLED_ON_FINALIZED_INVOICE"
+      | "INSUFFICIENT_STOCK",
+    partName?: string,
   ) {
     super(reason);
     this.name = "StockLineTxError";
     this.reason = reason;
+    this.partName = partName;
+  }
+}
+
+async function issueJobCardPartStock(
+  tx: Prisma.TransactionClient,
+  garageId: string,
+  data: {
+    partId: string;
+    serviceOrderId: string;
+    serviceOrderLineId: string;
+    quantity: number;
+    type: "IN" | "OUT";
+    actorId: string;
+    note: string;
+  },
+) {
+  if (data.quantity <= 0) {
+    return;
+  }
+
+  // serviceOrderLineId is unique on StockMovement — only attach it on the
+  // first OUT for that job-card line. Later returns / re-issues stay unlinked.
+  let serviceOrderLineId: string | null = null;
+  if (data.type === "OUT") {
+    const linked = await tx.stockMovement.findFirst({
+      where: { garageId, serviceOrderLineId: data.serviceOrderLineId },
+      select: { id: true },
+    });
+    if (!linked) {
+      serviceOrderLineId = data.serviceOrderLineId;
+    }
+  }
+
+  const stock = await applyStockMovement(
+    garageId,
+    {
+      partId: data.partId,
+      type: data.type,
+      quantity: data.quantity,
+      note: data.note,
+      actorId: data.actorId,
+      serviceOrderId: data.serviceOrderId,
+      serviceOrderLineId,
+    },
+    tx,
+  );
+  if (!stock.ok) {
+    throw new StockLineTxError(
+      stock.reason === "INSUFFICIENT_STOCK"
+        ? "INSUFFICIENT_STOCK"
+        : "PART_NOT_FOUND",
+      stock.reason === "INSUFFICIENT_STOCK" ? stock.partName : undefined,
+    );
+  }
+}
+
+async function adjustJobCardPartStock(
+  tx: Prisma.TransactionClient,
+  garageId: string,
+  data: {
+    serviceOrderId: string;
+    serviceOrderLineId: string;
+    previousPartId: string | null;
+    previousQuantity: number;
+    nextPartId: string | null;
+    nextQuantity: number;
+    actorId: string;
+  },
+) {
+  const prevPart = data.previousPartId;
+  const nextPart = data.nextPartId;
+  const prevQty = data.previousQuantity;
+  const nextQty = data.nextQuantity;
+
+  if (prevPart === nextPart) {
+    if (!prevPart) {
+      return;
+    }
+    const delta = nextQty - prevQty;
+    if (delta === 0) {
+      return;
+    }
+    await issueJobCardPartStock(tx, garageId, {
+      partId: prevPart,
+      serviceOrderId: data.serviceOrderId,
+      serviceOrderLineId: data.serviceOrderLineId,
+      quantity: Math.abs(delta),
+      type: delta > 0 ? "OUT" : "IN",
+      actorId: data.actorId,
+      note:
+        delta > 0
+          ? `Job card part qty increased ${data.serviceOrderId}`
+          : `Job card part qty decreased ${data.serviceOrderId}`,
+    });
+    return;
+  }
+
+  if (prevPart && prevQty > 0) {
+    await issueJobCardPartStock(tx, garageId, {
+      partId: prevPart,
+      serviceOrderId: data.serviceOrderId,
+      serviceOrderLineId: data.serviceOrderLineId,
+      quantity: prevQty,
+      type: "IN",
+      actorId: data.actorId,
+      note: `Job card part swapped out ${data.serviceOrderId}`,
+    });
+  }
+  if (nextPart && nextQty > 0) {
+    await issueJobCardPartStock(tx, garageId, {
+      partId: nextPart,
+      serviceOrderId: data.serviceOrderId,
+      serviceOrderLineId: data.serviceOrderLineId,
+      quantity: nextQty,
+      type: "OUT",
+      actorId: data.actorId,
+      note: `Job card part swapped in ${data.serviceOrderId}`,
+    });
   }
 }
 
@@ -998,11 +1394,11 @@ export async function listServiceOrderAuditLogs(
         { meta: { path: ["serviceOrderId"], equals: orderId } },
         ...(invoiceIds.length > 0
           ? [
-              { entity: "Invoice" as const, entityId: { in: invoiceIds } },
-              ...invoiceIds.map((invoiceId) => ({
-                meta: { path: ["invoiceId"], equals: invoiceId },
-              })),
-            ]
+            { entity: "Invoice" as const, entityId: { in: invoiceIds } },
+            ...invoiceIds.map((invoiceId) => ({
+              meta: { path: ["invoiceId"], equals: invoiceId },
+            })),
+          ]
           : []),
       ],
     },

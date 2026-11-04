@@ -18,6 +18,7 @@ type Props = {
     sort?: string;
     page?: string;
     pageSize?: string;
+    create?: string;
   }>;
 };
 
@@ -49,7 +50,9 @@ export default async function CustomersPage({ searchParams }: Props) {
         actions={
           <>
             {canImport ? <ImportModal entity="customers" /> : null}
-            {canWrite ? <CreateCustomerModal /> : null}
+            {canWrite ? (
+              <CreateCustomerModal defaultOpen={params.create === "1"} />
+            ) : null}
           </>
         }
       />

@@ -1,7 +1,8 @@
 "use client";
 
 import { useLocale, useTranslations } from "next-intl";
-import { useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { CalendarClock, CalendarDays, Car, ClipboardList, User } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { DataTable, type ColumnDef } from "@/components/ui/data-table";
@@ -12,6 +13,11 @@ import { ListSortMenu } from "@/components/ui/list-sort-menu";
 import { SearchInput } from "@/components/ui/search-input";
 import { StatusBadge } from "@/components/ui/status-badge";
 import {
+  calendarDateKeyBoundsUtc,
+  calendarDayOffsetBoundsUtc,
+  calendarDaysAheadBoundsUtc,
+} from "@/lib/calendar-day";
+import {
   SERVICE_ORDER_STATUSES,
   type ServiceOrderStatus,
 } from "@/lib/service-order-status";
@@ -21,11 +27,112 @@ import { formatTechniciansList } from "@/modules/service-orders/technicians";
 
 type OrderSort = "newest" | "oldest" | "reg_asc" | "reg_desc";
 type StatusFilter = "" | ServiceOrderStatus | "NEEDS_PRICING";
+type DueFilter =
+  | ""
+  | "overdue"
+  | "today"
+  | "tomorrow"
+  | "days3"
+  | "days7"
+  | "soon"
+  | "custom";
+
+const DUE_FILTERS = [
+  "overdue",
+  "today",
+  "tomorrow",
+  "days3",
+  "days7",
+  "soon",
+  "custom",
+] as const;
+
+function parseStatusFilter(
+  raw: string | null,
+  allowNeedsPricing: boolean,
+): StatusFilter {
+  if (!raw) return "";
+  if (raw === "NEEDS_PRICING") {
+    return allowNeedsPricing ? "NEEDS_PRICING" : "";
+  }
+  return (SERVICE_ORDER_STATUSES as readonly string[]).includes(raw)
+    ? (raw as ServiceOrderStatus)
+    : "";
+}
+
+function parseDueFilter(raw: string | null): DueFilter {
+  if (!raw) return "";
+  return (DUE_FILTERS as readonly string[]).includes(raw)
+    ? (raw as DueFilter)
+    : "";
+}
+
+function parseDateKey(raw: string | null): string {
+  if (!raw) return "";
+  return calendarDateKeyBoundsUtc(raw) ? raw : "";
+}
+
+function expectedCompletionTime(
+  expectedCompletion: Date | string | null,
+): number | null {
+  if (!expectedCompletion) return null;
+  const date =
+    expectedCompletion instanceof Date
+      ? expectedCompletion
+      : new Date(expectedCompletion);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.getTime();
+}
+
+function matchesDueFilter(
+  expectedCompletion: Date | string | null,
+  status: ServiceOrderStatus,
+  dueFilter: DueFilter,
+  dueFrom: string,
+  dueTo: string,
+): boolean {
+  if (!dueFilter) return true;
+  if (status === "COMPLETED") return false;
+  const time = expectedCompletionTime(expectedCompletion);
+  if (time == null) return false;
+
+  if (dueFilter === "overdue") {
+    return time < Date.now();
+  }
+
+  if (dueFilter === "custom") {
+    const fromBound = dueFrom ? calendarDateKeyBoundsUtc(dueFrom) : null;
+    const toBound = dueTo
+      ? calendarDateKeyBoundsUtc(dueTo)
+      : dueFrom
+        ? calendarDateKeyBoundsUtc(dueFrom)
+        : null;
+    if (!fromBound && !toBound) return true;
+    const start = fromBound?.start.getTime() ?? Number.NEGATIVE_INFINITY;
+    const end = toBound?.end.getTime() ?? Number.POSITIVE_INFINITY;
+    return time >= start && time < end;
+  }
+
+  let window: { start: Date; end: Date };
+  if (dueFilter === "today") {
+    window = calendarDayOffsetBoundsUtc(0);
+  } else if (dueFilter === "tomorrow") {
+    window = calendarDayOffsetBoundsUtc(1);
+  } else if (dueFilter === "days3") {
+    window = calendarDaysAheadBoundsUtc(3);
+  } else if (dueFilter === "days7") {
+    window = calendarDaysAheadBoundsUtc(7);
+  } else {
+    window = calendarDaysAheadBoundsUtc(1);
+  }
+  return time >= window.start.getTime() && time < window.end.getTime();
+}
 
 export type OrderTableRow = {
   id: string;
   customerId: string;
   vehicleId: string;
+  jobCardNumber: number;
   status: ServiceOrderStatus;
   complaint: string;
   bay: string | null;
@@ -95,11 +202,81 @@ export function OrdersTable({
   const t = useTranslations("orders");
   const tc = useTranslations("common");
   const locale = useLocale();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const [, startTransition] = useTransition();
+  const urlStatus = parseStatusFilter(
+    searchParams.get("status"),
+    showNeedsPricing,
+  );
+  const urlDue = parseDueFilter(searchParams.get("due"));
+  const urlDueFrom = parseDateKey(searchParams.get("dueFrom"));
+  const urlDueTo = parseDateKey(searchParams.get("dueTo"));
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<OrderSort>("newest");
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>(urlStatus);
+  const [dueFilter, setDueFilter] = useState<DueFilter>(urlDue);
+  const [dueFrom, setDueFrom] = useState(urlDueFrom);
+  const [dueTo, setDueTo] = useState(urlDueTo);
   const filtersActive =
-    Boolean(query.trim()) || sort !== "newest" || Boolean(statusFilter);
+    Boolean(query.trim()) ||
+    sort !== "newest" ||
+    Boolean(statusFilter) ||
+    Boolean(dueFilter) ||
+    Boolean(dueFrom) ||
+    Boolean(dueTo);
+
+  useEffect(() => {
+    setStatusFilter(urlStatus);
+  }, [urlStatus]);
+
+  useEffect(() => {
+    setDueFilter(urlDue);
+  }, [urlDue]);
+
+  useEffect(() => {
+    setDueFrom(urlDueFrom);
+    setDueTo(urlDueTo);
+  }, [urlDueFrom, urlDueTo]);
+
+  function replaceListParams(next: {
+    status?: StatusFilter;
+    due?: DueFilter;
+    dueFrom?: string;
+    dueTo?: string;
+  }) {
+    const params = new URLSearchParams(searchParams.toString());
+    const status = next.status !== undefined ? next.status : statusFilter;
+    const due = next.due !== undefined ? next.due : dueFilter;
+    const from = next.dueFrom !== undefined ? next.dueFrom : dueFrom;
+    const to = next.dueTo !== undefined ? next.dueTo : dueTo;
+
+    if (status) {
+      params.set("status", status);
+    } else {
+      params.delete("status");
+    }
+    if (due) {
+      params.set("due", due);
+    } else {
+      params.delete("due");
+    }
+    if (due === "custom" && from) {
+      params.set("dueFrom", from);
+    } else {
+      params.delete("dueFrom");
+    }
+    if (due === "custom" && to) {
+      params.set("dueTo", to);
+    } else {
+      params.delete("dueTo");
+    }
+
+    const queryString = params.toString();
+    startTransition(() => {
+      router.replace(queryString ? `/orders?${queryString}` : "/orders");
+    });
+  }
 
   const sortOptions = useMemo(
     () => [
@@ -127,12 +304,37 @@ export function OrdersTable({
     return options;
   }, [t, showNeedsPricing]);
 
+  const dueFilterOptions = useMemo(
+    () => [
+      { value: "", label: t("filters.dueAll") },
+      { value: "overdue", label: t("filters.dueOverdue") },
+      { value: "today", label: t("filters.dueToday") },
+      { value: "tomorrow", label: t("filters.dueTomorrow") },
+      { value: "days3", label: t("filters.dueNext3Days") },
+      { value: "days7", label: t("filters.dueNext7Days") },
+      { value: "custom", label: t("filters.dueCustom") },
+    ],
+    [t],
+  );
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     const matched = orders.filter((order) => {
       if (statusFilter === "NEEDS_PRICING") {
         if (!order.needsPricing) return false;
       } else if (statusFilter && order.status !== statusFilter) {
+        return false;
+      }
+
+      if (
+        !matchesDueFilter(
+          order.expectedCompletion,
+          order.status,
+          dueFilter,
+          dueFrom,
+          dueTo,
+        )
+      ) {
         return false;
       }
 
@@ -168,10 +370,20 @@ export function OrdersTable({
     });
 
     return matched;
-  }, [orders, query, sort, statusFilter, t]);
+  }, [orders, query, sort, statusFilter, dueFilter, dueFrom, dueTo, t]);
 
   const columns = useMemo<ColumnDef<OrderTableRow>[]>(
     () => [
+      {
+        id: "jobCardNumber",
+        accessorFn: (row) => row.jobCardNumber,
+        header: t("columns.jobCardNumber"),
+        cell: ({ row }) => (
+          <span className="font-mono text-sm font-semibold text-foreground">
+            {row.original.jobCardNumber}
+          </span>
+        ),
+      },
       {
         id: "vehicle",
         accessorFn: (row) => row.vehicle.registrationNumber,
@@ -279,19 +491,19 @@ export function OrdersTable({
   }, [showNeedsPricing, statusFilter]);
 
   const hasQuery = Boolean(query.trim());
-  const hasStatusFilter = Boolean(statusFilter);
+  const hasListFilter = Boolean(statusFilter) || Boolean(dueFilter);
   const empty = (
     <EmptyState
       icon={ClipboardList}
       title={
-        hasQuery || hasStatusFilter ? t("emptySearchTitle") : t("emptyTitle")
+        hasQuery || hasListFilter ? t("emptySearchTitle") : t("emptyTitle")
       }
       description={
-        hasQuery || hasStatusFilter
+        hasQuery || hasListFilter
           ? t("emptySearchDescription")
           : t("emptyDescription")
       }
-      action={!hasQuery && !hasStatusFilter ? emptyAction : undefined}
+      action={!hasQuery && !hasListFilter ? emptyAction : undefined}
     />
   );
 
@@ -311,7 +523,7 @@ export function OrdersTable({
             placeholder={t("searchPlaceholder")}
             className="w-full min-w-0 flex-1 md:max-w-md"
           />
-          <div className="flex shrink-0 items-center gap-2">
+          <div className="flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto">
             <div className="min-w-0">
               <label htmlFor="orders-status-filter" className="sr-only">
                 {t("filterStatusLabel")}
@@ -319,14 +531,89 @@ export function OrdersTable({
               <FormSelect
                 id="orders-status-filter"
                 value={statusFilter}
-                onValueChange={(value) =>
-                  setStatusFilter(value as StatusFilter)
-                }
+                onValueChange={(value) => {
+                  const next = value as StatusFilter;
+                  setStatusFilter(next);
+                  replaceListParams({ status: next });
+                }}
                 options={statusFilterOptions}
                 className="w-auto min-w-42"
                 triggerClassName="h-11 min-h-11 w-auto min-w-42 rounded-lg border-slate-200 bg-white px-3 text-[13px] font-semibold shadow-xs"
               />
             </div>
+            <div className="min-w-0">
+              <label htmlFor="orders-due-filter" className="sr-only">
+                {t("filterDueLabel")}
+              </label>
+              <FormSelect
+                id="orders-due-filter"
+                value={dueFilter}
+                onValueChange={(value) => {
+                  const next = value as DueFilter;
+                  setDueFilter(next);
+                  if (next !== "custom") {
+                    setDueFrom("");
+                    setDueTo("");
+                    replaceListParams({
+                      due: next,
+                      dueFrom: "",
+                      dueTo: "",
+                    });
+                    return;
+                  }
+                  replaceListParams({ due: next });
+                }}
+                options={
+                  dueFilter === "soon"
+                    ? [
+                        {
+                          value: "soon",
+                          label: t("filters.dueSoon"),
+                        },
+                        ...dueFilterOptions,
+                      ]
+                    : dueFilterOptions
+                }
+                className="w-auto min-w-44"
+                triggerClassName="h-11 min-h-11 w-auto min-w-44 rounded-lg border-slate-200 bg-white px-3 text-[13px] font-semibold shadow-xs"
+              />
+            </div>
+            {dueFilter === "custom" ? (
+              <div className="flex h-11 min-h-11 w-full items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2 shadow-xs sm:w-auto">
+                <label htmlFor="orders-due-from" className="sr-only">
+                  {t("filters.dueFrom")}
+                </label>
+                <input
+                  id="orders-due-from"
+                  type="date"
+                  value={dueFrom}
+                  onChange={(event) => {
+                    const next = event.target.value;
+                    setDueFrom(next);
+                    replaceListParams({ due: "custom", dueFrom: next });
+                  }}
+                  className="h-9 min-w-0 flex-1 border-0 bg-transparent px-1 text-sm text-slate-800 outline-none sm:w-[9.5rem] sm:flex-none"
+                />
+                <span className="shrink-0 text-xs font-medium text-slate-400">
+                  –
+                </span>
+                <label htmlFor="orders-due-to" className="sr-only">
+                  {t("filters.dueTo")}
+                </label>
+                <input
+                  id="orders-due-to"
+                  type="date"
+                  value={dueTo}
+                  min={dueFrom || undefined}
+                  onChange={(event) => {
+                    const next = event.target.value;
+                    setDueTo(next);
+                    replaceListParams({ due: "custom", dueTo: next });
+                  }}
+                  className="h-9 min-w-0 flex-1 border-0 bg-transparent px-1 text-sm text-slate-800 outline-none sm:w-[9.5rem] sm:flex-none"
+                />
+              </div>
+            ) : null}
             <ListSortMenu
               value={sort}
               options={sortOptions}
@@ -340,6 +627,12 @@ export function OrdersTable({
                 setQuery("");
                 setSort("newest");
                 setStatusFilter("");
+                setDueFilter("");
+                setDueFrom("");
+                setDueTo("");
+                startTransition(() => {
+                  router.replace("/orders");
+                });
               }}
             />
           </div>
@@ -355,6 +648,9 @@ export function OrdersTable({
               <div className="min-w-0 space-y-1">
                 <p className="truncate text-base font-semibold text-foreground">
                   {order.vehicle.registrationNumber}
+                </p>
+                <p className="font-mono text-sm font-semibold text-foreground">
+                  {t("jobCardNumberShort", { number: order.jobCardNumber })}
                 </p>
                 <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
                   <User className="size-3.5 shrink-0" aria-hidden />

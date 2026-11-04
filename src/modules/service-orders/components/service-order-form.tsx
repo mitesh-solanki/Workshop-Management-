@@ -9,7 +9,6 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import {
   createServiceOrderAction,
@@ -55,18 +54,20 @@ type CreateProps = {
   mode: "create";
   vehicleId: string;
   defaultOdometer: number | null;
-  /** Prefill from linked inspection when creating a job card. */
+  /** Prefill from linked inspection / latest estimate when creating a job card. */
   defaultExpectedCompletion?: string;
+  /** Shown under Expected Completion when the date was matched from inspection/estimate. */
+  expectedCompletionHint?: string;
+  /** Suggested next Job Card number (editable). */
+  suggestedJobCardNumber: number;
   technicians: TechnicianOption[];
   bays: BayOption[];
   /** When set, technician field is fixed to this id (technician self-assign). */
   lockTechnicianId?: string;
   /** Link this standalone inspection after the job card is created. */
   inspectionId?: string;
-  /** Vehicle picker rendered beside Customer on create. */
+  /** Vehicle picker rendered next to Job Card Number on create. */
   vehiclePicker?: ReactNode;
-  /** Customer name for the selected vehicle (create). */
-  customerName?: string;
   className?: string;
 };
 
@@ -77,6 +78,7 @@ type EditProps = {
   bays: BayOption[];
   locked: LockedContext;
   defaults: {
+    jobCardNumber: number;
     complaint: string;
     requestedServices: string;
     odometerIn: number | null;
@@ -128,7 +130,6 @@ function TechnicianReadField({
 
 export function ServiceOrderForm(props: Props) {
   const t = useTranslations("orders");
-  const router = useRouter();
   const orderId = props.mode === "edit" ? props.orderId : null;
   const action = useMemo(() => {
     if (props.mode === "create" || !orderId) {
@@ -146,12 +147,15 @@ export function ServiceOrderForm(props: Props) {
     if (state.ok) {
       toast.success(state.message);
       if (props.mode === "create" && state.orderId) {
-        router.push(`/orders/${state.orderId}`);
+        // Full navigation so we land on Labour & parts and leave the create form
+        // before a soft refresh can bump the suggested job card number.
+        window.location.assign(`/orders/${state.orderId}?section=lines`);
+        return;
       }
     } else {
       toast.error(state.message);
     }
-  }, [state, props.mode, router]);
+  }, [state, props.mode]);
 
   const lockTechnicianId =
     props.mode === "create" ? props.lockTechnicianId : undefined;
@@ -160,6 +164,7 @@ export function ServiceOrderForm(props: Props) {
     props.mode === "edit"
       ? props.defaults
       : {
+          jobCardNumber: props.suggestedJobCardNumber,
           complaint: "",
           requestedServices: "",
           odometerIn: props.defaultOdometer,
@@ -171,6 +176,11 @@ export function ServiceOrderForm(props: Props) {
         };
 
   const [bay, setBay] = useState(defaults.bay);
+  const [jobCardNumber, setJobCardNumber] = useState(
+    String(defaults.jobCardNumber),
+  );
+  /** Once Save starts on create, freeze the number so a soft refresh cannot bump it. */
+  const [createSaveNumber, setCreateSaveNumber] = useState<string | null>(null);
   const [technicianIds, setTechnicianIds] = useState<string[]>(
     defaults.technicianIds,
   );
@@ -185,17 +195,32 @@ export function ServiceOrderForm(props: Props) {
   const technicianIdsKey = defaults.technicianIds.join(",");
 
   useEffect(() => {
+    if (props.mode === "create" && pending) {
+      setCreateSaveNumber((prev) => prev ?? jobCardNumber);
+    }
+  }, [props.mode, pending, jobCardNumber]);
+
+  useEffect(() => {
     setStatus(defaults.status);
     setPriority(defaults.priority || "NORMAL");
     setBay(defaults.bay);
+    // Create: keep the number the user is saving — a post-create refresh
+    // bumps the suggestion (e.g. 250 → 251) and must not rewrite the field.
+    if (props.mode === "edit") {
+      setJobCardNumber(String(defaults.jobCardNumber));
+    }
     setTechnicianIds(technicianIdsKey ? technicianIdsKey.split(",") : []);
   }, [
     orderId,
+    props.mode,
     defaults.status,
     defaults.priority,
     defaults.bay,
+    defaults.jobCardNumber,
     technicianIdsKey,
   ]);
+
+  const displayJobCardNumber = createSaveNumber ?? jobCardNumber;
 
   const allTechnicianOptions = useMemo(
     () =>
@@ -271,34 +296,15 @@ export function ServiceOrderForm(props: Props) {
       </FormField>
     ) : null;
 
-  const createCustomerName =
-    props.mode === "create" ? (props.customerName ?? "").trim() : "";
-  const customerField =
-    props.mode === "edit" && !technicianFieldsOnly ? (
-      <FormField id="locked-customer" label={t("customer")}>
-        <Input
-          id="locked-customer"
-          value={props.locked.customerName}
-          disabled
-          readOnly
-          className="h-11 min-h-11"
-        />
-      </FormField>
-    ) : props.mode === "create" ? (
-      <FormField id="locked-customer" label={t("customer")}>
-        <Input
-          id="locked-customer"
-          value={createCustomerName}
-          placeholder={t("selectVehiclePlaceholder")}
-          disabled
-          readOnly
-          className="h-11 min-h-11"
-        />
-      </FormField>
-    ) : null;
+  const expectedCompletionHint =
+    props.mode === "create" ? props.expectedCompletionHint : undefined;
 
   const expectedCompletionField = (
-    <FormField id="expectedCompletion" label={t("expectedCompletion")}>
+    <FormField
+      id="expectedCompletion"
+      label={t("expectedCompletion")}
+      hint={expectedCompletionHint}
+    >
       <Input
         id="expectedCompletion"
         name="expectedCompletion"
@@ -355,6 +361,37 @@ export function ServiceOrderForm(props: Props) {
           emptyLabel={t("techniciansEmpty")}
         />
       )}
+    </FormField>
+  );
+
+  const jobCardNumberField = (
+    <FormField
+      id="jobCardNumber"
+      label={t("jobCardNumber")}
+      hint={t.rich("jobCardNumberHint", {
+        settings: (chunks) => (
+          <Link
+            href="/settings"
+            className="font-medium text-teal-700 underline-offset-4 hover:underline"
+          >
+            {chunks}
+          </Link>
+        ),
+      })}
+    >
+      <Input
+        id="jobCardNumber"
+        name="jobCardNumber"
+        type="number"
+        inputMode="numeric"
+        min={1}
+        step={1}
+        value={displayJobCardNumber}
+        onChange={(e) => setJobCardNumber(e.target.value)}
+        required
+        disabled={readOnly || createSaveNumber != null}
+        className="h-11 min-h-11 font-mono"
+      />
     </FormField>
   );
 
@@ -471,6 +508,11 @@ export function ServiceOrderForm(props: Props) {
             name="priority"
             value={defaults.priority || "NORMAL"}
           />
+          <input
+            type="hidden"
+            name="jobCardNumber"
+            value={displayJobCardNumber}
+          />
           <div className="space-y-4">
             <div className="grid gap-4 sm:grid-cols-2">
               {vehicleField}
@@ -498,13 +540,13 @@ export function ServiceOrderForm(props: Props) {
           />
           <div className="space-y-4">
             <div className="grid gap-4 sm:grid-cols-2">
+              {jobCardNumberField}
               {props.mode === "edit" ? vehicleField : props.vehiclePicker}
-              {customerField}
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2">
-              {expectedCompletionField}
               {statusField}
+              {expectedCompletionField}
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2">

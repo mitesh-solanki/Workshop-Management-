@@ -12,7 +12,7 @@ import { InventoryTable } from "@/modules/inventory/components/inventory-table";
 import { listParts } from "@/modules/inventory/service";
 
 type Props = {
-  searchParams: Promise<{ q?: string; sort?: string }>;
+  searchParams: Promise<{ q?: string; sort?: string; stock?: string }>;
 };
 
 export const instant = false;
@@ -22,12 +22,16 @@ export default async function InventoryPage({ searchParams }: Props) {
   const params = await searchParams;
   const t = await getTranslations("inventory");
   const parts = await listParts(session, { q: params.q, sort: params.sort });
+  const lowStockOnly = params.stock === "low";
+  const items = lowStockOnly
+    ? parts.filter((part) => part.quantityOnHand <= part.lowStockLevel)
+    : parts;
   const canWrite = session.role === "OWNER" || session.role === "MANAGER";
   const canSale =
     session.role === "OWNER" ||
     session.role === "MANAGER" ||
     session.role === "ACCOUNTANT";
-  const hasQuery = Boolean(params.q?.trim());
+  const hasQuery = Boolean(params.q?.trim()) || lowStockOnly;
 
   return (
     <main className="space-y-6 sm:space-y-8">
@@ -59,7 +63,7 @@ export default async function InventoryPage({ searchParams }: Props) {
 
       <Suspense fallback={<TableSpinner />}>
         <InventoryTable
-          items={parts}
+          items={items}
           canWrite={canWrite}
           empty={
             <EmptyState

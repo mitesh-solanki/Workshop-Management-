@@ -1,8 +1,10 @@
+import { Suspense } from "react";
 import Link from "next/link";
 import { Plus } from "lucide-react";
 import { getTranslations } from "next-intl/server";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/ui/page-header";
+import { TableSpinner } from "@/components/shared/page-spinner";
 import { requireSession } from "@/lib/session";
 import { OrdersTable } from "@/modules/service-orders/components/orders-table";
 import { listOrders } from "@/modules/service-orders/service";
@@ -45,42 +47,45 @@ export default async function OrdersPage() {
         actions={createAction}
       />
 
-      <OrdersTable
-        canWrite={canWrite}
-        canDelete={canDelete}
-        canUploadPaper={canUploadPaper}
-        showNeedsPricing={showNeedsPricing}
-        showReport
-        orders={orders.map((order) => ({
-          id: order.id,
-          customerId: order.customerId,
-          vehicleId: order.vehicleId,
-          status: order.status,
-          complaint: order.complaint,
-          bay: order.bay,
-          createdAt: order.createdAt,
-          expectedCompletion: order.expectedCompletion,
-          paperCopyCount: order.paperCopies.length,
-          needsPricing:
-            showNeedsPricing &&
-            order.status !== "COMPLETED" &&
-            order.lines.length > 0,
-          vehicle: {
-            registrationNumber: order.vehicle.registrationNumber,
-            make: order.vehicle.make,
-            model: order.vehicle.model,
-          },
-          customer: { name: order.customer.name },
-          technician: order.technician
-            ? {
-                name: order.technician.name,
-                email: order.technician.email,
-              }
-            : null,
-          technicianAssignments: order.technicianAssignments,
-        }))}
-        emptyAction={createAction}
-      />
+      <Suspense fallback={<TableSpinner />}>
+        <OrdersTable
+          canWrite={canWrite}
+          canDelete={canDelete}
+          canUploadPaper={canUploadPaper}
+          showNeedsPricing={showNeedsPricing}
+          showReport
+          orders={orders.map((order) => ({
+            id: order.id,
+            customerId: order.customerId,
+            vehicleId: order.vehicleId,
+            jobCardNumber: order.jobCardNumber,
+            status: order.status,
+            complaint: order.complaint,
+            bay: order.bay,
+            createdAt: order.createdAt,
+            expectedCompletion: order.expectedCompletion,
+            paperCopyCount: order.paperCopies.length,
+            needsPricing:
+              showNeedsPricing &&
+              order.status !== "COMPLETED" &&
+              order.lines.length > 0,
+            vehicle: {
+              registrationNumber: order.vehicle.registrationNumber,
+              make: order.vehicle.make,
+              model: order.vehicle.model,
+            },
+            customer: { name: order.customer.name },
+            technician: order.technician
+              ? {
+                  name: order.technician.name,
+                  email: order.technician.email,
+                }
+              : null,
+            technicianAssignments: order.technicianAssignments,
+          }))}
+          emptyAction={createAction}
+        />
+      </Suspense>
     </main>
   );
 }

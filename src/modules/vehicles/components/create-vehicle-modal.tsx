@@ -46,7 +46,7 @@ type Props = {
   customerId: string;
   customerName?: string;
   trigger?: React.ReactNode;
-  onCreated?: () => void;
+  onCreated?: (vehicleId?: string) => void;
 };
 
 export function CreateVehicleModal({
@@ -79,7 +79,7 @@ export function CreateVehicleModal({
       setFieldErrors({});
       setFormKey((k) => k + 1);
       setOpen(false);
-      onCreated?.();
+      onCreated?.(state.vehicleId);
       router.refresh();
       return;
     }

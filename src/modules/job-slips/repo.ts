@@ -6,6 +6,7 @@ import { assignedTechnicianWhere } from "@/modules/service-orders/repo";
 
 const jobSlipSelect = {
   id: true,
+  jobCardNumber: true,
   status: true,
   complaint: true,
   bay: true,

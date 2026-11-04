@@ -129,14 +129,22 @@ export function InvoicesTable({
         ),
       },
       {
-        accessorKey: "paymentStatus",
-        header: t("columns.status"),
-        cell: ({ row }) => (
-          <PaymentStatusBadge
-            paymentStatus={row.original.paymentStatus}
-            label={t(`paymentStatuses.${row.original.paymentStatus}`)}
-          />
-        ),
+        accessorKey: "amountPaidPaise",
+        header: t("columns.received"),
+        cell: ({ row }) => {
+          const paid = row.original.amountPaidPaise;
+          return (
+            <span
+              className={
+                paid > 0
+                  ? "font-bold tabular-nums text-emerald-700"
+                  : "tabular-nums text-muted-foreground"
+              }
+            >
+              {formatRupees(paid)}
+            </span>
+          );
+        },
       },
       {
         accessorKey: "pendingBalancePaise",
@@ -148,11 +156,26 @@ export function InvoicesTable({
         ),
       },
       {
+        accessorKey: "paymentStatus",
+        header: t("columns.status"),
+        cell: ({ row }) => (
+          <PaymentStatusBadge
+            paymentStatus={row.original.paymentStatus}
+            label={t(`paymentStatuses.${row.original.paymentStatus}`)}
+          />
+        ),
+      },
+      {
         id: "actions",
         header: t("actions"),
         meta: { className: "w-[1%] whitespace-nowrap" },
         cell: ({ row }) => (
-          <InvoiceRowActions serviceOrderId={row.original.serviceOrderId} />
+          <InvoiceRowActions
+            invoiceId={row.original.id}
+            serviceOrderId={row.original.serviceOrderId}
+            amountPaidPaise={row.original.amountPaidPaise}
+            creditNotesTotalPaise={row.original.creditNotesTotalPaise}
+          />
         ),
       },
     ],
@@ -225,13 +248,27 @@ export function InvoicesTable({
               </div>
               <div>
                 <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                  {t("columns.received")}
+                </p>
+                <p
+                  className={
+                    invoice.amountPaidPaise > 0
+                      ? "mt-0.5 text-sm font-bold tabular-nums text-emerald-700"
+                      : "mt-0.5 text-sm font-semibold tabular-nums text-muted-foreground"
+                  }
+                >
+                  {formatRupees(invoice.amountPaidPaise)}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
                   {t("columns.balance")}
                 </p>
                 <p className="mt-0.5 text-sm font-semibold tabular-nums text-foreground">
                   {formatRupees(invoice.pendingBalancePaise)}
                 </p>
               </div>
-              <div className="col-span-2">
+              <div>
                 <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
                   {t("columns.date")}
                 </p>
@@ -245,7 +282,12 @@ export function InvoicesTable({
 
             <div className="flex items-center justify-between gap-2 border-t border-border pt-3">
               <p className="text-xs text-muted-foreground">{t("actions")}</p>
-              <InvoiceRowActions serviceOrderId={invoice.serviceOrderId} />
+              <InvoiceRowActions
+                invoiceId={invoice.id}
+                serviceOrderId={invoice.serviceOrderId}
+                amountPaidPaise={invoice.amountPaidPaise}
+                creditNotesTotalPaise={invoice.creditNotesTotalPaise}
+              />
             </div>
           </div>
         );

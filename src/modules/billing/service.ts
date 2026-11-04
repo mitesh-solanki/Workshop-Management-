@@ -1,5 +1,6 @@
 import "server-only";
 
+import { calendarDayBoundsUtc } from "@/lib/calendar-day";
 import { AppError, ForbiddenError, NotFoundError } from "@/lib/errors";
 import {
   computeLineGstSplit,
@@ -19,34 +20,53 @@ import type { PdfLocale } from "@/modules/billing/schema";
 import {
   createCreditNoteSchema,
   createInvoiceFromEstimateSchema,
-  deleteDraftInvoiceSchema,
+  deleteInvoiceSchema,
   finalizeInvoiceSchema,
   normalizePaymentBreakdown,
   recordPaymentSchema,
   recordRefundSchema,
+  syncInvoiceFromJobCardSchema,
+  updateInvoiceLinesSchema,
   type CreateCreditNoteInput,
   type CreateInvoiceFromEstimateInput,
-  type DeleteDraftInvoiceInput,
+  type DeleteInvoiceInput,
   type FinalizeInvoiceInput,
   type InvoiceLineTypeValue,
+  defaultInvoiceHsnOrSac,
   isBillableOrderLineType,
+  resolveInvoiceEditLineTax,
+  deletePaymentSchema,
+  type DeletePaymentInput,
   type RecordPaymentInput,
   type RecordRefundInput,
+  type SyncInvoiceFromJobCardInput,
+  type UpdateInvoiceLinesInput,
+  updatePaymentSchema,
+  type UpdatePaymentInput,
 } from "@/modules/billing/schema";
 import {
   createAndFinalizeInvoice,
   createCreditNoteRow,
   createDraftInvoice,
-  deleteDraftInvoiceRow,
+  deleteInvoiceRow,
+  sumPaymentsReceivedInWindow,
+  deletePaymentRow,
   finalizeInvoiceInTransaction,
   findGarageBillingProfile,
   findInvoiceById,
   listInvoicesForOrder,
   recordPaymentRow,
   recordRefundRow,
+  replaceInvoiceLinesRow,
+  updatePaymentRow,
   type InvoiceLineCreateRow,
 } from "@/modules/billing/repo";
-import { findServiceOrderById } from "@/modules/service-orders/repo";
+import { findPartById } from "@/modules/inventory/repo";
+import {
+  createServiceOrderLine,
+  findServiceOrderById,
+  updateServiceOrderLine,
+} from "@/modules/service-orders/repo";
 import { partRequiresWarrantyCard } from "@/modules/warranties/part-requires-warranty";
 import {
   listWarrantiesForInvoice,
@@ -158,6 +178,13 @@ export async function getGarageBillingProfile(session: RoleSession) {
   return findGarageBillingProfile(session.garageId);
 }
 
+/** Home KPI — net customer payments received on the workshop calendar day. */
+export async function getDashboardPaymentsReceivedToday(session: RoleSession) {
+  requireRole(session, ["OWNER", "MANAGER", "ACCOUNTANT"]);
+  const day = calendarDayBoundsUtc();
+  return sumPaymentsReceivedInWindow(session.garageId, day);
+}
+
 export async function getInvoice(
   session: RoleSession,
   invoiceId: string,
@@ -226,9 +253,7 @@ function draftMatchesExpectedOrderLines(
 }
 
 function defaultHsnOrSacForType(type: string) {
-  if (type === "PART") return "8708";
-  if (type === "OUTSIDE") return "9987";
-  return "9987";
+  return defaultInvoiceHsnOrSac(type);
 }
 
 function billableOrderLineSnapshots(order: {
@@ -269,8 +294,8 @@ function billableOrderLineSnapshots(order: {
 }
 
 /**
- * Keep one DRAFT invoice in sync with priced job-card labour / parts / outside work.
- * Creates it when missing; remakes it when lines changed. No-op when empty.
+ * One bill per job: return the existing bill if any.
+ * Does not auto-create after delete — empty billing shows Create Draft explicitly.
  */
 export async function ensureDraftInvoiceInSync(
   session: RoleSession,
@@ -278,46 +303,12 @@ export async function ensureDraftInvoiceInSync(
 ) {
   requireRole(session, WRITE_ROLES);
   const order = await loadOrder(session, serviceOrderId);
-  const pricedIds = pricedOrderLineIdSet(order.lines);
-  if (pricedIds.size === 0) {
+  const invoices = await listInvoicesForOrder(session.garageId, order.id);
+  if (invoices.length === 0) {
     return null;
   }
-
-  const invoices = await listInvoicesForOrder(session.garageId, order.id);
   const draft = invoices.find((invoice) => invoice.status === "DRAFT");
-
-  if (!draft) {
-    return createInvoiceFromApprovedEstimate(session, order.id, {
-      finalize: false,
-    });
-  }
-
-  const billedFingerprints = new Set(
-    invoices
-      .filter((invoice) => invoice.status === "FINALIZED")
-      .flatMap((invoice) =>
-        invoice.lines.map(
-          (line) =>
-            `${line.description}|${line.type}|${line.quantity}|${line.unitPricePaise}`,
-        ),
-      ),
-  );
-  const expected = billableOrderLineSnapshots(order).filter(
-    (line) =>
-      !billedFingerprints.has(
-        `${line.description}|${line.type}|${line.quantity}|${line.unitPricePaise}`,
-      ),
-  );
-
-  if (draftMatchesExpectedOrderLines(draft, expected)) {
-    return withBalance(draft);
-  }
-
-  return remakeDraftInvoice(session, order.id, draft.id, {
-    placeOfSupplyStateCode: draft.placeOfSupplyStateCode,
-    notes: draft.notes ?? "",
-    finalize: false,
-  });
+  return withBalance(draft ?? invoices[0]!);
 }
 
 /**
@@ -354,32 +345,15 @@ export async function createInvoiceFromApprovedEstimate(
     session.garageId,
     order.id,
   );
-  const billedOrderFingerprints = new Set(
-    existingInvoices
-      .filter((invoice) => invoice.status === "FINALIZED")
-      .flatMap((invoice) =>
-        invoice.lines.map(
-          (line) =>
-            `${line.description}|${line.type}|${line.quantity}|${line.unitPricePaise}`,
-        ),
-      ),
-  );
+  if (existingInvoices.length > 0) {
+    throw new AppError("billing.invoice_already_exists");
+  }
 
-  const snapshots = billableOrderLineSnapshots(order).filter(
-    (line) =>
-      !billedOrderFingerprints.has(
-        `${line.description}|${line.type}|${line.quantity}|${line.unitPricePaise}`,
-      ),
-  );
-
+  const snapshots = billableOrderLineSnapshots(order);
   const lineRows = buildLinesFromOrderSnapshots(snapshots, sameState);
 
   if (lineRows.length === 0) {
-    throw new AppError(
-      existingInvoices.some((invoice) => invoice.status === "FINALIZED")
-        ? "billing.no_unbilled_approved_lines"
-        : "billing.no_priced_lines",
-    );
+    throw new AppError("billing.no_priced_lines");
   }
 
   const gstInputs: GstLineInput[] = lineRows.map((line) => ({
@@ -449,26 +423,7 @@ export async function finalizeInvoice(
     throw new NotFoundError();
   }
   const order = await loadOrder(session, draft.serviceOrderId);
-  const issuedInvoices = await listInvoicesForOrder(
-    session.garageId,
-    draft.serviceOrderId,
-  );
-  const billedFingerprints = new Set(
-    issuedInvoices
-      .filter((invoice) => invoice.status === "FINALIZED")
-      .flatMap((invoice) =>
-        invoice.lines.map(
-          (line) =>
-            `${line.description}|${line.type}|${line.quantity}|${line.unitPricePaise}`,
-        ),
-      ),
-  );
-  const expected = billableOrderLineSnapshots(order).filter(
-    (line) =>
-      !billedFingerprints.has(
-        `${line.description}|${line.type}|${line.quantity}|${line.unitPricePaise}`,
-      ),
-  );
+  const expected = billableOrderLineSnapshots(order);
   if (!draftMatchesExpectedOrderLines(draft, expected)) {
     throw new AppError("billing.invoice_draft_outdated");
   }
@@ -498,10 +453,18 @@ export async function finalizeInvoice(
 
 export async function deleteDraftInvoice(
   session: RoleSession,
-  raw: DeleteDraftInvoiceInput,
+  raw: DeleteInvoiceInput,
+) {
+  return deleteInvoice(session, raw);
+}
+
+/** Delete the job's bill, including any payments and credit notes on it. */
+export async function deleteInvoice(
+  session: RoleSession,
+  raw: DeleteInvoiceInput,
 ) {
   requireRole(session, WRITE_ROLES);
-  const input = deleteDraftInvoiceSchema.parse(raw);
+  const input = deleteInvoiceSchema.parse(raw);
 
   const invoice = await findInvoiceById(session.garageId, input.invoiceId);
   if (!invoice) {
@@ -509,17 +472,13 @@ export async function deleteDraftInvoice(
   }
   await loadOrder(session, invoice.serviceOrderId);
 
-  if (invoice.status !== "DRAFT") {
-    throw new AppError("billing.invoice_immutable");
-  }
-
-  const deleted = await deleteDraftInvoiceRow(
+  const deleted = await deleteInvoiceRow(
     session.garageId,
     input.invoiceId,
     session.userId,
   );
   if (!deleted) {
-    throw new AppError("billing.invoice_immutable");
+    throw new NotFoundError();
   }
   return deleted;
 }
@@ -596,7 +555,10 @@ export async function remakeDraftInvoice(
   return withBalance(fresh);
 }
 
-/** Finalized invoices cannot be edited — call sites should use this guard. */
+/**
+ * Finalized invoices cannot be finalized again / remade as draft.
+ * Line edits use updateInvoiceLines / syncInvoiceFromJobCard instead.
+ */
 export async function assertInvoiceEditable(
   session: RoleSession,
   invoiceId: string,
@@ -609,6 +571,340 @@ export async function assertInvoiceEditable(
     throw new AppError("billing.invoice_immutable");
   }
   return invoice;
+}
+
+function lineFingerprint(line: {
+  description: string;
+  type: string;
+  quantity: number;
+  unitPricePaise: number;
+}) {
+  return `${line.description}|${line.type}|${line.quantity}|${line.unitPricePaise}`;
+}
+
+async function syncJobCardFromInvoiceLines(
+  session: RoleSession,
+  serviceOrderId: string,
+  previous: Array<{
+    description: string;
+    type: string;
+    quantity: number;
+    unitPricePaise: number;
+  }>,
+  next: Array<{
+    description: string;
+    type: InvoiceLineTypeValue;
+    quantity: number;
+    unitPricePaise: number;
+    partId?: string | null;
+  }>,
+) {
+  const order = await loadOrder(session, serviceOrderId);
+  const pool = order.lines
+    .filter((line) => isBillableOrderLineType(line.type))
+    .map((line) => ({
+      id: line.id,
+      type: line.type,
+      description: line.description,
+      quantity: line.quantity,
+      unitPricePaise: line.unitPricePaise,
+      partId: line.partId ?? null,
+      claimed: false,
+    }));
+
+  const matchedIds: Array<string | null> = previous.map((prev) => {
+    const fp = lineFingerprint(prev);
+    const hit = pool.find(
+      (line) => !line.claimed && lineFingerprint(line) === fp,
+    );
+    if (!hit) return null;
+    hit.claimed = true;
+    return hit.id;
+  });
+
+  for (let index = 0; index < next.length; index += 1) {
+    const line = next[index]!;
+    const matchedId = matchedIds[index] ?? null;
+    const nextPartId =
+      line.type === "PART" ? (line.partId ?? null) : null;
+    if (matchedId) {
+      const existing = pool.find((row) => row.id === matchedId);
+      const updated = await updateServiceOrderLine(session.garageId, {
+        lineId: matchedId,
+        serviceOrderId,
+        description: line.description,
+        quantity: line.type === "PART" ? line.quantity : 1,
+        unitPricePaise: line.unitPricePaise,
+        ...(line.type === "PART"
+          ? { partId: nextPartId ?? existing?.partId ?? null }
+          : {}),
+        actorId: session.userId,
+      });
+      if (!updated.ok) {
+        if (updated.reason === "INSUFFICIENT_STOCK") {
+          throw new AppError("inventory.insufficient_stock", 409, {
+            partName: updated.partName ?? "",
+          });
+        }
+        throw new NotFoundError();
+      }
+      continue;
+    }
+
+    const created = await createServiceOrderLine(session.garageId, {
+      serviceOrderId,
+      type: line.type,
+      description: line.description,
+      quantity: line.type === "PART" ? line.quantity : 1,
+      unitPricePaise: line.unitPricePaise,
+      partId: nextPartId,
+      actorId: session.userId,
+    });
+    if (!created.ok) {
+      if (created.reason === "INSUFFICIENT_STOCK") {
+        throw new AppError("inventory.insufficient_stock", 409, {
+          partName: created.partName ?? "",
+        });
+      }
+      throw new NotFoundError();
+    }
+  }
+}
+
+async function replaceInvoiceLinesFromSnapshots(
+  session: RoleSession,
+  invoice: {
+    id: string;
+    serviceOrderId: string;
+    sellerStateCode: string;
+    placeOfSupplyStateCode: string;
+    notes: string | null;
+    lines: Array<{
+      id: string;
+      type: string;
+      description: string;
+      estimateLineId: string | null;
+    }>;
+  },
+  snapshots: Array<{
+    estimateLineId: string | null;
+    type: InvoiceLineTypeValue;
+    description: string;
+    quantity: number;
+    unitPricePaise: number;
+    gstRatePercent: number;
+    hsnOrSac: string;
+  }>,
+  notes?: string | null,
+) {
+  const sameState = isSameStateSupply(
+    invoice.sellerStateCode,
+    invoice.placeOfSupplyStateCode,
+  );
+  const lineRows = buildLinesFromOrderSnapshots(snapshots, sameState);
+  if (lineRows.length === 0) {
+    throw new AppError("billing.no_priced_lines");
+  }
+
+  const warranties = await listWarrantiesForInvoice(
+    session.garageId,
+    invoice.id,
+  );
+  const byEstimateLineId = new Map<string, string>();
+  const byPartName = new Map<string, string>();
+  for (const line of invoice.lines) {
+    if (line.type !== "PART") continue;
+    const doc = warranties.find((item) => item.invoiceLineId === line.id);
+    if (!doc) continue;
+    if (line.estimateLineId) {
+      byEstimateLineId.set(line.estimateLineId, doc.id);
+    }
+    byPartName.set(line.description.trim().toLowerCase(), doc.id);
+  }
+
+  const gstInputs: GstLineInput[] = lineRows.map((line) => ({
+    quantity: line.quantity,
+    unitPricePaise: line.unitPricePaise,
+    gstRatePercent: line.gstRatePercent,
+  }));
+  const totals = sumLineGstSplit(gstInputs, sameState);
+
+  const replaced = await replaceInvoiceLinesRow(session.garageId, {
+    invoiceId: invoice.id,
+    actorId: session.userId,
+    taxablePaise: totals.taxablePaise,
+    cgstPaise: totals.cgstPaise,
+    sgstPaise: totals.sgstPaise,
+    igstPaise: totals.igstPaise,
+    totalPaise: totals.totalPaise,
+    gstSplit: totals.kind,
+    notes: notes === undefined ? undefined : notes,
+    lines: lineRows,
+  });
+  if (!replaced) {
+    throw new NotFoundError();
+  }
+
+  const usedWarrantyIds = new Set<string>();
+  for (const line of replaced.lines) {
+    if (line.type !== "PART") continue;
+    const warrantyId =
+      (line.estimateLineId
+        ? byEstimateLineId.get(line.estimateLineId)
+        : undefined) ?? byPartName.get(line.description.trim().toLowerCase());
+    if (!warrantyId || usedWarrantyIds.has(warrantyId)) continue;
+    usedWarrantyIds.add(warrantyId);
+    await relinkWarrantyToInvoiceLine({
+      garageId: session.garageId,
+      warrantyId,
+      invoiceId: replaced.id,
+      invoiceLineId: line.id,
+      actorId: session.userId,
+    });
+  }
+
+  return withBalance(replaced);
+}
+
+/** Edit bill lines (draft or finalized) and push changes onto the job card. */
+export async function updateInvoiceLines(
+  session: RoleSession,
+  raw: UpdateInvoiceLinesInput,
+) {
+  requireRole(session, WRITE_ROLES);
+  const input = updateInvoiceLinesSchema.parse(raw);
+  const invoice = await findInvoiceById(session.garageId, input.invoiceId);
+  if (!invoice) {
+    throw new NotFoundError();
+  }
+  const order = await loadOrder(session, invoice.serviceOrderId);
+
+  const previous = invoice.lines.map((line) => ({
+    description: line.description,
+    type: line.type,
+    quantity: line.quantity,
+    unitPricePaise: line.unitPricePaise,
+  }));
+
+  const existingById = new Map(
+    invoice.lines.map((line) => [line.id, line] as const),
+  );
+  const orderPool = order.lines
+    .filter((line) => isBillableOrderLineType(line.type))
+    .map((line) => ({ ...line, claimed: false }));
+
+  const partIds = [
+    ...new Set(
+      input.lines
+        .map((line) => line.partId)
+        .filter((partId): partId is string => Boolean(partId)),
+    ),
+  ];
+  const partsById = new Map<
+    string,
+    NonNullable<Awaited<ReturnType<typeof findPartById>>>
+  >();
+  await Promise.all(
+    partIds.map(async (partId) => {
+      const part = await findPartById(session.garageId, partId);
+      if (part) {
+        partsById.set(partId, part);
+      }
+    }),
+  );
+
+  const snapshots = input.lines.map((line) => {
+    const existing = line.id ? existingById.get(line.id) : undefined;
+    const quantity = line.type === "PART" ? line.quantity : 1;
+    const selectedPart = line.partId ? partsById.get(line.partId) : undefined;
+    const orderLine =
+      orderPool.find(
+        (row) =>
+          !row.claimed &&
+          row.type === line.type &&
+          row.description === line.description,
+      ) ??
+      (existing
+        ? orderPool.find(
+            (row) =>
+              !row.claimed &&
+              row.type === existing.type &&
+              row.description === existing.description,
+          )
+        : undefined);
+    if (orderLine) {
+      orderLine.claimed = true;
+    }
+
+    const tax = resolveInvoiceEditLineTax({
+      type: line.type,
+      gstRatePercent: line.gstRatePercent,
+      hsnOrSac: line.hsnOrSac,
+      existing: existing
+        ? {
+            gstRatePercent: existing.gstRatePercent,
+            hsnOrSac: existing.hsnOrSac,
+          }
+        : null,
+      part: selectedPart ?? orderLine?.part ?? null,
+    });
+
+    return {
+      estimateLineId: existing?.estimateLineId ?? null,
+      type: line.type,
+      description: line.description,
+      quantity,
+      unitPricePaise: line.unitPricePaise,
+      gstRatePercent: tax.gstRatePercent,
+      hsnOrSac: tax.hsnOrSac,
+      partId: line.type === "PART" ? (line.partId ?? null) : null,
+    };
+  });
+
+  const updated = await replaceInvoiceLinesFromSnapshots(
+    session,
+    invoice,
+    snapshots.map(({ partId: _partId, ...line }) => line),
+    input.notes === undefined ? undefined : input.notes,
+  );
+
+  await syncJobCardFromInvoiceLines(
+    session,
+    invoice.serviceOrderId,
+    previous,
+    snapshots.map((line) => ({
+      description: line.description,
+      type: line.type,
+      quantity: line.quantity,
+      unitPricePaise: line.unitPricePaise,
+      partId: line.partId,
+    })),
+  );
+
+  return updated;
+}
+
+/** Rebuild the job's single bill from current priced labour / parts / outside work. */
+export async function syncInvoiceFromJobCard(
+  session: RoleSession,
+  raw: SyncInvoiceFromJobCardInput,
+) {
+  requireRole(session, WRITE_ROLES);
+  const input = syncInvoiceFromJobCardSchema.parse(raw);
+  const order = await loadOrder(session, input.serviceOrderId);
+  const invoices = await listInvoicesForOrder(session.garageId, order.id);
+  const target =
+    invoices.find((invoice) => invoice.status === "DRAFT") ?? invoices[0];
+  if (!target) {
+    throw new AppError("billing.no_invoice");
+  }
+
+  const snapshots = billableOrderLineSnapshots(order);
+  if (snapshots.length === 0) {
+    throw new AppError("billing.no_priced_lines");
+  }
+
+  return replaceInvoiceLinesFromSnapshots(session, target, snapshots);
 }
 
 export async function recordInvoicePayment(
@@ -652,6 +948,92 @@ export async function recordInvoicePayment(
   }
   return {
     payment: result.payment,
+    invoice: withBalance(result.invoice),
+  };
+}
+
+export async function updateInvoicePayment(
+  session: RoleSession,
+  raw: UpdatePaymentInput,
+) {
+  requireRole(session, WRITE_ROLES);
+  const input = updatePaymentSchema.parse(raw);
+  const breakdown = normalizePaymentBreakdown({
+    method: input.method,
+    amountPaise: input.amountPaise,
+    cashPaise: input.cashPaise,
+    upiPaise: input.upiPaise,
+    cardPaise: input.cardPaise,
+  });
+
+  const result = await updatePaymentRow(session.garageId, {
+    invoiceId: input.invoiceId,
+    paymentId: input.paymentId,
+    method: input.method,
+    amountPaise: input.amountPaise,
+    cashPaise: breakdown.cashPaise,
+    upiPaise: breakdown.upiPaise,
+    cardPaise: breakdown.cardPaise,
+    note: input.note ?? null,
+    actorId: session.userId,
+  });
+
+  if (!result) {
+    throw new NotFoundError();
+  }
+  if ("error" in result) {
+    if (result.error === "not_finalized") {
+      throw new AppError("billing.payment_requires_finalized");
+    }
+    if (result.error === "online_locked") {
+      throw new AppError("billing.payment_online_locked", 409);
+    }
+    if (result.error === "refund_locked") {
+      throw new AppError("billing.payment_refund_locked", 409);
+    }
+    throw new AppError("billing.payment_exceeds_balance", 400, {
+      pending: String(result.pending ?? 0),
+    });
+  }
+  if (!result.invoice) {
+    throw new AppError("billing.payment_failed");
+  }
+  return {
+    paymentId: result.paymentId,
+    invoice: withBalance(result.invoice),
+  };
+}
+
+export async function deleteInvoicePayment(
+  session: RoleSession,
+  raw: DeletePaymentInput,
+) {
+  requireRole(session, WRITE_ROLES);
+  const input = deletePaymentSchema.parse(raw);
+
+  const result = await deletePaymentRow(session.garageId, {
+    invoiceId: input.invoiceId,
+    paymentId: input.paymentId,
+    actorId: session.userId,
+  });
+
+  if (!result) {
+    throw new NotFoundError();
+  }
+  if ("error" in result) {
+    if (result.error === "not_finalized") {
+      throw new AppError("billing.payment_requires_finalized");
+    }
+    if (result.error === "online_locked") {
+      throw new AppError("billing.payment_online_locked", 409);
+    }
+    throw new AppError("billing.payment_failed");
+  }
+  if (!result.invoice) {
+    throw new AppError("billing.payment_failed");
+  }
+  return {
+    paymentId: result.paymentId,
     invoice: withBalance(result.invoice),
   };
 }

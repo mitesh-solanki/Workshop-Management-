@@ -1,5 +1,6 @@
 import {
   Car,
+  ChartColumn,
   ClipboardCheck,
   ClipboardList,
   Columns3,
@@ -27,6 +28,7 @@ export type NavKey =
   | "customers"
   | "vehicles"
   | "invoices"
+  | "reports"
   | "inventory"
   | "counterSales"
   | "vendors"
@@ -48,6 +50,16 @@ export type NavChildItem = {
   roles?: readonly AppRole[];
 };
 
+/** Hover flyout action (Cruise-style Add / View). */
+export type NavFlyoutItem = {
+  href: string;
+  /** i18n key under `nav.flyout.*` */
+  labelKey: string;
+  kind: "list" | "add";
+  /** Roles that may see this action. Omit = same as parent item. */
+  roles?: readonly AppRole[];
+};
+
 export type NavItem = {
   href: string;
   key: NavKey;
@@ -56,12 +68,10 @@ export type NavItem = {
   /** Roles that may see this item. Omit = all roles. */
   roles?: readonly AppRole[];
   children?: readonly NavChildItem[];
+  flyout?: readonly NavFlyoutItem[];
 };
 
-/**
- * Modules that exist as routes today.
- * Later: reports — add when pages ship.
- */
+/** Modules that exist as routes today. */
 export const APP_NAV_ITEMS: readonly NavItem[] = [
   {
     href: "/dashboard",
@@ -69,12 +79,14 @@ export const APP_NAV_ITEMS: readonly NavItem[] = [
     icon: LayoutDashboard,
     group: "workshop",
     roles: ["OWNER", "MANAGER", "ACCOUNTANT"],
+    flyout: [{ href: "/dashboard", labelKey: "viewDashboard", kind: "list" }],
   },
   {
     href: "/workshop",
     key: "workshop",
     icon: Kanban,
     group: "workshop",
+    flyout: [{ href: "/workshop", labelKey: "viewWorkshop", kind: "list" }],
   },
   {
     href: "/inspections",
@@ -82,12 +94,30 @@ export const APP_NAV_ITEMS: readonly NavItem[] = [
     icon: ClipboardCheck,
     group: "workshop",
     roles: ["OWNER", "MANAGER", "ACCOUNTANT"],
+    flyout: [
+      {
+        href: "/inspections/new",
+        labelKey: "addInspection",
+        kind: "add",
+        roles: ["OWNER", "MANAGER"],
+      },
+      { href: "/inspections", labelKey: "viewInspections", kind: "list" },
+    ],
   },
   {
     href: "/orders",
     key: "orders",
     icon: ClipboardList,
     group: "workshop",
+    flyout: [
+      {
+        href: "/orders/new",
+        labelKey: "addOrder",
+        kind: "add",
+        roles: ["OWNER", "MANAGER"],
+      },
+      { href: "/orders", labelKey: "viewOrders", kind: "list" },
+    ],
   },
   {
     href: "/job-slips",
@@ -95,6 +125,7 @@ export const APP_NAV_ITEMS: readonly NavItem[] = [
     icon: Ticket,
     group: "workshop",
     roles: ["OWNER", "MANAGER", "ACCOUNTANT"],
+    flyout: [{ href: "/job-slips", labelKey: "viewJobSlips", kind: "list" }],
   },
   {
     href: "/work-stations",
@@ -102,6 +133,14 @@ export const APP_NAV_ITEMS: readonly NavItem[] = [
     icon: Columns3,
     group: "workshop",
     roles: ["OWNER", "MANAGER"],
+    flyout: [
+      {
+        href: "/work-stations?create=1",
+        labelKey: "addBay",
+        kind: "add",
+      },
+      { href: "/work-stations", labelKey: "viewBays", kind: "list" },
+    ],
   },
   {
     href: "/customers",
@@ -109,6 +148,15 @@ export const APP_NAV_ITEMS: readonly NavItem[] = [
     icon: Contact,
     group: "business",
     roles: ["OWNER", "MANAGER", "ACCOUNTANT"],
+    flyout: [
+      {
+        href: "/customers?create=1",
+        labelKey: "addCustomer",
+        kind: "add",
+        roles: ["OWNER", "MANAGER"],
+      },
+      { href: "/customers", labelKey: "viewCustomers", kind: "list" },
+    ],
   },
   {
     href: "/vehicles",
@@ -116,6 +164,15 @@ export const APP_NAV_ITEMS: readonly NavItem[] = [
     icon: Car,
     group: "business",
     roles: ["OWNER", "MANAGER", "ACCOUNTANT"],
+    flyout: [
+      {
+        href: "/vehicles?create=1",
+        labelKey: "addVehicle",
+        kind: "add",
+        roles: ["OWNER", "MANAGER"],
+      },
+      { href: "/vehicles", labelKey: "viewVehicles", kind: "list" },
+    ],
   },
   {
     href: "/invoices",
@@ -123,6 +180,15 @@ export const APP_NAV_ITEMS: readonly NavItem[] = [
     icon: FileText,
     group: "business",
     roles: ["OWNER", "MANAGER", "ACCOUNTANT"],
+    flyout: [{ href: "/invoices", labelKey: "viewInvoices", kind: "list" }],
+  },
+  {
+    href: "/reports",
+    key: "reports",
+    icon: ChartColumn,
+    group: "business",
+    roles: ["OWNER", "MANAGER", "ACCOUNTANT"],
+    flyout: [{ href: "/reports", labelKey: "viewReports", kind: "list" }],
   },
   {
     href: "/inventory",
@@ -137,6 +203,20 @@ export const APP_NAV_ITEMS: readonly NavItem[] = [
         roles: ["OWNER", "MANAGER", "ACCOUNTANT"],
       },
     ],
+    flyout: [
+      { href: "/inventory/new", labelKey: "addInventory", kind: "add" },
+      { href: "/inventory", labelKey: "viewInventory", kind: "list" },
+      {
+        href: "/inventory/sales/new",
+        labelKey: "addCounterSale",
+        kind: "add",
+      },
+      {
+        href: "/inventory/sales",
+        labelKey: "viewCounterSales",
+        kind: "list",
+      },
+    ],
   },
   {
     href: "/vendors",
@@ -144,6 +224,15 @@ export const APP_NAV_ITEMS: readonly NavItem[] = [
     icon: Truck,
     group: "business",
     roles: ["OWNER", "MANAGER", "ACCOUNTANT"],
+    flyout: [
+      {
+        href: "/vendors?create=1",
+        labelKey: "addVendor",
+        kind: "add",
+        roles: ["OWNER", "MANAGER"],
+      },
+      { href: "/vendors", labelKey: "viewVendors", kind: "list" },
+    ],
   },
   {
     href: "/purchase-orders",
@@ -151,6 +240,18 @@ export const APP_NAV_ITEMS: readonly NavItem[] = [
     icon: ShoppingCart,
     group: "business",
     roles: ["OWNER", "MANAGER"],
+    flyout: [
+      {
+        href: "/purchase-orders/new",
+        labelKey: "addPurchaseOrder",
+        kind: "add",
+      },
+      {
+        href: "/purchase-orders",
+        labelKey: "viewPurchaseOrders",
+        kind: "list",
+      },
+    ],
   },
   {
     href: "/vendor-bills",
@@ -158,6 +259,9 @@ export const APP_NAV_ITEMS: readonly NavItem[] = [
     icon: Wallet,
     group: "business",
     roles: ["OWNER", "MANAGER", "ACCOUNTANT"],
+    flyout: [
+      { href: "/vendor-bills", labelKey: "viewVendorBills", kind: "list" },
+    ],
   },
   {
     href: "/purchase-returns",
@@ -165,6 +269,13 @@ export const APP_NAV_ITEMS: readonly NavItem[] = [
     icon: PackageMinus,
     group: "business",
     roles: ["OWNER", "MANAGER", "ACCOUNTANT"],
+    flyout: [
+      {
+        href: "/purchase-returns",
+        labelKey: "viewPurchaseReturns",
+        kind: "list",
+      },
+    ],
   },
   {
     href: "/team",
@@ -172,6 +283,15 @@ export const APP_NAV_ITEMS: readonly NavItem[] = [
     icon: Users,
     group: "admin",
     roles: ["OWNER", "MANAGER"],
+    flyout: [
+      {
+        href: "/team?create=1",
+        labelKey: "addTeamMember",
+        kind: "add",
+        roles: ["OWNER"],
+      },
+      { href: "/team", labelKey: "viewTeam", kind: "list" },
+    ],
   },
   {
     href: "/settings",
@@ -179,6 +299,7 @@ export const APP_NAV_ITEMS: readonly NavItem[] = [
     icon: Settings,
     group: "admin",
     roles: ["OWNER", "MANAGER"],
+    flyout: [{ href: "/settings", labelKey: "viewSettings", kind: "list" }],
   },
 ] as const;
 
@@ -192,11 +313,17 @@ export function navItemsForRole(role: AppRole): NavItem[] {
   return APP_NAV_ITEMS.filter(
     (item) => !item.roles || item.roles.includes(role),
   ).map((item) => {
-    if (!item.children?.length) return item;
-    const children = item.children.filter(
+    const children = item.children?.filter(
       (child) => !child.roles || child.roles.includes(role),
     );
-    return children.length > 0 ? { ...item, children } : { ...item, children: undefined };
+    const flyout = item.flyout?.filter(
+      (action) => !action.roles || action.roles.includes(role),
+    );
+    return {
+      ...item,
+      children: children && children.length > 0 ? children : undefined,
+      flyout: flyout && flyout.length > 0 ? flyout : undefined,
+    };
   });
 }
 

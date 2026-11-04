@@ -20,6 +20,7 @@ type Props = {
     sort?: string;
     page?: string;
     pageSize?: string;
+    create?: string;
   }>;
 };
 
@@ -62,7 +63,11 @@ export default async function WorkStationsPage({ searchParams }: Props) {
       <PageHeader
         title={t("title")}
         description={t("subtitle")}
-        actions={canWrite ? <CreateBayModal /> : undefined}
+        actions={
+          canWrite ? (
+            <CreateBayModal defaultOpen={params.create === "1"} />
+          ) : undefined
+        }
       />
 
       <Suspense fallback={<TableSpinner />}>

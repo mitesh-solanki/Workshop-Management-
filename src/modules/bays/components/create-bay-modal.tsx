@@ -23,6 +23,7 @@ import {
 import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/toast";
+import { useStripCreateQuery } from "@/hooks/use-open-create-query";
 import { BAY_NAME_MAX } from "@/modules/bays/schema";
 
 const initial: BayActionState = { ok: false };
@@ -30,14 +31,21 @@ const initial: BayActionState = { ok: false };
 type Props = {
   trigger?: React.ReactNode;
   size?: "sm" | "md";
+  /** Open from sidebar Add (`?create=1`). */
+  defaultOpen?: boolean;
 };
 
-export function CreateBayModal({ trigger, size = "md" }: Props) {
+export function CreateBayModal({
+  trigger,
+  size = "md",
+  defaultOpen = false,
+}: Props) {
   const t = useTranslations("bays");
   const te = useTranslations("errors");
   const router = useRouter();
   const formId = useId();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultOpen);
+  useStripCreateQuery(defaultOpen);
   const [name, setName] = useState("");
   const [fieldError, setFieldError] = useState<string | undefined>();
   const [state, formAction, pending] = useActionState(

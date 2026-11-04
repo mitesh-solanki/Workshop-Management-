@@ -97,13 +97,26 @@ function DescriptionWithWarrantyLabel({
   );
 }
 
+type LineTypeKey = "LABOUR" | "PART" | "OUTSIDE";
+
+function lineTypeKey(type: string | undefined): LineTypeKey | null {
+  if (type === "PART" || type === "LABOUR" || type === "OUTSIDE") return type;
+  return null;
+}
+
+function typeBadgeClass(typeKey: LineTypeKey) {
+  if (typeKey === "PART") return "border-blue-200 bg-blue-50 text-blue-800";
+  if (typeKey === "LABOUR") return "border-orange-200 bg-orange-50 text-orange-800";
+  return "border-violet-200 bg-violet-50 text-violet-800";
+}
+
 function WarrantyActionCell({
   lineId,
   typeKey,
   warranty,
 }: {
   lineId: string;
-  typeKey: "LABOUR" | "PART" | null;
+  typeKey: LineTypeKey | null;
   warranty: PricingLinesWarrantyProps;
 }) {
   if (typeKey !== "PART") {
@@ -199,12 +212,9 @@ export function PricingLinesTable({
         )}
       >
         {lines.map((line) => {
-          const typeKey =
-            line.type === "PART" || line.type === "LABOUR" ? line.type : null;
+          const typeKey = lineTypeKey(line.type);
           const typeText =
-            typeKey != null
-              ? te(`lineTypes.${typeKey}`)
-              : null;
+            typeKey != null ? te(`lineTypes.${typeKey}`) : null;
           const showsQuantity = line.type === "PART";
           const info =
             typeKey === "PART" && warranty
@@ -217,13 +227,11 @@ export function PricingLinesTable({
             >
               <div className="flex min-w-0 flex-1 flex-col gap-2">
                 <div className="flex min-w-0 flex-wrap items-start gap-2">
-                  {showType && typeText ? (
+                  {showType && typeKey && typeText ? (
                     <span
                       className={cn(
                         "mt-0.5 inline-flex shrink-0 rounded-md border px-2 py-0.5 text-[11px] font-semibold",
-                        typeKey === "PART"
-                          ? "border-blue-200 bg-blue-50 text-blue-800"
-                          : "border-orange-200 bg-orange-50 text-orange-800",
+                        typeBadgeClass(typeKey),
                       )}
                     >
                       {typeText}
@@ -303,10 +311,7 @@ export function PricingLinesTable({
         </TableHeader>
         <TableBody>
           {lines.map((line) => {
-            const typeKey =
-              line.type === "PART" || line.type === "LABOUR"
-                ? line.type
-                : null;
+            const typeKey = lineTypeKey(line.type);
             const typeText =
               typeKey != null ? te(`lineTypes.${typeKey}`) : null;
             const showsQuantity = line.type === "PART";
@@ -318,13 +323,11 @@ export function PricingLinesTable({
               <TableRow key={line.id}>
                 {showType ? (
                   <TableCell className={cn(typeColClass, "whitespace-nowrap")}>
-                    {typeText ? (
+                    {typeKey && typeText ? (
                       <span
                         className={cn(
                           "inline-flex w-max rounded-md border px-2 py-0.5 text-[11px] font-semibold",
-                          typeKey === "PART"
-                            ? "border-blue-200 bg-blue-50 text-blue-800"
-                            : "border-orange-200 bg-orange-50 text-orange-800",
+                          typeBadgeClass(typeKey),
                         )}
                       >
                         {typeText}

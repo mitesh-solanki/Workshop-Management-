@@ -87,6 +87,7 @@ function sampleOrder(
     garageId: overrides.garageId ?? garageA,
     vehicleId: "veh-1",
     customerId: "cust-1",
+    jobCardNumber: 1,
     status: overrides.status ?? "INSPECTION",
     priority: "NORMAL" as const,
     complaint: "Brake noise",

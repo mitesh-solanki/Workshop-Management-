@@ -6,12 +6,16 @@ import { PageHeader } from "@/components/ui/page-header";
 import { ForbiddenError, NotFoundError } from "@/lib/errors";
 import { requireRole, requireSession } from "@/lib/session";
 import { listBaysForSelect } from "@/modules/bays/service";
-import { getCustomer, listCustomers } from "@/modules/customers/service";
+import { getCustomer } from "@/modules/customers/service";
 import { getInspection } from "@/modules/inspections/service";
 import { NewJobCardForm } from "@/modules/service-orders/components/new-job-card-form";
 import { datetimeLocalFromOrder } from "@/modules/service-orders/components/service-order-form";
 import { jobCardSurfaceForRole } from "@/modules/service-orders/job-card-sections";
-import { listAssignableTechnicians } from "@/modules/service-orders/service";
+import {
+  getSuggestedJobCardNumber,
+  listAssignableTechnicians,
+} from "@/modules/service-orders/service";
+import { getVehicle, listVehicles } from "@/modules/vehicles/service";
 
 type Props = {
   searchParams: Promise<{
@@ -61,9 +65,10 @@ export default async function NewJobCardPage({ searchParams }: Props) {
   }
 
   const surface = jobCardSurfaceForRole(session.role);
-  const [technicians, bays] = await Promise.all([
+  const [technicians, bays, suggestedJobCardNumber] = await Promise.all([
     listAssignableTechnicians(session),
     listBaysForSelect(session),
+    getSuggestedJobCardNumber(session),
   ]);
 
   type VehicleOption = {
@@ -79,6 +84,7 @@ export default async function NewJobCardPage({ searchParams }: Props) {
   let vehicles: VehicleOption[] = [];
   let backHref = "/orders";
   let pageDescription = t("newSubtitleGeneric");
+  let localVehicleList = false;
 
   if (scopedCustomerId) {
     try {
@@ -92,6 +98,7 @@ export default async function NewJobCardPage({ searchParams }: Props) {
         customerId: customer.id,
         customerName: customer.name,
       }));
+      localVehicleList = true;
       backHref = `/customers/${customer.id}`;
       pageDescription = t("newSubtitleCustomer", {
         customer: customer.name,
@@ -102,41 +109,52 @@ export default async function NewJobCardPage({ searchParams }: Props) {
       }
       vehicles = [];
     }
-  } else {
-    const { items: customers } = await listCustomers(session, {
-      pageSize: 50,
-    });
-    vehicles = customers.flatMap((customer) =>
-      customer.vehicles.map((vehicle) => ({
-        id: vehicle.id,
-        registrationNumber: vehicle.registrationNumber,
-        make: vehicle.make,
-        model: vehicle.model,
-        odometer: vehicle.odometer,
-        customerId: customer.id,
-        customerName: customer.name,
-      })),
-    );
-
-    if (initialVehicleId) {
-      const selected = vehicles.find((item) => item.id === initialVehicleId);
-      if (selected) {
-        vehicles = vehicles.filter(
-          (item) => item.customerId === selected.customerId,
-        );
-        backHref = `/customers/${selected.customerId}`;
-        pageDescription = t("newSubtitle", {
-          registration: selected.registrationNumber,
-          customer: selected.customerName,
-        });
+  } else if (initialVehicleId) {
+    try {
+      const selected = await getVehicle(session, initialVehicleId);
+      vehicles = [
+        {
+          id: selected.id,
+          registrationNumber: selected.registrationNumber,
+          make: selected.make,
+          model: selected.model,
+          odometer: selected.odometer,
+          customerId: selected.customerId,
+          customerName: selected.customer.name,
+        },
+      ];
+      backHref = `/customers/${selected.customerId}`;
+      pageDescription = t("newSubtitle", {
+        registration: selected.registrationNumber,
+        customer: selected.customer.name,
+      });
+    } catch (error) {
+      if (!(error instanceof NotFoundError) && !(error instanceof ForbiddenError)) {
+        throw error;
       }
+      vehicles = [];
     }
+  } else {
+    // Seed a short newest list so the picker is not blank before typing.
+    const { items } = await listVehicles(session, {
+      pageSize: 10,
+      sort: "newest",
+    });
+    vehicles = items.map((vehicle) => ({
+      id: vehicle.id,
+      registrationNumber: vehicle.registrationNumber,
+      make: vehicle.make,
+      model: vehicle.model,
+      odometer: vehicle.odometer,
+      customerId: vehicle.customerId,
+      customerName: vehicle.customer.name,
+    }));
   }
 
   const preselectedVehicleId =
     initialVehicleId && vehicles.some((item) => item.id === initialVehicleId)
       ? initialVehicleId
-      : vehicles.length === 1
+      : localVehicleList && vehicles.length === 1
         ? vehicles[0]!.id
         : "";
 
@@ -182,10 +200,12 @@ export default async function NewJobCardPage({ searchParams }: Props) {
           vehicles={vehicles}
           technicians={technicians}
           bays={bays}
+          suggestedJobCardNumber={suggestedJobCardNumber}
           initialVehicleId={preselectedVehicleId}
           inspectionId={inspectionId || undefined}
           defaultExpectedCompletion={defaultExpectedCompletion || undefined}
           surface={surface}
+          localVehicleList={localVehicleList}
         />
       )}
     </main>

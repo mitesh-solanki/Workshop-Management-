@@ -123,19 +123,30 @@ export function isZeroRupeesInput(value: string): boolean {
 /**
  * Strip letters/symbols while typing a rupee amount.
  * Keeps digits, at most one `.`, and at most two decimal places.
+ * Drops leading zeros on the rupee part (`0122` → `122`); keeps `0.` for decimals.
  */
 export function sanitizeRupeesTyping(value: string): string {
   const cleaned = value.replace(/[^\d.]/g, "");
   const firstDot = cleaned.indexOf(".");
   if (firstDot === -1) {
-    return cleaned;
+    if (cleaned === "") return "";
+    return cleaned.replace(/^0+(?=\d)/, "");
   }
-  const whole = cleaned.slice(0, firstDot);
+  const rawWhole = cleaned.slice(0, firstDot);
+  const whole =
+    rawWhole === "" ? "0" : rawWhole.replace(/^0+(?=\d)/, "") || "0";
   const fraction = cleaned
     .slice(firstDot + 1)
     .replace(/\./g, "")
     .slice(0, 2);
   return `${whole}.${fraction}`;
+}
+
+/** Canonical rupee string for storage/re-edit (`0122` → `122`). */
+export function normalizeRupeesInput(value: string): string {
+  const paise = parseRupeesToPaise(sanitizeRupeesTyping(value));
+  if (paise == null || paise <= 0) return "";
+  return paiseToRupeesInput(paise);
 }
 
 /** Zod field: rupee string/number → integer paise (shared by order, inspection, estimate forms). */

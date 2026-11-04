@@ -1,6 +1,12 @@
 "use client";
 
 import { useTranslations } from "next-intl";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import {
   JOB_CARD_SECTIONS,
@@ -11,6 +17,8 @@ type Props = {
   section: JobCardSection;
   onSectionChange: (section: JobCardSection) => void;
   sections?: readonly JobCardSection[];
+  /** Sections shown but not openable yet (e.g. create flow before save). */
+  lockedSections?: readonly JobCardSection[];
 };
 
 const SECTION_NUMBERS: Record<JobCardSection, string> = {
@@ -26,9 +34,11 @@ export function JobCardSectionNav({
   section,
   onSectionChange,
   sections = JOB_CARD_SECTIONS,
+  lockedSections = [],
 }: Props) {
   const t = useTranslations("orders");
   const tb = useTranslations("billing");
+  const locked = new Set(lockedSections);
 
   const labels: Record<JobCardSection, string> = {
     details: t("details"),
@@ -56,51 +66,81 @@ export function JobCardSectionNav({
   ) as Record<JobCardSection, string>;
 
   return (
-    <nav
-      aria-label={t("sectionsTitle")}
-      className="rounded-[14px] border border-[#d7deea] bg-white p-2.5 shadow-[0_3px_17px_rgba(36,58,99,0.06)]"
-    >
-      <h3 className="mb-2 hidden px-2 pt-0.5 text-[11px] font-extrabold tracking-[0.08em] text-slate-400 uppercase lg:block">
-        {t("sectionsTitle")}
-      </h3>
-      <div className="flex gap-1.5 overflow-x-auto lg:flex-col lg:overflow-visible">
-        {sections.map((id) => {
-          const isActive = section === id;
-          return (
-            <button
-              key={id}
-              type="button"
-              onClick={() => onSectionChange(id)}
-              aria-current={isActive ? "true" : undefined}
-              className={cn(
-                "inline-flex min-h-11 shrink-0 items-center gap-2.5 rounded-[10px] px-2.5 py-2 text-left transition-colors lg:w-full",
-                isActive
-                  ? "bg-[#e8efff] text-[#1f5eff]"
-                  : "text-slate-600 hover:bg-slate-50 hover:text-[#1f5eff]",
-              )}
-            >
-              <span
+    <TooltipProvider>
+      <nav
+        aria-label={t("sectionsTitle")}
+        className="rounded-[14px] border border-[#d7deea] bg-white p-2.5 shadow-[0_3px_17px_rgba(36,58,99,0.06)]"
+      >
+        <h3 className="mb-2 hidden px-2 pt-0.5 text-[11px] font-extrabold tracking-[0.08em] text-slate-400 uppercase lg:block">
+          {t("sectionsTitle")}
+        </h3>
+        <div className="flex gap-1.5 overflow-x-auto lg:flex-col lg:overflow-visible">
+          {sections.map((id) => {
+            const isActive = section === id;
+            const isLocked = locked.has(id);
+            const button = (
+              <button
+                type="button"
+                onClick={() => {
+                  if (!isLocked) onSectionChange(id);
+                }}
+                disabled={isLocked}
+                aria-current={isActive ? "true" : undefined}
+                aria-disabled={isLocked || undefined}
                 className={cn(
-                  "grid size-[22px] shrink-0 place-items-center rounded-md border text-[10px] font-black",
-                  isActive
-                    ? "border-blue-200 bg-white text-[#1f5eff]"
-                    : "border-[#d7deea] bg-white text-slate-500",
+                  "inline-flex min-h-11 w-full shrink-0 items-center gap-2.5 rounded-[10px] px-2.5 py-2 text-left transition-colors",
+                  isLocked && "cursor-not-allowed opacity-55",
+                  !isLocked &&
+                    (isActive
+                      ? "bg-[#e8efff] text-[#1f5eff]"
+                      : "text-slate-600 hover:bg-slate-50 hover:text-[#1f5eff]"),
+                  isLocked &&
+                    isActive &&
+                    "bg-[#e8efff] text-[#1f5eff] opacity-100",
                 )}
               >
-                {numbers[id] ?? SECTION_NUMBERS[id]}
-              </span>
-              <span className="min-w-0">
-                <span className="block truncate text-[13px] font-bold">
-                  {labels[id]}
+                <span
+                  className={cn(
+                    "grid size-[22px] shrink-0 place-items-center rounded-md border text-[10px] font-black",
+                    isActive
+                      ? "border-blue-200 bg-white text-[#1f5eff]"
+                      : "border-[#d7deea] bg-white text-slate-500",
+                  )}
+                >
+                  {numbers[id] ?? SECTION_NUMBERS[id]}
                 </span>
-                <span className="mt-0.5 hidden text-[11px] font-medium text-slate-500 lg:block">
-                  {subs[id]}
+                <span className="min-w-0">
+                  <span className="block truncate text-[13px] font-bold">
+                    {labels[id]}
+                  </span>
+                  <span className="mt-0.5 hidden text-[11px] font-medium text-slate-500 lg:block">
+                    {isLocked ? t("createSectionsLockedNavShort") : subs[id]}
+                  </span>
                 </span>
-              </span>
-            </button>
-          );
-        })}
-      </div>
-    </nav>
+              </button>
+            );
+
+            if (!isLocked) {
+              return (
+                <div key={id} className="shrink-0 lg:w-full">
+                  {button}
+                </div>
+              );
+            }
+
+            return (
+              <Tooltip key={id}>
+                <TooltipTrigger asChild>
+                  <div className="w-full shrink-0 lg:w-full">{button}</div>
+                </TooltipTrigger>
+                <TooltipContent side="right" className="max-w-[220px]">
+                  {t("createSectionsLockedNav")}
+                </TooltipContent>
+              </Tooltip>
+            );
+          })}
+        </div>
+      </nav>
+    </TooltipProvider>
   );
 }

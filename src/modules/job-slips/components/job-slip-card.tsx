@@ -14,6 +14,7 @@ import { cn } from "@/lib/utils";
 
 export type JobSlipCardData = {
   id: string;
+  jobCardNumber: number;
   status: ServiceOrderStatusValue;
   needsPricing: boolean;
   complaint: string;
@@ -221,6 +222,9 @@ export function JobSlipCard({ slip, linked = true }: Props) {
                 {slip.garage.address}
               </p>
             ) : null}
+            <p className="mt-2 font-mono text-[13px] font-semibold tracking-wide text-stone-200 sm:text-[14px]">
+              {t("jobCardNumber", { number: slip.jobCardNumber })}
+            </p>
           </div>
           <div
             className={cn(

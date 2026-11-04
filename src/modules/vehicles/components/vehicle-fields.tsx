@@ -36,6 +36,7 @@ export type VehicleFieldValues = {
 };
 
 export type VehicleFormFieldErrors = {
+  customerId?: string;
   registrationNumber?: string;
   make?: string;
   model?: string;

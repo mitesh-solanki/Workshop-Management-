@@ -15,16 +15,23 @@ import { listVehicleWarranties } from "@/modules/warranties/service";
 
 type Props = {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ next?: string }>;
 };
 
 export const instant = false;
 
-export default async function VehicleDetailPage({ params }: Props) {
+export default async function VehicleDetailPage({
+  params,
+  searchParams,
+}: Props) {
   const session = await requireSession();
   if (session.role === "TECHNICIAN") {
     redirect(homePathForRole(session.role));
   }
   const { id } = await params;
+  const { next: nextRaw } = await searchParams;
+  const nextStep =
+    nextRaw === "inspections" ? ("inspections" as const) : null;
   const locale = await getLocale();
   const tv = await getTranslations("vehicles");
 
@@ -112,6 +119,7 @@ export default async function VehicleDetailPage({ params }: Props) {
         canCreateInspection={canCreateInspection}
         canDeleteOrder={canDeleteOrder}
         locale={locale}
+        nextStep={nextStep}
       />
     </main>
   );

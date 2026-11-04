@@ -12,8 +12,10 @@ import {
 import { findBayById } from "@/modules/bays/repo";
 import {
   findInspectionById,
+  findLatestVehicleInspectionDue,
   linkInspectionToServiceOrder,
 } from "@/modules/inspections/repo";
+import { findLatestCurrentEstimateForCustomerVehicle } from "@/modules/estimates/repo";
 import { findVehicleById } from "@/modules/vehicles/repo";
 import {
   addServiceOrderLineSchema,
@@ -40,7 +42,7 @@ import {
   type UpdateServiceOrderLineInput,
   type UpdateServiceOrderStatusInput,
 } from "@/modules/service-orders/schema";
-import { calendarDayBoundsUtc } from "@/lib/calendar-day";
+import { calendarDaysAheadBoundsUtc } from "@/lib/calendar-day";
 import {
   countOverdueServiceOrders,
   countPaperCopiesForOrder,
@@ -54,14 +56,19 @@ import {
   applyCataloguePricesToUnpricedPartLines,
   findServiceOrderById,
   findTechnicianInGarage,
+  getNextJobCardNumber,
+  JobCardNumberConflictError,
   listPaperCopiesForOrder,
   listServiceOrderAuditLogs,
   listServiceOrders,
   listServiceOrdersByCustomer,
+  listServiceOrdersByStatus,
   listServiceOrdersByVehicle,
-  listServiceOrdersForToday,
+  listServiceOrdersDueInWindow,
+  listServiceOrdersNeedingPricing,
   listTechniciansInGarage,
   replacePaperCopy,
+  setNextJobCardNumberSeed,
   updateServiceOrderDetails,
   updateServiceOrderLine,
   updateServiceOrderStatus,
@@ -181,17 +188,47 @@ export async function getDashboardOrderCounts(session: RoleSession) {
   return { statusCounts, overdueCount };
 }
 
-/** Home “due today” panel — open jobs due today or opened today. */
-export async function listDashboardTodayOrders(session: RoleSession) {
+/** Home queue — open jobs with expected completion today or tomorrow. */
+export async function listDashboardDueSoonOrders(session: RoleSession) {
   requireRole(session, ["OWNER", "MANAGER", "TECHNICIAN"]);
 
   const scope =
     session.role === "TECHNICIAN"
       ? { technicianId: session.userId }
       : {};
-  const day = calendarDayBoundsUtc();
+  const window = calendarDaysAheadBoundsUtc(1);
 
-  return listServiceOrdersForToday(session.garageId, day, scope);
+  return listServiceOrdersDueInWindow(session.garageId, window, scope);
+}
+
+/** @deprecated Prefer listDashboardDueSoonOrders. */
+export async function listDashboardTodayOrders(session: RoleSession) {
+  return listDashboardDueSoonOrders(session);
+}
+
+/** Home queue — open jobs with unpriced part lines (mechanic-added, no price yet). */
+export async function listDashboardNeedsPricingOrders(session: RoleSession) {
+  requireRole(session, ["OWNER", "MANAGER", "TECHNICIAN"]);
+  const scope =
+    session.role === "TECHNICIAN"
+      ? { technicianId: session.userId }
+      : {};
+  return listServiceOrdersNeedingPricing(session.garageId, scope);
+}
+
+/** @deprecated Prefer listDashboardNeedsPricingOrders. */
+export async function listDashboardPartsNeededOrders(session: RoleSession) {
+  return listDashboardNeedsPricingOrders(session);
+}
+
+/** Home queue — cars ready for customer delivery. */
+export async function listDashboardReadyOrders(session: RoleSession) {
+  requireRole(session, ["OWNER", "MANAGER", "TECHNICIAN"]);
+  const scope =
+    session.role === "TECHNICIAN"
+      ? { technicianId: session.userId }
+      : {};
+  return listServiceOrdersByStatus(session.garageId, "READY", scope);
 }
 
 /** Bay chips for the board — scoped by technician filter only (not by selected bay). */
@@ -322,6 +359,83 @@ export async function getOrderTimeline(session: RoleSession, orderId: string) {
   return events;
 }
 
+export async function getSuggestedJobCardNumber(session: RoleSession) {
+  requireRole(session, [...CREATE_ROLES, "ACCOUNTANT"]);
+  return getNextJobCardNumber(session.garageId);
+}
+
+export type SuggestedExpectedCompletion = {
+  date: string;
+  source: "inspection" | "estimate";
+};
+
+function toDateInputValue(value: Date | string | null): string {
+  if (!value) return "";
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+/** Prefill Expected Completion from latest inspection, else latest estimate. */
+export async function getSuggestedExpectedCompletionForVehicle(
+  session: RoleSession,
+  vehicleId: string,
+): Promise<SuggestedExpectedCompletion | null> {
+  requireRole(session, CREATE_ROLES);
+  const vehicle = await findVehicleById(session.garageId, vehicleId);
+  if (!vehicle) {
+    throw new NotFoundError();
+  }
+
+  const inspection = await findLatestVehicleInspectionDue(
+    session.garageId,
+    vehicleId,
+  );
+  if (inspection?.expectedCompletion) {
+    return {
+      date: toDateInputValue(inspection.expectedCompletion),
+      source: "inspection",
+    };
+  }
+
+  const estimate = await findLatestCurrentEstimateForCustomerVehicle(
+    session.garageId,
+    vehicle.customerId,
+    vehicleId,
+  );
+  const fromEstimate =
+    estimate?.inspection?.expectedCompletion ??
+    estimate?.serviceOrder?.expectedCompletion ??
+    null;
+  if (fromEstimate) {
+    return {
+      date: toDateInputValue(fromEstimate),
+      source: "estimate",
+    };
+  }
+
+  return null;
+}
+
+export async function updateNextJobCardNumberSetting(
+  session: RoleSession,
+  nextNumber: number,
+) {
+  requireRole(session, ["OWNER", "MANAGER"]);
+  try {
+    return await setNextJobCardNumberSeed(session.garageId, nextNumber);
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      error.message === "JOB_CARD_NUMBER_SEED_TOO_LOW"
+    ) {
+      throw new AppError("orders.job_card_number_seed_too_low", 400);
+    }
+    throw error;
+  }
+}
+
 export async function createOrder(
   session: RoleSession,
   raw: CreateServiceOrderInput,
@@ -372,19 +486,28 @@ export async function createOrder(
     }
   }
 
-  const order = await createServiceOrder(session.garageId, {
-    vehicleId: vehicle.id,
-    customerId: vehicle.customerId,
-    complaint: input.complaint,
-    requestedServices: input.requestedServices,
-    odometerIn: input.odometerIn,
-    expectedCompletion,
-    technicianIds,
-    bay: input.bay,
-    priority: input.priority,
-    status: input.status,
-    actorId: session.userId,
-  });
+  let order;
+  try {
+    order = await createServiceOrder(session.garageId, {
+      vehicleId: vehicle.id,
+      customerId: vehicle.customerId,
+      jobCardNumber: input.jobCardNumber,
+      complaint: input.complaint,
+      requestedServices: input.requestedServices,
+      odometerIn: input.odometerIn,
+      expectedCompletion,
+      technicianIds,
+      bay: input.bay,
+      priority: input.priority,
+      status: input.status,
+      actorId: session.userId,
+    });
+  } catch (error) {
+    if (error instanceof JobCardNumberConflictError) {
+      throw new AppError("orders.job_card_number_exists", 409);
+    }
+    throw error;
+  }
 
   if (input.inspectionId) {
     const linked = await linkInspectionToServiceOrder(
@@ -433,17 +556,26 @@ export async function updateOrder(
     }
   }
 
-  const updated = await updateServiceOrderDetails(session.garageId, orderId, {
-    complaint: input.complaint,
-    requestedServices: input.requestedServices,
-    odometerIn: input.odometerIn,
-    expectedCompletion: input.expectedCompletion,
-    technicianIds,
-    bay: input.bay,
-    priority: input.priority,
-    vehicleId: order.vehicleId,
-    actorId: session.userId,
-  });
+  let updated;
+  try {
+    updated = await updateServiceOrderDetails(session.garageId, orderId, {
+      jobCardNumber: input.jobCardNumber,
+      complaint: input.complaint,
+      requestedServices: input.requestedServices,
+      odometerIn: input.odometerIn,
+      expectedCompletion: input.expectedCompletion,
+      technicianIds,
+      bay: input.bay,
+      priority: input.priority,
+      vehicleId: order.vehicleId,
+      actorId: session.userId,
+    });
+  } catch (error) {
+    if (error instanceof JobCardNumberConflictError) {
+      throw new AppError("orders.job_card_number_exists", 409);
+    }
+    throw error;
+  }
 
   if (!updated) {
     throw new NotFoundError();
@@ -549,6 +681,11 @@ export async function addOrderLine(
   });
 
   if (!result.ok) {
+    if (result.reason === "INSUFFICIENT_STOCK") {
+      throw new AppError("inventory.insufficient_stock", 409, {
+        partName: result.partName ?? "",
+      });
+    }
     throw new NotFoundError();
   }
 
@@ -603,6 +740,11 @@ export async function updateOrderLine(
   });
 
   if (!result.ok) {
+    if (result.reason === "INSUFFICIENT_STOCK") {
+      throw new AppError("inventory.insufficient_stock", 409, {
+        partName: result.partName ?? "",
+      });
+    }
     throw new NotFoundError();
   }
 

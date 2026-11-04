@@ -151,6 +151,7 @@ describe("warranties + remake against Postgres", () => {
         garageId,
         customerId,
         vehicleId,
+        jobCardNumber: 1,
         complaint: "Warranty remake flow",
         status: "IN_PROGRESS" },
       select: { id: true } });

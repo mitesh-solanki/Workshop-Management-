@@ -129,6 +129,7 @@ function sampleOrder(
     garageId: overrides.garageId ?? garageA,
     vehicleId: "veh-1",
     customerId,
+    jobCardNumber: 1,
     status: overrides.status ?? ("WAITING" as const),
     priority: overrides.priority ?? ("NORMAL" as const),
     complaint: "Engine noise",
@@ -226,6 +227,7 @@ describe("create and status change", () => {
 
     await createOrder(ownerA, {
       vehicleId: "veh-1",
+      jobCardNumber: 1,
       complaint: "Engine noise",
       requestedServices: "Oil change",
       odometerIn: 12000,
@@ -240,6 +242,7 @@ describe("create and status change", () => {
       expect.objectContaining({
         vehicleId: "veh-1",
         customerId: "cust-1",
+        jobCardNumber: 1,
         complaint: "Engine noise",
         technicianIds: ["tech-a"],
         priority: "HIGH",
@@ -267,6 +270,7 @@ describe("create and status change", () => {
 
     await createOrder(ownerA, {
       vehicleId: "veh-1",
+      jobCardNumber: 2,
       complaint: "Engine noise",
       requestedServices: "Oil change",
       odometerIn: 12000,
@@ -417,6 +421,7 @@ describe("role limits", () => {
     await expect(
       createOrder(accountantA, {
         vehicleId: "veh-1",
+        jobCardNumber: 1,
         complaint: "Noise",
         requestedServices: null,
         odometerIn: null,
@@ -453,6 +458,7 @@ describe("role limits", () => {
     await expect(
       createOrder(techA, {
         vehicleId: "veh-1",
+        jobCardNumber: 1,
         complaint: "Noise",
         requestedServices: null,
         odometerIn: null,
@@ -734,6 +740,7 @@ describe("listCustomerServiceHistory", () => {
     const history = [
       {
         id: "order-1",
+        jobCardNumber: 1,
         status: "WAITING" as const,
         complaint: "Noise",
         bay: null,
@@ -780,6 +787,7 @@ describe("listCustomerServiceHistory", () => {
     const history = [
       {
         id: "mine",
+        jobCardNumber: 2,
         status: "WAITING" as const,
         complaint: "Engine noise",
         bay: null,
@@ -843,6 +851,7 @@ describe("service order schema i18n messages", () => {
   it("uses validation keys for invalid odometer, date and quantity", () => {
     const odometer = createServiceOrderSchema.safeParse({
       vehicleId: "veh-1",
+      jobCardNumber: 1,
       complaint: "Noise",
       odometerIn: -1,
       requestedServices: "",
@@ -860,6 +869,7 @@ describe("service order schema i18n messages", () => {
 
     const date = createServiceOrderSchema.safeParse({
       vehicleId: "veh-1",
+      jobCardNumber: 1,
       complaint: "Noise",
       odometerIn: "",
       requestedServices: "",

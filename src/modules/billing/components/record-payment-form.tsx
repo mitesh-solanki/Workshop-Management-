@@ -1,6 +1,14 @@
 "use client";
 
-import { useActionState, useEffect, useId, useRef, useState } from "react";
+import {
+  useActionState,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type FormEvent,
+} from "react";
+import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { FormSelect } from "@/components/ui/form-select";
@@ -25,6 +33,9 @@ const initial: BillingActionState = { ok: false };
 
 const controlClass =
   "h-11 min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-[14px] shadow-xs outline-none focus-visible:border-blue-600 focus-visible:ring-2 focus-visible:ring-blue-600/25";
+
+const amountControlClass =
+  "h-12 min-h-12 w-full rounded-lg border border-slate-300 bg-white px-3 text-[16px] font-semibold shadow-xs outline-none focus-visible:border-blue-600 focus-visible:ring-2 focus-visible:ring-blue-600/25";
 
 const labelClass = "mb-1.5 block text-[13px] font-bold text-slate-700";
 
@@ -66,22 +77,17 @@ export function RecordPaymentForm({
   pendingPaise,
 }: Props) {
   const t = useTranslations("billing");
+  const router = useRouter();
   const idPrefix = useId();
   const bound = recordPaymentAction.bind(null, orderId, invoiceId);
   const [state, formAction, pending] = useActionState(bound, initial);
   const handledMessage = useRef<string | null>(null);
   const [method, setMethod] = useState<PaymentMethodValue>("UPI");
-  const [amountRupees, setAmountRupees] = useState(
-    paiseToRupeesInput(pendingPaise),
-  );
+  const [amountRupees, setAmountRupees] = useState("");
   const [cashRupees, setCashRupees] = useState("");
   const [upiRupees, setUpiRupees] = useState("");
   const [cardRupees, setCardRupees] = useState("");
   const maxAmountLabel = formatRupees(pendingPaise);
-
-  useEffect(() => {
-    setAmountRupees((current) => clampRupeesToMax(current, pendingPaise));
-  }, [pendingPaise]);
 
   useEffect(() => {
     if (!state.message || state.message === handledMessage.current) return;
@@ -92,10 +98,23 @@ export function RecordPaymentForm({
           ? t("paymentRecorded")
           : state.message,
       );
+      setAmountRupees("");
+      setCashRupees("");
+      setUpiRupees("");
+      setCardRupees("");
+      setMethod("UPI");
+      router.refresh();
     } else {
       toast.error(state.message);
     }
-  }, [state, t]);
+  }, [state, t, router]);
+
+  useEffect(() => {
+    setAmountRupees((current) => {
+      if (!current.trim()) return "";
+      return clampRupeesToMax(current, pendingPaise);
+    });
+  }, [pendingPaise]);
 
   function onAmountChange(raw: string) {
     setAmountRupees(clampRupeesToMax(raw, pendingPaise));
@@ -129,8 +148,25 @@ export function RecordPaymentForm({
     );
   }
 
+  function onSubmit(event: FormEvent<HTMLFormElement>) {
+    const amountPaise = parseRupeesToPaise(amountRupees);
+    if (amountPaise == null || amountPaise <= 0) {
+      event.preventDefault();
+      toast.error(t("errors.paymentAmountRequired"));
+      return;
+    }
+    if (amountPaise > pendingPaise) {
+      event.preventDefault();
+      toast.error(
+        t("errors.paymentExceedsBalance", {
+          pending: formatRupees(pendingPaise),
+        }),
+      );
+    }
+  }
+
   return (
-    <form action={formAction} className="space-y-4">
+    <form action={formAction} onSubmit={onSubmit} className="space-y-4">
       <div className="rounded-lg border border-[#cfdcf1] bg-white px-4 py-3 shadow-[0_3px_17px_rgba(36,58,99,0.04)]">
         <p className="text-[13px] font-bold text-slate-500">
           {t("pendingBalance")}
@@ -140,7 +176,7 @@ export function RecordPaymentForm({
         </p>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-2">
         <div className="min-w-0">
           <label htmlFor={`${idPrefix}-method`} className={labelClass}>
             {t("paymentMethod")}
@@ -165,42 +201,29 @@ export function RecordPaymentForm({
           <input
             id={`${idPrefix}-amount`}
             name="amountRupees"
-            className={cn(controlClass, "tabular-nums")}
+            className={cn(amountControlClass, "tabular-nums")}
             value={amountRupees}
             onChange={(event) => onAmountChange(event.target.value)}
             inputMode="decimal"
             max={paiseToRupeesInput(pendingPaise)}
+            placeholder={paiseToRupeesInput(pendingPaise)}
             aria-describedby={`${idPrefix}-amount-hint`}
           />
-          <p
-            id={`${idPrefix}-amount-hint`}
-            className="mt-1.5 text-[13px] text-slate-500"
-          >
-            {t("amountHint")}
-          </p>
         </div>
-        {isSingleMethod(method) ? (
-          <div className="min-w-0">
-            <label
-              htmlFor={`${idPrefix}-${methodFieldName(method)}`}
-              className={labelClass}
-            >
-              {t(`methods.${method}`)}
-            </label>
-            <input
-              id={`${idPrefix}-${methodFieldName(method)}`}
-              name={methodFieldName(method)}
-              className={cn(controlClass, "tabular-nums")}
-              value={amountRupees}
-              onChange={(event) => onAmountChange(event.target.value)}
-              inputMode="decimal"
-              max={paiseToRupeesInput(pendingPaise)}
-            />
-          </div>
-        ) : (
-          <div className="hidden sm:block" aria-hidden />
-        )}
       </div>
+      <p
+        id={`${idPrefix}-amount-hint`}
+        className="text-[14px] font-bold text-slate-800"
+      >
+        {t("amountHint")}
+      </p>
+      {isSingleMethod(method) ? (
+        <input
+          type="hidden"
+          name={methodFieldName(method)}
+          value={amountRupees}
+        />
+      ) : null}
 
       {method === "MIXED" ? (
         <>

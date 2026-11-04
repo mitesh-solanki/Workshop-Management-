@@ -11,12 +11,14 @@ import {
   createOrder,
   createPaperCopyUploadUrl,
   deleteOrder,
+  getSuggestedExpectedCompletionForVehicle,
   listPaperCopies,
   removeOrderLine,
   removePaperCopyUpload,
   replacePaperCopyUpload,
   updateOrder,
   updateOrderLine,
+  type SuggestedExpectedCompletion,
 } from "@/modules/service-orders/service";
 
 export type ServiceOrderActionState = {
@@ -38,6 +40,7 @@ function parseTechnicianIds(formData: FormData): string[] {
 function parseCreateOrderForm(formData: FormData) {
   return {
     vehicleId: String(formData.get("vehicleId") ?? ""),
+    jobCardNumber: String(formData.get("jobCardNumber") ?? ""),
     complaint: String(formData.get("complaint") ?? ""),
     requestedServices: String(formData.get("requestedServices") ?? ""),
     odometerIn: String(formData.get("odometerIn") ?? ""),
@@ -64,6 +67,7 @@ function parseCreateOrderForm(formData: FormData) {
 
 function parseUpdateOrderForm(formData: FormData) {
   return {
+    jobCardNumber: String(formData.get("jobCardNumber") ?? ""),
     complaint: String(formData.get("complaint") ?? ""),
     requestedServices: String(formData.get("requestedServices") ?? ""),
     odometerIn: String(formData.get("odometerIn") ?? ""),
@@ -87,7 +91,7 @@ function parseUpdateOrderForm(formData: FormData) {
   };
 }
 
-/** Create basic job card, then the client opens Labour & parts (no hard redirect). */
+/** Create basic job card; client navigates to Labour & parts (`?section=lines`). */
 export async function createServiceOrderAction(
   _prev: ServiceOrderActionState,
   formData: FormData,
@@ -380,6 +384,25 @@ export async function removePaperCopyAction(input: {
       input.vehicleId,
     );
     return { ok: true, message: t("paperRemoved") };
+  } catch (error) {
+    return { ok: false, message: await translateError(error) };
+  }
+}
+
+export type SuggestedExpectedCompletionResult =
+  | { ok: true; suggestion: SuggestedExpectedCompletion | null }
+  | { ok: false; message: string };
+
+export async function getSuggestedExpectedCompletionAction(
+  vehicleId: string,
+): Promise<SuggestedExpectedCompletionResult> {
+  try {
+    const session = await requireSession();
+    const suggestion = await getSuggestedExpectedCompletionForVehicle(
+      session,
+      vehicleId,
+    );
+    return { ok: true, suggestion };
   } catch (error) {
     return { ok: false, message: await translateError(error) };
   }

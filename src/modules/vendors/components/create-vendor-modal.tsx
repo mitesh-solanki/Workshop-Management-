@@ -31,6 +31,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/toast";
 import { useCreateModalNavigation } from "@/hooks/use-create-modal-navigation";
+import { useStripCreateQuery } from "@/hooks/use-open-create-query";
 import {
   isValidEmail,
   isValidPhone,
@@ -74,6 +75,8 @@ type Props = {
   /** Stay on the current page and call `onCreated` instead of opening the vendor. */
   navigateOnSuccess?: boolean;
   onCreated?: (vendor: CreatedVendorSummary) => void;
+  /** Open from sidebar Add (`?create=1`). */
+  defaultOpen?: boolean;
 };
 
 export function CreateVendorModal({
@@ -84,6 +87,7 @@ export function CreateVendorModal({
   initialName = "",
   navigateOnSuccess = true,
   onCreated,
+  defaultOpen = false,
 }: Props) {
   const t = useTranslations("vendors");
   const te = useTranslations("errors");
@@ -115,7 +119,9 @@ export function CreateVendorModal({
         : null,
     hrefForId: (id) => `/vendors/${id}`,
     onReset: () => resetForm(),
+    defaultOpen,
   });
+  useStripCreateQuery(defaultOpen);
 
   const open = controlled ? Boolean(openProp) : nav.open;
 

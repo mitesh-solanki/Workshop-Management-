@@ -169,6 +169,7 @@ describe("job card module — full scenarios", () => {
     const order = await createServiceOrder(garageId, {
       vehicleId,
       customerId,
+      jobCardNumber: 1,
       complaint: "Engine oil leak",
       requestedServices: "Oil change",
       odometerIn: 12_500,
@@ -205,6 +206,7 @@ describe("job card module — full scenarios", () => {
     if (!ready) return;
 
     const updated = await updateServiceOrderDetails(garageId, orderId, {
+      jobCardNumber: 1,
       complaint: "Engine oil leak + filter",
       requestedServices: "Oil + filter",
       odometerIn: 12_600,
@@ -219,7 +221,8 @@ describe("job card module — full scenarios", () => {
     expect(updated!.complaint).toBe("Engine oil leak + filter");
     expect(updated!.bay).toBe("Bay 2");
     expect(updated!.priority).toBe("URGENT");
-    expect(updated!.status).toBe("WAITING");
+    expect(updated!.status).toBe("IN_PROGRESS");
+    expect(updated!.jobCardNumber).toBe(1);
     expect(updated!.odometerIn).toBe(12_600);
 
     const vehicle = await prisma.vehicle.findFirst({
@@ -288,7 +291,7 @@ describe("job card module — full scenarios", () => {
     expect(current?.status).toBe("IN_PROGRESS");
   });
 
-  it("adds labour and part lines without changing inventory", async () => {
+  it("adds labour and part lines; part OUTs stock", async () => {
     if (!ready) return;
 
     expect(await getPartStock(garageId, partId)).toBe(2);
@@ -325,7 +328,7 @@ describe("job card module — full scenarios", () => {
       actorId: userId });
     expect(missingPart).toEqual({ ok: false, reason: "PART_NOT_FOUND" });
 
-    expect(await getPartStock(garageId, partId)).toBe(2);
+    expect(await getPartStock(garageId, partId)).toBe(1);
 
     const loaded = await findServiceOrderById(garageId, orderId);
     expect(loaded?.lines).toHaveLength(2);
@@ -359,8 +362,8 @@ describe("job card module — full scenarios", () => {
       actorId: userId });
     expect(partUpdated.ok).toBe(true);
 
-    // Updating lines still does not touch stock.
-    expect(await getPartStock(garageId, partId)).toBe(2);
+    // Same qty — stock unchanged.
+    expect(await getPartStock(garageId, partId)).toBe(1);
 
     const totals = computeEstimateTotals([
       {
@@ -417,10 +420,10 @@ describe("job card module — full scenarios", () => {
       serviceOrderId: orderId,
       actorId: userId });
     expect(removedPart).toEqual({ ok: true });
-    expect(await getPartStock(garageId, partId)).toBe(2);
+    expect(await getPartStock(garageId, partId)).toBe(1);
   });
 
-  it("Agree depletes stock; approved job-card labour can still be deleted", async () => {
+  it("Agree does not move stock; approved job-card labour can still be deleted", async () => {
     if (!ready) return;
 
     const estimate = await prisma.estimate.create({
@@ -485,8 +488,6 @@ describe("job card module — full scenarios", () => {
     expect(agreeLabour.ok).toBe(true);
     expect(await getPartStock(garageId, partId)).toBe(1);
 
-    // Keep the approved part held for the next concurrency test. Disposable
-    // labour still deletes (cascades its estimate line).
     const moreLabour = await createServiceOrderLine(garageId, {
       serviceOrderId: orderId,
       type: "LABOUR",
@@ -506,12 +507,13 @@ describe("job card module — full scenarios", () => {
     }
   });
 
-  it("while Agreed on job A, job B cannot Approve more than remaining stock", async () => {
+  it("while job A holds stock, job B cannot add more than remaining", async () => {
     if (!ready) return;
 
     const orderB = await createServiceOrder(garageId, {
       vehicleId: vehicleBId,
       customerId,
+      jobCardNumber: 2,
       complaint: "Needs two filters",
       requestedServices: null,
       odometerIn: null,
@@ -523,6 +525,43 @@ describe("job card module — full scenarios", () => {
       actorId: userId });
     orderBId = orderB.id;
 
+    const blocked = await createServiceOrderLine(garageId, {
+      serviceOrderId: orderBId,
+      type: "PART",
+      description: "Oil Filter",
+      quantity: 2,
+      unitPricePaise: 12_000,
+      partId,
+      actorId: userId });
+    expect(blocked).toMatchObject({
+      ok: false,
+      reason: "INSUFFICIENT_STOCK",
+    });
+    expect(await getPartStock(garageId, partId)).toBe(1);
+  });
+
+  it("removing job A part frees stock so job B can take it", async () => {
+    if (!ready) return;
+
+    const disagreed = await recordLineApproval(garageId, {
+      estimateId,
+      estimateLineId: estimatePartLineId,
+      serviceOrderId: orderId,
+      fromState: "APPROVED",
+      toState: "REJECTED",
+      method: "MANUAL",
+      note: "Customer changed mind",
+      recordedById: userId });
+    expect(disagreed.ok).toBe(true);
+    expect(await getPartStock(garageId, partId)).toBe(1);
+
+    const canDelete = await deleteServiceOrderLine(garageId, {
+      lineId: partLineId,
+      serviceOrderId: orderId,
+      actorId: userId });
+    expect(canDelete).toEqual({ ok: true });
+    expect(await getPartStock(garageId, partId)).toBe(2);
+
     const partB = await createServiceOrderLine(garageId, {
       serviceOrderId: orderBId,
       type: "PART",
@@ -533,9 +572,7 @@ describe("job card module — full scenarios", () => {
       actorId: userId });
     expect(partB.ok).toBe(true);
     if (!partB.ok) return;
-
-    // Add on job B does not change stock (still 1 held by job A).
-    expect(await getPartStock(garageId, partId)).toBe(1);
+    expect(await getPartStock(garageId, partId)).toBe(0);
 
     const estimateB = await prisma.estimate.create({
       data: {
@@ -559,42 +596,6 @@ describe("job card module — full scenarios", () => {
     estimateBId = estimateB.id;
     estimateBPartLineId = estimateB.lines[0]!.id;
 
-    const blocked = await recordLineApproval(garageId, {
-      estimateId: estimateBId,
-      estimateLineId: estimateBPartLineId,
-      serviceOrderId: orderBId,
-      fromState: "PENDING",
-      toState: "APPROVED",
-      method: "MANUAL",
-      note: null,
-      recordedById: userId });
-    expect(blocked).toMatchObject({ ok: false, reason: "INSUFFICIENT_STOCK" });
-    expect(await getPartStock(garageId, partId)).toBe(1);
-  });
-
-  it("Disagree on job A returns stock; job B can then Approve", async () => {
-    if (!ready) return;
-
-    const disagreed = await recordLineApproval(garageId, {
-      estimateId,
-      estimateLineId: estimatePartLineId,
-      serviceOrderId: orderId,
-      fromState: "APPROVED",
-      toState: "REJECTED",
-      method: "MANUAL",
-      note: "Customer changed mind",
-      recordedById: userId });
-    expect(disagreed.ok).toBe(true);
-    expect(await getPartStock(garageId, partId)).toBe(2);
-
-    // After Disagree, approved-on-estimate guard lifts — part line can be deleted.
-    const canDelete = await deleteServiceOrderLine(garageId, {
-      lineId: partLineId,
-      serviceOrderId: orderId,
-      actorId: userId });
-    expect(canDelete).toEqual({ ok: true });
-
-    // Re-add part on A for listing continuity not required; job B takes stock.
     const approvedB = await recordLineApproval(garageId, {
       estimateId: estimateBId,
       estimateLineId: estimateBPartLineId,
@@ -625,6 +626,7 @@ describe("job card module — full scenarios", () => {
       otherGarageId,
       orderId,
       {
+        jobCardNumber: 999,
         complaint: "hacked",
         requestedServices: null,
         odometerIn: null,

@@ -5,30 +5,23 @@ import { useTranslations } from "next-intl";
 import { formatRupees } from "@/lib/money";
 import { cn } from "@/lib/utils";
 import { BillingCollapsibleCard } from "@/modules/billing/components/billing-collapsible-card";
-import { CreateInvoiceForm } from "@/modules/billing/components/create-invoice-form";
 import { CreditNoteForm } from "@/modules/billing/components/credit-note-form";
-import { DeleteDraftInvoiceForm } from "@/modules/billing/components/delete-draft-invoice-form";
+import { DeleteInvoiceForm } from "@/modules/billing/components/delete-invoice-form";
 import { DownloadInvoicePdfButton } from "@/modules/billing/components/download-invoice-pdf-button";
+import {
+  EditInvoicePanel,
+  EditInvoiceTrigger,
+  type InvoiceDraftTotals,
+} from "@/modules/billing/components/edit-invoice-panel";
 import { FinalizeInvoiceForm } from "@/modules/billing/components/finalize-invoice-form";
 import { InvoicePreviewButton } from "@/modules/billing/components/invoice-preview-button";
 import type { InvoicePreviewData } from "@/modules/billing/components/invoice-preview-dialog";
-import { PricingLinesTable } from "@/modules/billing/components/pricing-lines-table";
+import { PaymentHistoryList } from "@/modules/billing/components/payment-history-list";
 import { RecordPaymentForm } from "@/modules/billing/components/record-payment-form";
 import { RecordRefundForm } from "@/modules/billing/components/record-refund-form";
-import { RemakeDraftInvoiceForm } from "@/modules/billing/components/remake-draft-invoice-form";
 import type { PdfLocale } from "@/modules/billing/schema";
 import { InvoiceWarrantyPanel } from "@/modules/warranties/components/invoice-warranty-panel";
 import { partRequiresWarrantyCard } from "@/modules/warranties/part-requires-warranty";
-
-type UnbilledLine = {
-  id: string;
-  description: string;
-  type?: "LABOUR" | "PART" | "OUTSIDE";
-  typeLabel?: string;
-  quantity: number;
-  unitPricePaise: number;
-  totalPaise: number;
-};
 
 export type BillingInvoiceCardModel = {
   id: string;
@@ -51,6 +44,7 @@ export type BillingInvoiceCardModel = {
     type: "LABOUR" | "PART" | "OUTSIDE";
     quantity: number;
     unitPricePaise: number;
+    gstRatePercent: number;
     totalPaise: number;
   }>;
   payments: Array<{
@@ -58,6 +52,11 @@ export type BillingInvoiceCardModel = {
     method: string;
     amountPaise: number;
     isRefund: boolean;
+    cashPaise: number;
+    upiPaise: number;
+    cardPaise: number;
+    provider: string;
+    status: string;
   }>;
   creditNotes: Array<{
     id: string;
@@ -84,12 +83,10 @@ export type BillingInvoiceCardModel = {
 type Props = {
   orderId: string;
   vehicleId: string;
+  jobCardNumber: number;
   canEdit: boolean;
   pdfLocale: PdfLocale;
   invoices: BillingInvoiceCardModel[];
-  unbilledLines: UnbilledLine[];
-  hasUnbilledApprovedLines: boolean;
-  defaultPlaceOfSupplyStateCode: string;
 };
 
 function tabLabel(
@@ -111,30 +108,13 @@ function tabLabel(
   return labels.due(number, formatRupees(invoice.pendingBalancePaise));
 }
 
-function methodLabel(
-  method: string,
-  t: (key: `methods.${"CASH" | "UPI" | "CARD" | "MIXED"}`) => string,
-) {
-  if (
-    method === "CASH" ||
-    method === "UPI" ||
-    method === "CARD" ||
-    method === "MIXED"
-  ) {
-    return t(`methods.${method}`);
-  }
-  return method;
-}
-
 export function BillingInvoiceWorkspace({
   orderId,
   vehicleId,
+  jobCardNumber,
   canEdit,
   pdfLocale,
   invoices,
-  unbilledLines,
-  hasUnbilledApprovedLines,
-  defaultPlaceOfSupplyStateCode,
 }: Props) {
   const t = useTranslations("billing");
   const tw = useTranslations("warranties");
@@ -164,12 +144,26 @@ export function BillingInvoiceWorkspace({
 
   const [activeId, setActiveId] = useState(initialId);
   const [warrantyFormComplete, setWarrantyFormComplete] = useState(true);
+  const [editingInvoice, setEditingInvoice] = useState(false);
+  const [draftTotals, setDraftTotals] = useState<InvoiceDraftTotals | null>(
+    null,
+  );
   const active =
     invoices.find((inv) => inv.id === activeId) ?? invoices[0] ?? null;
+  const totals = draftTotals ?? {
+    taxablePaise: active?.taxablePaise ?? 0,
+    cgstPaise: active?.cgstPaise ?? 0,
+    sgstPaise: active?.sgstPaise ?? 0,
+    igstPaise: active?.igstPaise ?? 0,
+    totalPaise: active?.totalPaise ?? 0,
+    pendingBalancePaise: active?.pendingBalancePaise ?? 0,
+  };
 
   function selectInvoice(id: string) {
     setActiveId(id);
     setWarrantyFormComplete(true);
+    setEditingInvoice(false);
+    setDraftTotals(null);
   }
 
   const warrantyIncomplete = useMemo(() => {
@@ -248,38 +242,84 @@ export function BillingInvoiceWorkspace({
                     })}
             </span>
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <InvoicePreviewButton data={active.preview} />
             {active.status === "FINALIZED" ? (
               <DownloadInvoicePdfButton
                 orderId={orderId}
                 invoiceId={active.id}
+                jobCardNumber={jobCardNumber}
                 invoiceNumber={active.invoiceNumber}
                 locale={pdfLocale}
               />
+            ) : null}
+            {canEdit ? (
+              <>
+                <EditInvoiceTrigger
+                  editing={editingInvoice}
+                  onEditingChange={setEditingInvoice}
+                  iconOnly
+                />
+                <DeleteInvoiceForm
+                  invoiceId={active.id}
+                  orderId={orderId}
+                  iconOnly
+                  amountPaidPaise={active.payments
+                    .filter((payment) => !payment.isRefund)
+                    .reduce((sum, payment) => sum + payment.amountPaise, 0)}
+                  creditNotesTotalPaise={active.creditNotes.reduce(
+                    (sum, note) => sum + note.totalPaise,
+                    0,
+                  )}
+                />
+              </>
             ) : null}
           </div>
         </div>
 
         <div className="border-b border-slate-100 bg-[#eff4ff] px-4 py-2.5 text-[12px] font-bold tracking-wide text-[#354e73]">
-          {t("paperLinesHeading")}
+          {editingInvoice ? t("editInvoiceTitle") : t("paperLinesHeading")}
         </div>
-        <InvoiceWarrantyPanel
-          orderId={orderId}
-          invoiceId={active.id}
-          vehicleId={vehicleId}
-          emptyLabel={t("invoiceEmpty")}
-          lines={active.lines}
-          docs={active.warrantyDocs}
-          canEdit={canEdit && active.status === "DRAFT"}
-          onRequiredValidityChange={setWarrantyFormComplete}
-        />
+        {canEdit ? (
+          <EditInvoicePanel
+            orderId={orderId}
+            invoiceId={active.id}
+            vehicleId={vehicleId}
+            notes={active.notes}
+            gstSplit={active.gstSplit}
+            amountPaidPaise={active.amountPaidPaise}
+            creditNotesTotalPaise={active.creditNotes.reduce(
+              (sum, note) => sum + note.totalPaise,
+              0,
+            )}
+            lines={active.lines}
+            warrantyDocs={active.warrantyDocs}
+            editing={editingInvoice}
+            onEditingChange={(next) => {
+              setEditingInvoice(next);
+              if (!next) setDraftTotals(null);
+            }}
+            onDraftTotalsChange={setDraftTotals}
+          />
+        ) : null}
+        {!editingInvoice ? (
+          <InvoiceWarrantyPanel
+            orderId={orderId}
+            invoiceId={active.id}
+            vehicleId={vehicleId}
+            emptyLabel={t("invoiceEmpty")}
+            lines={active.lines}
+            docs={active.warrantyDocs}
+            canEdit={canEdit && active.status === "DRAFT"}
+            onRequiredValidityChange={setWarrantyFormComplete}
+          />
+        ) : null}
 
         <dl className="flex flex-wrap items-start gap-x-6 gap-y-3 border-t border-slate-200 bg-slate-50 px-4 py-3.5 sm:flex-nowrap sm:justify-between">
           <div>
             <dt className="text-[13px] text-slate-500">{t("taxable")}</dt>
             <dd className="mt-0.5 text-[14px] font-semibold text-slate-900">
-              {formatRupees(active.taxablePaise)}
+              {formatRupees(totals.taxablePaise)}
             </dd>
           </div>
           {active.gstSplit === "CGST_SGST" ? (
@@ -287,13 +327,13 @@ export function BillingInvoiceWorkspace({
               <div>
                 <dt className="text-[13px] text-slate-500">{t("cgst")}</dt>
                 <dd className="mt-0.5 text-[14px] font-semibold text-slate-900">
-                  {formatRupees(active.cgstPaise)}
+                  {formatRupees(totals.cgstPaise)}
                 </dd>
               </div>
               <div>
                 <dt className="text-[13px] text-slate-500">{t("sgst")}</dt>
                 <dd className="mt-0.5 text-[14px] font-semibold text-slate-900">
-                  {formatRupees(active.sgstPaise)}
+                  {formatRupees(totals.sgstPaise)}
                 </dd>
               </div>
             </>
@@ -301,17 +341,17 @@ export function BillingInvoiceWorkspace({
             <div>
               <dt className="text-[13px] text-slate-500">{t("igst")}</dt>
               <dd className="mt-0.5 text-[14px] font-semibold text-slate-900">
-                {formatRupees(active.igstPaise)}
+                {formatRupees(totals.igstPaise)}
               </dd>
             </div>
           )}
           <div>
             <dt className="text-[13px] text-slate-500">{t("pendingBalance")}</dt>
             <dd className="mt-0.5 text-[14px] font-semibold text-slate-900">
-              {formatRupees(active.pendingBalancePaise)}
+              {formatRupees(totals.pendingBalancePaise)}
             </dd>
           </div>
-          {active.refundDuePaise > 0 ? (
+          {!editingInvoice && active.refundDuePaise > 0 ? (
             <div>
               <dt className="text-[13px] text-slate-500">{t("refundDue")}</dt>
               <dd className="mt-0.5 text-[14px] font-semibold text-amber-800">
@@ -322,12 +362,12 @@ export function BillingInvoiceWorkspace({
           <div className="sm:ml-auto sm:text-right">
             <dt className="text-[13px] text-slate-500">{t("paperTotal")}</dt>
             <dd className="mt-0.5 text-[18px] font-bold text-blue-700">
-              {formatRupees(active.totalPaise)}
+              {formatRupees(totals.totalPaise)}
             </dd>
           </div>
         </dl>
 
-        {canEdit && active.status === "DRAFT" ? (
+        {canEdit && active.status === "DRAFT" && !editingInvoice ? (
           <div className="flex flex-wrap items-center gap-2 border-t border-slate-200 px-4 py-4">
             <FinalizeInvoiceForm
               invoiceId={active.id}
@@ -339,20 +379,9 @@ export function BillingInvoiceWorkspace({
                 {tw("finalizeBlocked")}
               </p>
             ) : null}
-
-            <RemakeDraftInvoiceForm
-              invoiceId={active.id}
-              orderId={orderId}
-              placeOfSupplyStateCode={active.placeOfSupplyStateCode}
-              notes={active.notes}
-            />
-            <DeleteDraftInvoiceForm invoiceId={active.id} orderId={orderId} />
-            <div className="basis-full space-y-1 text-[13px] leading-relaxed text-slate-700">
-              <p>{t("draftNextStepHint")}</p>
-              <p>{t("draftNextStepRemake")}</p>
-              <p>{t("draftNextStepFinalize")}</p>
-              <p>{t("draftNextStepDelete")}</p>
-            </div>
+            <p className="basis-full text-[13px] leading-relaxed text-slate-700">
+              {t("draftNextStepFinalize")}
+            </p>
           </div>
         ) : null}
       </article>
@@ -368,17 +397,30 @@ export function BillingInvoiceWorkspace({
             </p>
           </div>
 
-          {canEdit ? (
+          {canEdit || active.payments.length > 0 ? (
             <BillingCollapsibleCard
               title={t("paymentReceivedTitle")}
               hint={t("paymentReceivedHint")}
-              defaultOpen={active.pendingBalancePaise > 0}
+              defaultOpen={
+                active.pendingBalancePaise > 0 || active.payments.length > 0
+              }
             >
-              <RecordPaymentForm
-                invoiceId={active.id}
-                orderId={orderId}
-                pendingPaise={active.pendingBalancePaise}
-              />
+              <div className="max-w-2xl space-y-4">
+                {canEdit ? (
+                  <RecordPaymentForm
+                    invoiceId={active.id}
+                    orderId={orderId}
+                    pendingPaise={active.pendingBalancePaise}
+                  />
+                ) : null}
+                <PaymentHistoryList
+                  orderId={orderId}
+                  invoiceId={active.id}
+                  canEdit={canEdit}
+                  pendingPaise={active.pendingBalancePaise}
+                  payments={active.payments}
+                />
+              </div>
             </BillingCollapsibleCard>
           ) : null}
 
@@ -404,33 +446,11 @@ export function BillingInvoiceWorkspace({
               hint={t("creditNoteHint")}
               defaultOpen={false}
             >
-              <CreditNoteForm invoiceId={active.id} orderId={orderId} />
-            </BillingCollapsibleCard>
-          ) : null}
-
-          {active.payments.length > 0 ? (
-            <BillingCollapsibleCard
-              title={t("paymentHistoryTitle")}
-              hint={t("payments")}
-              defaultOpen={false}
-            >
-              <ul className="space-y-2 text-[14px] text-slate-700">
-                {active.payments.map((payment) => (
-                  <li
-                    key={payment.id}
-                    className="rounded-lg border border-slate-200 bg-white px-3 py-2"
-                  >
-                    {payment.isRefund
-                      ? t("refundPaymentLabel")
-                      : methodLabel(payment.method, t)}
-                    {" · "}
-                    {formatRupees(payment.amountPaise)}
-                    {payment.isRefund
-                      ? ` · ${methodLabel(payment.method, t)}`
-                      : null}
-                  </li>
-                ))}
-              </ul>
+              <CreditNoteForm
+                invoiceId={active.id}
+                orderId={orderId}
+                gstSplit={active.gstSplit}
+              />
             </BillingCollapsibleCard>
           ) : null}
 
@@ -438,7 +458,7 @@ export function BillingInvoiceWorkspace({
             <BillingCollapsibleCard
               title={t("creditNotesHistoryTitle")}
               hint={t("creditNotesHistoryHint")}
-              defaultOpen
+              defaultOpen={false}
             >
               <ul className="space-y-3">
                 {active.creditNotes.map((note) => {
@@ -506,46 +526,6 @@ export function BillingInvoiceWorkspace({
         </div>
       ) : null}
 
-      {canEdit && invoices.some((inv) => inv.status === "FINALIZED") ? (
-        <div className="overflow-hidden rounded-xl border border-blue-200 bg-blue-50/60 shadow-[0_3px_17px_rgba(36,58,99,0.04)]">
-          <div className="border-b border-blue-100 px-4 py-3.5">
-            <strong className="block text-[14px] font-semibold text-slate-900">
-              {t("createAnotherTitle")}
-            </strong>
-            <p className="mt-1 text-[13px] text-slate-600">
-              {t("createAnotherCardHint")}
-            </p>
-          </div>
-          {hasUnbilledApprovedLines ? (
-            <div className="space-y-4 p-4 sm:p-5">
-              <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
-                <PricingLinesTable
-                  showType
-                  emptyLabel={t("invoiceEmpty")}
-                  lines={unbilledLines.map((line) => ({
-                    id: line.id,
-                    description: line.description,
-                    type: line.type,
-                    typeLabel: line.typeLabel,
-                    quantity: line.quantity,
-                    unitPricePaise: line.unitPricePaise,
-                    totalPaise: line.totalPaise,
-                  }))}
-                />
-              </div>
-              <CreateInvoiceForm
-                orderId={orderId}
-                defaultPlaceOfSupplyStateCode={defaultPlaceOfSupplyStateCode}
-              />
-              <p className="text-[13px] text-slate-500">{t("createAnotherHelp")}</p>
-            </div>
-          ) : (
-            <p className="px-4 py-4 text-[13px] text-slate-600 sm:px-5">
-              {t("createAnotherEmpty")}
-            </p>
-          )}
-        </div>
-      ) : null}
     </div>
   );
 }

@@ -73,6 +73,7 @@ const RESULTS = [
 const ITEM_ICONS: Record<string, LucideIcon> = {
   brakes: Disc3,
   tyres: CircleDot,
+  wheel: CircleDot,
   battery: Battery,
   lights: Lightbulb,
   fluids: Droplets,
@@ -92,6 +93,7 @@ function iconKeyForLabel(label: string): string | null {
   const lower = label.trim().toLowerCase();
   if (lower.includes("brake")) return "brakes";
   if (lower.includes("tyre") || lower.includes("tire")) return "tyres";
+  if (lower.includes("wheel")) return "wheel";
   if (lower.includes("battery")) return "battery";
   if (lower.includes("light")) return "lights";
   if (lower.includes("wiper")) return "wiper";

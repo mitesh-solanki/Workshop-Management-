@@ -149,11 +149,20 @@ export function InvoicesTable({
       {
         accessorKey: "pendingBalancePaise",
         header: t("columns.balance"),
-        cell: ({ row }) => (
-          <span className="tabular-nums text-muted-foreground">
-            {formatRupees(row.original.pendingBalancePaise)}
-          </span>
-        ),
+        cell: ({ row }) => {
+          const balance = row.original.pendingBalancePaise;
+          return (
+            <span
+              className={
+                balance > 0
+                  ? "font-semibold tabular-nums text-amber-700"
+                  : "tabular-nums text-muted-foreground"
+              }
+            >
+              {formatRupees(balance)}
+            </span>
+          );
+        },
       },
       {
         accessorKey: "paymentStatus",
@@ -264,7 +273,13 @@ export function InvoicesTable({
                 <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
                   {t("columns.balance")}
                 </p>
-                <p className="mt-0.5 text-sm font-semibold tabular-nums text-foreground">
+                <p
+                  className={
+                    invoice.pendingBalancePaise > 0
+                      ? "mt-0.5 text-sm font-semibold tabular-nums text-amber-700"
+                      : "mt-0.5 text-sm tabular-nums text-muted-foreground"
+                  }
+                >
                   {formatRupees(invoice.pendingBalancePaise)}
                 </p>
               </div>

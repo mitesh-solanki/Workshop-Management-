@@ -767,6 +767,7 @@ export async function searchPurchaseOrders(
           select: {
             quantityOrdered: true,
             quantityReceived: true,
+            unitCostPaise: true,
             part: { select: { name: true } },
           },
         },
@@ -774,7 +775,18 @@ export async function searchPurchaseOrders(
     }),
   ]);
 
-  return { items, total, page, pageSize };
+  return {
+    items: items.map((item) => ({
+      ...item,
+      totalPaise: item.lines.reduce(
+        (sum, line) => sum + line.quantityOrdered * line.unitCostPaise,
+        0,
+      ),
+    })),
+    total,
+    page,
+    pageSize,
+  };
 }
 
 export async function findPurchaseOrderById(garageId: string, id: string) {

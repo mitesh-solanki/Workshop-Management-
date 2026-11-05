@@ -2,19 +2,16 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useState } from "react";
 import { useTranslations } from "next-intl";
-import { Bell, ChevronRight } from "lucide-react";
+import { ChevronRight, Settings } from "lucide-react";
+import { AccountSettingsDialog } from "@/components/shared/account-settings-dialog";
 import { GlobalSearch } from "@/components/global-search";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { usePageChrome } from "@/components/page-chrome";
 import type { NavKey } from "@/components/shared/nav-items";
 import { Button } from "@/components/ui/button";
 import { SidebarTrigger, useSidebar } from "@/components/ui/sidebar";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 
 const TITLE_BY_PREFIX: { prefix: string; key: NavKey }[] = [
   { prefix: "/dashboard", key: "dashboard" },
@@ -32,18 +29,21 @@ const TITLE_BY_PREFIX: { prefix: string; key: NavKey }[] = [
   { prefix: "/inspections", key: "inspections" },
   { prefix: "/workshop", key: "workshop" },
   { prefix: "/team", key: "team" },
+  { prefix: "/payroll", key: "payroll" },
   { prefix: "/settings", key: "settings" },
 ];
 
 type AppHeaderProps = {
   appName: string;
   garageName: string;
+  userName: string;
   homeHref?: string;
 };
 
 export function AppHeader({
   appName,
   garageName,
+  userName,
   homeHref = "/dashboard",
 }: AppHeaderProps) {
   const pathname = usePathname();
@@ -52,6 +52,7 @@ export function AppHeader({
   const { isMobile, openMobile } = useSidebar();
   const chrome = usePageChrome();
   const detailLabel = chrome?.detailLabel ?? null;
+  const [accountOpen, setAccountOpen] = useState(false);
 
   const match = TITLE_BY_PREFIX.find(
     (item) =>
@@ -122,43 +123,41 @@ export function AppHeader({
   const actions = (
     <div className="flex shrink-0 items-center gap-1.5 ml-auto">
       <LanguageSwitcher />
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <span className="inline-flex">
-            <Button
-              type="button"
-              variant="outline"
-              size="icon"
-              disabled
-              aria-label={tShell("notifications")}
-              className="rounded-full border-blue-200 bg-white text-blue-600 hover:bg-blue-50 [&_svg]:text-blue-600"
-            >
-              <Bell className="size-5" aria-hidden />
-            </Button>
-          </span>
-        </TooltipTrigger>
-        <TooltipContent side="bottom">
-          {tShell("notificationsSoon")}
-        </TooltipContent>
-      </Tooltip>
+      <Button
+        type="button"
+        variant="outline"
+        size="icon"
+        aria-label={tNav("accountSettings")}
+        className="rounded-full border-blue-200 bg-white text-blue-600 hover:bg-blue-50 [&_svg]:text-blue-600"
+        onClick={() => setAccountOpen(true)}
+      >
+        <Settings className="size-5" aria-hidden />
+      </Button>
     </div>
   );
 
   return (
-    <header className="sticky top-0 z-30 shrink-0 border-b border-slate-200 bg-card/95 backdrop-blur-md supports-backdrop-filter:bg-card/80">
-      <div className="flex w-full flex-col gap-2 px-3 pt-2.5 pb-2.5 sm:px-6 sm:pt-3 sm:pb-3 lg:px-8.5 md:gap-0 md:py-0">
-        <div className="flex h-11 w-full items-center gap-2 md:h-16">
-          <SidebarTrigger
-            aria-label={triggerLabel}
-            className="-ml-1 shrink-0 text-slate-500 border hover:bg-slate-100 hover:text-slate-900 sm:-ml-3"
-          />
-          <div className="min-w-0 flex-1 md:max-w-sm xl:max-w-md">
-            <GlobalSearch />
-          </div>
+    <>
+      <header className="sticky top-0 z-30 shrink-0 border-b border-slate-200 bg-card/95 backdrop-blur-md supports-backdrop-filter:bg-card/80">
+        <div className="flex w-full flex-col gap-2 px-3 pt-2.5 pb-2.5 sm:px-6 sm:pt-3 sm:pb-3 lg:px-8.5 md:gap-0 md:py-0">
+          <div className="flex h-11 w-full items-center gap-2 md:h-16">
+            <SidebarTrigger
+              aria-label={triggerLabel}
+              className="-ml-1 shrink-0 text-slate-500 border hover:bg-slate-100 hover:text-slate-900 sm:-ml-3"
+            />
+            <div className="min-w-0 flex-1 md:max-w-sm xl:max-w-md">
+              <GlobalSearch />
+            </div>
 
-          {actions}
+            {actions}
+          </div>
         </div>
-      </div>
-    </header>
+      </header>
+      <AccountSettingsDialog
+        open={accountOpen}
+        onOpenChange={setAccountOpen}
+        currentName={userName}
+      />
+    </>
   );
 }

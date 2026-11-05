@@ -28,4 +28,5 @@ export type EmailType =
   | "login_otp"
   | "signup_otp"
   | "invite_otp"
-  | "team_invite";
+  | "team_invite"
+  | "password_reset";

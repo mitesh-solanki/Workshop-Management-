@@ -32,17 +32,25 @@ describe("navItemsForRole — other roles keep full access", () => {
         "purchaseOrders",
         "vendorBills",
         "purchaseReturns",
+        "expenses",
         "team",
         "settings",
       ]),
     );
   });
 
-  it("keeps manager the same business surface as owner", () => {
-    expect(keysFor("MANAGER")).toEqual(keysFor("OWNER"));
+  it("keeps manager the same business surface as owner except payroll", () => {
+    const owner = keysFor("OWNER");
+    const manager = keysFor("MANAGER");
+    expect(manager).toEqual(expect.arrayContaining(["expenses"]));
+    expect(manager).not.toContain("payroll");
+    expect(owner).toEqual(expect.arrayContaining(["expenses", "payroll"]));
+    expect(manager.filter((key) => key !== "payroll")).toEqual(
+      owner.filter((key) => !key.startsWith("payroll")),
+    );
   });
 
-  it("keeps accountant money and inventory (not team or purchases ops)", () => {
+  it("keeps accountant money and inventory (not purchases ops or settings)", () => {
     const keys = keysFor("ACCOUNTANT");
     expect(keys).toEqual(
       expect.arrayContaining([
@@ -60,12 +68,14 @@ describe("navItemsForRole — other roles keep full access", () => {
         "vendors",
         "vendorBills",
         "purchaseReturns",
+        "expenses",
+        "team",
+        "payroll",
       ]),
     );
     expect(keys).not.toContain("bays");
     expect(keys).not.toContain("partsRequests");
     expect(keys).not.toContain("purchaseOrders");
-    expect(keys).not.toContain("team");
     expect(keys).not.toContain("settings");
   });
 

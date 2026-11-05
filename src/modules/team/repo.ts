@@ -11,6 +11,8 @@ export async function listUsersByGarage(garageId: string) {
       name: true,
       email: true,
       role: true,
+      isActive: true,
+      passwordHash: true,
       createdAt: true,
     },
     orderBy: [{ role: "asc" }, { name: "asc" }],
@@ -164,6 +166,55 @@ export async function findUserInGarage(garageId: string, userId: string) {
       name: true,
       role: true,
       garageId: true,
+      isActive: true,
+      passwordHash: true,
+    },
+  });
+}
+
+export async function updateMemberActiveInGarage(input: {
+  garageId: string;
+  userId: string;
+  isActive: boolean;
+}) {
+  return prisma.user.updateMany({
+    where: { id: input.userId, garageId: input.garageId },
+    data: { isActive: input.isActive },
+  });
+}
+
+export async function setMemberPasswordInGarage(input: {
+  garageId: string;
+  userId: string;
+  passwordHash: string;
+}) {
+  return prisma.user.updateMany({
+    where: { id: input.userId, garageId: input.garageId },
+    data: {
+      passwordHash: input.passwordHash,
+      failedLoginAttempts: 0,
+      lockoutUntil: null,
+      passwordResetTokenHash: null,
+      passwordResetExpiresAt: null,
+    },
+  });
+}
+
+export async function setMemberPasswordResetTokenInGarage(input: {
+  garageId: string;
+  userId: string;
+  tokenHash: string;
+  expiresAt: Date;
+}) {
+  return prisma.user.updateMany({
+    where: {
+      id: input.userId,
+      garageId: input.garageId,
+      isActive: true,
+    },
+    data: {
+      passwordResetTokenHash: input.tokenHash,
+      passwordResetExpiresAt: input.expiresAt,
     },
   });
 }
@@ -176,6 +227,30 @@ export async function updateUserRoleInGarage(input: {
   return prisma.user.updateMany({
     where: { id: input.userId, garageId: input.garageId },
     data: { role: input.role },
+  });
+}
+
+export async function findUserIdByEmail(email: string) {
+  return prisma.user.findFirst({
+    where: { email },
+    select: { id: true },
+  });
+}
+
+export async function updateMemberInGarage(input: {
+  garageId: string;
+  userId: string;
+  name: string;
+  email: string;
+  role: Role;
+}) {
+  return prisma.user.updateMany({
+    where: { id: input.userId, garageId: input.garageId },
+    data: {
+      name: input.name,
+      email: input.email,
+      role: input.role,
+    },
   });
 }
 

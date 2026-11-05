@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import { useTranslations } from "next-intl";
 import type { Role } from "@prisma/client";
 import { Users } from "lucide-react";
@@ -18,6 +19,8 @@ export type TeamMemberRow = {
   name: string | null;
   email: string;
   role: Role;
+  isActive: boolean;
+  hasPassword?: boolean;
   createdAt: Date | string;
 };
 
@@ -65,15 +68,20 @@ export function MembersTable({
           const member = row.original;
           const name = member.name ?? member.email;
           return (
-            <div className="flex items-center gap-3">
+            <Link
+              href={`/team/${member.id}`}
+              className="flex items-center gap-3 min-h-11 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
               <InitialsAvatar name={name} size="sm" />
               <div className="min-w-0">
-                <p className="truncate font-medium">{name}</p>
+                <p className="truncate font-medium text-foreground hover:text-blue-700">
+                  {name}
+                </p>
                 <p className="truncate text-caption text-muted-foreground">
                   {member.email}
                 </p>
               </div>
-            </div>
+            </Link>
           );
         },
       },
@@ -87,9 +95,13 @@ export function MembersTable({
       },
       {
         id: "status",
-        accessorFn: () => "active",
+        accessorFn: (row) => (row.isActive ? "active" : "disabled"),
         header: t("columns.status"),
-        cell: () => <Badge variant="success">{t("statusActive")}</Badge>,
+        cell: ({ row }) => (
+          <Badge variant={row.original.isActive ? "success" : "danger"}>
+            {row.original.isActive ? t("statusActive") : t("statusDisabled")}
+          </Badge>
+        ),
       },
       {
         id: "joined",
@@ -162,7 +174,9 @@ export function MembersTable({
                   {member.email}
                 </p>
               </div>
-              <Badge variant="success">{t("statusActive")}</Badge>
+              <Badge variant={member.isActive ? "success" : "danger"}>
+                {member.isActive ? t("statusActive") : t("statusDisabled")}
+              </Badge>
             </div>
             <div className="flex flex-wrap items-center gap-2 text-caption text-muted-foreground">
               <RoleBadge label={t(`roles.${member.role}`)} />

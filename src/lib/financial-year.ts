@@ -27,6 +27,49 @@ export function formatInvoiceNumber(
   return `INV-${formatFinancialYearLabel(financialYearStartYear)}-${String(sequence).padStart(4, "0")}`;
 }
 
+/** Display invoice label using job card number: INV-2025-26-259. */
+export function formatJobCardInvoiceNumber(
+  financialYearStartYear: number,
+  jobCardNumber: number,
+): string {
+  if (!Number.isInteger(jobCardNumber) || jobCardNumber < 1) {
+    throw new Error("jobCardNumber must be a positive integer");
+  }
+  return `INV-${formatFinancialYearLabel(financialYearStartYear)}-${jobCardNumber}`;
+}
+
+/**
+ * What staff see on bills / PDFs / lists.
+ * Prefer INV-{FY}-{jobCardNumber}; fall back to stored sequential invoice number.
+ */
+export function displayInvoiceNumber(input: {
+  invoiceNumber?: string | null;
+  jobCardNumber?: number | null;
+  at?: Date | string | null;
+}): string | null {
+  const stored = input.invoiceNumber?.trim() || null;
+  if (!stored) {
+    return null;
+  }
+  if (input.jobCardNumber != null && Number.isFinite(input.jobCardNumber)) {
+    const fyFromStored = stored.match(/^(INV-\d{4}-\d{2})(?:-|$)/)?.[1];
+    if (fyFromStored) {
+      return `${fyFromStored}-${input.jobCardNumber}`;
+    }
+    const at =
+      input.at == null
+        ? new Date()
+        : input.at instanceof Date
+          ? input.at
+          : new Date(input.at);
+    const fy = Number.isNaN(at.getTime())
+      ? financialYearStart()
+      : financialYearStart(at);
+    return formatJobCardInvoiceNumber(fy, input.jobCardNumber);
+  }
+  return stored;
+}
+
 /** Credit note number: CN-2025-26-0001 */
 export function formatCreditNoteNumber(
   financialYearStartYear: number,

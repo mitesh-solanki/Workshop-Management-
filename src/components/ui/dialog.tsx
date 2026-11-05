@@ -98,7 +98,7 @@ function DialogContent({
       <DialogPrimitive.Content
         data-slot="dialog-content"
         className={cn(
-          "fixed top-[50%] left-[50%] z-50 flex w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] flex-col overflow-hidden rounded-lg border bg-background p-6 shadow-lg duration-200 outline-none data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 data-[state=open]:opacity-100",
+          "fixed top-[50%] left-[50%] z-50 flex w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] flex-col gap-0 overflow-hidden rounded-lg border bg-background p-0 shadow-lg duration-200 outline-none data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 data-[state=open]:opacity-100",
           "max-h-[calc(100dvh-2rem)]",
           "sm:max-w-lg",
           className
@@ -161,8 +161,10 @@ function DialogHeader({ className, ...props }: React.ComponentProps<"div">) {
     <div
       data-slot="dialog-header"
       className={cn(
-        "relative z-10 flex shrink-0 flex-col gap-2 bg-background text-center shadow-[0_6px_16px_-10px_rgba(15,23,42,0.35)] sm:text-left",
-        className
+        "relative z-10 flex shrink-0 flex-col gap-2 border-b border-border bg-background px-5 text-left shadow-[0_6px_16px_-10px_rgba(15,23,42,0.35)]",
+        className,
+        // After className so local `py-*` / `px-*` cannot collapse header spacing or the X.
+        "py-5 pr-12",
       )}
       {...props}
     />
@@ -175,8 +177,10 @@ function DialogBody({ className, ...props }: React.ComponentProps<"div">) {
     <div
       data-slot="dialog-body"
       className={cn(
-        "min-h-0 flex-1 overflow-y-auto overscroll-contain bg-background",
-        className
+        "min-h-0 flex-1 overflow-y-auto overscroll-contain bg-background px-5",
+        className,
+        // After className so local `py-4` overrides cannot collapse section gaps.
+        "py-6",
       )}
       {...props}
     />
@@ -196,8 +200,9 @@ function DialogFooter({
     <div
       data-slot="dialog-footer"
       className={cn(
-        "relative z-10 flex shrink-0 flex-col-reverse gap-2 bg-background shadow-[0_-6px_16px_-10px_rgba(15,23,42,0.35)] sm:flex-row sm:justify-end",
-        className
+        "relative z-10 flex shrink-0 flex-col-reverse gap-2 border-t border-border bg-background px-5 shadow-[0_-6px_16px_-10px_rgba(15,23,42,0.35)] sm:flex-row sm:justify-end",
+        className,
+        "py-5",
       )}
       {...props}
     >

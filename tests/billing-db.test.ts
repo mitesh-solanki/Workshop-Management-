@@ -259,7 +259,7 @@ describe("billing against Postgres", () => {
           sortOrder: 0 },
       ] });
     expect(note && "creditNote" in note && note.creditNote?.creditNoteNumber).toMatch(
-      /^CN-[A-Z0-9]{2,4}\/\d{4}-\d{2}\/\d{4}$/,
+      /^CN-\d{4}-\d{2}-\d{4}$/,
     );
 
     const over = await createCreditNoteRow(garageId, {

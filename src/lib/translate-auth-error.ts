@@ -15,9 +15,13 @@ const AUTH_ERROR_KEYS: Record<string, string> = {
   "auth.invalid_credentials": "errors.invalidCredentials",
   "auth.signup_incomplete": "errors.signupIncomplete",
   "auth.invalid_invite": "errors.invalidInvite",
+  "auth.invalid_reset_token": "errors.invalidResetToken",
+  "auth.use_invite_password": "errors.useInvitePassword",
   "auth.user_not_found": "errors.userNotFound",
   "auth.rate_limited": "errors.rateLimited",
   "auth.email_send_failed": "errors.emailSendFailed",
+  "auth.password_reuse": "errors.passwordReuse",
+  "auth.wrong_current_password": "errors.wrongCurrentPassword",
 };
 
 const tAuth = createTranslator({
@@ -64,18 +68,74 @@ function translateZodIssue(issue: ZodIssue): string {
   return tErrors("validation.invalidInput");
 }
 
-export function translateAuthError(error: unknown): string {
+export type AuthField =
+  | "email"
+  | "password"
+  | "confirmPassword"
+  | "currentPassword"
+  | "name"
+  | "code"
+  | "garageName";
+
+export type AuthErrorInfo = {
+  message: string;
+  field?: AuthField;
+};
+
+function fieldFromZodPath(path: PropertyKey[]): AuthField | undefined {
+  const key = path[0];
+  if (
+    key === "email" ||
+    key === "password" ||
+    key === "confirmPassword" ||
+    key === "currentPassword" ||
+    key === "name" ||
+    key === "code" ||
+    key === "garageName"
+  ) {
+    return key;
+  }
+  return undefined;
+}
+
+export function translateAuthErrorInfo(error: unknown): AuthErrorInfo {
   if (error instanceof AppError) {
     const key = AUTH_ERROR_KEYS[error.code];
-    if (key) {
-      return tAuth(key as AuthKey);
-    }
-    return tCommon("error");
+    return {
+      message: key ? tAuth(key as AuthKey) : tCommon("error"),
+      field:
+        error.code === "auth.invalid_credentials" ||
+        error.code === "auth.email_in_use" ||
+        error.code === "auth.password_reuse"
+          ? "password"
+          : error.code === "auth.wrong_current_password"
+            ? "currentPassword"
+            : undefined,
+    };
   }
 
   if (error instanceof ZodError && error.issues.length > 0) {
-    return translateZodIssue(error.issues[0]!);
+    const issue = error.issues[0]!;
+    const field = fieldFromZodPath(issue.path);
+    // Policy failures are on password; only mismatch belongs on confirm.
+    const resolvedField =
+      field === "confirmPassword"
+        ? "confirmPassword"
+        : field === "password" ||
+            (typeof issue.message === "string" &&
+              issue.message.startsWith("validation.password") &&
+              issue.message !== "validation.passwordMismatch")
+          ? "password"
+          : field;
+    return {
+      message: translateZodIssue(issue),
+      field: resolvedField,
+    };
   }
 
-  return tCommon("error");
+  return { message: tCommon("error") };
+}
+
+export function translateAuthError(error: unknown): string {
+  return translateAuthErrorInfo(error).message;
 }

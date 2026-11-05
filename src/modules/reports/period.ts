@@ -132,3 +132,16 @@ export function buildEmptyBuckets(
 
   return [...new Set(keys)];
 }
+
+/** Chart / table label: DD-MM-YYYY (day/week) or MM-YYYY (month). */
+export function formatBucketLabel(key: string, bucket: ReportBucket): string {
+  if (bucket === "month") {
+    const [year, month] = key.split("-");
+    if (!year || !month) return key;
+    return `${month}-${year}`;
+  }
+
+  const [year, month, day] = key.split("-");
+  if (!year || !month || !day) return key;
+  return `${day}-${month}-${year}`;
+}

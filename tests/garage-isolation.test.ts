@@ -155,7 +155,10 @@ describe("garage isolation", () => {
       email: "tech@example.com",
       name: "Tech",
       role: "TECHNICIAN",
-      garageId: garageA });
+      garageId: garageA,
+      isActive: true,
+      passwordHash: "hash",
+    });
 
     const member = await getTeamMemberForGarage(ownerA, garageA, "tech-a");
 

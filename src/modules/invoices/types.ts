@@ -6,6 +6,7 @@ export type InvoiceListItem = {
   status: "DRAFT" | "FINALIZED";
   paymentStatus: InvoicePaymentStatus;
   invoiceNumber: string | null;
+  jobCardNumber?: number | null;
   totalPaise: number;
   amountPaidPaise: number;
   creditNotesTotalPaise: number;

@@ -22,8 +22,16 @@ export async function requestWarrantyUploadUrlAction(input: {
   byteSize: number;
   fileName?: string;
 }) {
-  const session = await requireSession();
-  return requestWarrantyUploadUrl(session, input);
+  try {
+    const session = await requireSession();
+    return await requestWarrantyUploadUrl(session, input);
+  } catch (error) {
+    throw new Error(
+      error instanceof AppError
+        ? await translateError(error)
+        : await translateError(error),
+    );
+  }
 }
 
 export async function saveInvoiceLineWarrantyAction(input: {

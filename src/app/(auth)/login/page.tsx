@@ -12,7 +12,7 @@ import {
 import { authCopy } from "@/lib/auth-copy";
 import { homePathForRole } from "@/lib/rbac";
 import { getOptionalSession } from "@/lib/session";
-import { isProdPasswordLoginEnabled } from "@/modules/auth/service";
+import { isOtpLoginEnabled } from "@/modules/auth/service";
 
 export const instant = false;
 
@@ -21,8 +21,6 @@ export default async function LoginPage() {
   if (session) {
     redirect(homePathForRole(session.role));
   }
-
-  const passwordLoginEnabled = isProdPasswordLoginEnabled();
 
   return (
     <div className="flex flex-col gap-6">
@@ -33,13 +31,11 @@ export default async function LoginPage() {
             {authCopy("loginTitle")}
           </CardTitle>
           <CardDescription className="text-sm text-slate-500">
-            {passwordLoginEnabled
-              ? authCopy("loginSubtitlePassword")
-              : authCopy("loginSubtitle")}
+            {authCopy("loginSubtitlePassword")}
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <LoginForm passwordLoginEnabled={passwordLoginEnabled} />
+          <LoginForm otpLoginEnabled={isOtpLoginEnabled()} />
         </CardContent>
       </Card>
       <p className="text-center text-sm text-muted-foreground">

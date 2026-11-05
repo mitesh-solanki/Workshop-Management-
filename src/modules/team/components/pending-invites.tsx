@@ -2,8 +2,9 @@
 
 import { useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
-import { Mail } from "lucide-react";
+import { Link, Mail } from "lucide-react";
 import {
+  copyInviteLinkAction,
   resendInviteAction,
   revokeInviteAction,
 } from "@/app/actions/team";
@@ -48,19 +49,51 @@ export function PendingInvitesSection({
 }: Props) {
   const t = useTranslations("team");
   const [pendingId, setPendingId] = useState<string | null>(null);
+  const [busyAction, setBusyAction] = useState<"resend" | "copy" | null>(null);
   const [revokeId, setRevokeId] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
+  function onCopyLink(inviteId: string) {
+    setPendingId(inviteId);
+    setBusyAction("copy");
+    startTransition(async () => {
+      const result = await copyInviteLinkAction(inviteId);
+      setPendingId(null);
+      setBusyAction(null);
+      if (!result.ok || !result.acceptUrl) {
+        toast.error(result.message ?? t("error"));
+        return;
+      }
+      try {
+        await navigator.clipboard.writeText(result.acceptUrl);
+        toast.success(t("inviteLinkCopied"));
+      } catch {
+        toast.error(t("inviteLinkCopyFailed"));
+        window.prompt(t("inviteLink"), result.acceptUrl);
+      }
+    });
+  }
+
   function onResend(inviteId: string) {
     setPendingId(inviteId);
+    setBusyAction("resend");
     startTransition(async () => {
       const result = await resendInviteAction(inviteId);
       setPendingId(null);
+      setBusyAction(null);
       if (!result.ok) {
         toast.error(result.message ?? t("error"));
         return;
       }
       toast.success(result.message ?? t("inviteResent"));
+      if (result.acceptUrl) {
+        try {
+          await navigator.clipboard.writeText(result.acceptUrl);
+          toast.success(t("inviteLinkCopied"));
+        } catch {
+          window.prompt(t("inviteLink"), result.acceptUrl);
+        }
+      }
     });
   }
 
@@ -161,8 +194,29 @@ export function PendingInvitesSection({
                     <Button
                       type="button"
                       variant="outline"
+                      size="icon-sm"
+                      loading={
+                        busy &&
+                        busyAction === "copy" &&
+                        revokeId !== invite.id
+                      }
+                      disabled={pending}
+                      aria-label={t("copyInviteLink")}
+                      title={t("copyInviteLink")}
+                      className="border-blue-600 text-blue-600 hover:bg-blue-50 hover:text-blue-700"
+                      onClick={() => onCopyLink(invite.id)}
+                    >
+                      <Link className="size-4" aria-hidden />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
                       size="sm"
-                      loading={busy && revokeId !== invite.id}
+                      loading={
+                        busy &&
+                        busyAction === "resend" &&
+                        revokeId !== invite.id
+                      }
                       disabled={pending}
                       className="border-blue-600 text-blue-600 hover:bg-blue-50 hover:text-blue-700"
                       onClick={() => onResend(invite.id)}

@@ -55,7 +55,7 @@ export default async function TeamPage({ searchParams }: Props) {
         title={t("title")}
         description={t("subtitle")}
         actions={
-          canInvite && !error ? (
+          !error && canInvite ? (
             <InviteModal defaultOpen={params.create === "1"} />
           ) : undefined
         }

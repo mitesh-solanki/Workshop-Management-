@@ -50,10 +50,6 @@ export type JobSlipCardData = {
     quantity: number;
     unitPricePaise: number;
   }>;
-  garage: {
-    name: string;
-    address: string | null;
-  };
 };
 
 type Props = {
@@ -214,16 +210,8 @@ export function JobSlipCard({ slip, linked = true }: Props) {
       <header className="relative z-0 border-b border-stone-700 bg-stone-900 px-3.5 py-3 text-stone-50 sm:px-4">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-[18px] leading-tight font-bold tracking-wide sm:text-[20px]">
-              {slip.garage.name}
-            </p>
-            {slip.garage.address ? (
-              <p className="mt-1 text-[12px] leading-snug text-stone-400">
-                {slip.garage.address}
-              </p>
-            ) : null}
-            <p className="mt-2 font-mono text-[13px] font-semibold tracking-wide text-stone-200 sm:text-[14px]">
-              {t("jobCardNumber", { number: slip.jobCardNumber })}
+            <p className="font-mono text-[18px] leading-tight font-bold tracking-wide sm:text-[20px]">
+              {slip.jobCardNumber}
             </p>
           </div>
           <div

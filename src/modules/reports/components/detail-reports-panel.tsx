@@ -13,9 +13,9 @@ export function DetailReportsPanel({ dashboard, exportUserSlug }: Props) {
   const t = useTranslations("reports");
 
   const cards = [
+    dashboard.invoice_tax,
     dashboard.parts_stock,
     dashboard.stock_movements,
-    dashboard.invoice_tax,
     dashboard.hsn,
   ] as const;
 
@@ -29,7 +29,7 @@ export function DetailReportsPanel({ dashboard, exportUserSlug }: Props) {
           {t("detail.sectionSubtitle")}
         </p>
       </div>
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid gap-4 lg:grid-cols-2">
         {cards.map((card) => (
           <DetailReportCard
             key={card.key}

@@ -18,3 +18,4 @@ export {
 export { sendLoggedEmail } from "@/lib/email/send";
 export { renderOtpEmail } from "@/lib/email/templates/otp";
 export { renderInviteEmail } from "@/lib/email/templates/invite";
+export { renderPasswordResetEmail } from "@/lib/email/templates/password-reset";

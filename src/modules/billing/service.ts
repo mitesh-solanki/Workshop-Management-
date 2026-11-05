@@ -1,6 +1,7 @@
 import "server-only";
 
 import { calendarDayBoundsUtc } from "@/lib/calendar-day";
+import { displayInvoiceNumber } from "@/lib/financial-year";
 import { AppError, ForbiddenError, NotFoundError } from "@/lib/errors";
 import {
   computeLineGstSplit,
@@ -1199,11 +1200,19 @@ export async function getInvoicePdfBuffer(
       return [{ partName: doc.partName, expiresAt }];
     });
 
-  return generateInvoicePdf({
+  const jobCardNumber = invoice.serviceOrder.jobCardNumber ?? null;
+  const issuedAt = invoice.finalizedAt ?? invoice.createdAt;
+  const shownInvoiceNumber = displayInvoiceNumber({
+    invoiceNumber: invoice.invoiceNumber,
+    jobCardNumber,
+    at: issuedAt,
+  });
+
+  const pdf = await generateInvoicePdf({
     locale,
     status: invoice.status,
-    invoiceNumber: invoice.invoiceNumber,
-    issuedAt: invoice.finalizedAt ?? invoice.createdAt,
+    invoiceNumber: shownInvoiceNumber,
+    issuedAt,
     garage: {
       name: garage.name,
       address: garage.address,
@@ -1250,6 +1259,13 @@ export async function getInvoicePdfBuffer(
     notes: invoice.notes,
     warranties,
   });
+
+  return {
+    ...pdf,
+    invoiceNumber: shownInvoiceNumber,
+    storedInvoiceNumber: invoice.invoiceNumber,
+    jobCardNumber,
+  };
 }
 
 /** Test helper: refuse cross-garage invoice read. */

@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   type ReactNode,
@@ -53,6 +54,41 @@ type AppSidebarProps = {
 
 type FlyoutPos = { top: number; left: number };
 
+const FLYOUT_MENU_WIDTH = 216;
+const FLYOUT_GAP = 8;
+const FLYOUT_ITEM_HEIGHT = 40;
+const FLYOUT_HEADER_HEIGHT = 28;
+const FLYOUT_PAD_Y = 16;
+
+function estimateFlyoutHeight(itemCount: number): number {
+  return FLYOUT_HEADER_HEIGHT + FLYOUT_PAD_Y + itemCount * FLYOUT_ITEM_HEIGHT;
+}
+
+/** Prefer align-top with trigger; flip upward when the menu would clip the viewport. */
+function computeFlyoutPos(
+  triggerRect: DOMRect,
+  menuHeight: number,
+): FlyoutPos {
+  const maxLeft = window.innerWidth - FLYOUT_MENU_WIDTH - FLYOUT_GAP;
+  const left = Math.min(triggerRect.right + FLYOUT_GAP, maxLeft);
+  const viewportBottom = window.innerHeight - FLYOUT_GAP;
+  const spaceBelow = viewportBottom - triggerRect.top;
+  const spaceAbove = triggerRect.bottom - FLYOUT_GAP;
+
+  let top = triggerRect.top;
+  if (menuHeight > spaceBelow) {
+    if (menuHeight <= spaceAbove) {
+      top = triggerRect.bottom - menuHeight;
+    } else {
+      top = Math.max(FLYOUT_GAP, viewportBottom - menuHeight);
+    }
+  }
+
+  const maxTop = Math.max(FLYOUT_GAP, viewportBottom - menuHeight);
+  top = Math.min(Math.max(FLYOUT_GAP, top), maxTop);
+  return { top, left };
+}
+
 function childIsActive(pathname: string, href: string, key: string): boolean {
   if (key === "counterSales") return isCounterSalesPath(pathname);
   return pathname === href || pathname.startsWith(`${href}/`);
@@ -63,6 +99,10 @@ function parentIsActive(pathname: string, item: NavItem): boolean {
     return isInventoryPartsPath(pathname) || isCounterSalesPath(pathname);
   }
   if (item.children?.length) {
+    // Parent route itself (e.g. /payroll) must count as active, not only children.
+    if (pathname === item.href || pathname.startsWith(`${item.href}/`)) {
+      return true;
+    }
     return item.children.some((child) =>
       childIsActive(pathname, child.href, child.key),
     );
@@ -100,6 +140,7 @@ function SidebarNavFlyoutHost({
   const flyoutItems = item.flyout ?? [];
   const hasFlyout = flyoutItems.length > 0 && flyoutsEnabled;
   const itemRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [flyoutOpen, setFlyoutOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
@@ -121,19 +162,23 @@ function SidebarNavFlyoutHost({
     setFlyoutOpen(false);
   }, [clearCloseTimer]);
 
+  const placeFlyout = useCallback(() => {
+    if (!itemRef.current) return;
+    const rect = itemRef.current.getBoundingClientRect();
+    const measured = menuRef.current?.offsetHeight;
+    const height =
+      measured && measured > 0
+        ? measured
+        : estimateFlyoutHeight(flyoutItems.length);
+    setPos(computeFlyoutPos(rect, height));
+  }, [flyoutItems.length]);
+
   const openFlyout = useCallback(() => {
     if (!hasFlyout || !itemRef.current) return;
     clearCloseTimer();
-    const rect = itemRef.current.getBoundingClientRect();
-    const gap = 8;
-    const menuWidth = 216;
-    const maxLeft = window.innerWidth - menuWidth - gap;
-    setPos({
-      top: Math.max(gap, Math.min(rect.top, window.innerHeight - gap - 48)),
-      left: Math.min(rect.right + gap, maxLeft),
-    });
+    placeFlyout();
     setFlyoutOpen(true);
-  }, [clearCloseTimer, hasFlyout]);
+  }, [clearCloseTimer, hasFlyout, placeFlyout]);
 
   const scheduleClose = useCallback(() => {
     clearCloseTimer();
@@ -165,40 +210,34 @@ function SidebarNavFlyoutHost({
     closeFlyout();
   }, [pathname, closeFlyout]);
 
+  useLayoutEffect(() => {
+    if (!flyoutOpen) return;
+    placeFlyout();
+  }, [flyoutOpen, placeFlyout]);
+
   useEffect(() => {
     if (!flyoutOpen) return;
-
-    function updatePos() {
-      if (!itemRef.current) return;
-      const rect = itemRef.current.getBoundingClientRect();
-      const gap = 8;
-      const menuWidth = 216;
-      const maxLeft = window.innerWidth - menuWidth - gap;
-      setPos({
-        top: Math.max(gap, Math.min(rect.top, window.innerHeight - gap - 48)),
-        left: Math.min(rect.right + gap, maxLeft),
-      });
-    }
 
     function onKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") closeFlyout();
     }
 
-    window.addEventListener("scroll", updatePos, true);
-    window.addEventListener("resize", updatePos);
+    window.addEventListener("scroll", placeFlyout, true);
+    window.addEventListener("resize", placeFlyout);
     window.addEventListener("keydown", onKeyDown);
     return () => {
-      window.removeEventListener("scroll", updatePos, true);
-      window.removeEventListener("resize", updatePos);
+      window.removeEventListener("scroll", placeFlyout, true);
+      window.removeEventListener("resize", placeFlyout);
       window.removeEventListener("keydown", onKeyDown);
     };
-  }, [flyoutOpen, closeFlyout]);
+  }, [flyoutOpen, closeFlyout, placeFlyout]);
 
   const flyoutMenu =
     hasFlyout && flyoutOpen && mounted
       ? createPortal(
           <div
-            className="pointer-events-auto fixed z-100 min-w-54 overflow-hidden rounded-lg border border-slate-200 bg-white py-2 shadow-lg shadow-slate-900/15"
+            ref={menuRef}
+            className="pointer-events-auto fixed z-100 max-h-[calc(100vh-1rem)] min-w-54 overflow-y-auto rounded-lg border border-slate-200 bg-white py-2 shadow-lg shadow-slate-900/15"
             style={{ top: pos.top, left: pos.left }}
             onMouseEnter={openFlyout}
             onMouseLeave={scheduleClose}
@@ -436,12 +475,21 @@ export function AppSidebar({
                             <Link
                               href={href}
                               className={cn(
-                                "flex min-h-11 min-w-0 flex-1 items-center gap-2 px-2 text-sm font-medium outline-none",
+                                "flex min-h-11 shrink-0 items-center gap-2 px-2 text-sm font-medium outline-none",
                                 parentActive
                                   ? "text-white"
                                   : "text-sidebar-foreground",
                               )}
-                              onClick={() => {
+                              onClick={(event) => {
+                                // Already on this section with submenu open → close it.
+                                if (parentActive && menuOpen) {
+                                  event.preventDefault();
+                                  setOpenMenus((prev) => ({
+                                    ...prev,
+                                    [key]: false,
+                                  }));
+                                  return;
+                                }
                                 setOpenMenus((prev) => ({
                                   ...prev,
                                   [key]: true,
@@ -455,7 +503,7 @@ export function AppSidebar({
                             <button
                               type="button"
                               className={cn(
-                                "inline-flex size-11 shrink-0 items-center justify-center outline-none",
+                                "inline-flex min-h-11 min-w-11 flex-1 items-center justify-end px-2 outline-none",
                                 parentActive
                                   ? "text-white hover:bg-blue-800/40"
                                   : "text-sidebar-foreground hover:bg-sidebar-accent",

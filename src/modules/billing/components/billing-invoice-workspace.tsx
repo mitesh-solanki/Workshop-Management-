@@ -310,7 +310,7 @@ export function BillingInvoiceWorkspace({
             emptyLabel={t("invoiceEmpty")}
             lines={active.lines}
             docs={active.warrantyDocs}
-            canEdit={canEdit && active.status === "DRAFT"}
+            canEdit={canEdit}
             onRequiredValidityChange={setWarrantyFormComplete}
           />
         ) : null}

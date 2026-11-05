@@ -5,7 +5,8 @@ import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import { Download } from "lucide-react";
 import { loadDetailReportCardAction } from "@/app/actions/reports";
-import { ReportBarChart } from "@/modules/reports/components/report-bar-chart";
+import { DetailReportSummary } from "@/modules/reports/components/detail-report-summary";
+import { ReportChart } from "@/modules/reports/components/report-chart";
 import { ReportCardShell } from "@/modules/reports/components/report-card-shell";
 import { Button } from "@/components/ui/button";
 import { FormSelect } from "@/components/ui/form-select";
@@ -136,7 +137,7 @@ export function DetailReportCard({ initialCard, exportUserSlug }: Props) {
     <ReportCardShell
       pending={pending}
       title={t(`detail.kinds.${card.key}`)}
-      countLabel={t("cardCount", { count: card.count })}
+      countLabel={t(`detail.countLabel.${card.key}`, { count: card.count })}
       hero={
         <span className={ACCENT[card.key]}>
           {card.heroKind === "money"
@@ -172,11 +173,19 @@ export function DetailReportCard({ initialCard, exportUserSlug }: Props) {
         </>
       }
       chart={
-        <ReportBarChart
-          points={card.series}
-          valueLabel={t(`detail.kinds.${card.key}`)}
-          valueFormat={card.chartFormat}
-        />
+        card.key === "invoice_tax" ? (
+          <ReportChart
+            points={card.series.map((point) => ({
+              ...point,
+              label: t(`detail.columns.${point.key}`),
+            }))}
+            valueLabel={t(`detail.kinds.${card.key}`)}
+            valueFormat={card.chartFormat}
+            variant="donut"
+          />
+        ) : (
+          <DetailReportSummary card={card} />
+        )
       }
     />
   );

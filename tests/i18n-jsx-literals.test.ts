@@ -31,8 +31,12 @@ describe("app route JSX literals", () => {
       for (const match of withoutComments.matchAll(JSX_TEXT)) {
         const text = match[1]?.trim() ?? "";
         if (!text || /^[\d\s.:|·—–…/\-]+$/.test(text)) continue;
-        // Arrow functions (`=>`) produce false positives between `>` and the next `<`.
+        // Arrow functions (`=>`) and comparisons (`<=`) produce false positives.
+        const openIndex = match.index ?? 0;
+        if (openIndex > 0 && withoutComments[openIndex - 1] === "=") continue;
         if (/===|=>|return\s*\(|const\s+\w+\s*=/.test(text)) continue;
+        // Code expressions mistaken for text (`part.quantityOnHand`).
+        if (/^\w+\.\w+/.test(text)) continue;
         offenders.push(`${relative(appRoot, file)}: "${text}"`);
       }
     }

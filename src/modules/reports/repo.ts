@@ -8,6 +8,7 @@ import {
 import {
   bucketKey,
   buildEmptyBuckets,
+  formatBucketLabel,
   type ReportBucket,
   type ReportRange,
 } from "@/modules/reports/period";
@@ -30,10 +31,11 @@ export type ReportTableRow = {
 function fillSeries(
   keys: string[],
   totals: Map<string, number>,
+  bucket: ReportRange["bucket"],
 ): ReportSeriesPoint[] {
   return keys.map((key) => ({
     key,
-    label: key,
+    label: formatBucketLabel(key, bucket),
     amountPaise: totals.get(key) ?? 0,
   }));
 }
@@ -50,6 +52,7 @@ function aggregateByBucket(
   return fillSeries(
     buildEmptyBuckets(range.from, range.to, range.bucket),
     totals,
+    range.bucket,
   );
 }
 
@@ -217,28 +220,15 @@ export async function loadOutstandingReport(
     })
     .filter((row) => row.due > 0);
 
-  const byCustomer = new Map<
-    string,
-    { name: string; amountPaise: number }
-  >();
-  for (const row of open) {
-    const id = row.invoice.customer.id;
-    const existing = byCustomer.get(id);
-    byCustomer.set(id, {
-      name: row.invoice.customer.name,
-      amountPaise: (existing?.amountPaise ?? 0) + row.due,
-    });
-  }
-
-  const series: ReportSeriesPoint[] = [...byCustomer.entries()]
-    .sort((a, b) => b[1].amountPaise - a[1].amountPaise)
-    .slice(0, 12)
-    .map(([customerId, entry]) => ({
-      key: customerId,
-      label: entry.name,
-      amountPaise: entry.amountPaise,
-      href: `/customers/${customerId}`,
-    }));
+  const series = aggregateByBucket(
+    open
+      .filter((row) => row.invoice.finalizedAt != null)
+      .map((row) => ({
+        at: row.invoice.finalizedAt!,
+        amountPaise: row.due,
+      })),
+    range,
+  );
 
   const rows: ReportTableRow[] = open.map(({ invoice, due }) => ({
     id: invoice.id,

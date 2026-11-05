@@ -133,6 +133,21 @@ enum CreditNoteReason {
   OTHER
 }
 
+/// How basic salary is drafted on a payroll run.
+enum StaffPayMode {
+  FULL_BASIC
+}
+
+enum PayrollRunStatus {
+  OPEN
+  CLOSED
+}
+
+enum PayrollLineStatus {
+  DRAFT
+  PAID
+}
+
 model Garage {
   id        String   @id @default(cuid())
   name      String
@@ -182,6 +197,12 @@ model Garage {
   serviceOrderTechnicianAssignments ServiceOrderTechnicianAssignment[]
   serviceOrderPaperCopies ServiceOrderPaperCopy[]
   jobCardNumberCounters JobCardNumberCounter[]
+  staffPayProfiles      StaffPayProfile[]
+  staffAdvances         StaffAdvance[]
+  staffBonuses          StaffBonus[]
+  payrollRuns           PayrollRun[]
+  payrollLines          PayrollLine[]
+  expenses              Expense[]
 }
 
 /// Physical service bay in the workshop (master list for job cards).
@@ -1122,6 +1143,13 @@ model User {
   email         String    @unique
   emailVerified DateTime?
   image         String?
+  /// bcrypt hash for email+password login (Owner, Technician, and invited staff).
+  passwordHash  String?
+  isActive      Boolean   @default(true)
+  passwordResetTokenHash   String?
+  passwordResetExpiresAt   DateTime?
+  failedLoginAttempts      Int       @default(0)
+  lockoutUntil             DateTime?
   role          Role
   garageId      String
   garage        Garage    @relation(fields: [garageId], references: [id], onDelete: Cascade)
@@ -1149,6 +1177,15 @@ model User {
   purchaseReturnsCreated PurchaseReturn[]   @relation("PurchaseReturnCreatedBy")
   warrantyDocumentsCreated VehicleWarrantyDocument[] @relation("WarrantyDocumentCreatedBy")
   serviceOrderPaperCopiesCreated ServiceOrderPaperCopy[] @relation("ServiceOrderPaperCopyCreatedBy")
+  staffPayProfile         StaffPayProfile?
+  staffAdvances           StaffAdvance[]
+  staffAdvancesCreated    StaffAdvance[]       @relation("StaffAdvanceCreatedBy")
+  staffBonuses            StaffBonus[]
+  staffBonusesCreated     StaffBonus[]         @relation("StaffBonusCreatedBy")
+  payrollRunsCreated      PayrollRun[]         @relation("PayrollRunCreatedBy")
+  payrollLines            PayrollLine[]
+  payrollLinesPaidBy      PayrollLine[]        @relation("PayrollLinePaidBy")
+  expensesRecorded        Expense[]            @relation("ExpenseRecordedBy")
 
   @@index([garageId])
 }
@@ -1260,4 +1297,137 @@ model VerificationToken {
   expires    DateTime
 
   @@unique([identifier, token])
+}
+
+/// Monthly basic salary for a team member.
+model StaffPayProfile {
+  id               String       @id @default(cuid())
+  garageId         String
+  garage           Garage       @relation(fields: [garageId], references: [id], onDelete: Cascade)
+  userId           String       @unique
+  user             User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  basicSalaryPaise Int          @default(0)
+  payMode          StaffPayMode @default(FULL_BASIC)
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  @@index([garageId])
+  @@index([garageId, userId])
+}
+
+model StaffAdvance {
+  id             String        @id @default(cuid())
+  garageId       String
+  garage         Garage        @relation(fields: [garageId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  amountPaise    Int
+  remainingPaise Int
+  givenOn        DateTime      @db.Date
+  method         PaymentMethod
+  note           String?
+  createdById    String?
+  createdBy      User?         @relation("StaffAdvanceCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  @@index([garageId, userId])
+  @@index([garageId, remainingPaise])
+}
+
+model StaffBonus {
+  id            String        @id @default(cuid())
+  garageId      String
+  garage        Garage        @relation(fields: [garageId], references: [id], onDelete: Cascade)
+  userId        String
+  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  amountPaise   Int
+  givenOn       DateTime      @db.Date
+  method        PaymentMethod
+  note          String?
+  payrollLineId String?
+  payrollLine   PayrollLine?  @relation(fields: [payrollLineId], references: [id], onDelete: SetNull)
+  createdById   String?
+  createdBy     User?         @relation("StaffBonusCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@index([garageId, userId])
+  @@index([garageId, payrollLineId])
+}
+
+model PayrollRun {
+  id          String           @id @default(cuid())
+  garageId    String
+  garage      Garage           @relation(fields: [garageId], references: [id], onDelete: Cascade)
+  periodStart DateTime         @db.Date
+  periodEnd   DateTime         @db.Date
+  status      PayrollRunStatus @default(OPEN)
+  note        String?
+  createdById String?
+  createdBy   User?            @relation("PayrollRunCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  lines       PayrollLine[]
+
+  @@index([garageId, periodStart])
+  @@index([garageId, status])
+}
+
+model PayrollLine {
+  id                  String            @id @default(cuid())
+  garageId            String
+  garage              Garage            @relation(fields: [garageId], references: [id], onDelete: Cascade)
+  payrollRunId        String
+  payrollRun          PayrollRun        @relation(fields: [payrollRunId], references: [id], onDelete: Cascade)
+  userId              String
+  user                User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  basicPaise          Int               @default(0)
+  bonusPaise          Int               @default(0)
+  commissionPaise     Int               @default(0)
+  advanceDeductedPaise Int              @default(0)
+  adjustmentPaise     Int               @default(0)
+  adjustmentNote      String?
+  /// Optional per-person note for this payroll line.
+  note                String?
+  netPaise            Int               @default(0)
+  status              PayrollLineStatus @default(DRAFT)
+  paidAt              DateTime?
+  paidMethod          PaymentMethod?
+  paidById            String?
+  paidBy              User?             @relation("PayrollLinePaidBy", fields: [paidById], references: [id], onDelete: SetNull)
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+  bonusesApplied      StaffBonus[]
+
+  @@unique([payrollRunId, userId])
+  @@index([garageId, userId])
+  @@index([garageId, status])
+}
+
+enum ExpenseStatus {
+  PAID
+  UNPAID
+}
+
+model Expense {
+  id           String         @id @default(cuid())
+  garageId     String
+  garage       Garage         @relation(fields: [garageId], references: [id], onDelete: Cascade)
+  amountPaise  Int
+  spentAt      DateTime
+  status       ExpenseStatus  @default(PAID)
+  /// Set when status is PAID; null while unpaid.
+  method       PaymentMethod?
+  /// Free-text label (UI offers suggestions; any value allowed).
+  category     String
+  note         String?
+  recordedById String?
+  recordedBy   User?          @relation("ExpenseRecordedBy", fields: [recordedById], references: [id], onDelete: SetNull)
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  @@index([garageId, spentAt])
+  @@index([garageId, category])
+  @@index([garageId, status])
 }

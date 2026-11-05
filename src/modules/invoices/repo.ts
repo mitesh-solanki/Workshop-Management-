@@ -26,6 +26,7 @@ const invoiceListSelect = {
   serviceOrder: {
     select: {
       id: true,
+      jobCardNumber: true,
       vehicle: {
         select: {
           registrationNumber: true,
@@ -57,6 +58,17 @@ function invoiceSearchWhere(
   const registrationQuery = query
     ? query.replace(/\s+/g, "").toUpperCase()
     : undefined;
+  const jobCardFromQuery = (() => {
+    if (!query) return null;
+    if (/^\d+$/.test(query)) {
+      const n = Number(query);
+      return Number.isSafeInteger(n) && n > 0 ? n : null;
+    }
+    const fromLabel = query.match(/INV-\d{4}-\d{2}-(\d+)$/i)?.[1];
+    if (!fromLabel) return null;
+    const n = Number(fromLabel);
+    return Number.isSafeInteger(n) && n > 0 ? n : null;
+  })();
 
   return {
     garageId,
@@ -69,6 +81,15 @@ function invoiceSearchWhere(
                 mode: "insensitive",
               },
             },
+            ...(jobCardFromQuery != null
+              ? [
+                  {
+                    serviceOrder: {
+                      jobCardNumber: jobCardFromQuery,
+                    },
+                  },
+                ]
+              : []),
             {
               customer: {
                 name: { contains: query, mode: "insensitive" },

@@ -14,7 +14,7 @@ function parseLocale(value: string | null): PdfLocale {
 }
 
 function safeFilename(value: string): string {
-  return value.replace(/[^\w.\-/]+/g, "_").slice(0, 80);
+  return value.replace(/[^\w.\-]+/g, "_").slice(0, 120);
 }
 
 export async function GET(request: Request, { params }: Params) {
@@ -27,12 +27,12 @@ export async function GET(request: Request, { params }: Params) {
   const locale = parseLocale(new URL(request.url).searchParams.get("locale"));
 
   try {
-    const { buffer, labels } = await getInvoicePdfBuffer(
+    const { buffer, labels, invoiceNumber } = await getInvoicePdfBuffer(
       session,
       invoiceId,
       locale,
     );
-    const filename = `invoice-${locale}.pdf`;
+    const filename = `${invoiceNumber?.trim() || `invoice-${locale}`}.pdf`;
     return new NextResponse(new Uint8Array(buffer), {
       status: 200,
       headers: {

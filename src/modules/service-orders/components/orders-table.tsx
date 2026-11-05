@@ -380,7 +380,7 @@ export function OrdersTable({
         header: t("columns.jobCardNumber"),
         cell: ({ row }) => (
           <span className="font-mono text-sm font-semibold text-foreground">
-            {row.original.jobCardNumber}
+            {t("jobCardNumberShort", { number: row.original.jobCardNumber })}
           </span>
         ),
       },

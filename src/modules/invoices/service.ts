@@ -1,5 +1,6 @@
 import "server-only";
 
+import { displayInvoiceNumber } from "@/lib/financial-year";
 import { requireRole, type RoleSession } from "@/lib/rbac";
 import {
   pendingBalancePaise,
@@ -51,7 +52,13 @@ export async function listInvoices(
           pendingBalancePaise: pending,
           finalizedAt: invoice.finalizedAt,
         }),
-        invoiceNumber: invoice.invoiceNumber,
+        invoiceNumber:
+          displayInvoiceNumber({
+            invoiceNumber: invoice.invoiceNumber,
+            jobCardNumber: invoice.serviceOrder.jobCardNumber,
+            at: invoice.finalizedAt ?? invoice.createdAt,
+          }) ?? invoice.invoiceNumber,
+        jobCardNumber: invoice.serviceOrder.jobCardNumber,
         totalPaise: invoice.totalPaise,
         amountPaidPaise: invoice.amountPaidPaise,
         creditNotesTotalPaise,

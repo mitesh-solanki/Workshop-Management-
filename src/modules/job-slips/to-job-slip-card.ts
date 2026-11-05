@@ -55,7 +55,6 @@ export function orderNeedsPricing(order: JobSlipOrderSource): boolean {
 
 export function toJobSlipCardData(
   order: JobSlipOrderSource,
-  garage: { name: string; address: string | null },
 ): JobSlipCardData {
   return {
     id: order.id,
@@ -96,9 +95,5 @@ export function toJobSlipCardData(
         quantity: 1,
         unitPricePaise: line.unitPricePaise,
       })),
-    garage: {
-      name: garage.name,
-      address: garage.address,
-    },
   };
 }

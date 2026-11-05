@@ -83,29 +83,24 @@ export function toDetailReportCardView(
   }
 
   if (payload.key === "invoice_tax") {
-    const byCustomer = new Map<
-      string,
-      { name: string; totalPaise: number }
-    >();
+    let taxablePaise = 0;
+    let cgstPaise = 0;
+    let sgstPaise = 0;
+    let igstPaise = 0;
+    let heroValue = 0;
     for (const row of payload.rows) {
-      const existing = byCustomer.get(row.customerId);
-      byCustomer.set(row.customerId, {
-        name: row.customerName,
-        totalPaise: (existing?.totalPaise ?? 0) + row.totalPaise,
-      });
+      taxablePaise += row.taxablePaise;
+      cgstPaise += row.cgstPaise;
+      sgstPaise += row.sgstPaise;
+      igstPaise += row.igstPaise;
+      heroValue += row.totalPaise;
     }
-    const series = topByValue(
-      [...byCustomer.entries()].map(([customerId, entry]) => ({
-        key: customerId,
-        label: entry.name,
-        amountPaise: entry.totalPaise,
-        href: `/customers/${customerId}`,
-      })),
-    );
-    const heroValue = payload.rows.reduce(
-      (sum, row) => sum + row.totalPaise,
-      0,
-    );
+    const series: DetailChartPoint[] = [
+      { key: "taxable", label: "taxable", amountPaise: taxablePaise },
+      { key: "cgst", label: "cgst", amountPaise: cgstPaise },
+      { key: "sgst", label: "sgst", amountPaise: sgstPaise },
+      { key: "igst", label: "igst", amountPaise: igstPaise },
+    ];
     return {
       key: payload.key,
       period: payload.period,

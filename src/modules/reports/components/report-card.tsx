@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import { Download } from "lucide-react";
 import { loadMoneyReportCardAction } from "@/app/actions/reports";
-import { ReportBarChart } from "@/modules/reports/components/report-bar-chart";
+import { ReportChart } from "@/modules/reports/components/report-chart";
 import { ReportCardShell } from "@/modules/reports/components/report-card-shell";
 import { Button } from "@/components/ui/button";
 import { FormSelect } from "@/components/ui/form-select";
@@ -133,9 +133,10 @@ export function ReportCard({
         </>
       }
       chart={
-        <ReportBarChart
+        <ReportChart
           points={card.series}
           valueLabel={t(`kinds.${card.key}`)}
+          variant="line"
         />
       }
     />

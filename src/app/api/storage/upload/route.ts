@@ -71,11 +71,22 @@ export async function POST(request: Request) {
       },
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Upload failed";
-    const status = message === "STORAGE_NOT_CONFIGURED" ? 500 : 500;
+    const code =
+      error &&
+      typeof error === "object" &&
+      "code" in error &&
+      typeof (error as { code: unknown }).code === "string"
+        ? (error as { code: string }).code
+        : null;
+    const message =
+      code === "STORAGE_NOT_CONFIGURED"
+        ? "File storage is not configured."
+        : error instanceof Error
+          ? error.message
+          : "Upload failed";
     return NextResponse.json(
       { success: false, error: message },
-      { status },
+      { status: 500 },
     );
   }
 }

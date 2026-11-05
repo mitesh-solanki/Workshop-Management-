@@ -15,6 +15,13 @@ export async function findUserByEmailForLogin(email: string) {
   });
 }
 
+export async function findGarageNameById(garageId: string) {
+  return prisma.garage.findFirst({
+    where: { id: garageId },
+    select: { id: true, name: true },
+  });
+}
+
 /**
  * Global user lookup by id for JWT session refresh.
  * The session already authenticated the user; garage comes from the user row.
@@ -28,7 +35,36 @@ export async function findUserByIdForSessionRefresh(userId: string) {
       name: true,
       garageId: true,
       role: true,
+      isActive: true,
     },
+  });
+}
+
+/** Password change for the signed-in user (includes hash). */
+export async function findUserByIdForPasswordChange(userId: string) {
+  return prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      id: true,
+      garageId: true,
+      isActive: true,
+      passwordHash: true,
+    },
+  });
+}
+
+export async function updateOwnNameInGarage(input: {
+  garageId: string;
+  userId: string;
+  name: string;
+}) {
+  return prisma.user.updateMany({
+    where: {
+      id: input.userId,
+      garageId: input.garageId,
+      isActive: true,
+    },
+    data: { name: input.name },
   });
 }
 
@@ -148,6 +184,7 @@ export async function createOwnerWithGarage(input: {
   email: string;
   name: string;
   garageName: string;
+  passwordHash?: string | null;
 }) {
   return prisma.$transaction(async (tx) => {
     const garage = await tx.garage.create({
@@ -161,6 +198,8 @@ export async function createOwnerWithGarage(input: {
         emailVerified: new Date(),
         role: "OWNER",
         garageId: garage.id,
+        passwordHash: input.passwordHash ?? null,
+        isActive: true,
       },
     });
 
@@ -185,6 +224,7 @@ export async function ensureTechnicianInGarage(input: {
   email: string;
   name: string;
   actorId?: string;
+  passwordHash?: string | null;
 }) {
   const email = input.email.trim().toLowerCase();
   const existing = await prisma.user.findUnique({ where: { email } });
@@ -193,11 +233,13 @@ export async function ensureTechnicianInGarage(input: {
       existing.garageId === input.garageId &&
       existing.role === "TECHNICIAN"
     ) {
-      if (existing.name !== input.name) {
-        return prisma.user.update({
-          where: { id: existing.id },
-          data: { name: input.name },
-        });
+      const data: Prisma.UserUpdateInput = {};
+      if (existing.name !== input.name) data.name = input.name;
+      if (input.passwordHash && !existing.passwordHash) {
+        data.passwordHash = input.passwordHash;
+      }
+      if (Object.keys(data).length > 0) {
+        return prisma.user.update({ where: { id: existing.id }, data });
       }
       return existing;
     }
@@ -212,6 +254,8 @@ export async function ensureTechnicianInGarage(input: {
         emailVerified: new Date(),
         role: "TECHNICIAN",
         garageId: input.garageId,
+        passwordHash: input.passwordHash ?? null,
+        isActive: true,
       },
     });
 
@@ -240,6 +284,7 @@ export async function acceptInviteAndCreateUser(input: {
   name: string;
   role: Role;
   garageId: string;
+  passwordHash: string;
 }) {
   return prisma.$transaction(async (tx) => {
     const user = await tx.user.create({
@@ -249,6 +294,8 @@ export async function acceptInviteAndCreateUser(input: {
         emailVerified: new Date(),
         role: input.role,
         garageId: input.garageId,
+        passwordHash: input.passwordHash,
+        isActive: true,
       },
     });
 
@@ -272,5 +319,65 @@ export async function acceptInviteAndCreateUser(input: {
     });
 
     return user;
+  });
+}
+
+export async function setUserPasswordHash(userId: string, passwordHash: string) {
+  return prisma.user.update({
+    where: { id: userId },
+    data: {
+      passwordHash,
+      failedLoginAttempts: 0,
+      lockoutUntil: null,
+      passwordResetTokenHash: null,
+      passwordResetExpiresAt: null,
+    },
+  });
+}
+
+export async function recordFailedLogin(
+  userId: string,
+  lockoutUntil: Date | null,
+) {
+  return prisma.user.update({
+    where: { id: userId },
+    data: {
+      failedLoginAttempts: { increment: 1 },
+      lockoutUntil,
+    },
+  });
+}
+
+export async function clearLoginFailures(userId: string) {
+  return prisma.user.update({
+    where: { id: userId },
+    data: {
+      failedLoginAttempts: 0,
+      lockoutUntil: null,
+    },
+  });
+}
+
+export async function setPasswordResetToken(input: {
+  userId: string;
+  tokenHash: string;
+  expiresAt: Date;
+}) {
+  return prisma.user.update({
+    where: { id: input.userId },
+    data: {
+      passwordResetTokenHash: input.tokenHash,
+      passwordResetExpiresAt: input.expiresAt,
+    },
+  });
+}
+
+export async function findUserByPasswordResetTokenHash(tokenHash: string) {
+  return prisma.user.findFirst({
+    where: {
+      passwordResetTokenHash: tokenHash,
+      passwordResetExpiresAt: { gt: new Date() },
+      isActive: true,
+    },
   });
 }

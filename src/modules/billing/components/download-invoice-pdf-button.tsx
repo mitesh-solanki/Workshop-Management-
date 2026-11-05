@@ -3,21 +3,35 @@
 import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
+import { displayInvoiceNumber } from "@/lib/financial-year";
 
 type Props = {
   orderId: string;
   invoiceId: string;
-  /** Job Card number used as the download file name. */
-  jobCardNumber: number | null;
-  /** Fallback when job card number is missing (legacy). */
+  /** Job card number — used as the last segment of the PDF file name. */
+  jobCardNumber?: number | null;
+  /** Tax invoice number (on the PDF). FY prefix is reused for the file name. */
   invoiceNumber: string | null;
   locale: string;
 };
 
+/** File name: INV-{FY}-{jobCardNumber}, e.g. INV-2026-27-259. */
+function invoicePdfFileBase(
+  invoiceNumber: string | null,
+  jobCardNumber: number | null | undefined,
+  invoiceId: string,
+): string {
+  return (
+    displayInvoiceNumber({ invoiceNumber, jobCardNumber }) ??
+    invoiceNumber?.trim() ??
+    invoiceId
+  );
+}
+
 export function DownloadInvoicePdfButton({
   orderId,
   invoiceId,
-  jobCardNumber,
+  jobCardNumber = null,
   invoiceNumber,
   locale,
 }: Props) {
@@ -37,20 +51,19 @@ export function DownloadInvoicePdfButton({
         throw new Error("pdf_failed");
       }
       const blob = await response.blob();
+      const disposition = response.headers.get("Content-Disposition");
+      const match = disposition?.match(/filename="([^"]+)"/);
+      const filename =
+        match?.[1] ??
+        `${invoicePdfFileBase(invoiceNumber, jobCardNumber, invoiceId)}.pdf`;
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
       anchor.href = url;
-      const fileBase =
-        jobCardNumber != null
-          ? String(jobCardNumber)
-          : (invoiceNumber ?? invoiceId);
-      anchor.download = `${fileBase}.pdf`;
-      document.body.appendChild(anchor);
+      anchor.download = filename;
       anchor.click();
-      anchor.remove();
       URL.revokeObjectURL(url);
     } catch {
-      // Keep the button usable; server already logged failures.
+      // Parent toast / silent — keep button usable
     } finally {
       setLoading(false);
     }
@@ -60,10 +73,9 @@ export function DownloadInvoicePdfButton({
     <Button
       type="button"
       variant="outline"
-      className="min-h-11 text-blue-700"
-      loading={loading}
+      size="sm"
       disabled={loading}
-      onClick={onDownload}
+      onClick={() => void onDownload()}
     >
       {loading ? t("downloadingPdf") : t("downloadPdf")}
     </Button>

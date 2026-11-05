@@ -6,7 +6,6 @@ import {
   listJobSlipOrders,
 } from "@/modules/job-slips/repo";
 import { toJobSlipCardData } from "@/modules/job-slips/to-job-slip-card";
-import { getGarageSettings } from "@/modules/settings/service";
 
 const READ_ROLES = ["OWNER", "MANAGER", "ACCOUNTANT"] as const;
 const ORDER_REPORT_ROLES = [
@@ -36,9 +35,5 @@ export async function getJobReportForOrder(
     return null;
   }
 
-  const garage = await getGarageSettings(session);
-  return toJobSlipCardData(order, {
-    name: garage.name,
-    address: garage.address,
-  });
+  return toJobSlipCardData(order);
 }

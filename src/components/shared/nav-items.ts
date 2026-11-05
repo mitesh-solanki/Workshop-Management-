@@ -1,5 +1,6 @@
 import {
   Car,
+  CalendarDays,
   ChartColumn,
   ClipboardCheck,
   ClipboardList,
@@ -10,12 +11,14 @@ import {
   LayoutDashboard,
   Package,
   PackageMinus,
+  Receipt,
   Settings,
   ShoppingCart,
   Ticket,
   Truck,
   Users,
   Wallet,
+  IndianRupee,
   type LucideIcon,
 } from "lucide-react";
 
@@ -29,13 +32,16 @@ export type NavKey =
   | "vehicles"
   | "invoices"
   | "reports"
+  | "dailySummary"
   | "inventory"
   | "counterSales"
   | "vendors"
   | "purchaseOrders"
   | "vendorBills"
   | "purchaseReturns"
+  | "expenses"
   | "team"
+  | "payroll"
   | "orders"
   | "jobSlips"
   | "inspections"
@@ -191,6 +197,16 @@ export const APP_NAV_ITEMS: readonly NavItem[] = [
     flyout: [{ href: "/reports", labelKey: "viewReports", kind: "list" }],
   },
   {
+    href: "/daily-summary",
+    key: "dailySummary",
+    icon: CalendarDays,
+    group: "business",
+    roles: ["OWNER", "MANAGER", "ACCOUNTANT"],
+    flyout: [
+      { href: "/daily-summary", labelKey: "viewDailySummary", kind: "list" },
+    ],
+  },
+  {
     href: "/inventory",
     key: "inventory",
     icon: Package,
@@ -278,11 +294,27 @@ export const APP_NAV_ITEMS: readonly NavItem[] = [
     ],
   },
   {
+    href: "/expenses",
+    key: "expenses",
+    icon: Receipt,
+    group: "business",
+    roles: ["OWNER", "MANAGER", "ACCOUNTANT"],
+    flyout: [
+      {
+        href: "/expenses?create=1",
+        labelKey: "addExpense",
+        kind: "add",
+        roles: ["OWNER", "MANAGER", "ACCOUNTANT"],
+      },
+      { href: "/expenses", labelKey: "viewExpenses", kind: "list" },
+    ],
+  },
+  {
     href: "/team",
     key: "team",
     icon: Users,
     group: "admin",
-    roles: ["OWNER", "MANAGER"],
+    roles: ["OWNER", "MANAGER", "ACCOUNTANT"],
     flyout: [
       {
         href: "/team?create=1",
@@ -291,6 +323,21 @@ export const APP_NAV_ITEMS: readonly NavItem[] = [
         roles: ["OWNER"],
       },
       { href: "/team", labelKey: "viewTeam", kind: "list" },
+    ],
+  },
+  {
+    href: "/payroll",
+    key: "payroll",
+    icon: IndianRupee,
+    group: "admin",
+    roles: ["OWNER", "ACCOUNTANT"],
+    flyout: [
+      {
+        href: "/payroll/new",
+        labelKey: "createPayrollRun",
+        kind: "add",
+      },
+      { href: "/payroll", labelKey: "viewPayroll", kind: "list" },
     ],
   },
   {

@@ -3,7 +3,7 @@ import { toDetailReportCardView } from "@/modules/reports/detail-series";
 import type { DetailReportPayload } from "@/modules/reports/detail-types";
 
 describe("toDetailReportCardView", () => {
-  it("builds money chart series for invoice tax by customer", () => {
+  it("sums invoice tax into taxable and GST component totals", () => {
     const payload: DetailReportPayload = {
       key: "invoice_tax",
       period: "this_year",
@@ -28,14 +28,14 @@ describe("toDetailReportCardView", () => {
           id: "2",
           invoiceNumber: "INV-2",
           date: new Date(2026, 9, 2).toISOString(),
-          customerId: "c1",
-          customerName: "Ramesh",
+          customerId: "c2",
+          customerName: "Suresh",
           taxablePaise: 20000,
-          cgstPaise: 1800,
-          sgstPaise: 1800,
-          igstPaise: 0,
+          cgstPaise: 0,
+          sgstPaise: 0,
+          igstPaise: 3600,
           totalPaise: 23600,
-          gstSplit: "CGST_SGST",
+          gstSplit: "IGST",
         },
       ],
     };
@@ -43,13 +43,12 @@ describe("toDetailReportCardView", () => {
     const view = toDetailReportCardView(payload);
     expect(view.heroKind).toBe("money");
     expect(view.heroValue).toBe(35400);
+    expect(view.count).toBe(2);
     expect(view.series).toEqual([
-      {
-        key: "c1",
-        label: "Ramesh",
-        amountPaise: 35400,
-        href: "/customers/c1",
-      },
+      { key: "taxable", label: "taxable", amountPaise: 30000 },
+      { key: "cgst", label: "cgst", amountPaise: 900 },
+      { key: "sgst", label: "sgst", amountPaise: 900 },
+      { key: "igst", label: "igst", amountPaise: 3600 },
     ]);
   });
 });

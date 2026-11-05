@@ -6,7 +6,6 @@ import { requireSession } from "@/lib/session";
 import { JobSlipsBoard } from "@/modules/job-slips/components/job-slips-board";
 import { toJobSlipCardData } from "@/modules/job-slips/to-job-slip-card";
 import { listJobSlips } from "@/modules/job-slips/service";
-import { getGarageSettings } from "@/modules/settings/service";
 
 export const instant = false;
 
@@ -17,17 +16,9 @@ export default async function JobSlipsPage() {
   }
 
   const t = await getTranslations("jobSlips");
-  const [orders, garage] = await Promise.all([
-    listJobSlips(session),
-    getGarageSettings(session),
-  ]);
+  const orders = await listJobSlips(session);
 
-  const slips = orders.map((order) =>
-    toJobSlipCardData(order, {
-      name: garage.name,
-      address: garage.address,
-    }),
-  );
+  const slips = orders.map((order) => toJobSlipCardData(order));
 
   return (
     <main className="space-y-4 sm:space-y-5">

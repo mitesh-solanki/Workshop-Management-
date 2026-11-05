@@ -14,11 +14,11 @@ describe("inspection report PDF money", () => {
 });
 
 describe("inspection report PDF expected completion", () => {
-  it("formats a datetime for the PDF header", () => {
+  it("formats a date for the PDF header (no time)", () => {
     const text = formatInspectionPdfExpectedCompletion(
       new Date(2026, 10, 2, 15, 30),
     );
-    expect(text).toBe("2 Nov 2026, 3:30 pm");
+    expect(text).toBe("2 Nov 2026");
     expect(formatInspectionPdfExpectedCompletion(null)).toBeNull();
     expect(formatInspectionPdfExpectedCompletion("")).toBeNull();
   });

@@ -36,6 +36,7 @@ const invoiceInclude = {
   serviceOrder: {
     select: {
       id: true,
+      jobCardNumber: true,
       vehicle: {
         select: {
           registrationNumber: true,

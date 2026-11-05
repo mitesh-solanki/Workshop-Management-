@@ -58,13 +58,16 @@ export function InviteModal({ defaultOpen = false }: Props) {
 
     if (state.ok) {
       toast.success(state.message);
-      const id = window.setTimeout(() => {
-        setOpen(false);
-        setRole("MANAGER");
-        setEmail("");
-        setEmailError(undefined);
-      }, 0);
-      return () => window.clearTimeout(id);
+      if (!state.acceptUrl) {
+        const id = window.setTimeout(() => {
+          setOpen(false);
+          setRole("MANAGER");
+          setEmail("");
+          setEmailError(undefined);
+        }, 0);
+        return () => window.clearTimeout(id);
+      }
+      return;
     }
 
     toast.error(state.message);
@@ -179,6 +182,35 @@ export function InviteModal({ defaultOpen = false }: Props) {
               </p>
             </div>
           </form>
+          {state.ok && state.acceptUrl ? (
+            <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <p className="mb-1 text-xs font-medium text-slate-500">
+                {t("inviteLink")}
+              </p>
+              <a
+                href={state.acceptUrl}
+                className="break-all text-sm font-medium text-blue-700 underline underline-offset-4"
+              >
+                {state.acceptUrl}
+              </a>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="mt-3 min-h-11 w-full"
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(state.acceptUrl!);
+                    toast.success(t("inviteLinkCopied"));
+                  } catch {
+                    toast.error(t("inviteLinkCopyFailed"));
+                  }
+                }}
+              >
+                {t("copyInviteLink")}
+              </Button>
+            </div>
+          ) : null}
         </DialogBody>
         <DialogFooter className="gap-2 border-t border-border bg-background px-5 py-4 sm:justify-stretch">
           <DialogClose asChild>
@@ -191,15 +223,17 @@ export function InviteModal({ defaultOpen = false }: Props) {
               {t("close")}
             </Button>
           </DialogClose>
-          <Button
-            type="submit"
-            form={formId}
-            loading={pending}
-            size="lg"
-            className="w-full sm:flex-1"
-          >
-            {pending ? t("inviting") : t("invite")}
-          </Button>
+          {state.ok && state.acceptUrl ? null : (
+            <Button
+              type="submit"
+              form={formId}
+              loading={pending}
+              size="lg"
+              className="w-full sm:flex-1"
+            >
+              {pending ? t("inviting") : t("invite")}
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

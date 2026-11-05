@@ -1,30 +1,14 @@
 "use client";
 
+import Link from "next/link";
 import { useState, useTransition } from "react";
-import { Trash2 } from "lucide-react";
+import { Eye, Trash2 } from "lucide-react";
 import { useTranslations } from "next-intl";
-import {
-  changeMemberRoleAction,
-  removeMemberAction,
-} from "@/app/actions/team";
-import type { ChangeMemberRoleInput } from "@/modules/team/schema";
+import { removeMemberAction } from "@/app/actions/team";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { toast } from "@/components/ui/toast";
-import { cn } from "@/lib/utils";
-
-const MEMBER_ROLES = ["MANAGER", "TECHNICIAN", "ACCOUNTANT"] as const;
-
-type MemberRole = (typeof MEMBER_ROLES)[number];
+import { ChangeMemberRoleButton } from "@/modules/team/components/change-member-role-button";
 
 type Props = {
   memberId: string;
@@ -43,33 +27,11 @@ export function MemberRowActions({
   isSelf,
 }: Props) {
   const t = useTranslations("team");
-  const [roleOpen, setRoleOpen] = useState(false);
   const [removeOpen, setRemoveOpen] = useState(false);
-  const [selectedRole, setSelectedRole] = useState<MemberRole>(
-    MEMBER_ROLES.includes(memberRole as MemberRole)
-      ? (memberRole as MemberRole)
-      : "MANAGER",
-  );
   const [pending, startTransition] = useTransition();
 
-  if (!canManage || isSelf || memberRole === "OWNER") {
-    return null;
-  }
-
-  function onChangeRole() {
-    startTransition(async () => {
-      const result = await changeMemberRoleAction(
-        memberId,
-        selectedRole as ChangeMemberRoleInput["role"],
-      );
-      if (!result.ok) {
-        toast.error(result.message ?? t("error"));
-        return;
-      }
-      toast.success(result.message ?? t("roleUpdated"));
-      setRoleOpen(false);
-    });
-  }
+  const canEditRole =
+    canManage && !isSelf && memberRole !== "OWNER";
 
   function onConfirmRemove() {
     startTransition(async () => {
@@ -86,108 +48,44 @@ export function MemberRowActions({
   return (
     <>
       <div className="flex items-center gap-1.5 whitespace-nowrap">
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          disabled={pending}
-          className="text-sm capitalize"
-          onClick={() => {
-            setSelectedRole(
-              MEMBER_ROLES.includes(memberRole as MemberRole)
-                ? (memberRole as MemberRole)
-                : "MANAGER",
-            );
-            setRoleOpen(true);
-          }}
-        >
-          {t("changeRole")}
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          size="icon-sm"
-          disabled={pending}
-          className="text-danger hover:bg-danger/5 hover:text-danger"
-          aria-label={t("removeMember")}
-          onClick={() => setRemoveOpen(true)}
-        >
-          <Trash2 className="size-4" aria-hidden />
-        </Button>
-      </div>
-
-      <Dialog open={roleOpen} onOpenChange={setRoleOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>{t("changeRoleTitle")}</DialogTitle>
-            <DialogDescription>
-              {t("changeRoleDescription", { name: memberName })}
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="flex flex-col gap-2">
-            <p
-              className="text-sm font-medium text-slate-900"
-              id="change-role-label"
-            >
-              {t("role")}
-            </p>
-            <div
-              role="radiogroup"
-              aria-labelledby="change-role-label"
-              className="grid grid-cols-3 gap-1 rounded-lg border border-slate-200 bg-slate-50 p-1"
-            >
-              {MEMBER_ROLES.map((option) => {
-                const selected = selectedRole === option;
-                return (
-                  <button
-                    key={option}
-                    type="button"
-                    role="radio"
-                    aria-checked={selected}
-                    onClick={() => setSelectedRole(option)}
-                    className={cn(
-                      "min-h-11 rounded-md px-2 text-caption font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600",
-                      selected
-                        ? "bg-card text-slate-900 shadow-sm"
-                        : "text-slate-600 hover:text-slate-900",
-                    )}
-                  >
-                    {t(`roles.${option}`)}
-                  </button>
-                );
-              })}
-            </div>
-            <p className="text-caption text-slate-500">
-              {t(`roleAccess.${selectedRole}`)}
-            </p>
-          </div>
-
-          <DialogFooter className="gap-2 sm:justify-stretch">
-            <DialogClose asChild>
+        {canEditRole ? (
+          <ChangeMemberRoleButton
+            memberId={memberId}
+            memberName={memberName}
+            memberRole={memberRole}
+            size="sm"
+            trigger={
               <Button
                 type="button"
-                variant="secondary"
-                size="md"
-                className="w-full sm:flex-1"
+                variant="outline"
+                size="sm"
                 disabled={pending}
+                className="text-sm capitalize"
               >
-                {t("close")}
+                {t("changeRole")}
               </Button>
-            </DialogClose>
-            <Button
-              type="button"
-              size="md"
-              className="w-full sm:flex-1"
-              loading={pending}
-              disabled={selectedRole === memberRole}
-              onClick={onChangeRole}
-            >
-              {t("saveRole")}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            }
+          />
+        ) : null}
+        <Button asChild variant="outline" size="icon-sm">
+          <Link href={`/team/${memberId}`} aria-label={t("view")}>
+            <Eye className="size-4" aria-hidden />
+          </Link>
+        </Button>
+        {canEditRole ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="icon-sm"
+            disabled={pending}
+            className="text-danger hover:bg-danger/5 hover:text-danger"
+            aria-label={t("removeMember")}
+            onClick={() => setRemoveOpen(true)}
+          >
+            <Trash2 className="size-4" aria-hidden />
+          </Button>
+        ) : null}
+      </div>
 
       <ConfirmDialog
         open={removeOpen}

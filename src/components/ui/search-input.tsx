@@ -31,14 +31,19 @@ function SearchInput({
   const inputId = id ?? "search";
 
   return (
-    <div className={cn("relative w-full", className)}>
+    <div
+      className={cn(
+        "group/search relative w-full rounded-lg transition-shadow",
+        className,
+      )}
+    >
       {label ? (
         <label htmlFor={inputId} className="sr-only">
           {label}
         </label>
       ) : null}
       <Search
-        className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-slate-400"
+        className="pointer-events-none absolute top-1/2 left-3.5 z-10 size-4 -translate-y-1/2 text-slate-400 transition-colors group-focus-within/search:text-blue-600"
         aria-hidden
       />
       <Input
@@ -53,7 +58,10 @@ function SearchInput({
         onChange={(event) => onValueChange(event.target.value)}
         className={cn(
           // Hide native clear (type=search / WebKit) — we use our own X.
-          "h-11 min-h-11 rounded-lg border-slate-200 bg-card pl-9 text-sm [&::-webkit-search-cancel-button]:hidden [&::-webkit-search-decoration]:hidden",
+          "h-11 min-h-11 rounded-lg border-slate-200 bg-slate-50/80 pl-10 text-sm text-slate-900 shadow-xs placeholder:text-slate-400 transition-[border-color,box-shadow,background-color]",
+          "hover:border-slate-300 hover:bg-white",
+          "focus-visible:border-blue-500 focus-visible:bg-white focus-visible:ring-3 focus-visible:ring-blue-500/15",
+          "[&::-webkit-search-cancel-button]:hidden [&::-webkit-search-decoration]:hidden",
           value ? "pr-11" : "pr-3",
         )}
       />
@@ -63,7 +71,7 @@ function SearchInput({
           variant="ghost"
           size="icon-sm"
           aria-label={t("clearSearch")}
-          className="absolute top-1/2 right-1.5 -translate-y-1/2 text-slate-500"
+          className="absolute top-1/2 right-1.5 z-10 -translate-y-1/2 text-slate-500 hover:bg-slate-100 hover:text-slate-800"
           onClick={() => onValueChange("")}
         >
           <X className="size-4" aria-hidden />

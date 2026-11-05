@@ -10,7 +10,6 @@ import { getCustomer } from "@/modules/customers/service";
 import { listCustomerInspections } from "@/modules/inspections/service";
 import { toJobSlipCardData } from "@/modules/job-slips/to-job-slip-card";
 import { listCustomerServiceHistory } from "@/modules/service-orders/service";
-import { getGarageSettings } from "@/modules/settings/service";
 import { listCustomerWarranties } from "@/modules/warranties/service";
 
 type Props = {
@@ -44,19 +43,15 @@ export default async function CustomerDetailPage({
     throw error;
   }
 
-  const [serviceHistoryRows, inspections, warrantyDocs, garage] =
+  const [serviceHistoryRows, inspections, warrantyDocs] =
     await Promise.all([
       listCustomerServiceHistory(session, customer.id),
       listCustomerInspections(session, customer.id).catch(() => []),
       listCustomerWarranties(session, customer.id).catch(() => []),
-      getGarageSettings(session),
     ]);
 
   const serviceHistory = serviceHistoryRows.map((order) => ({
-    ...toJobSlipCardData(order, {
-      name: garage.name,
-      address: garage.address,
-    }),
+    ...toJobSlipCardData(order),
     paperCopies: order.paperCopies,
     paperCopyCount: order.paperCopyCount,
     vehicleId: order.vehicle.id,

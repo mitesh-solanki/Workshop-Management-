@@ -152,9 +152,8 @@ export async function saveInvoiceLineWarranty(
   if (!invoice) {
     throw new NotFoundError();
   }
-  if (invoice.status !== "DRAFT") {
-    throw new AppError("billing.invoice_immutable", 409);
-  }
+  // Warranty cards attach to vehicle history on draft or finalized bills.
+  // Money/lines stay immutable after finalize; this only stores card photo + expiry.
 
   const line = invoice.lines.find((item) => item.id === input.invoiceLineId);
   if (!line || line.type !== "PART") {
@@ -247,9 +246,6 @@ export async function createVehicleWarranty(
     const invoice = await findInvoiceById(session.garageId, input.invoiceId);
     if (!invoice) {
       throw new NotFoundError();
-    }
-    if (invoice.status !== "DRAFT") {
-      throw new AppError("billing.invoice_immutable", 409);
     }
   }
 

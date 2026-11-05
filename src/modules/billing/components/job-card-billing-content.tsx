@@ -1,4 +1,5 @@
 import { getLocale, getTranslations } from "next-intl/server";
+import { displayInvoiceNumber } from "@/lib/financial-year";
 import { formatRupees } from "@/lib/money";
 import {
   BillingInvoiceWorkspace,
@@ -127,11 +128,16 @@ export async function JobCardBillingContent({
       invoice.gstSplit === "CGST_SGST"
         ? t("gstSplit.CGST_SGST")
         : t("gstSplit.IGST");
+    const shownInvoiceNumber = displayInvoiceNumber({
+      invoiceNumber: invoice.invoiceNumber,
+      jobCardNumber,
+      at: invoice.finalizedAt ?? invoice.createdAt,
+    });
 
     return {
       id: invoice.id,
       status: invoice.status,
-      invoiceNumber: invoice.invoiceNumber,
+      invoiceNumber: shownInvoiceNumber,
       gstSplit: invoice.gstSplit,
       taxablePaise: invoice.taxablePaise,
       cgstPaise: invoice.cgstPaise,
@@ -191,7 +197,7 @@ export async function JobCardBillingContent({
           invoice.status === "FINALIZED"
             ? t("viewBillTitle")
             : t("previewTitle"),
-        invoiceNumber: invoice.invoiceNumber,
+        invoiceNumber: shownInvoiceNumber,
         issuedAtLabel: formatIssuedAt(
           invoice.finalizedAt ?? invoice.createdAt,
           locale,

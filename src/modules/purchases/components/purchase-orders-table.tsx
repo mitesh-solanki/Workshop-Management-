@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { Badge } from "@/components/ui/badge";
 import { DataTable, type ColumnDef } from "@/components/ui/data-table";
+import { formatRupees, type Paise } from "@/lib/money";
 import { cn } from "@/lib/utils";
 import { PurchaseOrderRowActions } from "@/modules/purchases/components/purchase-order-row-actions";
 import { PurchaseOrderSearch } from "@/modules/purchases/components/purchase-order-search";
@@ -35,9 +36,11 @@ export type PurchaseOrderTableRow = {
   status: string;
   createdAt: Date | string;
   vendor: { id: string; name: string } | null;
+  totalPaise: number;
   lines: {
     quantityOrdered: number;
     quantityReceived: number;
+    unitCostPaise?: number;
     part: { name: string };
   }[];
 };
@@ -166,6 +169,16 @@ export function PurchaseOrdersTable({
         ),
       },
       {
+        id: "total",
+        accessorFn: (row) => row.totalPaise,
+        header: t("columns.amount"),
+        cell: ({ row }) => (
+          <span className="font-medium tabular-nums text-foreground">
+            {formatRupees(row.original.totalPaise as Paise, locale)}
+          </span>
+        ),
+      },
+      {
         id: "lines",
         accessorFn: (row) => row.lines.length,
         header: t("columns.lines"),
@@ -201,7 +214,7 @@ export function PurchaseOrdersTable({
         cell: ({ row }) => <PurchaseOrderRowActions order={row.original} />,
       },
     ],
-    [t, dateFmt],
+    [t, dateFmt, locale],
   );
 
   return (
@@ -246,10 +259,15 @@ export function PurchaseOrdersTable({
               lines={order.lines}
               moreLabel={(count) => t("partsMore", { count })}
             />
-            <div className="flex justify-between text-sm text-muted-foreground">
-              <span>
+            <div className="flex justify-between gap-3 text-sm">
+              <span className="text-muted-foreground">
                 {received}/{ordered}
               </span>
+              <span className="font-medium tabular-nums text-foreground">
+                {formatRupees(order.totalPaise as Paise, locale)}
+              </span>
+            </div>
+            <div className="flex justify-end text-sm text-muted-foreground">
               <span>{dateFmt.format(new Date(order.createdAt))}</span>
             </div>
             <div className="flex justify-end">

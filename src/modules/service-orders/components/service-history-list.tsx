@@ -310,7 +310,7 @@ export function ServiceHistoryList({
                     </p>
                   )}
                   <p className="font-mono text-caption font-semibold text-foreground">
-                    {tj("jobCardNumber", { number: slip.jobCardNumber })}
+                    {slip.jobCardNumber}
                   </p>
                   <p className="text-caption text-muted-foreground">
                     {showRegistration

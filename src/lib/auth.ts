@@ -4,7 +4,7 @@ import type { Role } from "@prisma/client";
 import { z } from "zod";
 import {
   completeOtpSignIn,
-  completeProdPasswordSignIn,
+  completePasswordSignIn,
   getAuthAdapter,
   getUserForSessionRefresh,
 } from "@/modules/auth/service";
@@ -14,7 +14,7 @@ const credentialsSchema = z.object({
   code: z.string().min(4).max(12),
 });
 
-const prodPasswordSchema = z.object({
+const passwordSchema = z.object({
   email: z.string().email(),
   password: z.string().min(1).max(128),
   ip: z.string().optional(),
@@ -34,6 +34,42 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   },
   providers: [
     Credentials({
+      id: "password",
+      name: "Email password",
+      credentials: {
+        email: { label: "Email", type: "email" },
+        password: { label: "Password", type: "password" },
+      },
+      authorize: async (raw) => {
+        const parsed = passwordSchema.safeParse(raw);
+        if (!parsed.success) {
+          return null;
+        }
+
+        try {
+          const user = await completePasswordSignIn(
+            {
+              email: parsed.data.email,
+              password: parsed.data.password,
+            },
+            { ip: parsed.data.ip },
+          );
+          if (!user.isActive) {
+            return null;
+          }
+          return {
+            id: user.id,
+            email: user.email,
+            name: user.name,
+            garageId: user.garageId,
+            role: user.role,
+          };
+        } catch {
+          return null;
+        }
+      },
+    }),
+    Credentials({
       id: "email-otp",
       name: "Email OTP",
       credentials: {
@@ -48,6 +84,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
         try {
           const user = await completeOtpSignIn(parsed.data);
+          if (!user.isActive) {
+            return null;
+          }
           return {
             id: user.id,
             email: user.email,
@@ -60,6 +99,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         }
       },
     }),
+    // Alias kept so older clients/tests using prod-password still work.
     Credentials({
       id: "prod-password",
       name: "Production password",
@@ -68,19 +108,22 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         password: { label: "Password", type: "password" },
       },
       authorize: async (raw) => {
-        const parsed = prodPasswordSchema.safeParse(raw);
+        const parsed = passwordSchema.safeParse(raw);
         if (!parsed.success) {
           return null;
         }
 
         try {
-          const user = await completeProdPasswordSignIn(
+          const user = await completePasswordSignIn(
             {
               email: parsed.data.email,
               password: parsed.data.password,
             },
             { ip: parsed.data.ip },
           );
+          if (!user.isActive) {
+            return null;
+          }
           return {
             id: user.id,
             email: user.email,
@@ -111,8 +154,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       }
 
       const dbUser = await getUserForSessionRefresh(userId);
-      if (!dbUser) {
-        // User was removed (or no longer exists) — invalidate the JWT claims.
+      if (!dbUser || !dbUser.isActive) {
         delete token.userId;
         delete token.garageId;
         delete token.role;
@@ -134,7 +176,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         typeof token.garageId === "string" ? token.garageId : null;
       const role = token.role;
 
-      // Missing claims (including after a removed member) → requireSession sends them to login.
       if (session.user && userId && garageId && role) {
         session.user.id = userId;
         session.user.garageId = garageId;
@@ -149,4 +190,5 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       return session;
     },
   },
+  trustHost: true,
 });

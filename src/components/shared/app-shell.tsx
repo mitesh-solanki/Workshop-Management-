@@ -44,6 +44,7 @@ export function AppShell({
           <AppHeader
             appName={appName}
             garageName={garageName}
+            userName={userName}
             homeHref={homePathForRole(role)}
           />
           {/* Only this pane scrolls — header stays put; section navs sticky inside. */}

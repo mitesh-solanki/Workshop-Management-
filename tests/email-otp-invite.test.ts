@@ -233,6 +233,40 @@ describe("OTP email delivery", () => {
     expect(markEmailOtpConsumed).toHaveBeenCalledWith("otp-4");
   });
 
+  it("rejects OTP request when email rate limit is exceeded", async () => {
+    vi.mocked(consumeRateLimit).mockResolvedValueOnce({
+      allowed: false,
+      remaining: 0,
+      resetAt: new Date(Date.now() + 60_000),
+    });
+
+    await expect(
+      createEmailOtp({ email: "a@b.com", purpose: "login" }),
+    ).rejects.toMatchObject({ code: "auth.rate_limited" });
+    expect(createEmailOtpRow).not.toHaveBeenCalled();
+    expect(sendLoggedEmail).not.toHaveBeenCalled();
+  });
+
+  it("rejects when OTP is already at max attempts", async () => {
+    vi.mocked(findLatestEmailOtp).mockResolvedValue({
+      id: "otp-max",
+      email: "a@b.com",
+      codeHash: "hash:424242",
+      purpose: "login",
+      payload: null,
+      attempts: MAX_OTP_ATTEMPTS,
+      expiresAt: new Date(Date.now() + 60_000),
+      consumedAt: null,
+      createdAt: new Date(),
+    });
+
+    await expect(
+      consumeEmailOtp({ email: "a@b.com", code: "424242" }),
+    ).rejects.toMatchObject({ code: "auth.invalid_otp" });
+    expect(incrementEmailOtpAttempts).not.toHaveBeenCalled();
+    expect(markEmailOtpConsumed).not.toHaveBeenCalled();
+  });
+
   it("consumes a valid code once", async () => {
     vi.mocked(findLatestEmailOtp).mockResolvedValue({
       id: "otp-5",

@@ -266,7 +266,7 @@ export async function listVendorsForSelect(garageId: string) {
   return prisma.vendor.findMany({
     where: { garageId },
     orderBy: { name: "asc" },
-    select: { id: true, name: true },
+    select: { id: true, name: true, gstin: true },
   });
 }
 

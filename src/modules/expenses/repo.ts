@@ -15,8 +15,18 @@ const expenseSelect = {
   method: true,
   category: true,
   note: true,
+  vendorId: true,
+  gstSplit: true,
+  gstRatePercent: true,
+  billStorageKey: true,
+  billContentType: true,
+  billFileName: true,
+  billByteSize: true,
   createdAt: true,
   updatedAt: true,
+  vendor: {
+    select: { id: true, name: true, gstin: true },
+  },
 } as const;
 
 function expenseOrderBy(
@@ -52,11 +62,13 @@ export async function searchExpenses(
       : {}),
     ...(q
       ? {
-          OR: [
-            { note: { contains: q, mode: "insensitive" } },
-            { category: { contains: q, mode: "insensitive" } },
-          ],
-        }
+        OR: [
+          { note: { contains: q, mode: "insensitive" } },
+          { category: { contains: q, mode: "insensitive" } },
+          { vendor: { name: { contains: q, mode: "insensitive" } } },
+          { vendor: { gstin: { contains: q, mode: "insensitive" } } },
+        ],
+      }
       : {}),
   };
 
@@ -101,6 +113,9 @@ export async function createExpense(
     method: PaymentMethod | null;
     category: string;
     note: string | null;
+    vendorId: string | null;
+    gstSplit: "CGST_SGST" | "IGST";
+    gstRatePercent: number;
     recordedById: string;
   },
 ) {
@@ -113,6 +128,9 @@ export async function createExpense(
       method: input.method,
       category: input.category,
       note: input.note,
+      vendorId: input.vendorId,
+      gstSplit: input.gstSplit,
+      gstRatePercent: input.gstRatePercent,
       recordedById: input.recordedById,
     },
     select: expenseSelect,
@@ -129,6 +147,10 @@ export async function updateExpenseById(
     method: PaymentMethod | null;
     category: string;
     note: string | null;
+    vendorId: string | null;
+    gstSplit: "CGST_SGST" | "IGST";
+    gstRatePercent: number;
+    clearBill?: boolean;
   },
 ) {
   const existing = await findExpenseById(garageId, expenseId);
@@ -143,9 +165,64 @@ export async function updateExpenseById(
       method: input.method,
       category: input.category,
       note: input.note,
+      vendorId: input.vendorId,
+      gstSplit: input.gstSplit,
+      gstRatePercent: input.gstRatePercent,
+      ...(input.clearBill
+        ? {
+          billStorageKey: null,
+          billContentType: null,
+          billFileName: null,
+          billByteSize: null,
+        }
+        : {}),
     },
     select: expenseSelect,
   });
+}
+
+export async function setExpenseBill(
+  garageId: string,
+  input: {
+    expenseId: string;
+    storageKey: string;
+    contentType: string;
+    fileName: string | null;
+    byteSize: number;
+    actorId: string;
+  },
+) {
+  const existing = await findExpenseById(garageId, input.expenseId);
+  if (!existing) return null;
+
+  const previousStorageKey = existing.billStorageKey;
+  const expense = await prisma.expense.update({
+    where: { id: input.expenseId },
+    data: {
+      billStorageKey: input.storageKey,
+      billContentType: input.contentType,
+      billFileName: input.fileName,
+      billByteSize: input.byteSize,
+    },
+    select: expenseSelect,
+  });
+
+  await prisma.auditLog.create({
+    data: {
+      garageId,
+      actorId: input.actorId,
+      action: "expense.bill_uploaded",
+      entity: "Expense",
+      entityId: expense.id,
+      meta: {
+        billFileName: input.fileName,
+        billByteSize: input.byteSize,
+        billContentType: input.contentType,
+      },
+    },
+  });
+
+  return { expense, previousStorageKey };
 }
 
 export async function markExpensePaidById(

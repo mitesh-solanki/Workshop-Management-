@@ -496,6 +496,7 @@ export type PartsPickerPageResult = {
     sku: string;
     unit: string;
     sellingPricePaise: number;
+    gstRatePercent: number;
     quantityOnHand: number;
   }>;
   nextOffset: number;
@@ -545,6 +546,7 @@ export async function createPartByNameAction(name: string): Promise<{
         sku: part.sku,
         unit: part.unit,
         sellingPricePaise: 0,
+        gstRatePercent: part.gstRatePercent,
         quantityOnHand: 0,
       },
     };

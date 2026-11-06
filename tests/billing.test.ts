@@ -339,14 +339,44 @@ describe("resolveInvoiceEditLineTax", () => {
     ).toEqual({ gstRatePercent: 28, hsnOrSac: "4011" });
   });
 
-  it("keeps the existing bill codes when there is no linked part", () => {
+  it("uses inventory part GST over a stale form rate when editing", () => {
+    expect(
+      resolveInvoiceEditLineTax({
+        type: "PART",
+        gstRatePercent: 18,
+        existing: { gstRatePercent: 18, hsnOrSac: "87089900" },
+        part: { gstRatePercent: 12, hsn: "8708" },
+      }),
+    ).toEqual({ gstRatePercent: 12, hsnOrSac: "8708" });
+  });
+
+  it("keeps the existing SAC for labour but forces 0% GST", () => {
     expect(
       resolveInvoiceEditLineTax({
         type: "LABOUR",
         existing: { gstRatePercent: 18, hsnOrSac: "998714" },
         part: null,
       }),
-    ).toEqual({ gstRatePercent: 18, hsnOrSac: "998714" });
+    ).toEqual({ gstRatePercent: 0, hsnOrSac: "998714" });
+  });
+
+  it("uses outside work GST rate like parts when a rate is passed", () => {
+    expect(
+      resolveInvoiceEditLineTax({
+        type: "OUTSIDE",
+        gstRatePercent: 18,
+        existing: { gstRatePercent: 5, hsnOrSac: "9987" },
+      }),
+    ).toEqual({ gstRatePercent: 18, hsnOrSac: "9987" });
+  });
+
+  it("keeps existing outside work GST when the form omits a rate", () => {
+    expect(
+      resolveInvoiceEditLineTax({
+        type: "OUTSIDE",
+        existing: { gstRatePercent: 12, hsnOrSac: "9987" },
+      }),
+    ).toEqual({ gstRatePercent: 12, hsnOrSac: "9987" });
   });
 });
 

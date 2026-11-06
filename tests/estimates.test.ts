@@ -125,6 +125,14 @@ function sampleOrder(
         unitPricePaise: 50_000,
         partId: null,
         part: null,
+        vendorId: null,
+        vendor: null,
+        gstSplit: null,
+        gstRatePercent: null,
+        billStorageKey: null,
+        billContentType: null,
+        billFileName: null,
+        billByteSize: null,
         sortOrder: 0,
         createdAt: new Date(),
         updatedAt: new Date(),
@@ -139,6 +147,14 @@ function sampleOrder(
         unitPricePaise: 99_900,
         partId: null,
         part: null,
+        vendorId: null,
+        vendor: null,
+        gstSplit: null,
+        gstRatePercent: null,
+        billStorageKey: null,
+        billContentType: null,
+        billFileName: null,
+        billByteSize: null,
         sortOrder: 1,
         createdAt: new Date(),
         updatedAt: new Date(),
@@ -254,7 +270,7 @@ describe("estimates service", () => {
 
   it("creates an estimate from job-card labour and parts lines only", async () => {
     const order = sampleOrder();
-    vi.mocked(findServiceOrderById).mockResolvedValue(order);
+    vi.mocked(findServiceOrderById).mockResolvedValue(order as never);
     vi.mocked(findCurrentEstimate).mockResolvedValue(null);
     vi.mocked(createEstimateWithLines).mockResolvedValue({
       id: "est-1",
@@ -334,7 +350,7 @@ describe("estimates service", () => {
         unitPricePaise: 0,
       },
     ];
-    vi.mocked(findServiceOrderById).mockResolvedValue(order);
+    vi.mocked(findServiceOrderById).mockResolvedValue(order as never);
     vi.mocked(findCurrentEstimate).mockResolvedValue(null);
 
     await expect(createEstimateFromSources(ownerA, order.id)).rejects.toMatchObject({
@@ -345,7 +361,7 @@ describe("estimates service", () => {
 
   it("keeps lines pending when customer permission is required", async () => {
     const order = sampleOrder();
-    vi.mocked(findServiceOrderById).mockResolvedValue(order);
+    vi.mocked(findServiceOrderById).mockResolvedValue(order as never);
     vi.mocked(findCurrentEstimate).mockResolvedValue(null);
     vi.mocked(createEstimateWithLines).mockResolvedValue({
       id: "est-1",
@@ -404,7 +420,7 @@ describe("estimates service", () => {
   });
 
   it("blocks accountants from creating estimates", async () => {
-    vi.mocked(findServiceOrderById).mockResolvedValue(sampleOrder());
+    vi.mocked(findServiceOrderById).mockResolvedValue(sampleOrder() as never);
     await expect(
       createEstimateFromSources(accountantA, "order-1"),
     ).rejects.toBeInstanceOf(ForbiddenError);
@@ -436,7 +452,7 @@ describe("estimates service", () => {
         revisionNumber: 1,
       },
     });
-    vi.mocked(findServiceOrderById).mockResolvedValue(order);
+    vi.mocked(findServiceOrderById).mockResolvedValue(order as never);
     vi.mocked(recordLineApproval).mockResolvedValue({
       ok: true,
       line: {
@@ -519,7 +535,7 @@ describe("estimates service", () => {
         revisionNumber: 1,
       },
     });
-    vi.mocked(findServiceOrderById).mockResolvedValue(order);
+    vi.mocked(findServiceOrderById).mockResolvedValue(order as never);
     vi.mocked(recordLineApproval).mockResolvedValue({
       ok: false,
       reason: "INSUFFICIENT_STOCK",
@@ -572,7 +588,7 @@ describe("estimates service", () => {
       approvals: [],
     };
 
-    vi.mocked(findServiceOrderById).mockResolvedValue(order);
+    vi.mocked(findServiceOrderById).mockResolvedValue(order as never);
     vi.mocked(findCurrentEstimate).mockResolvedValue(current);
     vi.mocked(findInspectionByServiceOrderId).mockResolvedValue(null);
     vi.mocked(createEstimateWithLines).mockResolvedValue({
@@ -627,7 +643,7 @@ describe("estimates service", () => {
       createdAt: new Date(),
       updatedAt: new Date(),
     };
-    vi.mocked(findServiceOrderById).mockResolvedValue(order);
+    vi.mocked(findServiceOrderById).mockResolvedValue(order as never);
     vi.mocked(findCurrentEstimate).mockResolvedValue({
       id: "est-1",
       garageId: garageA,
@@ -661,7 +677,7 @@ describe("estimates service", () => {
 
   it("does not add estimate lines for new job-card parts or labour", async () => {
     const order = sampleOrder({ status: "IN_PROGRESS" });
-    vi.mocked(findServiceOrderById).mockResolvedValue(order);
+    vi.mocked(findServiceOrderById).mockResolvedValue(order as never);
     vi.mocked(findCurrentEstimate).mockResolvedValue({
       id: "est-1",
       garageId: garageA,
@@ -695,7 +711,7 @@ describe("estimates service", () => {
 
   it("does not change the estimate when job-card outside work is added", async () => {
     const order = sampleOrder({ status: "IN_PROGRESS" });
-    vi.mocked(findServiceOrderById).mockResolvedValue(order);
+    vi.mocked(findServiceOrderById).mockResolvedValue(order as never);
     vi.mocked(findCurrentEstimate).mockResolvedValue({
       id: "est-1",
       garageId: garageA,
@@ -736,7 +752,7 @@ describe("estimates service", () => {
   it("requires sources before creating the first estimate", async () => {
     const order = sampleOrder();
     order.lines = [];
-    vi.mocked(findServiceOrderById).mockResolvedValue(order);
+    vi.mocked(findServiceOrderById).mockResolvedValue(order as never);
     vi.mocked(findCurrentEstimate).mockResolvedValue(null);
     vi.mocked(findInspectionByServiceOrderId).mockResolvedValue(null);
 

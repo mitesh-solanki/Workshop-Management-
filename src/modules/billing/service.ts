@@ -33,7 +33,6 @@ import {
   type DeleteInvoiceInput,
   type FinalizeInvoiceInput,
   type InvoiceLineTypeValue,
-  defaultInvoiceHsnOrSac,
   isBillableOrderLineType,
   resolveInvoiceEditLineTax,
   deletePaymentSchema,
@@ -253,10 +252,6 @@ function draftMatchesExpectedOrderLines(
   });
 }
 
-function defaultHsnOrSacForType(type: string) {
-  return defaultInvoiceHsnOrSac(type);
-}
-
 function billableOrderLineSnapshots(order: {
   lines: Array<{
     id: string;
@@ -264,6 +259,7 @@ function billableOrderLineSnapshots(order: {
     description: string;
     quantity: number;
     unitPricePaise: number;
+    gstRatePercent?: number | null;
     part?: { gstRatePercent?: number | null; hsn?: string | null } | null;
   }>;
 }) {
@@ -276,20 +272,22 @@ function billableOrderLineSnapshots(order: {
     )
     .map((line) => {
       const part = line.part ?? null;
+      const tax = resolveInvoiceEditLineTax({
+        type: line.type,
+        gstRatePercent:
+          line.type === "OUTSIDE"
+            ? (line.gstRatePercent ?? 0)
+            : undefined,
+        part,
+      });
       return {
         estimateLineId: null as string | null,
         type: line.type as InvoiceLineTypeValue,
         description: line.description,
         quantity: line.quantity,
         unitPricePaise: line.unitPricePaise,
-        gstRatePercent:
-          part && typeof part.gstRatePercent === "number"
-            ? part.gstRatePercent
-            : 18,
-        hsnOrSac:
-          part && typeof part.hsn === "string" && part.hsn.trim()
-            ? part.hsn.trim()
-            : defaultHsnOrSacForType(line.type),
+        gstRatePercent: tax.gstRatePercent,
+        hsnOrSac: tax.hsnOrSac,
       };
     });
 }
@@ -297,6 +295,7 @@ function billableOrderLineSnapshots(order: {
 /**
  * One bill per job: return the existing bill if any.
  * Does not auto-create after delete — empty billing shows Create Draft explicitly.
+ * Draft labour lines with leftover GST are rewritten to 0% on load.
  */
 export async function ensureDraftInvoiceInSync(
   session: RoleSession,
@@ -309,7 +308,39 @@ export async function ensureDraftInvoiceInSync(
     return null;
   }
   const draft = invoices.find((invoice) => invoice.status === "DRAFT");
-  return withBalance(draft ?? invoices[0]!);
+  if (!draft) {
+    return withBalance(invoices[0]!);
+  }
+
+  const needsLabourGstStrip = draft.lines.some(
+    (line) => line.type === "LABOUR" && line.gstRatePercent !== 0,
+  );
+  if (!needsLabourGstStrip) {
+    return withBalance(draft);
+  }
+
+  const snapshots = draft.lines.map((line) => {
+    const tax = resolveInvoiceEditLineTax({
+      type: line.type,
+      gstRatePercent:
+        line.type === "OUTSIDE" ? line.gstRatePercent : undefined,
+      existing: {
+        gstRatePercent: line.gstRatePercent,
+        hsnOrSac: line.hsnOrSac,
+      },
+    });
+    return {
+      estimateLineId: line.estimateLineId,
+      type: line.type as InvoiceLineTypeValue,
+      description: line.description,
+      quantity: line.quantity,
+      unitPricePaise: line.unitPricePaise,
+      gstRatePercent: tax.gstRatePercent,
+      hsnOrSac: tax.hsnOrSac,
+    };
+  });
+
+  return replaceInvoiceLinesFromSnapshots(session, draft, snapshots);
 }
 
 /**
@@ -598,8 +629,11 @@ async function syncJobCardFromInvoiceLines(
     quantity: number;
     unitPricePaise: number;
     partId?: string | null;
+    vendorId?: string | null;
+    gstSplit?: "CGST_SGST" | "IGST" | null;
+    gstRatePercent?: number | null;
   }>,
-) {
+): Promise<Array<{ orderLineId: string; type: InvoiceLineTypeValue; index: number }>> {
   const order = await loadOrder(session, serviceOrderId);
   const pool = order.lines
     .filter((line) => isBillableOrderLineType(line.type))
@@ -610,6 +644,9 @@ async function syncJobCardFromInvoiceLines(
       quantity: line.quantity,
       unitPricePaise: line.unitPricePaise,
       partId: line.partId ?? null,
+      vendorId: line.vendorId ?? null,
+      gstSplit: line.gstSplit ?? null,
+      gstRatePercent: line.gstRatePercent ?? null,
       claimed: false,
     }));
 
@@ -623,13 +660,39 @@ async function syncJobCardFromInvoiceLines(
     return hit.id;
   });
 
+  const synced: Array<{
+    orderLineId: string;
+    type: InvoiceLineTypeValue;
+    index: number;
+  }> = [];
+
   for (let index = 0; index < next.length; index += 1) {
     const line = next[index]!;
     const matchedId = matchedIds[index] ?? null;
     const nextPartId =
       line.type === "PART" ? (line.partId ?? null) : null;
+    const matchedExisting = matchedId
+      ? pool.find((row) => row.id === matchedId)
+      : undefined;
+    // Full outside edit from the bill includes vendorId. Stale bill lines without
+    // vendor must not wipe GST already saved on the job-card Outside Work row.
+    const outsidePatch =
+      line.type === "OUTSIDE" && line.vendorId
+        ? {
+            vendorId: line.vendorId,
+            gstSplit: line.gstSplit ?? matchedExisting?.gstSplit ?? null,
+            gstRatePercent:
+              line.gstRatePercent ?? matchedExisting?.gstRatePercent ?? null,
+          }
+        : line.type === "OUTSIDE"
+          ? {
+              vendorId: matchedExisting?.vendorId ?? null,
+              gstSplit: matchedExisting?.gstSplit ?? null,
+              gstRatePercent: matchedExisting?.gstRatePercent ?? null,
+            }
+          : {};
     if (matchedId) {
-      const existing = pool.find((row) => row.id === matchedId);
+      const existing = matchedExisting;
       const updated = await updateServiceOrderLine(session.garageId, {
         lineId: matchedId,
         serviceOrderId,
@@ -639,6 +702,7 @@ async function syncJobCardFromInvoiceLines(
         ...(line.type === "PART"
           ? { partId: nextPartId ?? existing?.partId ?? null }
           : {}),
+        ...outsidePatch,
         actorId: session.userId,
       });
       if (!updated.ok) {
@@ -647,8 +711,12 @@ async function syncJobCardFromInvoiceLines(
             partName: updated.partName ?? "",
           });
         }
+        if (updated.reason === "VENDOR_NOT_FOUND") {
+          throw new AppError("vendors.not_found");
+        }
         throw new NotFoundError();
       }
+      synced.push({ orderLineId: matchedId, type: line.type, index });
       continue;
     }
 
@@ -659,6 +727,7 @@ async function syncJobCardFromInvoiceLines(
       quantity: line.type === "PART" ? line.quantity : 1,
       unitPricePaise: line.unitPricePaise,
       partId: nextPartId,
+      ...outsidePatch,
       actorId: session.userId,
     });
     if (!created.ok) {
@@ -667,9 +736,15 @@ async function syncJobCardFromInvoiceLines(
           partName: created.partName ?? "",
         });
       }
+      if (created.reason === "VENDOR_NOT_FOUND") {
+        throw new AppError("vendors.not_found");
+      }
       throw new NotFoundError();
     }
+    synced.push({ orderLineId: created.line.id, type: line.type, index });
   }
+
+  return synced;
 }
 
 async function replaceInvoiceLinesFromSnapshots(
@@ -837,9 +912,15 @@ export async function updateInvoiceLines(
       orderLine.claimed = true;
     }
 
+    const outsideGstFromOrder =
+      line.type === "OUTSIDE" &&
+      orderLine &&
+      typeof orderLine.gstRatePercent === "number"
+        ? orderLine.gstRatePercent
+        : undefined;
     const tax = resolveInvoiceEditLineTax({
       type: line.type,
-      gstRatePercent: line.gstRatePercent,
+      gstRatePercent: line.gstRatePercent ?? outsideGstFromOrder,
       hsnOrSac: line.hsnOrSac,
       existing: existing
         ? {
@@ -859,17 +940,23 @@ export async function updateInvoiceLines(
       gstRatePercent: tax.gstRatePercent,
       hsnOrSac: tax.hsnOrSac,
       partId: line.type === "PART" ? (line.partId ?? null) : null,
+      vendorId: line.type === "OUTSIDE" ? (line.vendorId ?? null) : null,
+      gstSplit:
+        line.type === "OUTSIDE" ? (line.gstSplit ?? null) : null,
     };
   });
 
   const updated = await replaceInvoiceLinesFromSnapshots(
     session,
     invoice,
-    snapshots.map(({ partId: _partId, ...line }) => line),
+    snapshots.map(
+      ({ partId: _partId, vendorId: _vendorId, gstSplit: _gstSplit, ...line }) =>
+        line,
+    ),
     input.notes === undefined ? undefined : input.notes,
   );
 
-  await syncJobCardFromInvoiceLines(
+  const syncedOrderLines = await syncJobCardFromInvoiceLines(
     session,
     invoice.serviceOrderId,
     previous,
@@ -879,10 +966,16 @@ export async function updateInvoiceLines(
       quantity: line.quantity,
       unitPricePaise: line.unitPricePaise,
       partId: line.partId,
+      vendorId: line.vendorId,
+      gstSplit: line.gstSplit,
+      gstRatePercent: line.gstRatePercent,
     })),
   );
 
-  return updated;
+  return {
+    ...updated,
+    syncedOrderLines,
+  };
 }
 
 /** Rebuild the job's single bill from current priced labour / parts / outside work. */

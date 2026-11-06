@@ -67,6 +67,10 @@ type DataTableProps<TData, TValue = unknown> = {
    * When set, table is `hidden md:block` and cards show on small screens.
    */
   renderMobileCard?: (row: Row<TData>) => React.ReactNode;
+  /** Table width follows columns instead of stretching to 100%. */
+  fitContent?: boolean;
+  /** Extra classes on the `<table>` element (e.g. `table-fixed`). */
+  tableClassName?: string;
 };
 
 /**
@@ -83,6 +87,8 @@ function DataTable<TData, TValue = unknown>({
   defaultPageSize = DEFAULT_PAGE_SIZE,
   getRowHref,
   renderMobileCard,
+  fitContent = false,
+  tableClassName,
 }: DataTableProps<TData, TValue>) {
   const t = useTranslations("table");
   const router = useRouter();
@@ -179,6 +185,7 @@ function DataTable<TData, TValue = unknown>({
     <div
       className={cn(
         "overflow-hidden rounded-xl border border-border bg-card shadow-sm",
+        fitContent && "w-full max-w-full md:w-fit",
         className,
       )}
     >
@@ -234,7 +241,9 @@ function DataTable<TData, TValue = unknown>({
           ) : null}
 
           <div className={cn(renderMobileCard && "hidden md:block")}>
-            <Table>
+            <Table
+              className={cn(fitContent && "w-auto", tableClassName)}
+            >
               <TableHeader className="bg-muted/60">
                 {table.getHeaderGroups().map((headerGroup) => (
                   <TableRow

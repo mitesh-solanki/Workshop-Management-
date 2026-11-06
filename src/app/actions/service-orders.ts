@@ -7,10 +7,13 @@ import { getTranslations } from "next-intl/server";
 import {
   addOrderLine,
   changeOrderStatus,
+  confirmOutsideWorkBill,
   confirmPaperCopyUpload,
   createOrder,
+  createOutsideWorkBillUploadUrl,
   createPaperCopyUploadUrl,
   deleteOrder,
+  getOutsideWorkBillDownloadUrl,
   getSuggestedExpectedCompletionForVehicle,
   listPaperCopies,
   removeOrderLine,
@@ -25,6 +28,7 @@ export type ServiceOrderActionState = {
   ok: boolean;
   message?: string;
   orderId?: string;
+  lineId?: string;
 };
 
 function parseTechnicianIds(formData: FormData): string[] {
@@ -198,15 +202,23 @@ export async function addServiceOrderLineAction(
 ): Promise<ServiceOrderActionState> {
   try {
     const session = await requireSession();
-    await addOrderLine(session, orderId, {
+    const gstSplitRaw = String(formData.get("gstSplit") ?? "");
+    const gstRateRaw = String(formData.get("gstRatePercent") ?? "");
+    const line = await addOrderLine(session, orderId, {
       type: String(formData.get("type") ?? "") as "LABOUR" | "PART" | "OUTSIDE",
       description: String(formData.get("description") ?? ""),
       quantity: String(formData.get("quantity") ?? "1"),
       unitPricePaise: String(formData.get("unitPriceRupees") ?? "0"),
       partId: String(formData.get("partId") ?? ""),
+      vendorId: String(formData.get("vendorId") ?? ""),
+      gstSplit:
+        gstSplitRaw === "IGST" || gstSplitRaw === "CGST_SGST"
+          ? gstSplitRaw
+          : "",
+      gstRatePercent: gstRateRaw,
     });
     revalidatePath(`/orders/${orderId}`);
-    return { ok: true, message: "lineAdded" };
+    return { ok: true, message: "lineAdded", lineId: line.id };
   } catch (error) {
     return {
       ok: false,
@@ -224,11 +236,20 @@ export async function updateServiceOrderLineAction(
   const t = await getTranslations("orders");
   try {
     const session = await requireSession();
+    const gstSplitRaw = String(formData.get("gstSplit") ?? "");
+    const gstRateRaw = String(formData.get("gstRatePercent") ?? "");
     await updateOrderLine(session, orderId, lineId, {
       description: String(formData.get("description") ?? ""),
       quantity: String(formData.get("quantity") ?? "1"),
       unitPricePaise: String(formData.get("unitPriceRupees") ?? "0"),
       partId: String(formData.get("partId") ?? ""),
+      vendorId: String(formData.get("vendorId") ?? ""),
+      gstSplit:
+        gstSplitRaw === "IGST" || gstSplitRaw === "CGST_SGST"
+          ? gstSplitRaw
+          : undefined,
+      gstRatePercent: gstRateRaw === "" ? undefined : gstRateRaw,
+      clearBill: String(formData.get("clearBill") ?? "") === "1",
     });
     revalidatePath(`/orders/${orderId}`);
     return { ok: true, message: t("lineUpdated") };
@@ -403,6 +424,65 @@ export async function getSuggestedExpectedCompletionAction(
       vehicleId,
     );
     return { ok: true, suggestion };
+  } catch (error) {
+    return { ok: false, message: await translateError(error) };
+  }
+}
+
+export async function requestOutsideWorkBillUploadUrlAction(input: {
+  serviceOrderId: string;
+  lineId: string;
+  contentType: string;
+  byteSize: number;
+  fileName?: string;
+}) {
+  try {
+    const session = await requireSession();
+    return await createOutsideWorkBillUploadUrl(session, input);
+  } catch (error) {
+    throw new Error(await translateError(error));
+  }
+}
+
+export async function confirmOutsideWorkBillAction(input: {
+  serviceOrderId: string;
+  lineId: string;
+  storageKey: string;
+  contentType: string;
+  byteSize: number;
+  fileName?: string | null;
+}): Promise<ServiceOrderActionState> {
+  const t = await getTranslations("orders");
+  try {
+    const session = await requireSession();
+    await confirmOutsideWorkBill(session, {
+      ...input,
+      fileName: input.fileName ?? undefined,
+    });
+    revalidatePath(`/orders/${input.serviceOrderId}`);
+    return {
+      ok: true,
+      message: t("outsideWorkBillUploaded"),
+      orderId: input.serviceOrderId,
+      lineId: input.lineId,
+    };
+  } catch (error) {
+    return { ok: false, message: await translateError(error) };
+  }
+}
+
+export async function getOutsideWorkBillDownloadUrlAction(
+  serviceOrderId: string,
+  lineId: string,
+): Promise<{ ok: true; url: string } | { ok: false; message: string }> {
+  try {
+    const session = await requireSession();
+    const url = await getOutsideWorkBillDownloadUrl(
+      session,
+      serviceOrderId,
+      lineId,
+    );
+    return { ok: true, url };
   } catch (error) {
     return { ok: false, message: await translateError(error) };
   }

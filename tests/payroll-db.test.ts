@@ -8,9 +8,11 @@ import type { RoleSession } from "@/lib/rbac";
 import {
   createPayrollRun,
   generateMonthPayroll,
+  getMyPayLine,
   getPayrollManagement,
   getPayrollRunForGarage,
   giveAdvance,
+  listMyPay,
   markPayrollLinePaid,
   savePayProfile,
   updatePayrollLine,
@@ -182,5 +184,105 @@ describe("payroll against Postgres", () => {
     expect(
       refreshed.lines.filter((l) => l.userId === techId),
     ).toHaveLength(1);
+  });
+
+  it("lets a technician view only their own pay lines", async () => {
+    if (!ready) {
+      expect.fail(
+        "Postgres not reachable — start docker compose and set DATABASE_URL",
+      );
+    }
+
+    const otherTech = await prisma.user.create({
+      data: {
+        email: `payroll-tech-b-${suffix}@example.com`,
+        name: "Other Tech",
+        role: "TECHNICIAN",
+        garageId,
+      },
+      select: { id: true },
+    });
+
+    await savePayProfile(ownerSession(), {
+      userId: otherTech.id,
+      basicRupees: "15000",
+      payMode: "FULL_BASIC",
+    });
+
+    const run = await createPayrollRun(ownerSession(), {
+      periodStart: "2026-10-01",
+      periodEnd: "2026-10-31",
+      lines: [
+        { userId: techId, basicRupees: "18000" },
+        { userId: otherTech.id, basicRupees: "15000" },
+      ],
+    });
+
+    const ownLine = run.lines.find((l) => l.userId === techId);
+    const otherLine = run.lines.find((l) => l.userId === otherTech.id);
+    expect(ownLine).toBeTruthy();
+    expect(otherLine).toBeTruthy();
+
+    const techSession = (): RoleSession => ({
+      userId: techId,
+      garageId,
+      role: "TECHNICIAN",
+    });
+
+    await expect(
+      getMyPayLine(techSession(), ownLine!.id),
+    ).rejects.toBeInstanceOf(AppError);
+
+    await markPayrollLinePaid(ownerSession(), {
+      lineId: ownLine!.id,
+      method: "CASH",
+    });
+
+    const mine = await listMyPay(techSession());
+    expect(mine.lines.every((l) => l.status === "PAID")).toBe(true);
+    expect(mine.lines.some((l) => l.id === ownLine!.id)).toBe(true);
+    expect(mine.lines.some((l) => l.id === otherLine!.id)).toBe(false);
+
+    const detail = await getMyPayLine(techSession(), ownLine!.id);
+    expect(detail.id).toBe(ownLine!.id);
+    expect(detail.basicPaise).toBe(1_800_000);
+    expect(detail.status).toBe("PAID");
+
+    await expect(
+      getMyPayLine(techSession(), otherLine!.id),
+    ).rejects.toBeInstanceOf(AppError);
+
+    await expect(listMyPay(ownerSession())).rejects.toBeInstanceOf(
+      ForbiddenError,
+    );
+
+    const otherGarageTech = await prisma.user.create({
+      data: {
+        email: `payroll-tech-other-${suffix}@example.com`,
+        name: "Other Garage Tech",
+        role: "TECHNICIAN",
+        garageId: otherGarageId,
+      },
+      select: { id: true },
+    });
+
+    await expect(
+      listMyPay({
+        userId: otherGarageTech.id,
+        garageId: otherGarageId,
+        role: "TECHNICIAN",
+      }),
+    ).resolves.toEqual({ lines: [] });
+
+    await expect(
+      getMyPayLine(
+        {
+          userId: otherGarageTech.id,
+          garageId: otherGarageId,
+          role: "TECHNICIAN",
+        },
+        ownLine!.id,
+      ),
+    ).rejects.toBeInstanceOf(AppError);
   });
 });

@@ -12,6 +12,7 @@ import { requireSession } from "@/lib/session";
 import { AdvancesTable } from "@/modules/payroll/components/advances-table";
 import { BonusesTable } from "@/modules/payroll/components/bonuses-table";
 import { MoneyEntryModal } from "@/modules/payroll/components/money-entry-modal";
+import { PayrollAdvanceReminder } from "@/modules/payroll/components/payroll-advance-reminder";
 import { PayrollManagement } from "@/modules/payroll/components/payroll-management";
 import { currentYearMonth } from "@/modules/payroll/date";
 import {
@@ -73,24 +74,44 @@ export default async function PayrollPage({ searchParams }: Props) {
   let bonusesData: Awaited<ReturnType<typeof listPayrollBonuses>> | null = null;
   let advancesData: Awaited<ReturnType<typeof listPayrollAdvances>> | null =
     null;
+  let pendingAdvanceReminders: Awaited<
+    ReturnType<typeof getPayrollManagement>
+  >["pendingAdvanceReminders"] = [];
   let forbidden = false;
 
   try {
     if (tab === "bonuses") {
-      bonusesData = await listPayrollBonuses(session, {
-        yearMonth: addMonth,
-        memberId,
-      });
+      const [bonuses, reminderSource] = await Promise.all([
+        listPayrollBonuses(session, {
+          yearMonth: addMonth,
+          memberId,
+        }),
+        getPayrollManagement(session, {
+          yearMonth: addMonth,
+          status: "ALL",
+        }),
+      ]);
+      bonusesData = bonuses;
+      pendingAdvanceReminders = reminderSource.pendingAdvanceReminders;
     } else if (tab === "advances") {
-      advancesData = await listPayrollAdvances(session, {
-        yearMonth: addMonth,
-        memberId,
-      });
+      const [advances, reminderSource] = await Promise.all([
+        listPayrollAdvances(session, {
+          yearMonth: addMonth,
+          memberId,
+        }),
+        getPayrollManagement(session, {
+          yearMonth: addMonth,
+          status: "ALL",
+        }),
+      ]);
+      advancesData = advances;
+      pendingAdvanceReminders = reminderSource.pendingAdvanceReminders;
     } else {
       payrollData = await getPayrollManagement(session, {
         yearMonth,
         status,
       });
+      pendingAdvanceReminders = payrollData.pendingAdvanceReminders;
     }
   } catch (e) {
     if (e instanceof ForbiddenError) {
@@ -132,6 +153,8 @@ export default async function PayrollPage({ searchParams }: Props) {
         ? t("advancesSubtitle")
         : t("subtitleSalary");
 
+  const reminderYearMonth = yearMonth === "all" ? addMonth : yearMonth;
+
   return (
     <main className="space-y-6 sm:space-y-8">
       <PageHeader
@@ -159,6 +182,10 @@ export default async function PayrollPage({ searchParams }: Props) {
             </Button>
           </div>
         }
+      />
+      <PayrollAdvanceReminder
+        items={pendingAdvanceReminders}
+        yearMonth={reminderYearMonth}
       />
       <Suspense fallback={<TableSpinner />}>
         {tab === "bonuses" && bonusesData ? (

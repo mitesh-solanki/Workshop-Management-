@@ -35,7 +35,7 @@ function PaymentStatusBadge({
       ? "success"
       : paymentStatus === "OVERDUE"
         ? "danger"
-        : paymentStatus === "DUE"
+        : paymentStatus === "DUE" || paymentStatus === "PARTIAL"
           ? "warning"
           : "secondary";
 
@@ -86,13 +86,33 @@ export function InvoicesTable({
         id: "date",
         accessorFn: (row) => row.finalizedAt ?? row.createdAt,
         header: t("columns.date"),
-        cell: ({ row }) => (
-          <span className="text-muted-foreground">
-            {dateFmt.format(
-              new Date(row.original.finalizedAt ?? row.original.createdAt),
-            )}
-          </span>
-        ),
+        cell: ({ row }) => {
+          const invoice = row.original;
+          const unpaid =
+            invoice.status === "FINALIZED" && invoice.pendingBalancePaise > 0;
+          return (
+            <div className="min-w-0">
+              <p className="whitespace-nowrap text-muted-foreground">
+                {dateFmt.format(
+                  new Date(invoice.finalizedAt ?? invoice.createdAt),
+                )}
+              </p>
+              {unpaid ? (
+                <p
+                  className={
+                    invoice.paymentStatus === "OVERDUE"
+                      ? "text-caption font-medium text-amber-700"
+                      : "text-caption text-muted-foreground"
+                  }
+                >
+                  {invoice.paymentStatus === "OVERDUE"
+                    ? t("pastDueHint")
+                    : t("payWithinDays", { days: 7 })}
+                </p>
+              ) : null}
+            </div>
+          );
+        },
       },
       {
         accessorKey: "customerName",
@@ -292,6 +312,20 @@ export function InvoicesTable({
                     new Date(invoice.finalizedAt ?? invoice.createdAt),
                   )}
                 </p>
+                {invoice.status === "FINALIZED" &&
+                invoice.pendingBalancePaise > 0 ? (
+                  <p
+                    className={
+                      invoice.paymentStatus === "OVERDUE"
+                        ? "mt-0.5 text-xs font-medium text-amber-700"
+                        : "mt-0.5 text-xs text-muted-foreground"
+                    }
+                  >
+                    {invoice.paymentStatus === "OVERDUE"
+                      ? t("pastDueHint")
+                      : t("payWithinDays", { days: 7 })}
+                  </p>
+                ) : null}
               </div>
             </div>
 

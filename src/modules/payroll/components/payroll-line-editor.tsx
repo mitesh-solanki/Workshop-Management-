@@ -84,6 +84,9 @@ export function PayrollLineActions(props: PayrollLineEditorProps) {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [method, setMethod] = useState("CASH");
   const [paidOn, setPaidOn] = useState(todayDateInputValue());
+  const [advanceRupees, setAdvanceRupees] = useState(() =>
+    paiseToRupeesInput(props.advanceDeductedPaise),
+  );
   const [payPending, startPay] = useTransition();
   const [deletePending, startDelete] = useTransition();
   const [state, formAction, pending] = useActionState(
@@ -228,7 +231,10 @@ export function PayrollLineActions(props: PayrollLineEditorProps) {
           open={editOpen}
           onOpenChange={(next) => {
             setEditOpen(next);
-            if (next) handled.current = null;
+            if (next) {
+              handled.current = null;
+              setAdvanceRupees(paiseToRupeesInput(props.advanceDeductedPaise));
+            }
           }}
         >
           <DialogTrigger asChild>
@@ -256,6 +262,21 @@ export function PayrollLineActions(props: PayrollLineEditorProps) {
                   name="commissionRupees"
                   value={paiseToRupeesInput(props.commissionPaise)}
                 />
+                {props.openAdvancePaise > 0 ? (
+                  <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+                    <p className="text-sm font-semibold text-amber-950">
+                      {t("editOpenAdvanceCardTitle")}
+                    </p>
+                    <p className="mt-1 text-sm text-amber-900">
+                      {t("editOpenAdvanceCard", {
+                        amount: formatRupees(
+                          props.openAdvancePaise,
+                          props.locale,
+                        ),
+                      })}
+                    </p>
+                  </div>
+                ) : null}
                 <FormField id={`${formId}-basic`} label={t("basicSalary")}>
                   <Input
                     id={`${formId}-basic`}
@@ -277,11 +298,22 @@ export function PayrollLineActions(props: PayrollLineEditorProps) {
                 <FormField
                   id={`${formId}-advance`}
                   label={t("advanceDeductedRupees")}
+                  hint={
+                    props.openAdvancePaise > 0
+                      ? t("advanceDeductHint", {
+                          amount: formatRupees(
+                            props.openAdvancePaise,
+                            props.locale,
+                          ),
+                        })
+                      : t("advanceDeductHintNone")
+                  }
                 >
                   <Input
                     id={`${formId}-advance`}
                     name="advanceDeductedRupees"
-                    defaultValue={paiseToRupeesInput(props.advanceDeductedPaise)}
+                    value={advanceRupees}
+                    onChange={(e) => setAdvanceRupees(e.target.value)}
                     inputMode="decimal"
                     className="h-11 min-h-11 w-full"
                   />

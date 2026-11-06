@@ -65,6 +65,13 @@ const lineSelect = {
   quantity: true,
   unitPricePaise: true,
   partId: true,
+  vendorId: true,
+  gstSplit: true,
+  gstRatePercent: true,
+  billStorageKey: true,
+  billContentType: true,
+  billFileName: true,
+  billByteSize: true,
   sortOrder: true,
   createdAt: true,
   updatedAt: true,
@@ -444,6 +451,12 @@ export async function findServiceOrderById(
               hsn: true,
             },
           },
+          vendor: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
         },
         orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
       },
@@ -800,26 +813,32 @@ export async function updateServiceOrderStatus(
   });
 }
 
+type ServiceOrderLineRow = {
+  id: string;
+  garageId: string;
+  serviceOrderId: string;
+  type: ServiceOrderLineType;
+  description: string;
+  quantity: number;
+  unitPricePaise: number;
+  partId: string | null;
+  vendorId: string | null;
+  gstSplit: "CGST_SGST" | "IGST" | null;
+  gstRatePercent: number | null;
+  billStorageKey: string | null;
+  billContentType: string | null;
+  billFileName: string | null;
+  billByteSize: number | null;
+  sortOrder: number;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
 export type CreateServiceOrderLineResult =
-  | {
-    ok: true;
-    line: {
-      id: string;
-      garageId: string;
-      serviceOrderId: string;
-      type: ServiceOrderLineType;
-      description: string;
-      quantity: number;
-      unitPricePaise: number;
-      partId: string | null;
-      sortOrder: number;
-      createdAt: Date;
-      updatedAt: Date;
-    };
-  }
+  | { ok: true; line: ServiceOrderLineRow }
   | {
     ok: false;
-    reason: "PART_NOT_FOUND" | "INSUFFICIENT_STOCK";
+    reason: "PART_NOT_FOUND" | "INSUFFICIENT_STOCK" | "VENDOR_NOT_FOUND";
     partName?: string;
   };
 
@@ -836,6 +855,9 @@ export async function createServiceOrderLine(
     quantity: number;
     unitPricePaise: number;
     partId: string | null;
+    vendorId?: string | null;
+    gstSplit?: "CGST_SGST" | "IGST" | null;
+    gstRatePercent?: number | null;
     actorId: string;
   },
 ): Promise<CreateServiceOrderLineResult> {
@@ -851,11 +873,22 @@ export async function createServiceOrderLine(
         }
       }
 
+      if (data.type === "OUTSIDE" && data.vendorId) {
+        const vendor = await tx.vendor.findFirst({
+          where: { id: data.vendorId, garageId },
+          select: { id: true },
+        });
+        if (!vendor) {
+          throw new Error("VENDOR_NOT_FOUND");
+        }
+      }
+
       const maxSort = await tx.serviceOrderLine.aggregate({
         where: { garageId, serviceOrderId: data.serviceOrderId },
         _max: { sortOrder: true },
       });
       const sortOrder = (maxSort._max.sortOrder ?? -1) + 1;
+      const isOutside = data.type === "OUTSIDE";
 
       const created = await tx.serviceOrderLine.create({
         data: {
@@ -866,6 +899,9 @@ export async function createServiceOrderLine(
           quantity: data.quantity,
           unitPricePaise: data.unitPricePaise,
           partId: data.type === "PART" ? data.partId : null,
+          vendorId: isOutside ? (data.vendorId ?? null) : null,
+          gstSplit: isOutside ? (data.gstSplit ?? null) : null,
+          gstRatePercent: isOutside ? (data.gstRatePercent ?? null) : null,
           sortOrder,
         },
         select: lineSelect,
@@ -901,6 +937,9 @@ export async function createServiceOrderLine(
             quantity: data.quantity,
             unitPricePaise: data.unitPricePaise,
             partId: data.partId,
+            vendorId: created.vendorId,
+            gstSplit: created.gstSplit,
+            gstRatePercent: created.gstRatePercent,
           } satisfies Prisma.InputJsonValue,
         },
       });
@@ -910,6 +949,9 @@ export async function createServiceOrderLine(
 
     return { ok: true, line };
   } catch (error) {
+    if (error instanceof Error && error.message === "VENDOR_NOT_FOUND") {
+      return { ok: false, reason: "VENDOR_NOT_FOUND" };
+    }
     if (error instanceof StockLineTxError) {
       if (error.reason === "INSUFFICIENT_STOCK") {
         return {
@@ -924,25 +966,11 @@ export async function createServiceOrderLine(
   }
 }
 
-type ServiceOrderLineRow = {
-  id: string;
-  garageId: string;
-  serviceOrderId: string;
-  type: ServiceOrderLineType;
-  description: string;
-  quantity: number;
-  unitPricePaise: number;
-  partId: string | null;
-  sortOrder: number;
-  createdAt: Date;
-  updatedAt: Date;
-};
-
 export type UpdateServiceOrderLineResult =
   | { ok: true; line: ServiceOrderLineRow }
   | {
     ok: false;
-    reason: "NOT_FOUND" | "INSUFFICIENT_STOCK";
+    reason: "NOT_FOUND" | "INSUFFICIENT_STOCK" | "VENDOR_NOT_FOUND";
     partName?: string;
   };
 
@@ -955,6 +983,10 @@ export async function updateServiceOrderLine(
     quantity: number;
     unitPricePaise: number;
     partId?: string | null;
+    vendorId?: string | null;
+    gstSplit?: "CGST_SGST" | "IGST" | null;
+    gstRatePercent?: number | null;
+    clearBill?: boolean;
     actorId: string;
   },
 ): Promise<UpdateServiceOrderLineResult> {
@@ -987,6 +1019,16 @@ export async function updateServiceOrderLine(
         }
       }
 
+      if (existing.type === "OUTSIDE" && data.vendorId) {
+        const vendor = await tx.vendor.findFirst({
+          where: { id: data.vendorId, garageId },
+          select: { id: true },
+        });
+        if (!vendor) {
+          throw new Error("VENDOR_NOT_FOUND");
+        }
+      }
+
       if (existing.type === "PART") {
         await adjustJobCardPartStock(tx, garageId, {
           serviceOrderId: data.serviceOrderId,
@@ -999,6 +1041,17 @@ export async function updateServiceOrderLine(
         });
       }
 
+      const nextGstRate =
+        existing.type === "OUTSIDE" && data.gstRatePercent !== undefined
+          ? data.gstRatePercent
+          : existing.gstRatePercent;
+      const shouldClearBill =
+        existing.type === "OUTSIDE" &&
+        (data.clearBill ||
+          (typeof nextGstRate === "number" &&
+            nextGstRate <= 0 &&
+            Boolean(existing.billStorageKey)));
+
       const updated = await tx.serviceOrderLine.update({
         where: { id: existing.id },
         data: {
@@ -1007,6 +1060,27 @@ export async function updateServiceOrderLine(
           unitPricePaise: data.unitPricePaise,
           ...(existing.type === "PART" && data.partId !== undefined
             ? { partId: nextPartId }
+            : {}),
+          ...(existing.type === "OUTSIDE"
+            ? {
+                ...(data.vendorId !== undefined
+                  ? { vendorId: data.vendorId }
+                  : {}),
+                ...(data.gstSplit !== undefined
+                  ? { gstSplit: data.gstSplit }
+                  : {}),
+                ...(data.gstRatePercent !== undefined
+                  ? { gstRatePercent: data.gstRatePercent }
+                  : {}),
+                ...(shouldClearBill
+                  ? {
+                      billStorageKey: null,
+                      billContentType: null,
+                      billFileName: null,
+                      billByteSize: null,
+                    }
+                  : {}),
+              }
             : {}),
         },
         select: lineSelect,
@@ -1026,10 +1100,16 @@ export async function updateServiceOrderLine(
             quantity: updated.quantity,
             unitPricePaise: updated.unitPricePaise,
             partId: updated.partId,
+            vendorId: updated.vendorId,
+            gstSplit: updated.gstSplit,
+            gstRatePercent: updated.gstRatePercent,
             previousDescription: existing.description,
             previousQuantity: existing.quantity,
             previousUnitPricePaise: existing.unitPricePaise,
             previousPartId: existing.partId,
+            previousVendorId: existing.vendorId,
+            previousGstSplit: existing.gstSplit,
+            previousGstRatePercent: existing.gstRatePercent,
           } satisfies Prisma.InputJsonValue,
         },
       });
@@ -1039,6 +1119,9 @@ export async function updateServiceOrderLine(
 
     return { ok: true, line };
   } catch (error) {
+    if (error instanceof Error && error.message === "VENDOR_NOT_FOUND") {
+      return { ok: false, reason: "VENDOR_NOT_FOUND" };
+    }
     if (error instanceof StockLineTxError) {
       if (error.reason === "INSUFFICIENT_STOCK") {
         return {
@@ -1051,6 +1134,60 @@ export async function updateServiceOrderLine(
     }
     throw error;
   }
+}
+
+export async function setOutsideWorkBill(
+  garageId: string,
+  input: {
+    serviceOrderId: string;
+    lineId: string;
+    storageKey: string;
+    contentType: string;
+    fileName: string | null;
+    byteSize: number;
+    actorId: string;
+  },
+) {
+  const existing = await prisma.serviceOrderLine.findFirst({
+    where: {
+      id: input.lineId,
+      garageId,
+      serviceOrderId: input.serviceOrderId,
+      type: "OUTSIDE",
+    },
+    select: lineSelect,
+  });
+  if (!existing) return null;
+
+  const previousStorageKey = existing.billStorageKey;
+  const line = await prisma.serviceOrderLine.update({
+    where: { id: existing.id },
+    data: {
+      billStorageKey: input.storageKey,
+      billContentType: input.contentType,
+      billFileName: input.fileName,
+      billByteSize: input.byteSize,
+    },
+    select: lineSelect,
+  });
+
+  await prisma.auditLog.create({
+    data: {
+      garageId,
+      actorId: input.actorId,
+      action: "service_order.outside_work_bill_uploaded",
+      entity: "ServiceOrder",
+      entityId: input.serviceOrderId,
+      meta: {
+        lineId: line.id,
+        billFileName: input.fileName,
+        billByteSize: input.byteSize,
+        billContentType: input.contentType,
+      } satisfies Prisma.InputJsonValue,
+    },
+  });
+
+  return { line, previousStorageKey };
 }
 
 export type DeleteServiceOrderLineResult =

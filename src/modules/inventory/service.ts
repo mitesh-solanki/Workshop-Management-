@@ -157,6 +157,7 @@ export async function getPartForPicker(session: RoleSession, partId: string) {
     sku: part.sku,
     unit: part.unit,
     sellingPricePaise: hidePrices ? 0 : part.sellingPricePaise,
+    gstRatePercent: part.gstRatePercent,
     quantityOnHand: part.quantityOnHand,
   };
 }

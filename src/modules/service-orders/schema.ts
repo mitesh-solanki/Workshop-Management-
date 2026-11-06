@@ -315,36 +315,160 @@ export const updateServiceOrderSchema = z
   });
 
 export const SERVICE_ORDER_LINE_TYPES = ["LABOUR", "PART", "OUTSIDE"] as const;
+export const OUTSIDE_WORK_GST_SPLITS = ["CGST_SGST", "IGST"] as const;
+export type OutsideWorkGstSplit = (typeof OUTSIDE_WORK_GST_SPLITS)[number];
 
-export const addServiceOrderLineSchema = z.object({
-  type: z.enum(SERVICE_ORDER_LINE_TYPES),
-  description: z.string().trim().min(1).max(500),
-  quantity: quantityField,
-  unitPricePaise: rupeesToPaiseSchema,
-  partId: z
-    .union([z.string(), z.null(), z.undefined()])
-    .transform((value) => {
-      if (value == null || value === "") {
-        return null;
-      }
-      return value.trim();
-    }),
-});
+export const MAX_OUTSIDE_WORK_BILL_BYTES = 8 * 1024 * 1024;
+const OUTSIDE_WORK_BILL_TYPES = new Set([
+  "image/jpeg",
+  "image/jpg",
+  "image/png",
+  "image/webp",
+  "application/pdf",
+]);
+
+const optionalIdField = z
+  .union([z.string(), z.null(), z.undefined()])
+  .transform((value) => {
+    if (value == null || value === "") {
+      return null;
+    }
+    return value.trim();
+  });
+
+const outsideGstRateField = z.preprocess(
+  (value) => {
+    if (value == null || value === "") return null;
+    return typeof value === "number" ? value : Number(value);
+  },
+  z
+    .number()
+    .int()
+    .refine((rate) => [0, 5, 12, 18, 28].includes(rate), {
+      error: "validation.invalidInput",
+    })
+    .nullable(),
+);
+
+export const addServiceOrderLineSchema = z
+  .object({
+    type: z.enum(SERVICE_ORDER_LINE_TYPES),
+    description: z.string().trim().min(1).max(500),
+    quantity: quantityField,
+    unitPricePaise: rupeesToPaiseSchema,
+    partId: optionalIdField,
+    vendorId: optionalIdField,
+    gstSplit: z
+      .union([z.enum(OUTSIDE_WORK_GST_SPLITS), z.literal(""), z.null(), z.undefined()])
+      .transform((value) => {
+        if (value == null || value === "") return null;
+        return value;
+      }),
+    gstRatePercent: outsideGstRateField,
+  })
+  .superRefine((data, ctx) => {
+    if (data.type !== "OUTSIDE") return;
+    if (!data.vendorId) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["vendorId"],
+        message: "validation.required",
+      });
+    }
+    if (!data.gstSplit) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["gstSplit"],
+        message: "validation.required",
+      });
+    }
+    if (data.gstRatePercent == null) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["gstRatePercent"],
+        message: "validation.required",
+      });
+    }
+  });
 
 export const updateServiceOrderLineSchema = z.object({
   description: z.string().trim().min(1).max(500),
   quantity: quantityField,
   unitPricePaise: rupeesToPaiseSchema,
-  partId: z
-    .union([z.string(), z.null(), z.undefined()])
+  partId: optionalIdField.optional(),
+  vendorId: optionalIdField.optional(),
+  gstSplit: z
+    .union([z.enum(OUTSIDE_WORK_GST_SPLITS), z.literal(""), z.null(), z.undefined()])
     .transform((value) => {
-      if (value == null || value === "") {
-        return null;
-      }
-      return value.trim();
+      if (value == null || value === "") return undefined;
+      return value;
     })
     .optional(),
+  gstRatePercent: z.preprocess(
+    (value) => {
+      if (value == null || value === "") return undefined;
+      return typeof value === "number" ? value : Number(value);
+    },
+    z
+      .number()
+      .int()
+      .refine((rate) => [0, 5, 12, 18, 28].includes(rate), {
+        error: "validation.invalidInput",
+      })
+      .optional(),
+  ),
+  clearBill: z
+    .union([z.boolean(), z.literal("1"), z.literal("true"), z.literal(""), z.null(), z.undefined()])
+    .transform((value) => value === true || value === "1" || value === "true")
+    .optional(),
 });
+
+const outsideBillByteSizeField = z
+  .union([z.string(), z.number()])
+  .transform((value, ctx) => {
+    const n = typeof value === "number" ? value : Number(value);
+    if (!Number.isInteger(n) || n < 1) {
+      ctx.addIssue({ code: "custom", message: "validation.invalidInput" });
+      return z.NEVER;
+    }
+    return n;
+  });
+
+const optionalOutsideBillFileName = z
+  .string()
+  .trim()
+  .max(200)
+  .optional()
+  .transform((v) => (v && v.length > 0 ? v : null));
+
+export const createOutsideWorkBillUploadUrlSchema = z.object({
+  serviceOrderId: z.string().trim().min(1),
+  lineId: z.string().trim().min(1),
+  contentType: z.string().trim().min(3).max(120),
+  byteSize: outsideBillByteSizeField,
+  fileName: optionalOutsideBillFileName,
+});
+
+export const confirmOutsideWorkBillSchema = z.object({
+  serviceOrderId: z.string().trim().min(1),
+  lineId: z.string().trim().min(1),
+  storageKey: z.string().trim().min(1).max(500),
+  contentType: z.string().trim().min(3).max(120),
+  byteSize: outsideBillByteSizeField,
+  fileName: optionalOutsideBillFileName,
+});
+
+export function assertOutsideWorkBillLimits(
+  contentType: string,
+  byteSize: number,
+) {
+  if (!OUTSIDE_WORK_BILL_TYPES.has(contentType.toLowerCase())) {
+    throw new Error("orders.outside_work_bill_type");
+  }
+  if (byteSize > MAX_OUTSIDE_WORK_BILL_BYTES) {
+    throw new Error("orders.outside_work_bill_too_large");
+  }
+}
 
 export const MAX_PAPER_COPY_BYTES = 8 * 1024 * 1024;
 export const MAX_PAPER_COPIES_PER_ORDER = 5;
@@ -443,3 +567,9 @@ export type CreatePaperCopyUploadUrlInput = z.input<
 export type ConfirmPaperCopyInput = z.input<typeof confirmPaperCopySchema>;
 export type ReplacePaperCopyInput = z.input<typeof replacePaperCopySchema>;
 export type RemovePaperCopyInput = z.input<typeof removePaperCopySchema>;
+export type CreateOutsideWorkBillUploadUrlInput = z.input<
+  typeof createOutsideWorkBillUploadUrlSchema
+>;
+export type ConfirmOutsideWorkBillInput = z.input<
+  typeof confirmOutsideWorkBillSchema
+>;

@@ -42,6 +42,18 @@ export type BillingPreviewContext = {
   approvedTaxLabel: string;
 };
 
+export type BillingOutsideWorkLine = {
+  id: string;
+  description: string;
+  unitPricePaise: number;
+  vendorId: string | null;
+  vendorName: string | null;
+  gstSplit: "CGST_SGST" | "IGST" | null;
+  gstRatePercent: number | null;
+  billStorageKey: string | null;
+  billFileName: string | null;
+};
+
 type Props = {
   orderId: string;
   vehicleId: string;
@@ -50,6 +62,7 @@ type Props = {
   invoices: InvoiceList;
   defaultPlaceOfSupplyStateCode: string;
   draftSyncError?: string | null;
+  outsideWorkLines?: BillingOutsideWorkLine[];
   preview: BillingPreviewContext;
 };
 
@@ -69,6 +82,7 @@ export async function JobCardBillingContent({
   invoices,
   defaultPlaceOfSupplyStateCode,
   draftSyncError = null,
+  outsideWorkLines = [],
   preview,
 }: Props) {
   const t = await getTranslations("billing");
@@ -351,6 +365,7 @@ export async function JobCardBillingContent({
           canEdit={canEdit}
           pdfLocale={pdfLocale}
           invoices={invoiceCards}
+          outsideWorkLines={outsideWorkLines}
         />
       )}
     </div>

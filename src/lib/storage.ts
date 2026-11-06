@@ -180,6 +180,29 @@ export function buildServiceOrderPaperCopyKey(input: {
   return `garages/${input.garageId}/service-orders/${input.serviceOrderId}/paper/${id}.${ext}`;
 }
 
+/** Build a garage-scoped object key for an outside-work vendor bill. */
+export function buildOutsideWorkBillKey(input: {
+  garageId: string;
+  serviceOrderId: string;
+  lineId: string;
+  contentType: string;
+}) {
+  const ext = extensionForContentType(input.contentType);
+  const id = randomBytes(12).toString("hex");
+  return `garages/${input.garageId}/service-orders/${input.serviceOrderId}/outside-work/${input.lineId}/${id}.${ext}`;
+}
+
+/** Build a garage-scoped object key for an expense bill. */
+export function buildExpenseBillKey(input: {
+  garageId: string;
+  expenseId: string;
+  contentType: string;
+}) {
+  const ext = extensionForContentType(input.contentType);
+  const id = randomBytes(12).toString("hex");
+  return `garages/${input.garageId}/expenses/${input.expenseId}/${id}.${ext}`;
+}
+
 /**
  * Presigned PUT (S3) or app POST target (Cloudinary) for browser upload.
  * Cloudinary path posts the file to `/api/storage/upload` (server uploads).

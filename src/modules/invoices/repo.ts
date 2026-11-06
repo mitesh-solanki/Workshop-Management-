@@ -125,6 +125,7 @@ function rowPaymentStatus(invoice: InvoiceListRow): InvoicePaymentStatus {
       amountPaidPaise: invoice.amountPaidPaise,
       creditNotesTotalPaise,
     }),
+    amountPaidPaise: invoice.amountPaidPaise,
     finalizedAt: invoice.finalizedAt,
   });
 }
@@ -189,4 +190,65 @@ export async function searchInvoices(
   const items = matched.slice(skip, skip + pageSize);
 
   return { items, total, page, pageSize };
+}
+
+const GST_EXPORT_CAP = 2_000;
+
+const gstExportSelect = {
+  id: true,
+  invoiceNumber: true,
+  finalizedAt: true,
+  taxablePaise: true,
+  cgstPaise: true,
+  sgstPaise: true,
+  igstPaise: true,
+  totalPaise: true,
+  customer: {
+    select: { name: true, gstin: true },
+  },
+  serviceOrder: {
+    select: { jobCardNumber: true },
+  },
+} as const;
+
+export type GstExportInvoiceDbRow = Prisma.InvoiceGetPayload<{
+  select: typeof gstExportSelect;
+}>;
+
+/** Finalized invoices in [from, toExclusive) by finalizedAt, garage-scoped. */
+export async function listFinalizedInvoicesForGstExport(
+  garageId: string,
+  from: Date,
+  toExclusive: Date,
+) {
+  return prisma.invoice.findMany({
+    where: {
+      garageId,
+      status: "FINALIZED",
+      finalizedAt: { gte: from, lt: toExclusive },
+    },
+    select: gstExportSelect,
+    orderBy: { finalizedAt: "asc" },
+    take: GST_EXPORT_CAP,
+  });
+}
+
+export async function listFinalizedInvoicesForGstExportByIds(
+  garageId: string,
+  from: Date,
+  toExclusive: Date,
+  invoiceIds: string[],
+) {
+  if (invoiceIds.length === 0) return [];
+  return prisma.invoice.findMany({
+    where: {
+      garageId,
+      status: "FINALIZED",
+      id: { in: invoiceIds },
+      finalizedAt: { gte: from, lt: toExclusive },
+    },
+    select: gstExportSelect,
+    orderBy: { finalizedAt: "asc" },
+    take: GST_EXPORT_CAP,
+  });
 }

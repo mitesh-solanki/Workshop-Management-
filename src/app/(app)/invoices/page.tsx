@@ -65,7 +65,15 @@ export default async function InvoicesPage({ searchParams }: Props) {
 
   return (
     <main className="space-y-6 sm:space-y-8">
-      <PageHeader title={t("title")} description={t("subtitle")} />
+      <PageHeader
+        title={t("title")}
+        description={t("subtitle")}
+        actions={
+          <Button asChild size="sm" className="min-h-11">
+            <Link href="/invoices/export-gst">{t("gstExport.action")}</Link>
+          </Button>
+        }
+      />
 
       <Suspense fallback={<TableSpinner />}>
         <InvoicesTable
@@ -86,7 +94,7 @@ export default async function InvoicesPage({ searchParams }: Props) {
               }
               action={
                 !hasQuery && !hasStatus ? (
-                  <Button asChild size="sm">
+                  <Button asChild size="sm" variant="outline">
                     <Link href="/orders">{t("goToJobCards")}</Link>
                   </Button>
                 ) : undefined

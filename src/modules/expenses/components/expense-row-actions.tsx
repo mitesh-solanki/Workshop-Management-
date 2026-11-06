@@ -18,12 +18,17 @@ type Props = {
   expense: EditExpenseValues;
   canWrite: boolean;
   usedCategories?: readonly string[];
+  vendors?: readonly {
+    id: string;
+    name: string;
+  }[];
 };
 
 export function ExpenseRowActions({
   expense,
   canWrite,
   usedCategories = [],
+  vendors = [],
 }: Props) {
   const t = useTranslations("expenses");
   const locale = useLocale();
@@ -58,7 +63,11 @@ export function ExpenseRowActions({
             spentAtInput={expense.spentAtInput}
           />
         ) : null}
-        <EditExpenseModal expense={expense} usedCategories={usedCategories} />
+        <EditExpenseModal
+          expense={expense}
+          usedCategories={usedCategories}
+          vendors={vendors}
+        />
         <Button
           type="button"
           variant="outline"

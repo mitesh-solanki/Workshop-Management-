@@ -51,6 +51,7 @@ import {
 
 const MONEY_ROLES = ["OWNER", "ACCOUNTANT"] as const;
 const TEAM_VIEW_ROLES = ["OWNER", "MANAGER", "ACCOUNTANT"] as const;
+const MY_PAY_ROLES = ["TECHNICIAN"] as const;
 
 function parseDateOnly(value: string): Date {
   const [y, m, d] = value.split("-").map(Number);
@@ -72,6 +73,91 @@ export function assertCanViewTeamForPayroll(session: RoleSession) {
 
 export function assertCanManagePayrollMoney(session: RoleSession) {
   requireRole(session, MONEY_ROLES);
+}
+
+export function assertCanViewMyPay(session: RoleSession) {
+  requireRole(session, MY_PAY_ROLES);
+}
+
+function mapMyPayLine(line: {
+  id: string;
+  payrollRunId: string;
+  basicPaise: number;
+  bonusPaise: number;
+  commissionPaise: number;
+  advanceDeductedPaise: number;
+  adjustmentPaise: number;
+  adjustmentNote: string | null;
+  note: string | null;
+  netPaise: number;
+  status: "DRAFT" | "PAID";
+  paidAt: Date | null;
+  paidMethod: "CASH" | "UPI" | "CARD" | "MIXED" | null;
+  payrollRun: {
+    periodStart: Date;
+    periodEnd: Date;
+    status: string;
+  };
+}) {
+  return {
+    id: line.id,
+    payrollRunId: line.payrollRunId,
+    basicPaise: line.basicPaise,
+    bonusPaise: line.bonusPaise,
+    commissionPaise: line.commissionPaise,
+    advanceDeductedPaise: line.advanceDeductedPaise,
+    adjustmentPaise: line.adjustmentPaise,
+    adjustmentNote: line.adjustmentNote,
+    note: line.note,
+    netPaise: line.netPaise,
+    status: line.status,
+    paidAt: line.paidAt ? line.paidAt.toISOString() : null,
+    paidMethod: line.paidMethod,
+    periodStart: line.payrollRun.periodStart.toISOString(),
+    periodEnd: line.payrollRun.periodEnd.toISOString(),
+  };
+}
+
+/** Technician-only: own paid payroll lines and advances in this garage. */
+export async function listMyPay(session: RoleSession) {
+  assertCanViewMyPay(session);
+  const [lines, advances] = await Promise.all([
+    repo.listPayrollLinesForUser(session.garageId, session.userId),
+    repo.listAdvancesForUser(session.garageId, session.userId),
+  ]);
+  return {
+    lines: lines.filter((line) => line.status === "PAID").map(mapMyPayLine),
+    advances: advances.map((advance) => ({
+      id: advance.id,
+      amountPaise: advance.amountPaise,
+      remainingPaise: advance.remainingPaise,
+      givenOn: advance.givenOn.toISOString(),
+      method: advance.method,
+      note: advance.note,
+      status:
+        advance.remainingPaise <= 0
+          ? ("recovered" as const)
+          : advance.remainingPaise >= advance.amountPaise
+            ? ("pending" as const)
+            : ("partial" as const),
+    })),
+  };
+}
+
+/** Technician-only: one of their own paid payroll lines. */
+export async function getMyPayLine(session: RoleSession, lineId: string) {
+  assertCanViewMyPay(session);
+  const id = lineId.trim();
+  if (!id) {
+    throw new AppError("payroll.not_found", 404);
+  }
+
+  const line = await repo.findPayrollLine(session.garageId, id);
+  if (!line || line.userId !== session.userId || line.status !== "PAID") {
+    throw new AppError("payroll.not_found", 404);
+  }
+
+  return mapMyPayLine(line);
 }
 
 function isPayrollEligibleRole(role: string) {
@@ -942,10 +1028,11 @@ export async function getPayrollManagement(
   const period = allMonths
     ? null
     : periodFromYearMonth(query.yearMonth);
+  const reminderPeriod = period ?? periodFromYearMonth(currentYearMonth());
   const memberFilter =
     query.memberId && query.memberId.length > 0 ? query.memberId : undefined;
 
-  const [allMembers, profiles, rawLines, openAdvances, monthRun] =
+  const [allMembers, profiles, rawLines, openAdvances, monthRun, reminderRun] =
     await Promise.all([
       repo.listGarageUsers(session.garageId),
       repo.listPayProfiles(session.garageId),
@@ -961,6 +1048,13 @@ export async function getPayrollManagement(
             session.garageId,
             period.periodStart,
             period.periodEnd,
+          )
+        : Promise.resolve(null),
+      allMonths
+        ? repo.findPayrollRunByPeriod(
+            session.garageId,
+            reminderPeriod.periodStart,
+            reminderPeriod.periodEnd,
           )
         : Promise.resolve(null),
     ]);
@@ -996,6 +1090,9 @@ export async function getPayrollManagement(
   const monthLineUserIds = new Set(
     (monthRun?.lines ?? []).map((l) => l.userId),
   );
+  const reminderLineUserIds = new Set(
+    ((allMonths ? reminderRun : monthRun)?.lines ?? []).map((l) => l.userId),
+  );
 
   return {
     yearMonth: query.yearMonth,
@@ -1030,6 +1127,17 @@ export async function getPayrollManagement(
     addedMemberIds: [...monthLineUserIds],
     missingMemberCount: eligible.filter((m) => !monthLineUserIds.has(m.id))
       .length,
+    pendingAdvanceReminders: eligible
+      .filter(
+        (m) =>
+          !reminderLineUserIds.has(m.id) &&
+          (openAdvanceByUser.get(m.id) ?? 0) > 0,
+      )
+      .map((m) => ({
+        id: m.id,
+        label: m.name?.trim() || m.email,
+        openAdvancePaise: openAdvanceByUser.get(m.id) ?? 0,
+      })),
     summary: {
       totalPayrollPaise,
       paidPaise,

@@ -7,6 +7,7 @@ import { computeLineGst } from "@/lib/gst";
 import { requireSession } from "@/lib/session";
 import { translateError } from "@/lib/translate-error";
 import { JobCardBillingContent } from "@/modules/billing/components/job-card-billing-content";
+import { resolveInvoiceEditLineTax } from "@/modules/billing/schema";
 import {
   ensureDraftInvoiceInSync,
   getGarageBillingProfile,
@@ -181,10 +182,12 @@ export default async function OrderEditPage({ params, searchParams }: Props) {
       "part" in line && line.part
         ? line.part
         : null;
-    const gstRatePercent =
-      part && typeof part.gstRatePercent === "number"
-        ? part.gstRatePercent
-        : 18;
+    const gstRatePercent = resolveInvoiceEditLineTax({
+      type: typeKey,
+      gstRatePercent:
+        typeKey === "OUTSIDE" ? (line.gstRatePercent ?? 0) : undefined,
+      part,
+    }).gstRatePercent;
     const amounts = computeLineGst({
       quantity: line.quantity,
       unitPricePaise: line.unitPricePaise,
@@ -309,6 +312,12 @@ export default async function OrderEditPage({ params, searchParams }: Props) {
               "part" in line && line.part
                 ? line.part.sellingPricePaise
                 : null,
+            vendorId: line.vendorId ?? null,
+            vendor: line.vendor ?? null,
+            gstSplit: line.gstSplit ?? null,
+            gstRatePercent: line.gstRatePercent ?? null,
+            billStorageKey: line.billStorageKey ?? null,
+            billFileName: line.billFileName ?? null,
           })),
         }}
         timeline={surface.includeCommercialSections ? timeline : []}
@@ -351,6 +360,19 @@ export default async function OrderEditPage({ params, searchParams }: Props) {
               invoices={invoices}
               defaultPlaceOfSupplyStateCode={order.customer.stateCode}
               draftSyncError={draftSyncError}
+              outsideWorkLines={order.lines
+                .filter((line) => line.type === "OUTSIDE")
+                .map((line) => ({
+                  id: line.id,
+                  description: line.description,
+                  unitPricePaise: line.unitPricePaise,
+                  vendorId: line.vendorId ?? null,
+                  vendorName: line.vendor?.name ?? null,
+                  gstSplit: line.gstSplit ?? null,
+                  gstRatePercent: line.gstRatePercent ?? null,
+                  billStorageKey: line.billStorageKey ?? null,
+                  billFileName: line.billFileName ?? null,
+                }))}
               preview={{
                 garageName: garage?.name ?? t("title"),
                 garageAddress: garage?.address ?? null,

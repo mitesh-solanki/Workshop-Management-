@@ -87,29 +87,20 @@ export function AdvancesTable({
         ),
       },
       {
-        accessorKey: "recoveredPaise",
-        header: t("recoveredAmount"),
-        cell: ({ row }) => (
-          <span className="tabular-nums text-muted-foreground">
-            {formatRupees(row.original.recoveredPaise, locale)}
-          </span>
-        ),
-      },
-      {
-        accessorKey: "remainingPaise",
-        header: t("outstandingAmount"),
-        cell: ({ row }) => (
-          <span className="font-semibold tabular-nums text-amber-700">
-            {formatRupees(row.original.remainingPaise, locale)}
-          </span>
-        ),
-      },
-      {
         accessorKey: "givenOn",
         header: t("givenOn"),
         cell: ({ row }) => (
           <span className="text-muted-foreground">
             {formatDay(row.original.givenOn, locale)}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "method",
+        header: t("paymentMethod"),
+        cell: ({ row }) => (
+          <span className="text-muted-foreground">
+            {t(`methods.${row.original.method}`)}
           </span>
         ),
       },
@@ -186,12 +177,20 @@ export function AdvancesTable({
               </div>
               <div>
                 <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-                  {t("outstandingAmount")}
+                  {t("paymentMethod")}
                 </p>
-                <p className="mt-0.5 font-semibold tabular-nums text-amber-700">
-                  {formatRupees(item.remainingPaise, locale)}
+                <p className="mt-0.5 text-muted-foreground">
+                  {t(`methods.${item.method}`)}
                 </p>
               </div>
+              {item.note?.trim() ? (
+                <div className="col-span-2">
+                  <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                    {t("note")}
+                  </p>
+                  <p className="mt-0.5 text-muted-foreground">{item.note}</p>
+                </div>
+              ) : null}
             </div>
           </div>
         );

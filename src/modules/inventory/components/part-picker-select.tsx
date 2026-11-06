@@ -79,6 +79,7 @@ export function PartPickerSelect({
           sku: "",
           unit: "pcs",
           sellingPricePaise: 0,
+          gstRatePercent: 0,
           quantityOnHand: 0,
         }
       : null,
@@ -135,6 +136,7 @@ export function PartPickerSelect({
           sku: "",
           unit: "pcs",
           sellingPricePaise: 0,
+          gstRatePercent: 0,
           quantityOnHand: 0,
         });
         return;
@@ -157,6 +159,7 @@ export function PartPickerSelect({
         sku: "",
         unit: "pcs",
         sellingPricePaise: 0,
+        gstRatePercent: 0,
         quantityOnHand: 0,
       });
       return;

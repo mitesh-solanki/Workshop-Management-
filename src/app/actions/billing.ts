@@ -35,6 +35,8 @@ export type BillingActionState = {
     description: string;
     quantity: number;
     unitPricePaise: number;
+    gstRatePercent?: number;
+    orderLineId?: string | null;
   }>;
 };
 
@@ -133,15 +135,28 @@ export async function updateInvoiceLinesAction(
     const unitPrices = formData.getAll("unitPriceRupees").map(String);
     const ids = formData.getAll("lineId").map(String);
     const partIds = formData.getAll("partId").map(String);
+    const vendorIds = formData.getAll("vendorId").map(String);
+    const gstSplits = formData.getAll("gstSplit").map(String);
+    const gstRates = formData.getAll("gstRatePercent").map(String);
     const lines = descriptions
-      .map((description, index) => ({
-        id: ids[index] ?? "",
-        type: (types[index] ?? "LABOUR") as InvoiceLineTypeValue,
-        description,
-        quantity: quantities[index] ?? "1",
-        unitPricePaise: unitPrices[index] ?? "0",
-        partId: partIds[index] ?? "",
-      }))
+      .map((description, index) => {
+        const type = (types[index] ?? "LABOUR") as InvoiceLineTypeValue;
+        const gstSplitRaw = gstSplits[index] ?? "";
+        return {
+          id: ids[index] ?? "",
+          type,
+          description,
+          quantity: quantities[index] ?? "1",
+          unitPricePaise: unitPrices[index] ?? "0",
+          partId: partIds[index] ?? "",
+          vendorId: vendorIds[index] ?? "",
+          gstSplit:
+            gstSplitRaw === "IGST" || gstSplitRaw === "CGST_SGST"
+              ? (gstSplitRaw as "IGST" | "CGST_SGST")
+              : undefined,
+          gstRatePercent: gstRates[index] ?? undefined,
+        };
+      })
       .filter((line) => line.description.trim().length > 0);
     if (lines.length === 0) {
       const t = await getTranslations("billing");
@@ -154,15 +169,20 @@ export async function updateInvoiceLinesAction(
     });
     revalidateBilling(orderId);
     revalidatePath("/invoices");
+    const orderLineByIndex = new Map(
+      updated.syncedOrderLines.map((row) => [row.index, row.orderLineId]),
+    );
     return {
       ok: true,
       message: "invoiceUpdated",
-      savedLines: updated.lines.map((line) => ({
+      savedLines: updated.lines.map((line, index) => ({
         id: line.id,
         type: line.type,
         description: line.description,
         quantity: line.quantity,
         unitPricePaise: line.unitPricePaise,
+        gstRatePercent: line.gstRatePercent,
+        orderLineId: orderLineByIndex.get(index) ?? null,
       })),
     };
   } catch (error) {

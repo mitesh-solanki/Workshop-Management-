@@ -29,7 +29,7 @@ type Props = {
   "aria-invalid"?: boolean | "true" | "false";
 };
 
-/** Free-text category with optional suggestion chips (rent, electricity, …). */
+/** Free-text category with a suggestion dropdown filtered as the user types. */
 export function ExpenseCategoryInput({
   id,
   name = "category",
@@ -54,12 +54,7 @@ export function ExpenseCategoryInput({
     maxHeight: 240,
   });
 
-  const query = value.trim();
-  /** Match part-name suggest: only after typing — not a full select-on-focus dropdown. */
-  const suggestions =
-    query.length >= 1
-      ? filterExpenseCategorySuggestions(value, usedCategories)
-      : [];
+  const suggestions = filterExpenseCategorySuggestions(value, usedCategories);
   const showList = open && suggestions.length > 0;
 
   useLayoutEffect(() => {
@@ -201,15 +196,22 @@ export function ExpenseCategoryInput({
         onChange={(event) => {
           const next = event.target.value;
           onValueChange(next);
-          setOpen(next.trim().length >= 1);
+          setOpen(true);
           setActiveIndex(-1);
         }}
         onFocus={() => {
-          setOpen(false);
+          setOpen(true);
           setActiveIndex(-1);
         }}
         onKeyDown={(event) => {
-          if (!showList) return;
+          if (!showList) {
+            if (event.key === "ArrowDown" && suggestions.length > 0) {
+              event.preventDefault();
+              setOpen(true);
+              setActiveIndex(0);
+            }
+            return;
+          }
 
           if (event.key === "ArrowDown") {
             event.preventDefault();

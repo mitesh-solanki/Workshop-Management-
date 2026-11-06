@@ -80,6 +80,18 @@ export type BillingInvoiceCardModel = {
   preview: InvoicePreviewData;
 };
 
+type OutsideWorkLineRef = {
+  id: string;
+  description: string;
+  unitPricePaise: number;
+  vendorId: string | null;
+  vendorName: string | null;
+  gstSplit: "CGST_SGST" | "IGST" | null;
+  gstRatePercent: number | null;
+  billStorageKey: string | null;
+  billFileName: string | null;
+};
+
 type Props = {
   orderId: string;
   vehicleId: string;
@@ -87,6 +99,7 @@ type Props = {
   canEdit: boolean;
   pdfLocale: PdfLocale;
   invoices: BillingInvoiceCardModel[];
+  outsideWorkLines?: OutsideWorkLineRef[];
 };
 
 function tabLabel(
@@ -115,6 +128,7 @@ export function BillingInvoiceWorkspace({
   canEdit,
   pdfLocale,
   invoices,
+  outsideWorkLines = [],
 }: Props) {
   const t = useTranslations("billing");
   const tw = useTranslations("warranties");
@@ -293,6 +307,7 @@ export function BillingInvoiceWorkspace({
               0,
             )}
             lines={active.lines}
+            outsideWorkLines={outsideWorkLines}
             warrantyDocs={active.warrantyDocs}
             editing={editingInvoice}
             onEditingChange={(next) => {

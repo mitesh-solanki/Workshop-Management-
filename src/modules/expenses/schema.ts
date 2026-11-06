@@ -1,13 +1,32 @@
 import { z } from "zod";
 import { rupeesToPaiseSchema } from "@/lib/money";
+import { GST_RATE_OPTIONS } from "@/modules/estimates/schema";
 
 /** Default category chips — suggestions only; any free-text category is allowed. */
 export const EXPENSE_CATEGORY_SUGGESTIONS = [
   "Rent",
   "Electricity",
+  "Water",
   "Fuel",
   "Tools",
+  "Consumables",
+  "Oil & Lubricants",
   "Tea & Snacks",
+  "Cleaning",
+  "Internet & Phone",
+  "Insurance",
+  "Shop Maintenance",
+  "Uniforms",
+  "Stationery",
+  "Transport & Courier",
+  "Security",
+  "Software & Subscriptions",
+  "CA & Accounting",
+  "Bank Charges",
+  "Advertising",
+  "Training",
+  "Waste Disposal",
+  "Parking",
   "Miscellaneous",
 ] as const;
 
@@ -17,8 +36,20 @@ export type ExpenseMethod = (typeof EXPENSE_METHODS)[number];
 export const EXPENSE_STATUSES = ["PAID", "UNPAID"] as const;
 export type ExpenseStatus = (typeof EXPENSE_STATUSES)[number];
 
+export const EXPENSE_GST_SPLITS = ["CGST_SGST", "IGST"] as const;
+export type ExpenseGstSplit = (typeof EXPENSE_GST_SPLITS)[number];
+
 export const EXPENSE_SORTS = ["newest", "oldest", "amount_desc", "amount_asc"] as const;
 export type ExpenseSort = (typeof EXPENSE_SORTS)[number];
+
+export const MAX_EXPENSE_BILL_BYTES = 8 * 1024 * 1024;
+const EXPENSE_BILL_TYPES = new Set([
+  "image/jpeg",
+  "image/jpg",
+  "image/png",
+  "image/webp",
+  "application/pdf",
+]);
 
 const dateOnlySchema = z
   .string()
@@ -52,6 +83,32 @@ const optionalMethod = z.preprocess(
   z.enum(EXPENSE_METHODS).nullable(),
 );
 
+const gstRatePercentField = z.preprocess(
+  (value) => {
+    if (value == null || value === "") return 0;
+    return typeof value === "number" ? value : Number(value);
+  },
+  z
+    .number()
+    .int()
+    .refine((rate) => (GST_RATE_OPTIONS as readonly number[]).includes(rate), {
+      error: "validation.invalidInput",
+    }),
+);
+
+const optionalVendorId = z.preprocess(
+  (value) => {
+    if (value == null) return null;
+    const trimmed = String(value).trim();
+    return trimmed.length > 0 ? trimmed : null;
+  },
+  z
+    .string()
+    .min(1)
+    .max(64)
+    .nullable(),
+);
+
 export const createExpenseSchema = z
   .object({
     amountRupees: rupeesToPaiseSchema.refine((v) => v > 0, {
@@ -62,6 +119,9 @@ export const createExpenseSchema = z
     method: optionalMethod,
     category: categorySchema,
     note: optionalNote,
+    vendorId: optionalVendorId,
+    gstSplit: z.enum(EXPENSE_GST_SPLITS).default("CGST_SGST"),
+    gstRatePercent: gstRatePercentField,
   })
   .superRefine((data, ctx) => {
     if (data.status === "PAID" && !data.method) {
@@ -74,6 +134,48 @@ export const createExpenseSchema = z
   });
 
 export const updateExpenseSchema = createExpenseSchema;
+
+const billByteSizeField = z
+  .union([z.string(), z.number()])
+  .transform((value, ctx) => {
+    const n = typeof value === "number" ? value : Number(value);
+    if (!Number.isInteger(n) || n < 1) {
+      ctx.addIssue({ code: "custom", message: "validation.invalidInput" });
+      return z.NEVER;
+    }
+    return n;
+  });
+
+const optionalBillFileName = z
+  .string()
+  .trim()
+  .max(200)
+  .optional()
+  .transform((v) => (v && v.length > 0 ? v : null));
+
+export const createExpenseBillUploadUrlSchema = z.object({
+  expenseId: z.string().trim().min(1),
+  contentType: z.string().trim().min(3).max(120),
+  byteSize: billByteSizeField,
+  fileName: optionalBillFileName,
+});
+
+export const confirmExpenseBillSchema = z.object({
+  expenseId: z.string().trim().min(1),
+  storageKey: z.string().trim().min(1).max(500),
+  contentType: z.string().trim().min(3).max(120),
+  byteSize: billByteSizeField,
+  fileName: optionalBillFileName,
+});
+
+export function assertExpenseBillLimits(contentType: string, byteSize: number) {
+  if (!EXPENSE_BILL_TYPES.has(contentType.toLowerCase())) {
+    throw new Error("expenses.bill_type");
+  }
+  if (byteSize > MAX_EXPENSE_BILL_BYTES) {
+    throw new Error("expenses.bill_too_large");
+  }
+}
 
 export const deleteExpenseSchema = z.object({
   expenseId: z.string().trim().min(1, { error: "validation.required" }),
@@ -136,13 +238,15 @@ export function filterExpenseCategorySuggestions(
     seen.add(key);
     unique.push(item);
   }
-  if (!q) return unique.slice(0, 12);
-  return unique
-    .filter((item) => item.toLowerCase().includes(q))
-    .slice(0, 12);
+  if (!q) return unique;
+  return unique.filter((item) => item.toLowerCase().includes(q));
 }
 
 export type CreateExpenseInput = z.input<typeof createExpenseSchema>;
 export type UpdateExpenseInput = z.input<typeof updateExpenseSchema>;
 export type MarkExpensePaidInput = z.input<typeof markExpensePaidSchema>;
 export type ExpenseSearchInput = z.input<typeof expenseSearchSchema>;
+export type CreateExpenseBillUploadUrlInput = z.input<
+  typeof createExpenseBillUploadUrlSchema
+>;
+export type ConfirmExpenseBillInput = z.input<typeof confirmExpenseBillSchema>;

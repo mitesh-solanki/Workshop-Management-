@@ -102,6 +102,16 @@ export function FormSelect({
 
   function handleChange(next: string) {
     const external = fromInternal(next);
+    // Radix can emit empty while remounting a controlled select; ignore that so
+    // callers (e.g. GST %) are not wiped to Number("") === 0.
+    if (
+      external === "" &&
+      !hasEmptyChoice &&
+      isControlled &&
+      current !== ""
+    ) {
+      return;
+    }
     if (!isControlled) {
       setUncontrolled(external);
     }

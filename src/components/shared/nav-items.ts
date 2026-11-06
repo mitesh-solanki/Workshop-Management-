@@ -1,11 +1,13 @@
 import {
   Car,
   CalendarDays,
+  CalendarRange,
   ChartColumn,
   ClipboardCheck,
   ClipboardList,
   Columns3,
   Contact,
+  FileSpreadsheet,
   FileText,
   Kanban,
   LayoutDashboard,
@@ -33,15 +35,18 @@ export type NavKey =
   | "invoices"
   | "reports"
   | "dailySummary"
+  | "monthlySummary"
   | "inventory"
   | "counterSales"
   | "vendors"
   | "purchaseOrders"
   | "vendorBills"
   | "purchaseReturns"
+  | "purchaseGst"
   | "expenses"
   | "team"
   | "payroll"
+  | "myPay"
   | "orders"
   | "jobSlips"
   | "inspections"
@@ -207,6 +212,20 @@ export const APP_NAV_ITEMS: readonly NavItem[] = [
     ],
   },
   {
+    href: "/monthly-summary",
+    key: "monthlySummary",
+    icon: CalendarRange,
+    group: "business",
+    roles: ["OWNER", "MANAGER", "ACCOUNTANT"],
+    flyout: [
+      {
+        href: "/monthly-summary",
+        labelKey: "viewMonthlySummary",
+        kind: "list",
+      },
+    ],
+  },
+  {
     href: "/inventory",
     key: "inventory",
     icon: Package,
@@ -294,6 +313,20 @@ export const APP_NAV_ITEMS: readonly NavItem[] = [
     ],
   },
   {
+    href: "/purchases/export-gst",
+    key: "purchaseGst",
+    icon: FileSpreadsheet,
+    group: "business",
+    roles: ["OWNER", "MANAGER", "ACCOUNTANT"],
+    flyout: [
+      {
+        href: "/purchases/export-gst",
+        labelKey: "viewPurchaseGst",
+        kind: "list",
+      },
+    ],
+  },
+  {
     href: "/expenses",
     key: "expenses",
     icon: Receipt,
@@ -339,6 +372,14 @@ export const APP_NAV_ITEMS: readonly NavItem[] = [
       },
       { href: "/payroll", labelKey: "viewPayroll", kind: "list" },
     ],
+  },
+  {
+    href: "/my-pay",
+    key: "myPay",
+    icon: Wallet,
+    group: "workshop",
+    roles: ["TECHNICIAN"],
+    flyout: [{ href: "/my-pay", labelKey: "viewMyPay", kind: "list" }],
   },
   {
     href: "/settings",

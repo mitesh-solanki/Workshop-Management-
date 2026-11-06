@@ -58,6 +58,19 @@ import {
 const garageA = "garage-a";
 const garageB = "garage-b";
 
+const emptyOutsideLineFields = {
+  vendorId: null,
+  gstSplit: null,
+  gstRatePercent: null,
+} as const;
+
+const emptyLineBillFields = {
+  billStorageKey: null,
+  billContentType: null,
+  billFileName: null,
+  billByteSize: null,
+} as const;
+
 const ownerA: RoleSession = {
   userId: "owner-a",
   garageId: garageA,
@@ -448,6 +461,7 @@ describe("role limits", () => {
         quantity: 1,
         unitPricePaise: "100",
         partId: null,
+        ...emptyOutsideLineFields,
       }),
     ).rejects.toBeInstanceOf(ForbiddenError);
 
@@ -483,6 +497,7 @@ describe("role limits", () => {
         quantity: 1,
         unitPricePaise: "999",
         partId: null,
+        ...emptyOutsideLineFields,
       }),
     ).rejects.toMatchObject({
       code: "orders.technician_parts_only",
@@ -499,6 +514,8 @@ describe("role limits", () => {
         quantity: 2,
         unitPricePaise: 0,
         partId: "part-1",
+        ...emptyOutsideLineFields,
+        ...emptyLineBillFields,
         sortOrder: 0,
         createdAt: new Date("2026-01-01T00:00:00.000Z"),
         updatedAt: new Date("2026-01-01T00:00:00.000Z"),
@@ -511,6 +528,7 @@ describe("role limits", () => {
       quantity: 2,
       unitPricePaise: "999",
       partId: "part-1",
+      ...emptyOutsideLineFields,
     });
 
     expect(createServiceOrderLine).toHaveBeenCalledWith(
@@ -536,6 +554,8 @@ describe("role limits", () => {
         quantity: 1,
         unitPricePaise: 99900,
         partId: null,
+        ...emptyOutsideLineFields,
+        ...emptyLineBillFields,
         sortOrder: 0,
         createdAt: new Date("2026-01-01T00:00:00.000Z"),
         updatedAt: new Date("2026-01-01T00:00:00.000Z"),
@@ -548,6 +568,7 @@ describe("role limits", () => {
       quantity: 5,
       unitPricePaise: "999",
       partId: null,
+      ...emptyOutsideLineFields,
     });
 
     expect(createServiceOrderLine).toHaveBeenCalledWith(
@@ -579,6 +600,7 @@ describe("role limits", () => {
         quantity: 1,
         unitPricePaise: "50",
         partId: null,
+        ...emptyOutsideLineFields,
       }),
     ).rejects.toMatchObject({
       code: "ORDER_COMPLETED",
@@ -891,6 +913,7 @@ describe("service order schema i18n messages", () => {
       quantity: 0,
       unitPricePaise: "100",
       partId: "",
+      ...emptyOutsideLineFields,
     });
     expect(quantity.success).toBe(false);
     if (!quantity.success) {
@@ -899,12 +922,25 @@ describe("service order schema i18n messages", () => {
       );
     }
 
+    const outsideIncomplete = addServiceOrderLineSchema.safeParse({
+      type: "OUTSIDE",
+      description: "Wheel alignment at tyre shop",
+      quantity: 2,
+      unitPricePaise: "500",
+      partId: "",
+      ...emptyOutsideLineFields,
+    });
+    expect(outsideIncomplete.success).toBe(false);
+
     const outside = addServiceOrderLineSchema.safeParse({
       type: "OUTSIDE",
       description: "Wheel alignment at tyre shop",
       quantity: 2,
       unitPricePaise: "500",
       partId: "",
+      vendorId: "vendor-1",
+      gstSplit: "CGST_SGST",
+      gstRatePercent: 18,
     });
     expect(outside.success).toBe(true);
   });
@@ -922,6 +958,10 @@ describe("service order schema i18n messages", () => {
         quantity: 1,
         unitPricePaise: 50000,
         partId: null,
+        vendorId: "vendor-1",
+        gstSplit: "CGST_SGST",
+        gstRatePercent: 18,
+        ...emptyLineBillFields,
         sortOrder: 0,
         createdAt: new Date("2026-01-01T00:00:00.000Z"),
         updatedAt: new Date("2026-01-01T00:00:00.000Z"),
@@ -934,6 +974,9 @@ describe("service order schema i18n messages", () => {
       quantity: 1,
       unitPricePaise: "500",
       partId: null,
+      vendorId: "vendor-1",
+      gstSplit: "CGST_SGST",
+      gstRatePercent: 18,
     });
 
     expect(createServiceOrderLine).toHaveBeenCalledWith(
@@ -944,6 +987,9 @@ describe("service order schema i18n messages", () => {
         quantity: 1,
         unitPricePaise: 50000,
         partId: null,
+        vendorId: "vendor-1",
+        gstSplit: "CGST_SGST",
+        gstRatePercent: 18,
         actorId: "owner-a",
       }),
     );
@@ -961,6 +1007,9 @@ describe("service order schema i18n messages", () => {
         quantity: 1,
         unitPricePaise: "1000",
         partId: null,
+        vendorId: "vendor-1",
+        gstSplit: "CGST_SGST",
+        gstRatePercent: 18,
       }),
     ).rejects.toMatchObject({
       code: "orders.technician_parts_only",

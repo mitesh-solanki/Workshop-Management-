@@ -34,6 +34,7 @@ import {
   todayDateInput,
   type ExpenseFormValues,
 } from "@/modules/expenses/components/expense-form-fields";
+import { uploadExpenseBillFile } from "@/modules/expenses/components/upload-expense-bill";
 
 const initial: ExpenseActionState = { ok: false };
 
@@ -44,6 +45,10 @@ const EMPTY = (): ExpenseFormValues => ({
   method: "CASH",
   category: "",
   note: "",
+  vendorId: "",
+  gstSplit: "CGST_SGST",
+  gstRatePercent: 0,
+  billFile: null,
 });
 
 type Props = {
@@ -51,6 +56,10 @@ type Props = {
   size?: "sm" | "md";
   defaultOpen?: boolean;
   usedCategories?: readonly string[];
+  vendors?: readonly {
+    id: string;
+    name: string;
+  }[];
 };
 
 export function CreateExpenseModal({
@@ -58,6 +67,7 @@ export function CreateExpenseModal({
   size = "md",
   defaultOpen = false,
   usedCategories = [],
+  vendors = [],
 }: Props) {
   const t = useTranslations("expenses");
   const te = useTranslations("errors");
@@ -66,21 +76,25 @@ export function CreateExpenseModal({
   const [open, setOpen] = useState(defaultOpen);
   const [values, setValues] = useState<ExpenseFormValues>(EMPTY);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [uploading, setUploading] = useState(false);
   const [state, formAction, pending] = useActionState(
     createExpenseModalAction,
     initial,
   );
   const errorHandled = useRef<string | null>(null);
   const successHandled = useRef<string | null>(null);
+  const pendingFileRef = useRef<File | null>(null);
 
   useStripCreateQuery(defaultOpen);
 
   function resetForm() {
     setValues(EMPTY());
     setFieldErrors({});
+    pendingFileRef.current = null;
   }
 
   function handleOpenChange(next: boolean) {
+    if (uploading) return;
     setOpen(next);
     if (next) {
       errorHandled.current = null;
@@ -97,13 +111,37 @@ export function CreateExpenseModal({
       if (successHandled.current === state.expenseId) return;
       successHandled.current = state.expenseId;
       errorHandled.current = state.message;
-      toast.success(state.message);
-      router.refresh();
-      const id = window.setTimeout(() => {
-        setOpen(false);
-        resetForm();
-      }, 0);
-      return () => window.clearTimeout(id);
+      const expenseId = state.expenseId;
+      const selected = pendingFileRef.current;
+
+      void (async () => {
+        if (selected) {
+          setUploading(true);
+          try {
+            await uploadExpenseBillFile({
+              expenseId,
+              file: selected,
+              uploadFailedMessage: t("uploadFailed"),
+            });
+            toast.success(t("createdWithBill"));
+          } catch (err) {
+            const message =
+              err instanceof Error ? err.message : t("uploadFailed");
+            toast.error(t("createdButUploadFailed", { reason: message }));
+          } finally {
+            setUploading(false);
+          }
+        } else {
+          toast.success(state.message);
+        }
+        pendingFileRef.current = null;
+        router.refresh();
+        window.setTimeout(() => {
+          setOpen(false);
+          resetForm();
+        }, 0);
+      })();
+      return;
     }
 
     if (state.ok) return;
@@ -115,7 +153,7 @@ export function CreateExpenseModal({
       return () => window.clearTimeout(id);
     }
     toast.error(state.message);
-  }, [state, router]);
+  }, [state, router, t]);
 
   function setField<K extends keyof ExpenseFormValues>(
     key: K,
@@ -144,9 +182,14 @@ export function CreateExpenseModal({
     if (values.status === "PAID" && !values.method) {
       next.method = te("validation.required");
     }
+    if (values.gstRatePercent > 0 && !values.billFile) {
+      next.billFile = t("errors.billRequired");
+    }
     setFieldErrors(next);
     return Object.keys(next).length === 0;
   }
+
+  const busy = pending || uploading;
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -160,7 +203,7 @@ export function CreateExpenseModal({
           )}
         </DialogTrigger>
       ) : null}
-      <DialogContent className="gap-0 p-0 sm:max-w-lg">
+      <DialogContent className="gap-0 p-0 sm:max-w-xl">
         <DialogHeader className="border-b border-border px-5 py-4 pr-12 text-left">
           <DialogTitle>{t("newTitle")}</DialogTitle>
           <DialogDescription>{t("newSubtitle")}</DialogDescription>
@@ -172,6 +215,7 @@ export function CreateExpenseModal({
             onSubmit={(e) => {
               e.preventDefault();
               if (!validateClient()) return;
+              pendingFileRef.current = values.billFile;
               const formData = new FormData(e.currentTarget);
               startTransition(() => {
                 formAction(formData);
@@ -183,18 +227,19 @@ export function CreateExpenseModal({
               values={values}
               fieldErrors={fieldErrors}
               usedCategories={usedCategories}
+              vendors={vendors}
               onChange={setField}
             />
           </form>
         </DialogBody>
         <DialogFooter className="gap-2 border-t border-border bg-background px-5 py-4 sm:justify-end">
           <DialogClose asChild>
-            <Button type="button" variant="secondary" size="md">
+            <Button type="button" variant="secondary" size="md" disabled={busy}>
               {t("cancel")}
             </Button>
           </DialogClose>
-          <Button type="submit" form={formId} size="md" loading={pending}>
-            {pending ? t("saving") : t("create")}
+          <Button type="submit" form={formId} size="md" loading={busy}>
+            {busy ? t("saving") : t("create")}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -221,6 +221,7 @@ describe("inventory service stock guards", () => {
           sku: "PAD-1",
           unit: "pcs",
           sellingPricePaise: 50000,
+          gstRatePercent: 18,
           quantityOnHand: 2 },
       ],
       nextOffset: 1,

@@ -31,3 +31,23 @@ export const invoiceSearchSchema = z.object({
 
 export type InvoiceSearchInput = z.input<typeof invoiceSearchSchema>;
 export type InvoiceSearchParsed = z.output<typeof invoiceSearchSchema>;
+
+const yearMonthSchema = z
+  .string()
+  .trim()
+  .regex(/^\d{4}-\d{2}$/, { error: "validation.invalidInput" });
+
+export const gstExportListSchema = z.object({
+  yearMonth: yearMonthSchema,
+});
+
+export const gstExportDownloadSchema = z.object({
+  yearMonth: yearMonthSchema,
+  invoiceIds: z
+    .array(z.string().trim().min(1).max(64))
+    .min(1, { error: "validation.invalidInput" })
+    .max(2000, { error: "validation.invalidInput" }),
+});
+
+export type GstExportListInput = z.input<typeof gstExportListSchema>;
+export type GstExportDownloadInput = z.input<typeof gstExportDownloadSchema>;

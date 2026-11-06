@@ -12,6 +12,7 @@ import {
   assertCanAccessExpenses,
   canWriteExpenses,
   listExpenseCategoryOptions,
+  listExpenseVendorOptions,
   listExpenses,
 } from "@/modules/expenses/service";
 
@@ -52,7 +53,7 @@ export default async function ExpensesPage({ searchParams }: Props) {
     throw error;
   }
 
-  const [result, usedCategories] = await Promise.all([
+  const [result, usedCategories, vendors] = await Promise.all([
     listExpenses(session, {
       q: params.q,
       category: params.category,
@@ -62,6 +63,7 @@ export default async function ExpensesPage({ searchParams }: Props) {
       pageSize: params.pageSize,
     }),
     listExpenseCategoryOptions(session),
+    listExpenseVendorOptions(session),
   ]);
   const canWrite = canWriteExpenses(session);
   const hasFilters =
@@ -79,6 +81,7 @@ export default async function ExpensesPage({ searchParams }: Props) {
             <CreateExpenseModal
               defaultOpen={params.create === "1"}
               usedCategories={usedCategories}
+              vendors={vendors}
             />
           ) : undefined
         }
@@ -94,12 +97,18 @@ export default async function ExpensesPage({ searchParams }: Props) {
             method: item.method as "CASH" | "UPI" | "CARD" | null,
             category: item.category,
             note: item.note,
+            vendorId: item.vendorId,
+            gstSplit: item.gstSplit,
+            gstRatePercent: item.gstRatePercent,
+            billStorageKey: item.billStorageKey,
+            billFileName: item.billFileName,
           }))}
           page={result.page}
           pageSize={result.pageSize}
           total={result.total}
           canWrite={canWrite}
           usedCategories={usedCategories}
+          vendors={vendors}
           empty={
             <EmptyState
               icon={Receipt}
@@ -114,6 +123,7 @@ export default async function ExpensesPage({ searchParams }: Props) {
                   <CreateExpenseModal
                     size="sm"
                     usedCategories={usedCategories}
+                    vendors={vendors}
                   />
                 ) : undefined
               }

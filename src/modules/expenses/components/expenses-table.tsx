@@ -8,6 +8,7 @@ import { formatRupees } from "@/lib/money";
 import { ExpenseRowActions } from "@/modules/expenses/components/expense-row-actions";
 import { ExpenseSearch } from "@/modules/expenses/components/expense-search";
 import type {
+  ExpenseGstSplit,
   ExpenseMethod,
   ExpenseStatus,
 } from "@/modules/expenses/schema";
@@ -20,6 +21,11 @@ export type ExpenseTableRow = {
   method: ExpenseMethod | null;
   category: string;
   note: string | null;
+  vendorId: string | null;
+  gstSplit: ExpenseGstSplit;
+  gstRatePercent: number;
+  billStorageKey: string | null;
+  billFileName: string | null;
 };
 
 type Props = {
@@ -30,6 +36,10 @@ type Props = {
   empty: React.ReactNode;
   canWrite?: boolean;
   usedCategories?: readonly string[];
+  vendors?: readonly {
+    id: string;
+    name: string;
+  }[];
 };
 
 function toDateInput(value: Date | string): string {
@@ -55,6 +65,7 @@ export function ExpensesTable({
   empty,
   canWrite = false,
   usedCategories = [],
+  vendors = [],
 }: Props) {
   const t = useTranslations("expenses");
   const locale = useLocale();
@@ -83,6 +94,17 @@ export function ExpensesTable({
         cell: ({ row }) => (
           <span className="font-semibold tabular-nums text-foreground">
             {formatRupees(row.original.amountPaise, locale)}
+          </span>
+        ),
+      },
+      {
+        id: "gstIncluded",
+        header: t("columns.gstIncluded"),
+        cell: ({ row }) => (
+          <span className="text-muted-foreground">
+            {row.original.gstRatePercent > 0
+              ? t("gstIncludedYes")
+              : t("gstIncludedNo")}
           </span>
         ),
       },
@@ -128,7 +150,7 @@ export function ExpensesTable({
         },
         cell: ({ row }) => (
           <span
-            className="line-clamp-2 break-words text-muted-foreground"
+            className="line-clamp-2 wrap-break-word text-muted-foreground"
             title={row.original.note?.trim() || undefined}
           >
             {row.original.note?.trim() ? row.original.note : "—"}
@@ -149,14 +171,20 @@ export function ExpensesTable({
               method: row.original.method,
               category: row.original.category,
               note: row.original.note,
+              vendorId: row.original.vendorId,
+              gstSplit: row.original.gstSplit,
+              gstRatePercent: row.original.gstRatePercent,
+              billFileName: row.original.billFileName,
+              hasBill: Boolean(row.original.billStorageKey),
             }}
             canWrite={canWrite}
             usedCategories={usedCategories}
+            vendors={vendors}
           />
         ),
       },
     ],
-    [t, locale, canWrite, usedCategories],
+    [t, locale, canWrite, usedCategories, vendors],
   );
 
   return (
@@ -193,9 +221,15 @@ export function ExpensesTable({
                   method: expense.method,
                   category: expense.category,
                   note: expense.note,
+                  vendorId: expense.vendorId,
+                  gstSplit: expense.gstSplit,
+                  gstRatePercent: expense.gstRatePercent,
+                  billFileName: expense.billFileName,
+                  hasBill: Boolean(expense.billStorageKey),
                 }}
                 canWrite={canWrite}
                 usedCategories={usedCategories}
+                vendors={vendors}
               />
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -205,6 +239,12 @@ export function ExpensesTable({
               >
                 {t(`statuses.${expense.status}`)}
               </Badge>
+              <span className="text-sm text-muted-foreground">
+                {t("columns.gstIncluded")}:{" "}
+                {expense.gstRatePercent > 0
+                  ? t("gstIncludedYes")
+                  : t("gstIncludedNo")}
+              </span>
               {expense.status === "PAID" ? (
                 <span className="text-sm tabular-nums text-muted-foreground">
                   {t("paidOnDate", {

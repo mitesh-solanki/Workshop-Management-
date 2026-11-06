@@ -16,6 +16,7 @@ import {
 import { OrderLineForm } from "@/modules/service-orders/components/order-line-form";
 import { OrderLinesTable } from "@/modules/service-orders/components/order-lines-table";
 import { OutsideWorkForm } from "@/modules/service-orders/components/outside-work-form";
+import { OutsideWorkLinesTable } from "@/modules/service-orders/components/outside-work-lines-table";
 import { JobCardTimeline } from "@/modules/service-orders/components/job-card-timeline";
 import {
   PaperJobCardHeaderUpload,
@@ -51,6 +52,12 @@ type OrderLine = {
   unitPricePaise: number;
   partId?: string | null;
   catalogueSellingPricePaise?: number | null;
+  vendorId?: string | null;
+  vendor?: { id: string; name: string } | null;
+  gstSplit?: "CGST_SGST" | "IGST" | null;
+  gstRatePercent?: number | null;
+  billStorageKey?: string | null;
+  billFileName?: string | null;
 };
 
 type TimelineEvent = {
@@ -488,7 +495,7 @@ export function JobCardDetailPanel({
                     id="outsideWork"
                     open={activeSection === "outsideWork"}
                   >
-                    <div className="w-full max-w-2xl space-y-5">
+                    <div className="w-full space-y-5">
                       {outsideEstimateLines.length > 0 ? (
                         <LatestEstimateLinesCard
                           orderId={order.id}
@@ -518,15 +525,21 @@ export function JobCardDetailPanel({
                             {t("outsideWorkEmpty")}
                           </p>
                         ) : (
-                          <OrderLinesTable
+                          <OutsideWorkLinesTable
                             orderId={order.id}
                             canMutate={canMutate}
-                            hidePrices={false}
-                            hideType
-                            hideQuantity
-                            amountLabel={t("outsideWorkAmount")}
                             billSyncMode={billSyncMode}
-                            lines={outsideWorkLines}
+                            lines={outsideWorkLines.map((line) => ({
+                              id: line.id,
+                              description: line.description,
+                              unitPricePaise: line.unitPricePaise,
+                              vendorId: line.vendorId ?? null,
+                              vendorName: line.vendor?.name ?? null,
+                              gstSplit: line.gstSplit ?? null,
+                              gstRatePercent: line.gstRatePercent ?? null,
+                              billStorageKey: line.billStorageKey ?? null,
+                              billFileName: line.billFileName ?? null,
+                            }))}
                           />
                         )}
                       </div>
@@ -541,12 +554,10 @@ export function JobCardDetailPanel({
                               {t("outsideWorkHint")}
                             </small>
                           </div>
-                          <div className="rounded-[10px] border border-[#e8edf5] bg-[#fafcff] p-4 sm:p-5">
-                            <OutsideWorkForm
-                              orderId={order.id}
-                              billSyncMode={billSyncMode}
-                            />
-                          </div>
+                          <OutsideWorkForm
+                            orderId={order.id}
+                            billSyncMode={billSyncMode}
+                          />
                         </div>
                       ) : null}
                     </div>

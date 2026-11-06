@@ -118,6 +118,7 @@ export function OrderLineForm({
       sku: values.sku,
       unit: values.unit,
       sellingPricePaise: 0,
+      gstRatePercent: values.gstRatePercent,
       quantityOnHand: values.quantityOnHand,
     });
     setEditPart({
@@ -165,6 +166,7 @@ export function OrderLineForm({
       sku: part.sku,
       unit: part.unit,
       sellingPricePaise: 0,
+      gstRatePercent: 0,
       quantityOnHand: 0,
     });
     setCreateOpen(false);

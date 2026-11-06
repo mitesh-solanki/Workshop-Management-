@@ -114,19 +114,19 @@ export function PayrollManagement(props: Props) {
         ),
       },
       {
-        accessorKey: "bonusPaise",
-        header: t("bonusShort"),
+        accessorKey: "advanceDeductedPaise",
+        header: t("advanceShort"),
         cell: ({ row }) => {
-          const value = row.original.bonusPaise;
+          const value = row.original.advanceDeductedPaise;
           if (value <= 0) {
             return (
               <span className="text-sm text-muted-foreground">
-                {t("bonusNoneShort")}
+                {t("rowAdvanceNone")}
               </span>
             );
           }
           return (
-            <span className="font-bold tabular-nums text-emerald-700">
+            <span className="font-bold tabular-nums text-amber-700">
               {formatRupees(value, locale)}
             </span>
           );
@@ -296,15 +296,15 @@ export function PayrollManagement(props: Props) {
                 </div>
                 <div>
                   <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-                    {t("bonusShort")}
+                    {t("advanceShort")}
                   </p>
-                  {line.bonusPaise > 0 ? (
-                    <p className="mt-0.5 font-bold tabular-nums text-emerald-700">
-                      {formatRupees(line.bonusPaise, locale)}
+                  {line.advanceDeductedPaise > 0 ? (
+                    <p className="mt-0.5 font-bold tabular-nums text-amber-700">
+                      {formatRupees(line.advanceDeductedPaise, locale)}
                     </p>
                   ) : (
                     <p className="mt-0.5 text-muted-foreground">
-                      {t("bonusNoneShort")}
+                      {t("rowAdvanceNone")}
                     </p>
                   )}
                 </div>

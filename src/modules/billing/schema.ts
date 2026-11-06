@@ -21,9 +21,17 @@ export function defaultInvoiceHsnOrSac(type: string): string {
   return "9987";
 }
 
+/** Labour stays untaxed. Outside defaults to 0% like Outside Work; parts to 18%. */
+export function defaultInvoiceGstRatePercent(type: string): number {
+  if (type === "LABOUR" || type === "OUTSIDE") return 0;
+  return 18;
+}
+
 /**
  * Patch tax codes for Edit Invoice: form override, else the selected/catalogue
  * part, else the existing bill line — defaults only when none of those exist.
+ * Labour always stays at 0% GST. Outside work uses the same rate path as parts
+ * (form / existing / default), not the part catalogue.
  */
 export function resolveInvoiceEditLineTax(input: {
   type: string;
@@ -32,27 +40,43 @@ export function resolveInvoiceEditLineTax(input: {
   existing?: { gstRatePercent: number; hsnOrSac: string } | null;
   part?: { gstRatePercent?: number | null; hsn?: string | null } | null;
 }): { gstRatePercent: number; hsnOrSac: string } {
-  const fromPartGst =
-    input.part && typeof input.part.gstRatePercent === "number"
-      ? input.part.gstRatePercent
-      : null;
+  const explicitHsn = input.hsnOrSac?.trim();
   const fromPartHsn =
     input.part && typeof input.part.hsn === "string" && input.part.hsn.trim()
       ? input.part.hsn.trim()
       : null;
-  const explicitHsn = input.hsnOrSac?.trim();
+  const hsnOrSac =
+    explicitHsn ||
+    fromPartHsn ||
+    input.existing?.hsnOrSac ||
+    defaultInvoiceHsnOrSac(input.type);
+
+  if (input.type === "LABOUR") {
+    return { gstRatePercent: 0, hsnOrSac };
+  }
+
+  if (input.type === "OUTSIDE") {
+    return {
+      gstRatePercent:
+        input.gstRatePercent ??
+        input.existing?.gstRatePercent ??
+        defaultInvoiceGstRatePercent(input.type),
+      hsnOrSac,
+    };
+  }
+
+  const fromPartGst =
+    input.part && typeof input.part.gstRatePercent === "number"
+      ? input.part.gstRatePercent
+      : null;
 
   return {
     gstRatePercent:
-      input.gstRatePercent ??
       fromPartGst ??
+      input.gstRatePercent ??
       input.existing?.gstRatePercent ??
-      18,
-    hsnOrSac:
-      explicitHsn ||
-      fromPartHsn ||
-      input.existing?.hsnOrSac ||
-      defaultInvoiceHsnOrSac(input.type),
+      defaultInvoiceGstRatePercent(input.type),
+    hsnOrSac,
   };
 }
 
@@ -151,28 +175,65 @@ export type DeleteDraftInvoiceInput = z.input<typeof deleteDraftInvoiceSchema>;
 export const deleteInvoiceSchema = deleteDraftInvoiceSchema;
 export type DeleteInvoiceInput = DeleteDraftInvoiceInput;
 
-const invoiceEditLineSchema = z.object({
-  id: z
-    .string()
-    .trim()
-    .optional()
-    .transform((value) => (value && value.length > 0 ? value : undefined)),
-  type: z.enum(INVOICE_LINE_TYPES),
-  description: z
-    .string()
-    .trim()
-    .min(1, { error: "validation.required" })
-    .max(500, { error: "validation.tooLong" }),
-  quantity: quantityField,
-  unitPricePaise: rupeesToPaiseSchema,
-  partId: z
-    .string()
-    .trim()
-    .optional()
-    .transform((value) => (value && value.length > 0 ? value : undefined)),
-  gstRatePercent: gstRateField.optional(),
-  hsnOrSac: hsnOrSacField.optional(),
-});
+const invoiceEditLineSchema = z
+  .object({
+    id: z
+      .string()
+      .trim()
+      .optional()
+      .transform((value) => (value && value.length > 0 ? value : undefined)),
+    type: z.enum(INVOICE_LINE_TYPES),
+    description: z
+      .string()
+      .trim()
+      .min(1, { error: "validation.required" })
+      .max(500, { error: "validation.tooLong" }),
+    quantity: quantityField,
+    unitPricePaise: rupeesToPaiseSchema,
+    partId: z
+      .string()
+      .trim()
+      .optional()
+      .transform((value) => (value && value.length > 0 ? value : undefined)),
+    vendorId: z
+      .string()
+      .trim()
+      .optional()
+      .transform((value) => (value && value.length > 0 ? value : undefined)),
+    gstSplit: z
+      .union([z.enum(GST_SPLIT_KINDS), z.literal(""), z.null(), z.undefined()])
+      .transform((value) => {
+        if (value == null || value === "") return undefined;
+        return value;
+      })
+      .optional(),
+    gstRatePercent: gstRateField.optional(),
+    hsnOrSac: hsnOrSacField.optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.type !== "OUTSIDE") return;
+    if (!data.vendorId) {
+      ctx.addIssue({
+        code: "custom",
+        message: "validation.required",
+        path: ["vendorId"],
+      });
+    }
+    if (!data.gstSplit) {
+      ctx.addIssue({
+        code: "custom",
+        message: "validation.required",
+        path: ["gstSplit"],
+      });
+    }
+    if (data.gstRatePercent == null) {
+      ctx.addIssue({
+        code: "custom",
+        message: "validation.required",
+        path: ["gstRatePercent"],
+      });
+    }
+  });
 
 export const updateInvoiceLinesSchema = z.object({
   invoiceId: z.string().trim().min(1),

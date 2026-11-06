@@ -403,6 +403,17 @@ model ServiceOrderLine {
   unitPricePaise Int                   @default(0)
   partId         String?
   part           Part?                 @relation(fields: [partId], references: [id], onDelete: SetNull)
+  /// Outside work vendor (cost side). Null for labour/part lines.
+  vendorId       String?
+  vendor         Vendor?               @relation(fields: [vendorId], references: [id], onDelete: Restrict)
+  /// Outside work input GST split. Null for labour/part lines.
+  gstSplit       GstSplitKind?
+  /// Outside work input GST %. Null for labour/part lines.
+  gstRatePercent Int?
+  billStorageKey      String?
+  billContentType     String?
+  billFileName        String?
+  billByteSize        Int?
   sortOrder      Int                   @default(0)
   createdAt      DateTime              @default(now())
   updatedAt      DateTime              @updatedAt
@@ -413,6 +424,7 @@ model ServiceOrderLine {
   @@index([garageId])
   @@index([serviceOrderId])
   @@index([partId])
+  @@index([vendorId])
 }
 
 /// Inventory part catalogue. Current stock is derived from StockMovement rows only.
@@ -535,9 +547,11 @@ model Vendor {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  purchaseOrders  PurchaseOrder[]
-  vendorBills     VendorBill[]
-  purchaseReturns PurchaseReturn[]
+  purchaseOrders    PurchaseOrder[]
+  vendorBills       VendorBill[]
+  purchaseReturns   PurchaseReturn[]
+  serviceOrderLines ServiceOrderLine[]
+  expenses          Expense[]
 
   @@index([garageId])
   @@index([garageId, name])
@@ -1422,6 +1436,14 @@ model Expense {
   /// Free-text label (UI offers suggestions; any value allowed).
   category     String
   note         String?
+  vendorId     String?
+  vendor       Vendor?        @relation(fields: [vendorId], references: [id], onDelete: SetNull)
+  gstSplit       GstSplitKind @default(CGST_SGST)
+  gstRatePercent Int          @default(0)
+  billStorageKey      String?
+  billContentType     String?
+  billFileName        String?
+  billByteSize        Int?
   recordedById String?
   recordedBy   User?          @relation("ExpenseRecordedBy", fields: [recordedById], references: [id], onDelete: SetNull)
   createdAt    DateTime       @default(now())
@@ -1430,4 +1452,5 @@ model Expense {
   @@index([garageId, spentAt])
   @@index([garageId, category])
   @@index([garageId, status])
+  @@index([vendorId])
 }

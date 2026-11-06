@@ -62,13 +62,13 @@ type Props = {
   embedded?: boolean;
 };
 
-function newRow(member?: AddPayrollMember): Row {
+function newRow(memberId?: string): Row {
   return {
     key: `row-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-    userId: member?.id ?? "",
-    basicRupees: paiseToRupeesInput(member?.basicSalaryPaise ?? 0),
-    bonusRupees: paiseToRupeesInput(member?.pendingBonusPaise ?? 0),
-    advanceRupees: paiseToRupeesInput(member?.openAdvancePaise ?? 0),
+    userId: memberId ?? "",
+    basicRupees: "",
+    bonusRupees: "",
+    advanceRupees: "",
     adjustmentRupees: "",
     adjustmentNote: "",
   };
@@ -106,17 +106,18 @@ export function AddPayrollForm({
   const locale = useLocale();
   const router = useRouter();
   const formId = useId();
-  const lockedMember = lockedMemberId
-    ? members.find((member) => member.id === lockedMemberId)
-    : undefined;
   const locked = Boolean(lockedMemberId);
-  const [lines, setLines] = useState<Row[]>(() =>
-    lockedMember
-      ? [newRow(lockedMember)]
-      : members.length > 0
-        ? [newRow(members[0])]
-        : [newRow()],
-  );
+  const [lines, setLines] = useState<Row[]>(() => {
+    if (!lockedMemberId) return [newRow()];
+    const member = members.find((m) => m.id === lockedMemberId);
+    return [
+      {
+        ...newRow(lockedMemberId),
+        bonusRupees: paiseToRupeesInput(member?.pendingBonusPaise ?? 0),
+        advanceRupees: paiseToRupeesInput(member?.openAdvancePaise ?? 0),
+      },
+    ];
+  });
   const [state, formAction, pending] = useActionState(
     generateMonthPayrollAction,
     initial,
@@ -162,7 +163,7 @@ export function AddPayrollForm({
     const member = members.find((m) => m.id === userId);
     updateRow(rowKey, {
       userId,
-      basicRupees: paiseToRupeesInput(member?.basicSalaryPaise ?? 0),
+      basicRupees: "",
       bonusRupees: paiseToRupeesInput(member?.pendingBonusPaise ?? 0),
       advanceRupees: paiseToRupeesInput(member?.openAdvancePaise ?? 0),
     });

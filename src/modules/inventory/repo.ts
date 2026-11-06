@@ -126,6 +126,7 @@ export async function searchInStockPartsPage(
     sku: string;
     unit: string;
     sellingPricePaise: number;
+    gstRatePercent: number;
     quantityOnHand: number;
   }>;
   nextOffset: number;
@@ -153,6 +154,7 @@ export async function searchInStockPartsPage(
     sku: string;
     unit: string;
     sellingPricePaise: number;
+    gstRatePercent: number;
     quantityOnHand: number;
   }> = [];
   let hasMore = false;
@@ -167,6 +169,7 @@ export async function searchInStockPartsPage(
         sku: true,
         unit: true,
         sellingPricePaise: true,
+        gstRatePercent: true,
       },
       orderBy: [{ name: "asc" }, { sku: "asc" }],
       skip: partSkip,
@@ -232,6 +235,7 @@ export async function searchPartsCatalogPage(
     sku: string;
     unit: string;
     sellingPricePaise: number;
+    gstRatePercent: number;
     quantityOnHand: number;
   }>;
   nextOffset: number;
@@ -259,6 +263,7 @@ export async function searchPartsCatalogPage(
       sku: true,
       unit: true,
       sellingPricePaise: true,
+      gstRatePercent: true,
     },
     orderBy: [{ name: "asc" }, { sku: "asc" }],
     skip: offset,

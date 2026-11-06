@@ -120,6 +120,7 @@ describe("expenses roles and garage isolation", () => {
       garageA,
       "rent",
       undefined,
+      "ALL",
       1,
       10,
       "newest",
@@ -144,8 +145,16 @@ describe("expenses roles and garage isolation", () => {
       method: "UPI",
       category: "Electricity",
       note: null,
+      vendorId: null,
+      gstSplit: "CGST_SGST",
+      gstRatePercent: 0,
+      billStorageKey: null,
+      billContentType: null,
+      billFileName: null,
+      billByteSize: null,
       createdAt: spentAt,
       updatedAt: spentAt,
+      vendor: null,
     });
 
     const result = await createExpenseRecord(ownerA, {
@@ -155,6 +164,9 @@ describe("expenses roles and garage isolation", () => {
       method: "UPI",
       category: "Electricity",
       note: "",
+      vendorId: null,
+      gstSplit: "CGST_SGST",
+      gstRatePercent: 0,
     });
 
     expect(createExpense).toHaveBeenCalledWith(
@@ -164,6 +176,9 @@ describe("expenses roles and garage isolation", () => {
         status: "PAID",
         method: "UPI",
         category: "Electricity",
+        vendorId: null,
+        gstSplit: "CGST_SGST",
+        gstRatePercent: 0,
         recordedById: ownerA.userId,
       }),
     );
@@ -188,8 +203,16 @@ describe("expenses roles and garage isolation", () => {
       method: null,
       category: "Electricity",
       note: null,
+      vendorId: null,
+      gstSplit: "CGST_SGST",
+      gstRatePercent: 0,
+      billStorageKey: null,
+      billContentType: null,
+      billFileName: null,
+      billByteSize: null,
       createdAt: spentAt,
       updatedAt: spentAt,
+      vendor: null,
     });
     vi.mocked(markExpensePaidById).mockResolvedValue({
       id: "exp-1",
@@ -199,8 +222,16 @@ describe("expenses roles and garage isolation", () => {
       method: "CASH",
       category: "Electricity",
       note: null,
+      vendorId: null,
+      gstSplit: "CGST_SGST",
+      gstRatePercent: 0,
+      billStorageKey: null,
+      billContentType: null,
+      billFileName: null,
+      billByteSize: null,
       createdAt: spentAt,
       updatedAt: spentAt,
+      vendor: null,
     });
 
     await markExpensePaidRecord(accountantA, {
@@ -224,28 +255,28 @@ describe("expenses roles and garage isolation", () => {
 
   it("updates and deletes only within session garage", async () => {
     const spentAt = new Date("2026-11-05T00:00:00.000Z");
-    vi.mocked(updateExpenseById).mockResolvedValue({
+    const row = {
       id: "exp-1",
       amountPaise: 10000,
       spentAt,
-      status: "PAID",
-      method: "CASH",
+      status: "PAID" as const,
+      method: "CASH" as const,
       category: "Tea & Snacks",
       note: "Tea",
+      vendorId: null,
+      gstSplit: "CGST_SGST" as const,
+      gstRatePercent: 0,
+      billStorageKey: null,
+      billContentType: null,
+      billFileName: null,
+      billByteSize: null,
       createdAt: spentAt,
       updatedAt: spentAt,
-    });
-    vi.mocked(deleteExpenseById).mockResolvedValue({
-      id: "exp-1",
-      amountPaise: 10000,
-      spentAt,
-      status: "PAID",
-      method: "CASH",
-      category: "Tea & Snacks",
-      note: "Tea",
-      createdAt: spentAt,
-      updatedAt: spentAt,
-    });
+      vendor: null,
+    };
+    vi.mocked(findExpenseById).mockResolvedValue(row);
+    vi.mocked(updateExpenseById).mockResolvedValue(row);
+    vi.mocked(deleteExpenseById).mockResolvedValue(row);
 
     await updateExpenseRecord(accountantA, "exp-1", {
       amountRupees: "100",
@@ -254,6 +285,9 @@ describe("expenses roles and garage isolation", () => {
       method: "CASH",
       category: "Tea & Snacks",
       note: "Tea",
+      vendorId: null,
+      gstSplit: "CGST_SGST",
+      gstRatePercent: 0,
     });
     await deleteExpenseRecord(accountantA, "exp-1");
 
@@ -266,7 +300,7 @@ describe("expenses roles and garage isolation", () => {
   });
 
   it("throws not found when update misses the garage row", async () => {
-    vi.mocked(updateExpenseById).mockResolvedValue(null);
+    vi.mocked(findExpenseById).mockResolvedValue(null);
     await expect(
       updateExpenseRecord(ownerA, "missing", {
         amountRupees: "10",
@@ -275,8 +309,10 @@ describe("expenses roles and garage isolation", () => {
         method: "CASH",
         category: "Miscellaneous",
         note: "",
+        vendorId: null,
+        gstSplit: "CGST_SGST",
+        gstRatePercent: 0,
       }),
     ).rejects.toBeInstanceOf(NotFoundError);
-    expect(findExpenseById).not.toHaveBeenCalled();
   });
 });

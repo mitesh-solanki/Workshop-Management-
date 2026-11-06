@@ -3,6 +3,7 @@ import "server-only";
 import { AppError, ForbiddenError, NotFoundError } from "@/lib/errors";
 import { requireRole, type RoleSession } from "@/lib/rbac";
 import {
+  buildOutsideWorkBillKey,
   buildServiceOrderPaperCopyKey,
   createPresignedDownloadUrl,
   createPresignedUploadUrl,
@@ -19,10 +20,13 @@ import { findLatestCurrentEstimateForCustomerVehicle } from "@/modules/estimates
 import { findVehicleById } from "@/modules/vehicles/repo";
 import {
   addServiceOrderLineSchema,
+  assertOutsideWorkBillLimits,
   assertPaperCopyLimits,
   canTransitionStatus,
   computeBayOccupancy,
+  confirmOutsideWorkBillSchema,
   confirmPaperCopySchema,
+  createOutsideWorkBillUploadUrlSchema,
   createPaperCopyUploadUrlSchema,
   createServiceOrderSchema,
   MAX_PAPER_COPIES_PER_ORDER,
@@ -32,7 +36,9 @@ import {
   updateServiceOrderSchema,
   updateServiceOrderStatusSchema,
   type AddServiceOrderLineInput,
+  type ConfirmOutsideWorkBillInput,
   type ConfirmPaperCopyInput,
+  type CreateOutsideWorkBillUploadUrlInput,
   type CreatePaperCopyUploadUrlInput,
   type CreateServiceOrderInput,
   type RemovePaperCopyInput,
@@ -69,6 +75,7 @@ import {
   listTechniciansInGarage,
   replacePaperCopy,
   setNextJobCardNumberSeed,
+  setOutsideWorkBill,
   updateServiceOrderDetails,
   updateServiceOrderLine,
   updateServiceOrderStatus,
@@ -677,6 +684,9 @@ export async function addOrderLine(
     quantity,
     unitPricePaise,
     partId: input.type === "PART" ? input.partId : null,
+    vendorId: input.type === "OUTSIDE" ? input.vendorId : null,
+    gstSplit: input.type === "OUTSIDE" ? input.gstSplit : null,
+    gstRatePercent: input.type === "OUTSIDE" ? input.gstRatePercent : null,
     actorId: session.userId,
   });
 
@@ -685,6 +695,9 @@ export async function addOrderLine(
       throw new AppError("inventory.insufficient_stock", 409, {
         partName: result.partName ?? "",
       });
+    }
+    if (result.reason === "VENDOR_NOT_FOUND") {
+      throw new AppError("vendors.not_found", 404);
     }
     throw new NotFoundError();
   }
@@ -727,6 +740,15 @@ export async function updateOrderLine(
       ? 1
       : input.quantity;
 
+  const clearBillRequested = Boolean(input.clearBill);
+  const previousBillKey =
+    existing.type === "OUTSIDE" &&
+    existing.billStorageKey &&
+    (clearBillRequested ||
+      (input.gstRatePercent !== undefined && input.gstRatePercent <= 0))
+      ? existing.billStorageKey
+      : null;
+
   const result = await updateServiceOrderLine(session.garageId, {
     lineId,
     serviceOrderId: order.id,
@@ -735,6 +757,15 @@ export async function updateOrderLine(
     unitPricePaise,
     ...(existing.type === "PART"
       ? { partId: input.partId || existing.partId }
+      : {}),
+    ...(existing.type === "OUTSIDE"
+      ? {
+          vendorId: input.vendorId ?? existing.vendorId,
+          gstSplit: input.gstSplit ?? existing.gstSplit,
+          gstRatePercent:
+            input.gstRatePercent ?? existing.gstRatePercent,
+          clearBill: previousBillKey != null,
+        }
       : {}),
     actorId: session.userId,
   });
@@ -745,7 +776,16 @@ export async function updateOrderLine(
         partName: result.partName ?? "",
       });
     }
+    if (result.reason === "VENDOR_NOT_FOUND") {
+      throw new AppError("vendors.not_found", 404);
+    }
     throw new NotFoundError();
+  }
+
+  if (previousBillKey) {
+    try {
+      await deleteStoredObject(previousBillKey);
+    } catch {}
   }
 
   return result.line;
@@ -1054,6 +1094,142 @@ export async function replacePaperCopyUpload(
     url = null;
   }
   return { ...replaced.row, url };
+}
+
+export async function createOutsideWorkBillUploadUrl(
+  session: RoleSession,
+  raw: CreateOutsideWorkBillUploadUrlInput,
+) {
+  requireRole(session, LINE_ROLES);
+  const input = createOutsideWorkBillUploadUrlSchema.parse(raw);
+  try {
+    assertOutsideWorkBillLimits(input.contentType, input.byteSize);
+  } catch (error) {
+    const code =
+      error instanceof Error ? error.message : "orders.outside_work_bill_type";
+    throw new AppError(code, 400);
+  }
+
+  const order = await findServiceOrderById(
+    session.garageId,
+    input.serviceOrderId,
+  );
+  if (!order) throw new NotFoundError();
+  assertCanMutateOrder(session, order);
+
+  const line = order.lines.find(
+    (row) => row.id === input.lineId && row.type === "OUTSIDE",
+  );
+  if (!line) throw new NotFoundError();
+  if ((line.gstRatePercent ?? 0) <= 0) {
+    throw new AppError("orders.outside_work_bill_not_needed", 400);
+  }
+
+  const storageKey = buildOutsideWorkBillKey({
+    garageId: session.garageId,
+    serviceOrderId: order.id,
+    lineId: line.id,
+    contentType: input.contentType,
+  });
+
+  try {
+    const signed = await createPresignedUploadUrl({
+      storageKey,
+      contentType: input.contentType,
+    });
+    return {
+      uploadUrl: signed.uploadUrl,
+      storageKey: signed.storageKey,
+      method: signed.method,
+      fields: signed.fields,
+      contentType: input.contentType,
+      serviceOrderId: order.id,
+      lineId: line.id,
+    };
+  } catch (error) {
+    if (error instanceof AppError && error.code === "STORAGE_NOT_CONFIGURED") {
+      throw new AppError("STORAGE_NOT_CONFIGURED", 500);
+    }
+    throw error;
+  }
+}
+
+export async function confirmOutsideWorkBill(
+  session: RoleSession,
+  raw: ConfirmOutsideWorkBillInput,
+) {
+  requireRole(session, LINE_ROLES);
+  const input = confirmOutsideWorkBillSchema.parse(raw);
+  try {
+    assertOutsideWorkBillLimits(input.contentType, input.byteSize);
+  } catch (error) {
+    const code =
+      error instanceof Error ? error.message : "orders.outside_work_bill_type";
+    throw new AppError(code, 400);
+  }
+
+  if (!storageKeyBelongsToGarage(input.storageKey, session.garageId)) {
+    throw new ForbiddenError();
+  }
+  if (
+    !input.storageKey.includes(
+      `/service-orders/${input.serviceOrderId}/outside-work/${input.lineId}/`,
+    )
+  ) {
+    throw new ForbiddenError();
+  }
+
+  const order = await findServiceOrderById(
+    session.garageId,
+    input.serviceOrderId,
+  );
+  if (!order) throw new NotFoundError();
+  assertCanMutateOrder(session, order);
+
+  const line = order.lines.find(
+    (row) => row.id === input.lineId && row.type === "OUTSIDE",
+  );
+  if (!line) throw new NotFoundError();
+  if ((line.gstRatePercent ?? 0) <= 0) {
+    throw new AppError("orders.outside_work_bill_not_needed", 400);
+  }
+
+  const result = await setOutsideWorkBill(session.garageId, {
+    serviceOrderId: input.serviceOrderId,
+    lineId: input.lineId,
+    storageKey: input.storageKey,
+    contentType: input.contentType,
+    fileName: input.fileName,
+    byteSize: input.byteSize,
+    actorId: session.userId,
+  });
+  if (!result) throw new NotFoundError();
+
+  if (
+    result.previousStorageKey &&
+    result.previousStorageKey !== input.storageKey
+  ) {
+    try {
+      await deleteStoredObject(result.previousStorageKey);
+    } catch {}
+  }
+
+  return result.line;
+}
+
+export async function getOutsideWorkBillDownloadUrl(
+  session: RoleSession,
+  serviceOrderId: string,
+  lineId: string,
+) {
+  requireRole(session, LINE_ROLES);
+  const order = await findServiceOrderById(session.garageId, serviceOrderId);
+  if (!order) throw new NotFoundError();
+  const line = order.lines.find(
+    (row) => row.id === lineId && row.type === "OUTSIDE",
+  );
+  if (!line?.billStorageKey) throw new NotFoundError();
+  return createPresignedDownloadUrl(line.billStorageKey);
 }
 
 /** Test helper: attempt to read while scoped to another garage id. */
